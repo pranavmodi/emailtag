@@ -16,6 +16,7 @@ celery_app = Celery(
 celery_app.conf.task_routes = {
     "app.tasks.email.process_email": {"queue": "emails"},
     "app.tasks.email.tag_email": {"queue": "tagging"},
+    "app.tasks.worker.test_task": {"queue": "emails"},
 }
 
 celery_app.conf.update(
@@ -28,7 +29,7 @@ celery_app.conf.update(
 )
 
 
-@celery_app.task(bind=True, name="app.tasks.test")
+@celery_app.task(bind=True, name="app.tasks.worker.test_task")
 def test_task(self):
     """Test task to verify Celery setup."""
     logger.info("Test task executed")
