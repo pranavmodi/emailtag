@@ -15,7 +15,7 @@ email_tag_association = Table(
     "email_tag_association",
     Base.metadata,
     Column("email_id", UUID(as_uuid=True), ForeignKey("email.id"), primary_key=True),
-    Column("tag_id", UUID(as_uuid=True), ForeignKey("tag.id"), primary_key=True),
+    Column("tag_id", UUID(as_uuid=True), ForeignKey("tag.id"), primary_key=True)
 )
 
 

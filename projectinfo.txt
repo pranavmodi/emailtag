@@ -1,0 +1,337 @@
+Agentic AI Routing and Response Automation in FrontIntroduction: Understanding Agentic AI
+Agentic AI refers to an AI system that can autonomously analyze, decide, and take action based on predefined rules and learned patterns. Unlike basic automation, which follows strict, static instructions, agentic AI adapts by understanding context, prioritizing tasks, and making decisions to improve efficiency.
+In this case, our AI in Front is an agentic system that processes emails, live chats, and text messages, determines the correct department, applies relevant tags, and, when possible, automatically responds using templates or generated messages. If a message is too complex, the AI flags it for human intervention, ensuring seamless, intelligent automation across departments.
+
+Goal
+
+Improve Workflow Efficiency – By reducing manual sorting, tagging and replying, we enhance response times and improve task prioritization across teams.
+
+Overview
+
+The AI system in Front is being trained to analyze and process inbound emails, live chat messages, and text messages (SMS) using their subject, body, and OCR-processed attachments. This automation ensures efficient classification, routing, and response handling for different departments.
+
+
+
+Objectives
+
+1. Automate Message Routing – The AI will categorize and route inbound messages (email, live chat, and SMS) to the appropriate department based on content and attachments.
+2. Apply Relevant Tags – AI will apply all relevant tags to further classify messages.
+3. Automate Responses When Possible – Based on the department and tag, the AI will:
+
+    * Use a predefined template to respond when applicable.
+    * Assign a Human Review tag for complex cases requiring manual intervention.
+    * BEFORE IT CAN REPLY it must be able to verify the sender of the email is able to receive the email by email address, domain, fax, etc and see if that is a player attached to any of the studies for the patient. If not simply tag for the request and add human tag review and cannot confirm player tag
+
+  4.  Automate archival of unnecessary emails  - AI will determine if no reply is necessary and archive the message
+
+    * Many messages do not reply a reply or being looked at.  Examples could be a reply saying thank you or I will keep my eye out for it, appreciate it, much appreciated,  Thanks a lot, thanks so much, etc
+    * SPAM
+    * Apply tag called "No Action Needed" then perform action " Archive"
+
+
+Message Routing Departments & Subcategories
+
+The AI will classify and route messages under the correct department and subcategory.
+
+1) Scheduling
+
+📌 Tags:
+
+* RX
+    * Order Pending
+    * Order Entered
+    * Incomplete
+    * RX Request
+* Cancel Request
+    * Cancelled
+* Reschedule Request
+    * Rescheduled
+* Apt Status Req
+    * Query DB for exam status and use template for reply. We already have the query and template just need to automate it when this tag is added
+* No Show (new)
+* Cash Patient
+* Schedule Request (new)
+    * Scheduled
+* Will contact patient (new)
+
+
+
+2) Medical Records & Images
+
+📌 Tags:
+
+* Release of Records
+* Image Request
+* CD Requests
+* Reports Request
+* US Tech Sheet
+* Portal Requests
+* Referral pad request
+* Incorrect patient info
+* Incorrect study info
+
+
+
+3) Accounts Receivable (AR)
+
+📌 Subcategories & Tags:
+
+A) Billing
+
+* Bill or balance Request
+
+B) Liens
+
+* Missing Lien Request
+* PSL
+    * Rad Lien
+    * Tech Lien
+    * Lien Modified
+* ASL
+    * Rad Lien
+    * Tech Lien
+    * Lien Modified
+
+C) Negotiations
+
+* Bill Offer
+* Pending Approval
+* Offer Approved
+* Counter Offer Sent
+
+D) Case Updates
+
+* New Attorney
+* Drop Letter
+* Drop Pending
+* Promise to send payment
+* Waiting to clear liability
+* Waiting on settlement check
+* Sent payment but not received
+* Refund Request
+* Payment on way
+
+F) Collections
+
+* To send to collections
+* Sent to Collections
+* Attorney Non-Payment
+* To Review 
+
+
+
+📌 General Workflow & AI Processing Tags
+
+These tags improve how messages are handled and tracked within the system.
+
+* AI: Low Confidence (Used when the AI is unsure of classification and needs human input)
+* AI: Cannot confirm player (Used when the AI cannot confirm if the user is allowed to get the documents)
+* AI: Auto-Responded (Indicates the AI sent an automated response)
+* AI: Awaiting Response (AI is waiting for a reply before taking further action)
+* AI: Human Review Required (For unusual or urgent cases)
+* Duplicate Request (Used when the same request was received multiple times)
+* Follow-Up Required (For messages that need follow-ups before resolution)
+* VIP / High Priority (For priority clients, attorneys, or doctors)
+* Spam / Junk (For filtering out non-relevant or spam messages)
+
+
+Next Steps in AI Training
+
+* Continue tagging messages manually to provide training data for the AI.  We will train it one tag at a time
+* Refine routing logic based on edge cases and exceptions.
+* Expand tagging to cover more nuanced case scenarios.
+* Implement AI-driven responses for email, live chat, and text messages based on department-specific templates.
+
+This document will be updated as AI training evolves to cover additional tasks and edge cases.
+
+
+Suggested Workflow with an LLM
+
+
+
+🚀 Summary of the Workflow
+
+1. Front Webhook triggers when a message arrives and sends to local docker for preprocessing
+2. Backend receives data, strips signature and footers extracts text, and runs AI classification.
+3. AI determines the correct tag and action (route, respond, or escalate).
+4. If AI response is possible, backend sends reply via Front’s API.
+5. If human review is needed, AI adds a Human Review Required tag instead.
+
+Since real-time processing isn't a factor, we will  focus on high-accuracy extraction and  cost savings :
+
+1️⃣ Preprocessing: Email Cleaning & Signature Stripping
+
+* Check comments if we have previously found the Patient ID.  If reply is related to new patient, run all the checks again
+* Use heuristic-based signature detection:
+    * Remove footers and disclaimers (often found in legal and corporate emails)
+    * Remove previous replies that have already been analyzed and reviewed and previously tagged
+    * Open-source tools EmailReplyParser, alternative, alternative2can help clean up raw emails.
+* Check if there is an existing Patient ID in the email
+    * Use regex to check for PRE then follow up numbers such as PRE100345 or PRE98733
+
+2️⃣ LLM Processing for Classification & Entity Extraction
+
+* Prompting Strategy:
+    * Ask the LLM to classify the email into a department & subcategory based on its content.
+    * Instruct the model to extract structured data (e.g., full names, phone # dates of birth, case details) while ignoring signatures.
+    * Ensure it returns structured JSON for easy processing.
+
+📌 Example Prompt for LLM:
+
+markdown
+
+Extract the following from the email: 1. Department: (Scheduling, Medical Records, Billing, etc.)2. Subcategory: (Appointment Status Request, Payment Issue, etc.)3. Full Name(s) and Date(s) of Birth (DOB)4. Find patient phone number Ignore email signatures and legal disclaimers.5. Return the output in JSON format.
+
+✅ Example LLM Response:
+
+json
+CopyEdit
+{
+"department": "Scheduling",
+"subcategory": "Appointment Status Request",
+"name": "John Doe",
+"dob": "02/15/1987"
+"PatientPhone": "8185551212"
+}
+
+
+3️⃣ Postprocessing & Tagging
+
+* Use a Named Entity Recognition (NER) model (like spaCy, Hugging Face BERT-based models) to validate extracted phone, names & DOBs.
+    * We can find patient ID by finding the Patient ID, phone #, full name+DOB, full name+DOI
+* Assign appropriate tags in Front based on the extracted department & subcategory.
+* Insert Patient ID into comments if found.  If not found enter comment,  Patient ID not found
+
+
+📌 Deployment Strategy
+
+✅Local Ubunutu docker  container
+
+✅Compare LLM:
+
+* GPT-40 Mini (Finetiued for tagging & extraction)
+* Llama 3 70B (Together AI API, fine-tuned for tagging & extraction)
+
+✅ If llama 3 70B is just as good or better :
+
+* Llama 3 70B (self-hosted, fine-tuned for tagging & extraction)
+
+
+o build a robust AI tagging and routing system, you need to anticipate logical edge cases, conflicts, and exceptions. Below is a comprehensive list of questions covering AI tagging logic, human intervention, system behavior, and scalability.
+
+📌 AI Tagging & Learning Logic
+Handling Incorrect Tags:
+
+If AI assigns the wrong tag and a user removes it, how does AI learn from this?
+Should AI log errors and adjust future predictions based on removals?
+If a user removes a tag and manually applies a different one, should AI learn from the correction?
+Handling AI Training Conflicts:
+
+If a user removes a tag but then adds "AI Training", how does AI handle both actions?
+If AI already tagged a message but a user modifies the tags, should AI update its model or just log the change?
+Multiple Tagging Conflicts:
+
+If a message matches multiple categories (e.g., Billing and Liens), how does AI prioritize which one gets assigned?
+Should AI apply multiple tags or only the most relevant one?
+If a tag is manually removed and another is added, should AI assume the user’s tag is more correct?
+📌 Human Review & Overrides
+When to Require Human Review?
+
+If AI confidence is low, should the system flag it for human review before applying a tag?
+If AI tags something and a user removes the tag, should AI automatically escalate the message to human review?
+Should users be allowed to override AI decisions, or should AI provide a "suggested" classification instead?
+Handling AI vs. Human Conflicts:
+
+If a human tags a message differently from AI, which decision takes priority?
+Should AI ask for confirmation before overriding a user-applied tag?
+If AI disagrees with a human’s correction, should it flag the message for further analysis?
+Tracking Human Edits:
+
+How does the system track manual tag changes to improve AI predictions?
+Should AI assign a confidence score to human corrections and weigh them differently?
+📌 Handling Duplicate Messages
+Duplicate Email Scenarios:
+
+If the same sender sends multiple emails with the same request, should AI re-tag each one or assume the first classification applies?
+If AI already tagged an earlier email, should it skip reprocessing duplicates?
+How does AI differentiate new messages from follow-ups on an existing case?
+Tagging Consistency Across Threads:
+
+If an email thread has multiple replies, should AI re-evaluate every response?
+Should AI update tags dynamically if new information is added to a conversation?
+If a user removes a tag on one message, should AI also remove it from previous emails in the thread?
+📌 Auto-Response & AI Decision Making
+Deciding When to Auto-Respond:
+
+Should AI always respond if it has high confidence, or should it wait for human review in certain categories?
+If AI is wrongly tagged, how does it know whether to still send a reply?
+If AI partially understands a request, should it ask clarifying questions before replying?
+Handling AI Response Failures:
+
+If AI attempts to reply but the response is incorrect, should AI delete it or flag for review?
+If AI responds incorrectly, how can users correct and retrain AI on responses?
+Should AI be able to override its previous auto-response if a user corrects the tag?
+📌 Handling Attachments & OCR Data
+Processing Attachments for Tagging:
+If an email has attachments, should AI process those before tagging, or tag based only on the body?
+If AI misses important data in an attachment, should it retry OCR extraction before assigning a tag?
+How should AI handle scanned PDFs vs. digital text documents for classification?
+Tagging OCR-Extracted Data:
+Should AI separately tag the email body vs. extracted OCR data, or treat them as one input?
+If an attachment contradicts the email body, which should AI prioritize for tagging?
+📌 Multi-Platform Synchronization
+Tagging Across Email, Live Chat, and SMS:
+Should AI use different tagging logic for email, live chat, and SMS?
+If a customer contacts support via multiple channels, how does AI ensure consistent tagging?
+If a user corrects a tag in one channel, should AI update tags for similar messages in other channels?
+Tagging Across Different Departments:
+If a message is tagged for one department but should belong to another, should AI move it automatically?
+If AI tags something incorrectly, should it be reprocessed after user correction?
+📌 Edge Cases & Exception Handling
+Handling Unrecognized Requests:
+If AI doesn’t know what to tag, should it assign a default tag or flag for manual review?
+Should AI use a fallback category like "Uncategorized Requests" for uncertain cases?
+Handling Ambiguous Language in Emails:
+If an email is vague, should AI ask for clarification or make its best guess?
+How should AI handle multi-topic emails where multiple tags could apply?
+Handling Spam & Junk Mail:
+Should AI automatically detect spam and move it to a separate folder?
+If AI mistakenly classifies spam as legitimate, how can it correct future errors?
+📌 AI Learning & Model Optimization
+Improving AI Over Time:
+How should AI track user corrections to improve tagging accuracy?
+Should AI log confidence scores for each decision and adjust based on feedback?
+Handling User Feedback on AI Decisions:
+Should AI allow users to rate tag accuracy (e.g., “Was this tag correct?” ✅ / ❌)?
+How often should AI retrain on new tagging data to stay accurate?
+Detecting Model Drift & Accuracy Drops:
+If AI tagging accuracy starts declining, how can the system detect and fix the problem?
+Should AI compare old vs. new tagging decisions to detect inconsistencies?
+📌 Final Considerations
+How does AI handle special cases (VIP clients, attorneys, doctors, etc.)?
+Should AI allow department-specific override rules for tagging?
+How should AI deal with emergency/urgent requests vs. normal ones?
+🚀 Next Steps
+Decide on which logical rules are most critical for your workflow.
+Implement error tracking and correction mechanisms for AI tagging.
+Design a feedback loop where human corrections improve future AI decisions.
+Would you like a decision flowchart for handling these scenarios? 🚀
+
+Edge Cases
+
+
+Split conversations
+https://app.frontapp.com/open/cnv_coc2fgh?key=fusrho0NRXdinvTKf-Klr7cL2QTFYNUy
+A lot of times users will use the same email chain to discuss many different topics so 1 email chain can be about a different patient or a different topic. Need to split the conversation and tag that message appropriately. Example msg 1 was about scheduling a patient.  They hit reply and now say, cancel this patient. We need to split the conversation so each message is tagged and handled correctly.  Link the conversation if its about the same patient, just a different topic.
+
+RX attached but body is asking for the exam / schedule status and using the attached RX for us to use to check for that patient  https://app.frontapp.com/open/cnv_coy1da9?key=sxf37beN0jmfVT1p6xjLQYQUJjksTxgS and https://app.frontapp.com/open/cnv_coz9k01?key=Zw7Y8jr0d5qftSLv_ktU9AYd-t4KQYTc
+Can help also by checking if that patient exists already in system if can find a patient with name/dates or ID.  If in the system and body is asking for exam status we know they are asking for status and it is NOT a new RX to be entered.
+
+https://app.frontapp.com/open/cnv_coxzgox?key=va6t7tpovgYIxQo4BGBA8h9RMfcENz4O  doc attached is a report and body is asking for a report.  Conflicting and would require human.  Should tag Low Confidence and Human review required
+
+https://app.frontapp.com/open/cnv_ci44qdd?key=LNAYAhdz5oJahVoG6tBVu2KN5XFTksHr  They want the bill and the report falling into two departments.  Should add tag of bill or balance request and report request tag.  Reply with both bill and report
+
+https://app.frontapp.com/open/cnv_cphs1z5?key=RlO9qHDt_PM_DD1tKurZEjgtxtUYtwv-  Atty notifies us they sent payment.  Reply letting them know our system will let them know when the check arrives and then once we process the payment and deposited it.  Add tag "Payment on way", send reply and archive it.  AI just needs to add the tag.  Front will do the reply and archive
+
+
+

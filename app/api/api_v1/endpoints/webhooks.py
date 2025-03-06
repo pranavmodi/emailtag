@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 from typing import Any, Dict
+import mailparser
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,6 +45,27 @@ def verify_webhook_signature(
     ).hexdigest()
     
     return hmac.compare_digest(expected_signature, signature)
+
+
+def extract_email_parts(raw_email: str) -> Dict[str, str]:
+    """
+    Extract parts from a raw email using mail-parser.
+    
+    Args:
+        raw_email: Raw email content
+        
+    Returns:
+        Dict[str, str]: Dictionary containing text and html parts
+    """
+    try:
+        parsed_mail = mailparser.parse_from_string(raw_email)
+        return {
+            "text": parsed_mail.body,
+            "html": parsed_mail.body_html or ""
+        }
+    except Exception as e:
+        logger.error(f"Error parsing raw email: {str(e)}")
+        return {"text": "", "html": ""}
 
 
 @router.post("/frontapp", status_code=status.HTTP_202_ACCEPTED)
@@ -128,9 +150,27 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
             if "email" in recipient:
                 recipients.append(recipient["email"])
         
-        # Extract content
+        # Extract content - both text and HTML
         content_text = message.get("text", "")
-        content_html = message.get("body", "")
+        
+        # In some FrontApp payloads, HTML might be under 'body' or 'body_html'
+        content_html = message.get("body", "") or message.get("body_html", "")
+        
+        # If we have a raw_email field, try to extract parts using mail-parser
+        if "raw_email" in message and message["raw_email"]:
+            try:
+                email_parts = extract_email_parts(message["raw_email"])
+                # Only use parsed parts if the original ones are empty
+                if not content_text and email_parts["text"]:
+                    content_text = email_parts["text"]
+                if not content_html and email_parts["html"]:
+                    content_html = email_parts["html"]
+            except Exception as e:
+                logger.warning(f"Error extracting email parts: {str(e)}")
+            
+        # Log the content for debugging
+        logger.debug(f"Extracted email data - Subject: {subject}, Sender: {sender}")
+        logger.debug(f"Text content length: {len(content_text)}, HTML content length: {len(content_html)}")
         
         # Create email record
         email_data = EmailCreate(

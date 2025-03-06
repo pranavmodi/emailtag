@@ -64,14 +64,12 @@ def tag_email(email_id: str) -> Dict:
             logger.error(f"Email {email_id} not found")
             return {"status": "error", "message": "Email not found"}
         
-        # Extract content for analysis
-        content = email_obj.content_text or ""
-        if not content and email_obj.content_html:
-            # TODO: Extract text from HTML if needed
-            pass
+        # Get content for analysis
+        content_text = email_obj.content_text or ""
+        content_html = email_obj.content_html or ""
         
-        # Analyze content with AI
-        suggested_tags = analyze_email_content(content)
+        # Analyze content with AI - using updated parameter names
+        suggested_tags = analyze_email_content(content_text=content_text, content_html=content_html)
         
         # Create tags in database and associate with email
         db_tags = []
