@@ -46,3 +46,15 @@ def create_application() -> FastAPI:
 
 
 app = create_application() 
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    # You can modify these settings as needed
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,  # Auto-reload on code changes during development
+        log_level="info"
+    ) 
