@@ -125,10 +125,11 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         webhook_data: The webhook data from FrontApp
     """
     try:
+        logger.info(f"Processing inbound message: {webhook_data}")
         # Extract conversation data
         conversation_id = webhook_data.payload.get("conversation", {}).get("id")
         if not conversation_id:
-            logger.error("No conversation ID in webhook payload")
+            logger.info("No conversation ID in webhook payload")
             return
         
         # Check if we've already processed this conversation
