@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     SSL_KEY_FILE: Optional[str] = None
     FORCE_HTTPS: bool = True
 
+    # Server Settings
+    PORT: int = 8000  # Default to 8000 if not set in .env
+
     # Database
     DATABASE_URL: PostgresDsn
     ASYNC_DATABASE_URL: Optional[PostgresDsn] = None
@@ -105,9 +108,6 @@ class Settings(BaseSettings):
 
     # Logging
     LOG_LEVEL: str = "INFO"
-
-    # Server
-    PORT: int = 8000
 
     class Config:
         """Pydantic settings config."""
