@@ -28,7 +28,7 @@ if __name__ == "__main__":
             if time.time() - start_time > timeout:
                 raise Exception("Task timed out")
             logger.info(f"Task state: {result.state}")
-            time.sleep(1)
+            time.sleep(0.01)
             
         task_result = result.get()
         logger.info(f"Task result: {task_result}")

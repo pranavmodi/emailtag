@@ -28,9 +28,12 @@ celery_app.conf.update(
     worker_hijack_root_logger=False,
 )
 
+# Autodiscover tasks in the app package
+celery_app.autodiscover_tasks(["app.tasks"])
+
 
 @celery_app.task(bind=True, name="app.tasks.worker.test_task")
 def test_task(self):
     """Test task to verify Celery setup."""
-    logger.info("Test task executed")
+    logger.info("Test task fucking executed")
     return {"status": "ok"} 

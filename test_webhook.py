@@ -4,6 +4,167 @@ Test script for sending realistic email payloads to the FrontApp webhook endpoin
 This simulates the webhook calls that FrontApp would make when receiving emails.
 """
 
+"""
+USAGE INSTRUCTIONS
+=================
+
+This script allows you to test your FrontApp webhook endpoint by sending simulated email payloads.
+It's useful for testing the email tagging system without needing to send real emails through FrontApp.
+
+Prerequisites:
+-------------
+1. Python 3.6+ installed
+2. Required packages: requests, python-dotenv
+3. Optional: Create a .env file with FRONTAPP_WEBHOOK_SECRET=your_secret_key
+
+Installation:
+-----------
+# Install required packages
+pip install requests python-dotenv
+
+Environment Setup:
+----------------
+The script uses environment variables for configuration. You can set these in a .env file:
+
+```
+# .env file example
+FRONTAPP_WEBHOOK_SECRET=your_webhook_secret_here
+```
+
+If you don't provide a .env file, the script will use "testsecret" as the default webhook secret.
+To use a different webhook secret without a .env file, you can set it as an environment variable:
+
+# Linux/Mac
+export FRONTAPP_WEBHOOK_SECRET=your_webhook_secret_here
+
+# Windows
+set FRONTAPP_WEBHOOK_SECRET=your_webhook_secret_here
+
+Basic Usage:
+-----------
+# Send a random test email to the default endpoint (localhost:8444)
+python test_webhook.py
+
+# Send a test email to a specific endpoint
+python test_webhook.py --url https://your-webhook-url.com/api/v1/webhooks/frontapp
+
+# Send multiple test emails at once
+python test_webhook.py --count 5
+
+# Disable SSL verification (useful for self-signed certificates)
+python test_webhook.py --no-verify-ssl
+
+Template Options:
+---------------
+The script includes several email templates with different content types:
+- Template 0: Billing inquiry
+- Template 1: Scheduling request
+- Template 2: Urgent results request
+- Template 3: Insurance verification
+- Template 4: Technical support
+- Template 5: General question
+- Template 6: Complex email with attachment
+
+# Send a specific template
+python test_webhook.py --template 2  # Sends the urgent results request template
+
+# Send a template with raw email data (including attachment)
+python test_webhook.py --raw
+
+Advanced Options:
+---------------
+# Specify a custom sender email
+python test_webhook.py --sender customer@example.com
+
+# Send without HTML content (plain text only)
+python test_webhook.py --no-html
+
+# Send without signing the payload (for testing signature validation)
+python test_webhook.py --no-sign
+
+Payload Structure:
+----------------
+The script generates a webhook payload that mimics what FrontApp would send when an email is received.
+The payload structure includes:
+
+1. Conversation data:
+   - Conversation ID
+   - Subject
+   - Status (unassigned)
+   - Recipient information
+
+2. Message data:
+   - Message ID
+   - Type (email)
+   - Created timestamp
+   - Subject
+   - Body (HTML content)
+   - Text (plain text content)
+   - Author information
+   - Recipients list
+   - Metadata (headers, thread reference)
+
+3. Raw email data (only for template 6):
+   - Complete MIME-formatted email with headers
+   - Multipart content (text/plain, text/html)
+   - Base64-encoded attachment
+
+The payload is signed using HMAC-SHA1 with your webhook secret, and the signature
+is sent in the X-Front-Signature header, which your webhook should validate.
+
+Expected Response:
+----------------
+When the webhook is sent successfully, you should see output similar to:
+
+```
+Sending 1 test email(s) to https://localhost:8444/api/v1/webhooks/frontapp
+--------------------------------------------------
+Email 1/1:
+Subject: Billing Inquiry - Invoice #12345
+From: alex@gmail.com
+Expected tags: ['billing']
+Contains raw email data: No
+Payload size: 3245 bytes
+Response: 202 Accepted
+✅ Webhook successfully sent
+--------------------------------------------------
+```
+
+The "Expected tags" line shows what tags the AI should ideally apply to this email.
+A 202 response code indicates the webhook was accepted successfully.
+
+If your webhook endpoint is properly processing the email, it should:
+1. Verify the X-Front-Signature header (if signature validation is enabled)
+2. Extract the email content from the payload
+3. Use AI to analyze and tag the email appropriately
+4. Apply the tags to the conversation in FrontApp
+
+Examples:
+--------
+# Test with 3 billing inquiries
+python test_webhook.py --template 0 --count 3
+
+# Test with a complex email to a production endpoint
+python test_webhook.py --raw --url https://your-production-url.com/api/v1/webhooks/frontapp
+
+# Test signature validation
+python test_webhook.py --no-sign  # Should be rejected if your webhook validates signatures
+
+# Test with a custom sender and no HTML
+python test_webhook.py --sender important@client.com --no-html
+
+# Test with SSL verification disabled (for self-signed certificates)
+python test_webhook.py --no-verify-ssl
+
+Troubleshooting:
+--------------
+1. Connection errors: Make sure your webhook server is running and accessible
+2. Authentication errors: Verify your webhook secret matches what's configured on the server
+3. SSL errors: If using HTTPS locally with self-signed certificates, you may need to disable SSL verification
+   using the --no-verify-ssl option (SSL verification is automatically disabled for localhost)
+4. If you receive a non-202 response, check your server logs for more details
+"""
+
 import argparse
 import hmac
 import hashlib
@@ -22,7 +183,7 @@ import dotenv
 dotenv.load_dotenv()
 
 # Configuration
-DEFAULT_WEBHOOK_URL = "http://localhost:8000/api/v1/webhooks/frontapp"
+DEFAULT_WEBHOOK_URL = "https://localhost:8444/api/v1/webhooks/frontapp"
 WEBHOOK_SECRET = os.getenv("FRONTAPP_WEBHOOK_SECRET", "testsecret")
 
 # Sample email templates for realistic testing
@@ -398,7 +559,7 @@ def sign_payload(payload: Dict, secret: str) -> str:
     ).hexdigest()
 
 
-def send_webhook(url: str, payload: Dict, sign: bool = True) -> requests.Response:
+def send_webhook(url: str, payload: Dict, sign: bool = True, verify_ssl: bool = True) -> requests.Response:
     """
     Send the webhook payload to the specified URL.
     
@@ -406,6 +567,7 @@ def send_webhook(url: str, payload: Dict, sign: bool = True) -> requests.Respons
         url: The webhook URL
         payload: The webhook payload
         sign: Whether to sign the payload
+        verify_ssl: Whether to verify SSL certificates
         
     Returns:
         requests.Response: The HTTP response
@@ -418,7 +580,17 @@ def send_webhook(url: str, payload: Dict, sign: bool = True) -> requests.Respons
         signature = sign_payload(payload, WEBHOOK_SECRET)
         headers['X-Front-Signature'] = signature
     
-    return requests.post(url, json=payload, headers=headers)
+    # Disable SSL verification for localhost testing or if explicitly requested
+    if verify_ssl and ('localhost' in url or '127.0.0.1' in url):
+        verify_ssl = False
+        
+    if not verify_ssl:
+        print("⚠️  SSL verification disabled for connection")
+        # Suppress InsecureRequestWarning
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    
+    return requests.post(url, json=payload, headers=headers, verify=verify_ssl)
 
 
 def main():
@@ -438,6 +610,8 @@ def main():
                         help='Number of webhooks to send (default: 1)')
     parser.add_argument('--raw', action='store_true',
                         help='Force using a template with raw email data (uses template 6)')
+    parser.add_argument('--no-verify-ssl', action='store_true',
+                        help='Disable SSL certificate verification for all URLs')
     
     args = parser.parse_args()
     
@@ -476,7 +650,12 @@ def main():
         
         # Send webhook
         try:
-            response = send_webhook(args.url, payload, not args.no_sign)
+            response = send_webhook(
+                url=args.url, 
+                payload=payload, 
+                sign=not args.no_sign, 
+                verify_ssl=not args.no_verify_ssl
+            )
             print(f"Response: {response.status_code} {response.reason}")
             if response.status_code == 202:
                 print("✅ Webhook successfully sent")

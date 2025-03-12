@@ -7,8 +7,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.crud import email as email_crud
-from app.crud import tag as tag_crud
+from app.crud.sync import email as email_crud_sync
+from app.crud.sync import tag as tag_crud_sync
 from app.db.session import SessionLocal
 from app.services.ai import analyze_email_content
 from app.services.frontapp import update_conversation_tags
@@ -58,8 +58,8 @@ def tag_email(email_id: str) -> Dict:
     # Get database session
     db = SessionLocal()
     try:
-        # Get email from database
-        email_obj = email_crud.get(db, id=email_uuid)
+        # Get email from database using synchronous CRUD
+        email_obj = email_crud_sync.get(db, id=email_uuid)
         if not email_obj:
             logger.error(f"Email {email_id} not found")
             return {"status": "error", "message": "Email not found"}
@@ -74,7 +74,8 @@ def tag_email(email_id: str) -> Dict:
         # Create tags in database and associate with email
         db_tags = []
         for tag_name in suggested_tags:
-            db_tag = tag_crud.get_or_create(db, name=tag_name)
+            # Use synchronous CRUD
+            db_tag = tag_crud_sync.get_or_create(db, name=tag_name)
             db_tags.append(db_tag)
         
         # Associate tags with email
@@ -88,8 +89,8 @@ def tag_email(email_id: str) -> Dict:
                 [tag.front_tag_id for tag in db_tags if tag.front_tag_id]
             )
         
-        # Mark email as processed
-        email_crud.mark_as_processed(db, email_id=email_uuid)
+        # Mark email as processed using synchronous CRUD
+        email_crud_sync.mark_as_processed(db, email_id=email_uuid)
         
         return {
             "status": "success", 
