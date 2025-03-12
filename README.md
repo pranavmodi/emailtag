@@ -92,7 +92,7 @@ This will start the following services:
 1. Start the web server:
 
 ```bash
-uvicorn app.main:app --reload
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8444 --ssl-keyfile=/home/fret/work/emailtag/certs/privkey.pem --ssl-certfile=/home/fret/work/emailtag/certs/fullchain.pem
 ```
 
 2. Start the Celery worker:
@@ -175,7 +175,7 @@ The Docker Compose file is configured to automatically use SSL if the certificat
 Start the web server with SSL:
 
 ```bash
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8444 --ssl-keyfile=certs/privkey.pem --ssl-certfile=certs/fullchain.pem
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8444 --ssl-keyfile=/home/fret/work/emailtag/certs/privkey.pem --ssl-certfile=/home/fret/work/emailtag/certs/fullchain.pem
 ```
 
 Or let the application automatically detect and use SSL certificates:

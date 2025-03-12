@@ -7,6 +7,7 @@ import os
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+import uvicorn
 
 from app.api.api_v1.api import api_router
 from app.core.config import settings
@@ -65,32 +66,35 @@ def create_application() -> FastAPI:
 
 app = create_application() 
 
-if __name__ == "__main__":
-    import uvicorn
-    
+def run_app():
+    """Run the application with uvicorn server."""
     # SSL configuration
     ssl_config = {}
     if settings.SSL_ENABLED:
-        if os.path.isfile(settings.SSL_CERT_FILE) and os.path.isfile(settings.SSL_KEY_FILE):
-            ssl_config = {
-                "ssl_keyfile": settings.SSL_KEY_FILE,
-                "ssl_certfile": settings.SSL_CERT_FILE,
-            }
-            logger.info(f"SSL enabled with certificate {settings.SSL_CERT_FILE} and key {settings.SSL_KEY_FILE}")
-        else:
-            logger.warning(
-                f"SSL is enabled but certificate or key files are missing. "
-                f"Cert file exists: {os.path.isfile(settings.SSL_CERT_FILE)}, "
-                f"Key file exists: {os.path.isfile(settings.SSL_KEY_FILE)}. "
-                f"Running without SSL. Set SSL_CERT_FILE and SSL_KEY_FILE in .env"
-            )
+        if settings.SSL_CERT_FILE and settings.SSL_KEY_FILE:
+            if os.path.isfile(settings.SSL_CERT_FILE) and os.path.isfile(settings.SSL_KEY_FILE):
+                ssl_config = {
+                    "ssl_keyfile": settings.SSL_KEY_FILE,
+                    "ssl_certfile": settings.SSL_CERT_FILE,
+                }
+                logger.info(f"SSL enabled with certificate {settings.SSL_CERT_FILE}")
+            else:
+                logger.warning("SSL files not found. Running without SSL.")
     
-    # You can modify these settings as needed
+    logger.info(f"Starting server on port {settings.PORT}")
+    if settings.SSL_ENABLED:
+        logger.info(f"Server will be available at https://localhost:{settings.PORT}")
+    else:
+        logger.info(f"Server will be available at http://localhost:{settings.PORT}")
+    
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
         port=settings.PORT,
-        reload=True,  # Auto-reload on code changes during development
-        log_level="info",
+        reload=True,
+        log_level=settings.LOG_LEVEL.lower(),
         **ssl_config
-    ) 
+    )
+
+if __name__ == "__main__":
+    run_app() 
