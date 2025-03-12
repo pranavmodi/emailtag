@@ -4,15 +4,23 @@ services:
   web:
     build: .
     ports:
-      - "8000:8000"
+      - "8444:8444"  # HTTPS port
     volumes:
       - .:/app
+      - ./certs:/app/certs  # Mount SSL certificates
     env_file:
       - .env
     depends_on:
       - db
       - rabbitmq
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: >
+      bash -c "
+      if [ -f \"$$SSL_CERT_FILE\" ] && [ -f \"$$SSL_KEY_FILE\" ]; then
+        uvicorn app.main:app --host 0.0.0.0 --port $$PORT --ssl-keyfile $$SSL_KEY_FILE --ssl-certfile $$SSL_CERT_FILE;
+      else
+        uvicorn app.main:app --host 0.0.0.0 --port $$PORT;
+      fi
+      "
 
   worker:
     build: .

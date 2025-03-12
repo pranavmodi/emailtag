@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     DEBUG: bool = False
 
+    # SSL/TLS Settings
+    SSL_ENABLED: bool = True
+    SSL_CERT_FILE: Optional[str] = None
+    SSL_KEY_FILE: Optional[str] = None
+    FORCE_HTTPS: bool = True
+
     # Database
     DATABASE_URL: PostgresDsn
     ASYNC_DATABASE_URL: Optional[PostgresDsn] = None
@@ -99,6 +105,9 @@ class Settings(BaseSettings):
 
     # Logging
     LOG_LEVEL: str = "INFO"
+
+    # Server
+    PORT: int = 8000
 
     class Config:
         """Pydantic settings config."""

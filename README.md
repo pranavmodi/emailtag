@@ -122,6 +122,129 @@ Once the application is running, you can access the API documentation at:
    - Events: Select "Inbound message"
    - Secret: Generate a random string and add it to your `.env` file
 
+## SSL Configuration
+
+The application is configured to use SSL by default for secure communication. To enable SSL:
+
+### Creating Self-Signed Certificates for Development
+
+For development or testing environments, you can create self-signed certificates:
+
+1. Create a directory for your certificates:
+
+```bash
+mkdir -p certs
+```
+
+2. Generate self-signed certificates using OpenSSL:
+
+```bash
+openssl req -x509 -newkey rsa:4096 -keyout certs/privkey.pem -out certs/fullchain.pem -days 365 -nodes
+```
+
+3. When prompted, fill in the certificate information. For a development certificate, you can use any values.
+
+### Using SSL Certificates
+
+1. Update your `.env` file with the following settings:
+   ```
+   SSL_ENABLED=true
+   SSL_CERT_FILE=/path/to/your/fullchain.pem
+   SSL_KEY_FILE=/path/to/your/privkey.pem
+   FORCE_HTTPS=true
+   ```
+
+2. If you're using Docker, update your `docker-compose.yml` file to mount the certificate files:
+   ```yaml
+   volumes:
+     - /path/to/your/certs:/app/certs
+   ```
+
+### Starting the Server with SSL
+
+#### Using Docker
+
+```bash
+docker-compose up -d
+```
+
+The Docker Compose file is configured to automatically use SSL if the certificate files are available.
+
+#### Without Docker
+
+Start the web server with SSL:
+
+```bash
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8444 --ssl-keyfile=certs/privkey.pem --ssl-certfile=certs/fullchain.pem
+```
+
+Or let the application automatically detect and use SSL certificates:
+
+```bash
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8444
+```
+
+### Production SSL Certificates
+
+For production environments, it's recommended to use a trusted certificate authority like Let's Encrypt:
+
+1. Install Certbot:
+
+```bash
+sudo apt-get update
+sudo apt-get install certbot
+```
+
+2. Obtain certificates (replace `your-domain.com` with your actual domain):
+
+```bash
+sudo certbot certonly --standalone -d your-domain.com
+```
+
+3. Update your `.env` file with the certificate paths:
+
+```
+SSL_CERT_FILE=/etc/letsencrypt/live/your-domain.com/fullchain.pem
+SSL_KEY_FILE=/etc/letsencrypt/live/your-domain.com/privkey.pem
+```
+
+### Using a Reverse Proxy
+
+For production environments, it's recommended to use a reverse proxy (like Nginx) to handle SSL:
+
+1. Configure Nginx with your SSL certificates
+2. Set up a proxy pass to your application
+3. In your application's `.env` file, you can set:
+   ```
+   SSL_ENABLED=false  # Let Nginx handle SSL
+   FORCE_HTTPS=true   # Still enforce HTTPS redirects
+   ```
+
+Example Nginx configuration:
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name your-domain.com;
+
+    ssl_certificate /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
+
+    location / {
+        proxy_pass http://localhost:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
 ## Development
 
 ### Running Tests
