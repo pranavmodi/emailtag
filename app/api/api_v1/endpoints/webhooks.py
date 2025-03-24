@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.crud import email as email_crud
 from app.db.session import get_db
-from app.schemas.email import EmailCreate, FrontAppWebhook
+from app.schemas.email import EmailCreate, FrontAppWebhook, PreprocessingWebhook
 from app.tasks.email import process_email
 
 logger = logging.getLogger(__name__)
@@ -193,4 +193,86 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         logger.info(f"Queued email {db_email.id} for processing")
         
     except Exception as e:
-        logger.exception(f"Error processing inbound message: {str(e)}") 
+        logger.exception(f"Error processing inbound message: {str(e)}")
+
+
+@router.post("/preprocessing", status_code=status.HTTP_202_ACCEPTED)
+async def preprocessing_webhook(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Webhook endpoint for preprocessing service outputs.
+    
+    Args:
+        request: The FastAPI request object
+        db: Database session
+        
+    Returns:
+        Dict[str, Any]: Response indicating the webhook was received
+    """
+    # Get the raw request body
+    body = await request.body()
+    
+    # Verify webhook signature in production
+    if not settings.DEBUG:
+        signature = request.headers.get("X-Preprocessing-Signature")
+        if not signature or not verify_webhook_signature(body, signature):
+            logger.warning("Invalid preprocessing webhook signature")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid signature",
+            )
+    
+    # Parse the webhook payload
+    try:
+        payload = json.loads(body)
+        webhook_data = PreprocessingWebhook(**payload)
+    except Exception as e:
+        logger.error(f"Error parsing preprocessing webhook payload: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid payload format",
+        )
+    
+    try:
+        # Get the email from database
+        email = await email_crud.get(db, id=webhook_data.email_id)
+        if not email:
+            logger.error(f"Email {webhook_data.email_id} not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Email not found",
+            )
+        
+        # Update email with preprocessing results in raw_data
+        update_data = {
+            "raw_data": {
+                **email.raw_data,
+                "preprocessing": {
+                    "ocr_text": webhook_data.ocr_text,
+                    "cleaned_text": webhook_data.cleaned_text,
+                    "cleaned_html": webhook_data.cleaned_html,
+                    "extracted_entities": webhook_data.extracted_entities,
+                    "confidence_score": webhook_data.confidence_score,
+                    "processing_status": webhook_data.processing_status,
+                    "error_message": webhook_data.error_message,
+                }
+            }
+        }
+        
+        await email_crud.update(db, db_obj=email, obj_in=update_data)
+        
+        # If preprocessing was successful, queue the email for AI tagging
+        if webhook_data.processing_status == "success":
+            process_email.delay(str(email.id))
+            logger.info(f"Queued email {email.id} for AI tagging after preprocessing")
+        
+        return {"status": "accepted", "email_id": str(email.id)}
+        
+    except Exception as e:
+        logger.exception(f"Error processing preprocessing webhook: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error processing webhook",
+        ) 
