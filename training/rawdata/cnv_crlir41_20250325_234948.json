@@ -1,0 +1,262 @@
+{
+  "_links": {
+    "self": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlir41",
+    "related": {
+      "events": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlir41/events",
+      "followers": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlir41/followers",
+      "messages": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlir41/messages",
+      "comments": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlir41/comments",
+      "inboxes": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlir41/inboxes",
+      "last_message": "https://precise-imaging.api.frontapp.com/messages/msg_ot0so01?referer=conversation"
+    }
+  },
+  "id": "cnv_crlir41",
+  "subject": "Re: EXTERNAL: Re: Maximilian Garcia MRI Rx",
+  "status": "archived",
+  "status_id": "sts_v8lxd",
+  "status_category": "resolved",
+  "ticket_ids": [],
+  "assignee": {
+    "_links": {
+      "self": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd",
+      "related": {
+        "inboxes": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/inboxes",
+        "conversations": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/conversations"
+      }
+    },
+    "id": "tea_2ditd",
+    "email": "ana.m@precisemri.com",
+    "username": "ana",
+    "first_name": "Ana",
+    "last_name": "Martinez",
+    "is_admin": false,
+    "is_available": true,
+    "is_blocked": false,
+    "type": "user",
+    "custom_fields": {}
+  },
+  "recipient": {
+    "_links": {
+      "related": {
+        "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_1s50fpd"
+      }
+    },
+    "name": null,
+    "handle": "paralegal2@victorylawllp.com",
+    "role": "to"
+  },
+  "tags": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_3k7ll",
+          "children": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/children"
+        }
+      },
+      "id": "tag_tn98h",
+      "name": "RX",
+      "highlight": "blue",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "updated_at": 1743054887.05,
+      "created_at": 1663790297.907
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_3k5wx",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_3k5wx/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+          "children": null
+        }
+      },
+      "id": "tag_3k5wx",
+      "name": "Order Entered",
+      "highlight": "✅",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": false,
+      "updated_at": 1743052934.054,
+      "created_at": 1551378905.259
+    }
+  ],
+  "links": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/links/top_d6ojl"
+      },
+      "id": "top_d6ojl",
+      "name": "ID: PRE1048965",
+      "type": "app_df5cb65d50c3ff8b",
+      "external_url": "https://precise.radflow360.com/patient?patientid=PRE1048965",
+      "custom_fields": {}
+    }
+  ],
+  "custom_fields": {},
+  "created_at": 1742946588.765,
+  "waiting_since": 1743050417,
+  "is_private": false,
+  "scheduled_reminders": [],
+  "metadata": {},
+  "messages": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_ot0so01",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlir41",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_ot0so01/seen",
+          "message_replied_to": "https://precise-imaging.api.frontapp.com/messages/msg_ot0so01/parent"
+        }
+      },
+      "id": "msg_ot0so01",
+      "type": "email",
+      "is_inbound": false,
+      "created_at": 1743050415.356,
+      "blurb": "The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day. For your records, the patient ID is PRE1048965. Please use this",
+      "body": "<div>The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day.&nbsp;&nbsp;</div><div><br /></div><div><b style=\"color: rgb(29, 28, 29); font-family: Slack-Lato, Slack-Fractions, appleLogo, sans-serif; font-variant-ligatures: common-ligatures; text-align: left; background-color: rgb(248, 248, 248);\" data-stringify-type=\"bold\">For your records, the patient ID is PRE1048965.&nbsp; Please use this for all future communications.</b></div><div><br /></div><div><br /></div><div>We will also send them a text shortly letting them know to call us in case we miss them when we reach out.</div><div><br /></div><div><br /></div><div><b>The patient is welcome to call our direct scheduling line M-F 8am to 5pm @ 818-629-1169</b></div><div><br /></div><div><br /></div><div>Once we can schedule them and they complete their exam, reports are typically sent out within 24-72 hours.</div><div><br /></div><div></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">Patients can also view their appointment times, answer\nprescreening questions and sign all liens here:</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><u><span style=\"font-size: 12pt;\"><a href=\"https://precise.radflow360.com/patient-portal\" target=\"_blank\" rel=\"noopener noreferrer\">https://precise.radflow360.com/patient-portal</a></span></u></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><u><span style=\"font-size: 12pt;\">If this is also a personal injury case:</span></u></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><ul type=\"disc\" style=\"margin-bottom: 0in;\">\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">A report containing&nbsp;the findings of the exam will\n     also be sent to the attorney</span></b></li>\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">A bill will be sent to the attorney once both the\n     patient and the attorney sign all pending liens</span></b></li>\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">Please make sure to submit a negotiation offer before\n     sending the payment</span></b></li>\n</ul><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\"><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Access\nbills, appointment times, and e-sign liens​&nbsp; (Click request login if you\ndon't have an account)<br />\n</a></span></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\"><br /></a></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\"><a href=\"https://pacs.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Access\nreports &amp; images</a>&nbsp;&nbsp;</span><a href=\"https://www.precisemri.com/request\" target=\"_blank\" rel=\"noopener noreferrer\"><span style=\"font-size: 12pt;\">(Request login here for reports)</span></a></b></div><div><b><a href=\"https://www.precisemri.com/request\" rel=\"noopener noreferrer\" target=\"_blank\"></a></b></div><div><br /></div>",
+      "text": "The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day. \n\n\nFor your records, the patient ID is PRE1048965. Please use this for all future communications.\n\n\n\n\nWe will also send them a text shortly letting them know to call us in case we miss them when we reach out.\n\n\n\n\nThe patient is welcome to call our direct scheduling line M-F 8am to 5pm @ 818-629-1169\n\n\n\n\nOnce we can schedule them and they complete their exam, reports are typically sent out within 24-72 hours.\n\n\n\nPatients can also view their appointment times, answer\nprescreening questions and sign all liens here:\nhttps://precise.radflow360.com/patient-portal\n\nIf this is also a personal injury case:\n\n\nA report containing the findings of the exam will\nalso be sent to the attorney\n\nA bill will be sent to the attorney once both the\npatient and the attorney sign all pending liens\n\nPlease make sure to submit a negotiation offer before\nsending the payment\n\n\n\nAccess\nbills, appointment times, and e-sign liens​ (Click request login if you\ndon't have an account)\n\n\n\nAccess\nreports & images (Request login here for reports)",
+      "error_type": null,
+      "version": null,
+      "subject": "Re: EXTERNAL: Re: Maximilian Garcia MRI Rx",
+      "draft_mode": null,
+      "metadata": {},
+      "author": {
+        "_links": {
+          "self": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd",
+          "related": {
+            "inboxes": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/inboxes",
+            "conversations": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/conversations"
+          }
+        },
+        "id": "tea_2ditd",
+        "email": "ana.m@precisemri.com",
+        "username": "ana",
+        "first_name": "Ana",
+        "last_name": "Martinez",
+        "is_admin": false,
+        "is_available": true,
+        "is_blocked": false,
+        "type": "user",
+        "custom_fields": {}
+      },
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": null,
+          "handle": "scheduling@precisemri.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_1s50fpd"
+            }
+          },
+          "name": null,
+          "handle": "paralegal2@victorylawllp.com",
+          "role": "to"
+        }
+      ],
+      "attachments": [],
+      "signature": null,
+      "is_draft": false
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_oss5q0x",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlir41",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_oss5q0x/seen"
+        }
+      },
+      "id": "msg_oss5q0x",
+      "type": "email",
+      "is_inbound": true,
+      "created_at": 1742946587,
+      "blurb": "Good Afternoon, Please see Rx and schedule returning client at your earliest convenience. Thank you Virus-free.www.avast.com On Tue, Jan 28, 2025 at 1:39 PM Sandra Dentice <sdentice@victorylawllp.com>",
+      "body": "<div><div>\r\n</div><div class=\"fa0 front-email-body\"><div dir=\"ltr\"><div class=\"fahewjmj\" style=\"font-family:georgia,serif\">Good Afternoon,<br /></div><div class=\"fahewjmj\" style=\"font-family:georgia,serif\"><br /></div><div class=\"fahewjmj\" style=\"font-family:georgia,serif\">Please see Rx and schedule returning client at your earliest&nbsp;convenience.&nbsp;</div><div class=\"fahewjmj\" style=\"font-family:georgia,serif\"><br /></div><div class=\"fahewjmj\" style=\"font-family:georgia,serif\">Thank you&nbsp;</div><div class=\"fahewjmj\" style=\"font-family:georgia,serif\"><br /></div></div><div id=\"DAB4FAD8-2DD7-40BB-A1B8-4E2AA1F9FDF2\"><br /><table style=\"border-top:1px solid #d3d4de\"><tbody><tr><td style=\"width:55px;padding-top:13px\"><a href=\"https://www.avast.com/sig-email?utm_medium=email&amp;utm_source=link&amp;utm_campaign=sig-email&amp;utm_content=webmail\" target=\"_blank\" rel=\"noopener noreferrer\"><img src=\"https://ext.frontusercontent.com/v1/proxy/YkNSKrDWmLNDcSrpJqBhTyFr4yVZ5eLc5O1t--KNYxmuikweEjMdGDqHgfjaVjssYhUGDCiwFTGK0f2NX3LQwjpOMb7q23TInk0QHlX5fwGTC8TjQFzqJimrYk4IDeFeVxMWkY7VEwvwrun_Zp8pdsYaVAS483rLV04NuXxlwNmJsOth0YkUKjKhXrGKCgYnNmwanbwyLOxScxqI856q47viVemSMt9_Wf3okIMjqF9SfZQ7tviAcQ#https://s-install.avcdn.net/ipm/preview/icons/icon-envelope-tick-round-orange-animated-no-repeat-v1.gif\" alt width=\"46\" height=\"29\" style=\"width: 46px; height: 29px;\" /></a></td><td style=\"width:470px;padding-top:12px;color:#41424e;font-size:13px;font-family:Arial,Helvetica,sans-serif;line-height:18px\">Virus-free.<a href=\"https://www.avast.com/sig-email?utm_medium=email&amp;utm_source=link&amp;utm_campaign=sig-email&amp;utm_content=webmail\" target=\"_blank\" style=\"color:#4453ea\" rel=\"noopener noreferrer\">www.avast.com</a></td></tr></tbody></table><a width=\"1\" height=\"1\" target=\"_blank\" rel=\"noopener noreferrer\"></a></div><br /><div class=\"gmail_quote fajo55w4\"><div dir=\"ltr\" class=\"fa-qphyz8\">On Tue, Jan 28, 2025 at 1:39 PM Sandra Dentice &lt;<a href=\"mailto:sdentice@victorylawllp.com\" target=\"_blank\" rel=\"noopener noreferrer\">sdentice@victorylawllp.com</a>&gt; wrote:<br /></div><blockquote class=\"gmail_quote front-blockquote\" style=\"margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex\"><div dir=\"ltr\">Good afternoon,<div><br /></div><div>Hope this helps regarding the referral and requested code. Please see below, thank you.</div><div><br /></div><div><br /></div><div><div style=\"font-size:0.875rem;padding:20px 0px 0px\"><table cellpadding=\"0\" style=\"border-collapse:collapse;margin-top:0px;width:auto;font-family:&quot;Google Sans&quot;,Roboto,RobotoDraft,Helvetica,Arial,sans-serif;font-size:0.875rem;display:block\"><tbody style=\"display:block\"><tr style=\"height:auto;display:flex\"><td style=\"padding:0px;vertical-align:top;width:513.381px;line-height:20px;display:block;max-height:20px\"><table cellpadding=\"0\" style=\"border-collapse:collapse;table-layout:fixed;width:513.381px\"><tbody><tr><td style=\"display:flex\"><h3 style=\"overflow:hidden;font-size:0.75rem;font-weight:inherit;margin:inherit;text-overflow:ellipsis;color:rgb(95,99,104);line-height:20px\"><span style=\"outline:none\"><span name=\"kevin kelly\" style=\"color:rgb(31,31,31);font-size:0.875rem;font-weight:bold;display:inline;vertical-align:top;line-height:20px\"><span style=\"vertical-align:top\">kevin kelly</span></span><span></span></span></h3><h3 style=\"overflow:hidden;font-size:0.75rem;font-weight:inherit;margin:inherit;text-overflow:ellipsis;color:rgb(95,99,104);line-height:20px\"></h3></td></tr></tbody></table></td><td style=\"text-align:right;vertical-align:top;display:block;max-height:20px\"><div style=\"padding:0px;display:flex\"><span id=\"m_-6510028667546760463gmail-:w2\" title=\"Jan 28, 2025, 1:37 PM\" alt=\"Jan 28, 2025, 1:37 PM\" style=\"vertical-align:top;margin:0px;font-size:0.75rem;color:rgb(94,94,94);display:block;line-height:20px\">1:37 PM (0 minutes ago)</span><div style=\"display:inline-block;height:20px;margin-left:20px;outline:0px\"><span style=\"display:inline-flex;height:20px;text-align:center;width:20px;padding:0px;margin:0px;border:none;outline:none\"></span></div></div></td><td style=\"text-align:right;vertical-align:top;display:flex\"></td><td rowspan=\"2\" style=\"text-align:right;vertical-align:top;display:block;max-height:20px\"><div style=\"display:inline-flex;border-radius:2px 0px 0px 2px;font-size:0.875rem;text-align:center;margin:0px 0px 0px 20px;height:20px;line-height:18px;min-width:0px;outline:none;padding:0px;background:transparent;color:rgb(68,68,68);border:none\"><img src=\"https://ext.frontusercontent.com/v1/proxy/MlEfzF94CLivfbrXOpiqYG--5lcnmtliwOjDEQDeqK9qiEgYQz_SkAAbn7oI9rAitpEjXb_w6t2Orzg5SZpD5iyMeFheMrpGNMA6QWGQjc1k8RFv-hNaNTV-cWBue4sE492JwXb9ci-y7X7bNwKpP-_nSBCGJv6BYPicEOH0We5LXMTQwA#https://mail.google.com/mail/u/0/images/cleardot.gif\" alt style=\"background: url(&quot;&quot;) 50% 50% / 20px no-repeat; height: 20px; margin: 0px; vertical-align: middle; width: 20px; opacity: 1; display: inline-block; padding: 0px;\" /></div><div id=\"m_-6510028667546760463gmail-:r6\" style=\"display:inline-flex;border-radius:0px 2px 2px 0px;font-size:0.875rem;text-align:center;margin:0px 0px 0px 20px;height:20px;line-height:18px;min-width:0px;outline:none;padding:0px;background:transparent;color:rgb(68,68,68);border:none\"><img src=\"https://ext.frontusercontent.com/v1/proxy/MlEfzF94CLivfbrXOpiqYG--5lcnmtliwOjDEQDeqK9qiEgYQz_SkAAbn7oI9rAitpEjXb_w6t2Orzg5SZpD5iyMeFheMrpGNMA6QWGQjc1k8RFv-hNaNTV-cWBue4sE492JwXb9ci-y7X7bNwKpP-_nSBCGJv6BYPicEOH0We5LXMTQwA#https://mail.google.com/mail/u/0/images/cleardot.gif\" alt style=\"background: url(&quot;&quot;) 50% 50% / 20px no-repeat; height: 20px; width: 20px; margin: 0px; vertical-align: middle; opacity: 1; display: inline-block; padding: 0px;\" /></div></td></tr><tr style=\"height:auto;display:flex\"><td colspan=\"3\"><table cellpadding=\"0\" style=\"border-collapse:collapse;table-layout:fixed;width:762.045px\"><tbody><tr><td style=\"overflow:visible;text-overflow:ellipsis;display:flex;line-height:20px\"><div style=\"overflow:hidden;max-width:92%;display:inline-block\"><span style=\"vertical-align:top;color:rgb(94,94,94);font-size:0.75rem;line-height:20px\">to&nbsp;<b><span name=\"Mayra\" style=\"color:rgb(34,34,34);font-weight:normal;vertical-align:top\">Mayra</span></b>,&nbsp;<span name=\"me\" style=\"vertical-align:top\">me</span>,&nbsp;<span name=\"Sara\" style=\"vertical-align:top\">Sara</span>,&nbsp;<span name=\"Erik\" style=\"vertical-align:top\">Erik</span></span></div><div id=\"m_-6510028667546760463gmail-:z2\" style=\"display:inline-flex;margin-left:4px;vertical-align:top;border:none;outline:none\"><img src=\"https://ext.frontusercontent.com/v1/proxy/MlEfzF94CLivfbrXOpiqYG--5lcnmtliwOjDEQDeqK9qiEgYQz_SkAAbn7oI9rAitpEjXb_w6t2Orzg5SZpD5iyMeFheMrpGNMA6QWGQjc1k8RFv-hNaNTV-cWBue4sE492JwXb9ci-y7X7bNwKpP-_nSBCGJv6BYPicEOH0We5LXMTQwA#https://mail.google.com/mail/u/0/images/cleardot.gif\" alt style=\"background: url(&quot;https://ext.frontusercontent.com/v1/proxy/6EEi9z9a_mirO-RGluEd8Y3CB6h7TybYMxXMhkSEkm1BXI2p2PCaNELJiouitrrPHLxPGRxITbxDana2ZSyezhUVFIENZ0K7nk1ls0PSSAFkBBUw90rL2BoYV8_st-qAolNxuPyfVOMwIuhtLQaoi3dOfej4jb-xRSbKhIQ8DeAj7rovrM66cPcnUnOz1z3ASSwzAJzxWgn6cadWqmvbjWwoDA9UlkBQtzrgIs7E0QzGKrP9doRvwlE1JmORvpxy8-9UarN5i_X6thaKVsJGcqci5vIGubi_rMvpF8PWh2bsVqFZUIxQABn-Y3cN36UNb-XmvkmIiUcAw1LYRBeiHsGcr1pyVririRTknaySvLcserHUKImQYwlEJGVGrA#https://ci3.googleusercontent.com/meips/ADKq_NYV2Or50ypV91q2_cRmF0R7YnTaptikVlQKU3MYUxIPOjCgL4OiX1XeB3Ljtr3ED_nQp6KBgm7p9KO1TspYnkzjeCUBICL0nmCBvjg_4ehtXl8uFUnoauN1bgzRHBQ6mqcNR2ik6yRjBWHdbkC79Q=s0-d-e1-ft&quot;) 50% 50% / 20px no-repeat; padding: 0px; vertical-align: baseline; height: 20px; width: 20px; border: none; margin: 0px 0px 0px auto; display: flex; opacity: 0.71;\" /></div></td></tr></tbody></table></td></tr></tbody></table></div><div id=\"m_-6510028667546760463gmail-:15c\"><div></div><div></div><div></div><div></div><div style=\"display:flex\"></div></div><div><div></div><div id=\"m_-6510028667546760463gmail-:1pu\"></div><div id=\"m_-6510028667546760463gmail-:2r1\" style=\"direction:ltr;margin:8px 0px 0px;padding:0px;font-size:0.875rem;overflow-x:hidden\"><div id=\"m_-6510028667546760463gmail-:142\" style=\"direction:ltr;font-variant-numeric:normal;font-variant-east-asian:normal;font-variant-alternates:normal;font-size-adjust:none;font-kerning:auto;font-feature-settings:normal;font-stretch:normal;font-size:small;line-height:1.5;overflow:auto hidden\"><div dir=\"ltr\">Good Afternoon:<div><br /></div><div>A CT scan that is requested is not a diagnosis, it is a procedure, therefore, no DX code is required for my referral.</div><div><br /></div><div>I believe the ICD 10 billing code for CT of the Cervical Spine is BR20ZZZ.&nbsp;</div><div><br /></div><div>I do not bill for CT exams since I do not perform them, therefore, I do not put the ICD codes on my referral forms. If you are billing for this procedure, you might want to check with the MRI / CT facility to find out which&nbsp;code they use for a more accurate description.</div><div><br /></div><div>My&nbsp;reason for the CT scan is to rule out cervical spine HNP ( Herniated Nucleus Pulposus). The code used for billing purposes to rule out a C spine HNP is M50.90. Again, since I am not billing for this procedure, merely requesting it, I do not include the code on my referrals.&nbsp;</div><div><br /></div><div>Hope that helps.</div><div><br /></div><div>Dr. Kelly&nbsp;</div></div><div style=\"outline:none;padding:10px 0px;width:22px;margin:2px 0px 0px\"><br /></div></div></div></div></div></div><br /><div class=\"gmail_quote\"><div dir=\"ltr\" class=\"fa-qphyz8\">On Mon, Jan 27, 2025 at 10:09 AM Sara Adair &lt;<a href=\"mailto:paralegal2@victorylawllp.com\" target=\"_blank\" rel=\"noopener noreferrer\">paralegal2@victorylawllp.com</a>&gt; wrote:<br /></div><blockquote class=\"gmail_quote front-blockquote\" style=\"margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex\"><div dir=\"ltr\"><div class=\"fahewjmj\" style=\"font-family:tahoma,sans-serif\">Please see attached, and replace MRI with CT Rx.&nbsp;</div><div class=\"fahewjmj\" style=\"font-family:tahoma,sans-serif\">Thank you&nbsp;</div><div class=\"fahewjmj\" style=\"font-family:tahoma,sans-serif\"><br /></div></div><br /><div class=\"gmail_quote\"><div dir=\"ltr\" class=\"fa-qphyz8\">On Wed, Jan 22, 2025 at 1:12 PM Sara Adair &lt;<a href=\"mailto:paralegal2@victorylawllp.com\" target=\"_blank\" rel=\"noopener noreferrer\">paralegal2@victorylawllp.com</a>&gt; wrote:<br /></div><blockquote class=\"gmail_quote front-blockquote\" style=\"margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex\"><div dir=\"ltr\"><div><div style=\"font-family:tahoma,sans-serif\" class=\"fahewjmj\">Good Afternoon,&nbsp;</div><div style=\"font-family:tahoma,sans-serif\" class=\"fahewjmj\"><br /></div><div style=\"font-family:tahoma,sans-serif\" class=\"fahewjmj\">Please schedule this client for MRI. Attached is Rx and below are client demographics.</div><div style=\"font-family:tahoma,sans-serif\" class=\"fahewjmj\">Please send appointment details when&nbsp;available.&nbsp;</div><div style=\"font-family:tahoma,sans-serif\" class=\"fahewjmj\"><br /></div><div style=\"font-family:tahoma,sans-serif\" class=\"fahewjmj\">Thank you.&nbsp;</div><div style=\"font-family:tahoma,sans-serif\" class=\"fahewjmj\"><br /></div><div class=\"fahewjmj\"><b><font face=\"georgia, serif\">Maximilian Garcia&nbsp;</font></b></div><div class=\"fahewjmj\"><font face=\"georgia, serif\">DOL 08/22/24</font></div><div class=\"fahewjmj\"><font face=\"georgia, serif\">DOB: 09/05/2004</font></div><div class=\"fahewjmj\"><font face=\"georgia, serif\">Address: 854 Berkshire Place</font></div><div class=\"fahewjmj\"><font face=\"georgia, serif\">Oxnard, CA 93033</font></div><div class=\"fahewjmj\"><font face=\"georgia, serif\">Phone: 805-377-9727</font></div></div><div><br /></div><span class=\"fam67vav\">-- </span><br /><div dir=\"ltr\" class=\"fa2i3mrf\"><div dir=\"ltr\"><div><br /></div><div style=\"color:rgb(34,34,34)\"><span style=\"font-family:arial,sans-serif\">Thank you,&nbsp;</span></div><div style=\"color:rgb(34,34,34)\"><span style=\"font-family:arial,sans-serif\">Sara Adair&nbsp;</span><br /></div><div style=\"color:rgb(34,34,34)\">Paralegal to</div><div style=\"color:rgb(34,34,34)\">Erik S. Velie, Esq.</div><div style=\"color:rgb(34,34,34)\"><b>VICTORY LAW GROUP, LLP</b></div><div style=\"color:rgb(34,34,34)\">24324 Walnut Street, Suite A</div><div style=\"color:rgb(34,34,34)\">Newhall, California 91321</div><div style=\"color:rgb(34,34,34)\">(661) 367-6512 Office</div><div style=\"color:rgb(34,34,34)\">(855) 640-7962 Fax</div><div><b><font color=\"#9900ff\">Medical Records and <span>Billing please email: <a href=\"mailto:prelit1@victorylawllp.com\" target=\"_blank\" rel=\"noopener noreferrer\">prelit1@victorylawllp.com</a></span></font></b></div><div style=\"color:rgb(34,34,34)\">_______________________________________</div><div style=\"color:rgb(34,34,34)\">This email and any files transmitted with it may contain confidential information that is legally privileged and is intended solely for the use of the individual or entity to whom they are addressed. If you are not the intended recipient, or a person responsible for delivering it to the intended recipient, you are hereby notified that any disclosure, copying, dissemination, distribution, or use of any of the information contained in or attached to this transmission is STRICTLY PROHIBITED. If you have received this email in error, please notify the sender by replying to this email or by telephone at (661) 367-6512, then destroy the original transmission and its attachments without reading or saving them in any manner.</div><div style=\"color:rgb(34,34,34)\"><br /></div><div style=\"color:rgb(34,34,34)\">NOTICE: To ensure compliance with requirements imposed by the Internal Revenue Service, we inform you that any U.S. Tax advice contained in this communication (or any attachment) is not intended or written to be used, and cannot be used for the purpose of (i) avoiding penalties under the Internal Revenue Code or (ii) promoting, marketing or recommending to another party any transaction or matter addressed in this communication (or in any attachment)&nbsp;</div></div></div></div></blockquote></div><div><br /></div><div><br /></div><span class=\"fam67vav\">-- </span><br /><div dir=\"ltr\" class=\"fa2i3mrf\"><div dir=\"ltr\"><div><br /></div><div style=\"color:rgb(34,34,34)\"><span style=\"font-family:arial,sans-serif\">Thank you,&nbsp;</span></div><div style=\"color:rgb(34,34,34)\"><span style=\"font-family:arial,sans-serif\">Sara Adair&nbsp;</span><br /></div><div style=\"color:rgb(34,34,34)\">Paralegal to</div><div style=\"color:rgb(34,34,34)\">Erik S. Velie, Esq.</div><div style=\"color:rgb(34,34,34)\"><b>VICTORY LAW GROUP, LLP</b></div><div style=\"color:rgb(34,34,34)\">24324 Walnut Street, Suite A</div><div style=\"color:rgb(34,34,34)\">Newhall, California 91321</div><div style=\"color:rgb(34,34,34)\">(661) 367-6512 Office</div><div style=\"color:rgb(34,34,34)\">(855) 640-7962 Fax</div><div><b><font color=\"#9900ff\">Medical Records and <span>Billing please email: <a href=\"mailto:prelit1@victorylawllp.com\" target=\"_blank\" rel=\"noopener noreferrer\">prelit1@victorylawllp.com</a></span></font></b></div><div style=\"color:rgb(34,34,34)\">_______________________________________</div><div style=\"color:rgb(34,34,34)\">This email and any files transmitted with it may contain confidential information that is legally privileged and is intended solely for the use of the individual or entity to whom they are addressed. If you are not the intended recipient, or a person responsible for delivering it to the intended recipient, you are hereby notified that any disclosure, copying, dissemination, distribution, or use of any of the information contained in or attached to this transmission is STRICTLY PROHIBITED. If you have received this email in error, please notify the sender by replying to this email or by telephone at (661) 367-6512, then destroy the original transmission and its attachments without reading or saving them in any manner.</div><div style=\"color:rgb(34,34,34)\"><br /></div><div style=\"color:rgb(34,34,34)\">NOTICE: To ensure compliance with requirements imposed by the Internal Revenue Service, we inform you that any U.S. Tax advice contained in this communication (or any attachment) is not intended or written to be used, and cannot be used for the purpose of (i) avoiding penalties under the Internal Revenue Code or (ii) promoting, marketing or recommending to another party any transaction or matter addressed in this communication (or in any attachment)&nbsp;</div></div></div></blockquote></div></blockquote></div><div><br /></div><div><br /></div><span class=\"fam67vav\">-- </span><br /><div dir=\"ltr\" class=\"fa2i3mrf\"><div dir=\"ltr\"><div><font face=\"georgia, serif\"><br /></font></div><div style=\"color:rgb(34,34,34)\"><font face=\"georgia, serif\">Thank you,&nbsp;</font></div><div style=\"color:rgb(34,34,34)\"><font face=\"georgia, serif\">Sara Adair&nbsp;<br /></font></div><div style=\"color:rgb(34,34,34)\"><font face=\"georgia, serif\">Paralegal to</font></div><div style=\"color:rgb(34,34,34)\"><font face=\"georgia, serif\">Erik S. Velie, Esq.</font></div><div style=\"color:rgb(34,34,34)\"><b><font face=\"georgia, serif\">VICTORY LAW GROUP, LLP</font></b></div><div style=\"color:rgb(34,34,34)\"><font face=\"georgia, serif\">24324 Walnut Street, Suite A</font></div><div style=\"color:rgb(34,34,34)\"><font face=\"georgia, serif\">Newhall, California 91321</font></div><div style=\"color:rgb(34,34,34)\"><font face=\"georgia, serif\">(661) 367-6512 Office</font></div><div style=\"color:rgb(34,34,34)\"><font face=\"georgia, serif\">(855) 640-7962 Fax</font></div><div><b><font color=\"#9900ff\"><br /><span></span></font></b></div><div style=\"color:rgb(34,34,34)\">_______________________________________</div><div style=\"color:rgb(34,34,34)\">This email and any files transmitted with it may contain confidential information that is legally privileged and is intended solely for the use of the individual or entity to whom they are addressed. If you are not the intended recipient, or a person responsible for delivering it to the intended recipient, you are hereby notified that any disclosure, copying, dissemination, distribution, or use of any of the information contained in or attached to this transmission is STRICTLY PROHIBITED. If you have received this email in error, please notify the sender by replying to this email or by telephone at (661) 367-6512, then destroy the original transmission and its attachments without reading or saving them in any manner.</div><div style=\"color:rgb(34,34,34)\"><br /></div><div style=\"color:rgb(34,34,34)\">NOTICE: To ensure compliance with requirements imposed by the Internal Revenue Service, we inform you that any U.S. Tax advice contained in this communication (or any attachment) is not intended or written to be used, and cannot be used for the purpose of (i) avoiding penalties under the Internal Revenue Code or (ii) promoting, marketing or recommending to another party any transaction or matter addressed in this communication (or in any attachment)&nbsp;</div></div></div></div></div>",
+      "text": "\nGood Afternoon,\n\n\n\n\nPlease see Rx and schedule returning client at your earliest convenience. \n\n\n\nThank you \n\n\n\n\nVirus-free.www.avast.com \n\n\n\n\n> On Tue, Jan 28, 2025 at 1:39 PM Sandra Dentice <sdentice@victorylawllp.com> wrote:\n\n\n>> Good afternoon,\n\n\n>> Hope this helps regarding the referral and requested code. Please see below, thank you.\n\n\n\n\n\n>> kevin kelly\n\n\n\n\n>> 1:37 PM (0 minutes ago)\n\n\n\n\n\n>> to Mayra, me, Sara, Erik\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n>> Good Afternoon:\n\n\n>> A CT scan that is requested is not a diagnosis, it is a procedure, therefore, no DX code is required for my referral.\n\n\n\n>> I believe the ICD 10 billing code for CT of the Cervical Spine is BR20ZZZ. \n\n\n\n>> I do not bill for CT exams since I do not perform them, therefore, I do not put the ICD codes on my referral forms. If you are billing for this procedure, you might want to check with the MRI / CT facility to find out which code they use for a more accurate description.\n\n\n\n>> My reason for the CT scan is to rule out cervical spine HNP ( Herniated Nucleus Pulposus). The code used for billing purposes to rule out a C spine HNP is M50.90. Again, since I am not billing for this procedure, merely requesting it, I do not include the code on my referrals. \n\n\n\n>> Hope that helps.\n\n\n\n>> Dr. Kelly \n\n\n\n\n\n\n\n\n\n\n>>> On Mon, Jan 27, 2025 at 10:09 AM Sara Adair <paralegal2@victorylawllp.com> wrote:\n\n\n>>>> Please see attached, and replace MRI with CT Rx. \n\n>>>> Thank you \n\n\n\n\n\n>>>>> On Wed, Jan 22, 2025 at 1:12 PM Sara Adair <paralegal2@victorylawllp.com> wrote:\n\n\n>>>>>> Good Afternoon, \n\n\n\n>>>>>> Please schedule this client for MRI. Attached is Rx and below are client demographics.\n\n>>>>>> Please send appointment details when available. \n\n\n\n>>>>>> Thank you. \n\n\n>>>>>> Maximilian Garcia \n>>>>>> DOL 08/22/24\n>>>>>> DOB: 09/05/2004\n>>>>>> Address: 854 Berkshire Place\n>>>>>> Oxnard, CA 93033\n>>>>>> Phone: 805-377-9727\n\n\n\n\n>>>>>> -- \n\n\n\n>>>>>> Thank you, \n\n>>>>>> Sara Adair \n\n\n>>>>>> Paralegal to\n\n>>>>>> Erik S. Velie, Esq.\n\n>>>>>> VICTORY LAW GROUP, LLP\n\n>>>>>> 24324 Walnut Street, Suite A\n\n>>>>>> Newhall, California 91321\n\n>>>>>> (661) 367-6512 Office\n\n>>>>>> (855) 640-7962 Fax\n>>>>>> Medical Records and Billing please email: prelit1@victorylawllp.com\n\n>>>>>> _______________________________________\n\n>>>>>> This email and any files transmitted with it may contain confidential information that is legally privileged and is intended solely for the use of the individual or entity to whom they are addressed. If you are not the intended recipient, or a person responsible for delivering it to the intended recipient, you are hereby notified that any disclosure, copying, dissemination, distribution, or use of any of the information contained in or attached to this transmission is STRICTLY PROHIBITED. If you have received this email in error, please notify the sender by replying to this email or by telephone at (661) 367-6512, then destroy the original transmission and its attachments without reading or saving them in any manner.\n\n\n\n>>>>>> NOTICE: To ensure compliance with requirements imposed by the Internal Revenue Service, we inform you that any U.S. Tax advice contained in this communication (or any attachment) is not intended or written to be used, and cannot be used for the purpose of (i) avoiding penalties under the Internal Revenue Code or (ii) promoting, marketing or recommending to another party any transaction or matter addressed in this communication (or in any attachment) \n\n\n\n\n\n\n\n\n\n\n>>>> -- \n\n\n\n>>>> Thank you, \n\n>>>> Sara Adair \n\n\n>>>> Paralegal to\n\n>>>> Erik S. Velie, Esq.\n\n>>>> VICTORY LAW GROUP, LLP\n\n>>>> 24324 Walnut Street, Suite A\n\n>>>> Newhall, California 91321\n\n>>>> (661) 367-6512 Office\n\n>>>> (855) 640-7962 Fax\n>>>> Medical Records and Billing please email: prelit1@victorylawllp.com\n\n>>>> _______________________________________\n\n>>>> This email and any files transmitted with it may contain confidential information that is legally privileged and is intended solely for the use of the individual or entity to whom they are addressed. If you are not the intended recipient, or a person responsible for delivering it to the intended recipient, you are hereby notified that any disclosure, copying, dissemination, distribution, or use of any of the information contained in or attached to this transmission is STRICTLY PROHIBITED. If you have received this email in error, please notify the sender by replying to this email or by telephone at (661) 367-6512, then destroy the original transmission and its attachments without reading or saving them in any manner.\n\n\n\n>>>> NOTICE: To ensure compliance with requirements imposed by the Internal Revenue Service, we inform you that any U.S. Tax advice contained in this communication (or any attachment) is not intended or written to be used, and cannot be used for the purpose of (i) avoiding penalties under the Internal Revenue Code or (ii) promoting, marketing or recommending to another party any transaction or matter addressed in this communication (or in any attachment) \n\n\n\n\n\n\n\n\n\n\n-- \n\n\nThank you, \nSara Adair \n\nParalegal to\nErik S. Velie, Esq.\nVICTORY LAW GROUP, LLP\n24324 Walnut Street, Suite A\nNewhall, California 91321\n(661) 367-6512 Office\n(855) 640-7962 Fax\n\n\n\n_______________________________________\n\nThis email and any files transmitted with it may contain confidential information that is legally privileged and is intended solely for the use of the individual or entity to whom they are addressed. If you are not the intended recipient, or a person responsible for delivering it to the intended recipient, you are hereby notified that any disclosure, copying, dissemination, distribution, or use of any of the information contained in or attached to this transmission is STRICTLY PROHIBITED. If you have received this email in error, please notify the sender by replying to this email or by telephone at (661) 367-6512, then destroy the original transmission and its attachments without reading or saving them in any manner.\n\n\n\nNOTICE: To ensure compliance with requirements imposed by the Internal Revenue Service, we inform you that any U.S. Tax advice contained in this communication (or any attachment) is not intended or written to be used, and cannot be used for the purpose of (i) avoiding penalties under the Internal Revenue Code or (ii) promoting, marketing or recommending to another party any transaction or matter addressed in this communication (or in any attachment) ",
+      "error_type": null,
+      "version": null,
+      "subject": "EXTERNAL: Re: Maximilian Garcia MRI Rx",
+      "draft_mode": null,
+      "metadata": {},
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_1s50fpd"
+            }
+          },
+          "name": "Sara Adair",
+          "handle": "paralegal2@victorylawllp.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": "Precise Imaging Scheduling & Orders",
+          "handle": "scheduling@precisemri.com",
+          "role": "to"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_19bl2wx"
+            }
+          },
+          "name": "Scott Flaschner",
+          "handle": "scott.f@precisemri.com",
+          "role": "cc"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_23rhe2p"
+            }
+          },
+          "name": "Sandra Dentice",
+          "handle": "slozano@victorylawllp.com",
+          "role": "cc"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_24spj7l"
+            }
+          },
+          "name": "Sandra Dentice",
+          "handle": "sdentice@victorylawllp.com",
+          "role": "cc"
+        }
+      ],
+      "attachments": [
+        {
+          "id": "fil_12lqbds1",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_oss5q0x/download/fil_12lqbds1",
+          "filename": "MRI RX.pdf",
+          "content_type": "application/pdf",
+          "size": 1333780,
+          "metadata": {
+            "is_inline": false
+          }
+        }
+      ],
+      "signature": null,
+      "is_draft": false
+    }
+  ]
+}

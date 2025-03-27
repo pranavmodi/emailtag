@@ -1,0 +1,283 @@
+{
+  "_links": {
+    "self": "https://precise-imaging.api.frontapp.com/conversations/cnv_crldarl",
+    "related": {
+      "events": "https://precise-imaging.api.frontapp.com/conversations/cnv_crldarl/events",
+      "followers": "https://precise-imaging.api.frontapp.com/conversations/cnv_crldarl/followers",
+      "messages": "https://precise-imaging.api.frontapp.com/conversations/cnv_crldarl/messages",
+      "comments": "https://precise-imaging.api.frontapp.com/conversations/cnv_crldarl/comments",
+      "inboxes": "https://precise-imaging.api.frontapp.com/conversations/cnv_crldarl/inboxes",
+      "last_message": "https://precise-imaging.api.frontapp.com/messages/msg_ot0i535?referer=conversation"
+    }
+  },
+  "id": "cnv_crldarl",
+  "subject": "Re: EXTERNAL: Robledo, Iliana - DOL 03/13/2025 - DOB 12/26/1988",
+  "status": "archived",
+  "status_id": "sts_v8lxd",
+  "status_category": "resolved",
+  "ticket_ids": [],
+  "assignee": {
+    "_links": {
+      "self": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd",
+      "related": {
+        "inboxes": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/inboxes",
+        "conversations": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/conversations"
+      }
+    },
+    "id": "tea_2ditd",
+    "email": "ana.m@precisemri.com",
+    "username": "ana",
+    "first_name": "Ana",
+    "last_name": "Martinez",
+    "is_admin": false,
+    "is_available": true,
+    "is_blocked": false,
+    "type": "user",
+    "custom_fields": {}
+  },
+  "recipient": {
+    "_links": {
+      "related": {
+        "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_24wci2p"
+      }
+    },
+    "name": null,
+    "handle": "venus@jtlegalgroup.com",
+    "role": "to"
+  },
+  "tags": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_3k7ll",
+          "children": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/children"
+        }
+      },
+      "id": "tag_tn98h",
+      "name": "RX",
+      "highlight": "blue",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "updated_at": 1743054887.05,
+      "created_at": 1663790297.907
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_3k5wx",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_3k5wx/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+          "children": null
+        }
+      },
+      "id": "tag_3k5wx",
+      "name": "Order Entered",
+      "highlight": "✅",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": false,
+      "updated_at": 1743052934.054,
+      "created_at": 1551378905.259
+    }
+  ],
+  "links": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/links/top_eg669"
+      },
+      "id": "top_eg669",
+      "name": "ID: PRE1068796",
+      "type": "app_df5cb65d50c3ff8b",
+      "external_url": "https://precise.radflow360.com/patient?patientid=PRE1068796",
+      "custom_fields": {}
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/links/top_eg681"
+      },
+      "id": "top_eg681",
+      "name": "ID: PRE1068798",
+      "type": "app_df5cb65d50c3ff8b",
+      "external_url": "https://precise.radflow360.com/patient?patientid=PRE1068798",
+      "custom_fields": {}
+    }
+  ],
+  "custom_fields": {},
+  "created_at": 1742942860.213,
+  "waiting_since": 1743043221,
+  "is_private": false,
+  "scheduled_reminders": [],
+  "metadata": {},
+  "messages": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_ot0i535",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crldarl",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_ot0i535/seen",
+          "message_replied_to": "https://precise-imaging.api.frontapp.com/messages/msg_ot0i535/parent"
+        }
+      },
+      "id": "msg_ot0i535",
+      "type": "email",
+      "is_inbound": false,
+      "created_at": 1743043216.905,
+      "blurb": "The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day. For your records, patient IDs are PRE1068798, PRE1068796. Pleas",
+      "body": "<div>The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day.&nbsp;&nbsp;</div><div><br /></div><div><b style=\"color: rgb(29, 28, 29); font-family: Slack-Lato, Slack-Fractions, appleLogo, sans-serif; font-variant-ligatures: common-ligatures; text-align: left; background-color: rgb(248, 248, 248);\" data-stringify-type=\"bold\">For your records, patient IDs are PRE1068798, PRE1068796.&nbsp; Please use this for all future communications.</b></div><div><br /></div><div><br /></div><div>We will also send them a text shortly letting them know to call us in case we miss them when we reach out.</div><div><br /></div><div><br /></div><div><b>The patient is welcome to call our direct scheduling line M-F 8am to 5pm @ 818-629-1169</b></div><div><br /></div><div><br /></div><div>Once we can schedule them and they complete their exam, reports are typically sent out within 24-72 hours.</div><div><br /></div><div></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">Patients can also view their appointment times, answer\nprescreening questions and sign all liens here:</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><u><span style=\"font-size: 12pt;\"><a href=\"https://precise.radflow360.com/patient-portal\" target=\"_blank\" rel=\"noopener noreferrer\">https://precise.radflow360.com/patient-portal</a></span></u></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><u><span style=\"font-size: 12pt;\">If this is also a personal injury case:</span></u></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><ul type=\"disc\" style=\"margin-bottom: 0in;\">\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">A report containing&nbsp;the findings of the exam will\n     also be sent to the attorney</span></b></li>\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">A bill will be sent to the attorney once both the\n     patient and the attorney sign all pending liens</span></b></li>\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">Please make sure to submit a negotiation offer before\n     sending the payment</span></b></li>\n</ul><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\"><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Access\nbills, appointment times, and e-sign liens​&nbsp; (Click request login if you\ndon't have an account)<br />\n</a></span></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\"><br /></a></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\"><a href=\"https://pacs.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Access\nreports &amp; images</a>&nbsp;&nbsp;</span><a href=\"https://www.precisemri.com/request\" target=\"_blank\" rel=\"noopener noreferrer\"><span style=\"font-size: 12pt;\">(Request login here for reports)</span></a></b></div><div><b><a href=\"https://www.precisemri.com/request\" rel=\"noopener noreferrer\" target=\"_blank\"></a></b></div><div><br /></div>",
+      "text": "The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day. \n\n\nFor your records, patient IDs are PRE1068798, PRE1068796. Please use this for all future communications.\n\n\n\n\nWe will also send them a text shortly letting them know to call us in case we miss them when we reach out.\n\n\n\n\nThe patient is welcome to call our direct scheduling line M-F 8am to 5pm @ 818-629-1169\n\n\n\n\nOnce we can schedule them and they complete their exam, reports are typically sent out within 24-72 hours.\n\n\n\nPatients can also view their appointment times, answer\nprescreening questions and sign all liens here:\nhttps://precise.radflow360.com/patient-portal\n\nIf this is also a personal injury case:\n\n\nA report containing the findings of the exam will\nalso be sent to the attorney\n\nA bill will be sent to the attorney once both the\npatient and the attorney sign all pending liens\n\nPlease make sure to submit a negotiation offer before\nsending the payment\n\n\n\nAccess\nbills, appointment times, and e-sign liens​ (Click request login if you\ndon't have an account)\n\n\n\nAccess\nreports & images (Request login here for reports)",
+      "error_type": null,
+      "version": null,
+      "subject": "Re: EXTERNAL: Robledo, Iliana - DOL 03/13/2025 - DOB 12/26/1988",
+      "draft_mode": null,
+      "metadata": {},
+      "author": {
+        "_links": {
+          "self": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd",
+          "related": {
+            "inboxes": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/inboxes",
+            "conversations": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/conversations"
+          }
+        },
+        "id": "tea_2ditd",
+        "email": "ana.m@precisemri.com",
+        "username": "ana",
+        "first_name": "Ana",
+        "last_name": "Martinez",
+        "is_admin": false,
+        "is_available": true,
+        "is_blocked": false,
+        "type": "user",
+        "custom_fields": {}
+      },
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": null,
+          "handle": "scheduling@precisemri.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_24wci2p"
+            }
+          },
+          "name": null,
+          "handle": "venus@jtlegalgroup.com",
+          "role": "to"
+        }
+      ],
+      "attachments": [],
+      "signature": null,
+      "is_draft": false
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_osrtr7l",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crldarl",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_osrtr7l/seen"
+        }
+      },
+      "id": "msg_osrtr7l",
+      "type": "email",
+      "is_inbound": true,
+      "created_at": 1742942859,
+      "blurb": "Hello, For the client mentioned below, I have attached the Rx above. Please schedule for MRI as soon as possible. Kindly advise through email if clients has been scheduled. Robledo, Iliana - DOL 03/13",
+      "body": "<div><div>\r\n<style>\r\n#fae_osrtr7l p.fab6k8g, #fae_osrtr7l li.fab6k8g, #fae_osrtr7l :where(.front-email-body) div.fab6k8g\r\n\t{margin:0in;\r\n\tfont-size:11.0pt;\r\n\tfont-family:\"Aptos\",sans-serif;\r\n\tmso-ligatures:standardcontextual;}\r\n#fae_osrtr7l a:link, #fae_osrtr7l span.farytb2y\r\n\t{mso-style-priority:99;\r\n\tcolor:#467886;\r\n\ttext-decoration:underline;}\r\n@page WordSection1\r\n\t{size:8.5in 11.0in;\r\n\tmargin:1.0in 1.0in 1.0in 1.0in;}\r\n#fae_osrtr7l :where(.front-email-body) div.fac9qm84\r\n\t{page:WordSection1;}\r</style></div><div lang=\"EN-US\" style=\"word-wrap:break-word\" class=\"fa0 front-email-body\"><div class=\"fac9qm84\"><p class=\"fab6k8g\">Hello,<span></span></p><p class=\"fab6k8g\"><span>&nbsp;</span></p><p class=\"fab6k8g\"><span style=\"color:black;mso-ligatures:none\">For the client mentioned below, I have attached the Rx above. Please schedule for MRI as soon as possible. Kindly advise through email if clients has been scheduled.<span></span></span></p><p class=\"fab6k8g\"><span>&nbsp;</span></p><p class=\"fab6k8g\"><b>Robledo, Iliana - DOL 03/13/2025<span></span></b></p><p class=\"fab6k8g\">F&nbsp; | &nbsp;Age 36 &nbsp; | &nbsp;12/26/1988&nbsp; | &nbsp;<a href=\"tel:3236424430\" target=\"_blank\" rel=\"noopener noreferrer\">(323) 642-4430</a>&nbsp; | &nbsp;<a href=\"mailto:ilianarbld@gmail.com?bcc=2519726@bcc.casepeer.com\" target=\"_blank\" rel=\"noopener noreferrer\">ilianarbld@gmail.com</a>&nbsp; | &nbsp;English&nbsp;<span></span></p><p class=\"fab6k8g\"><span>&nbsp;</span></p><p class=\"fab6k8g\"><b>Robledo, Valery - DOL 03/13/2025<span></span></b></p><p class=\"fab6k8g\">F&nbsp; | &nbsp;Age 20 &nbsp; | &nbsp;03/26/2004&nbsp; | &nbsp;<a href=\"tel:3236424430\" target=\"_blank\" rel=\"noopener noreferrer\">(323) 642-4430</a>&nbsp; | &nbsp;<a href=\"mailto:ilianarbld@gmail.com?bcc=2520040@bcc.casepeer.com\" target=\"_blank\" rel=\"noopener noreferrer\">ilianarbld@gmail.com</a>&nbsp; | &nbsp;English&nbsp;<span></span></p><p class=\"fab6k8g\"><span>&nbsp;</span></p><p class=\"fab6k8g\">Address: 5309 Maywood Ave,<span style=\"font-size:11.5pt;font-family:&quot;Arial&quot;,sans-serif;color:#2C3037;background:white\"> </span>Maywood, CA 90270<span></span></p><p class=\"fab6k8g\"><span>&nbsp;</span></p><p class=\"fab6k8g\"><span style=\"font-size:12.0pt;mso-ligatures:none\">Best regards,</span><span style=\"font-family:&quot;Calibri&quot;,sans-serif;mso-ligatures:none\"><span></span></span></p><p class=\"fab6k8g\"><span style=\"font-size:12.0pt;mso-ligatures:none\">&nbsp;<span></span></span></p><table class=\"fa-6kext0\" border=\"0\" cellspacing=\"4\" cellpadding=\"0\" width=\"579\" style=\"width:434.35pt;margin-left:2.25pt\"><tbody><tr style=\"height:86.15pt\"><td width=\"287\" style=\"width:214.95pt;border:none;border-right:solid black 1.0pt;padding:.75pt .75pt .75pt .75pt;height:86.15pt\"><p class=\"fab6k8g\" align=\"center\" style=\"text-align:center;line-height:105%\"><span style=\"font-size:12.0pt;line-height:105%\"><img border=\"0\" width=\"270\" height=\"53\" style=\"width:2.8166in;height:.55in\" id=\"Picture_x0020_3\" src=\"/us-west-1/api/1/companies/88d6512b91118f61d8bf/attachments/2bc5a9be2700f27ea91524b33e1de26f7a8b37d4?resource_link_id=84031140801\" alt=\"jt legal group\" front-cid=\"image001.png@01DB9D9C.B269F8B0\" /><span style=\"mso-ligatures:none\"><span></span></span></span></p></td><td width=\"284\" valign=\"top\" style=\"width:212.8pt;padding:.75pt .75pt .75pt 4.5pt;height:86.15pt\"><p class=\"fab6k8g\" style=\"line-height:105%\"><b><span style=\"font-size:13.0pt;line-height:105%;font-family:&quot;Calibri Light&quot;,sans-serif;color:#2F5496;mso-ligatures:none\">Venus Duque</span></b><span style=\"mso-ligatures:none\"><span></span></span></p><p class=\"fab6k8g\" style=\"line-height:105%\"><b><span style=\"mso-ligatures:none\">Case Manager Assistant</span></b><span style=\"mso-ligatures:none\"><span></span></span></p><p class=\"fab6k8g\" style=\"line-height:105%\"><span style=\"font-size:12.0pt;line-height:105%;mso-ligatures:none\">801 N. Brand Blvd., Suite 1130<span></span></span></p><p class=\"fab6k8g\" style=\"line-height:105%\"><span lang=\"ES-US\" style=\"font-size:12.0pt;line-height:105%;mso-ligatures:none\">Glendale, CA 91203</span><span style=\"font-size:12.0pt;line-height:105%;mso-ligatures:none\"><span></span></span></p><p class=\"fab6k8g\" style=\"line-height:105%\"><span lang=\"ES-US\" style=\"mso-ligatures:none\">Direct:&nbsp;818-797-7900|&nbsp;Fax:&nbsp;818-208-4550</span><span style=\"mso-ligatures:none\"><span></span></span></p><p class=\"fab6k8g\" style=\"line-height:105%\"><span style=\"mso-ligatures:none\"><a href=\"http://www.jtlegalgroup.com/\" target=\"_blank\" rel=\"noopener noreferrer\"><span lang=\"ES-US\" style=\"color:blue\">www.jtlegalgroup.com</span></a></span><span style=\"font-size:12.0pt;line-height:105%;mso-ligatures:none\"><span></span></span></p></td></tr></tbody></table><p class=\"fab6k8g\"><span style=\"font-size:8.0pt;mso-ligatures:none\">&nbsp;</span><span style=\"mso-ligatures:none\"><span></span></span></p><p class=\"fab6k8g\"><span style=\"font-size:8.0pt;color:#A5A5A5;mso-ligatures:none\">CONFIDENTIALITY MESSAGE: The information contained in this e-mail is intended only for the personal and confidential use of the recipient(s) named above. This message may be an attorney-client communication and, as such, is PRIVILEGED &amp; CONFIDENTIAL. If the reader of this message is not the intended recipient or an agent responsible for delivering it to the intended recipient, you are hereby notified that you have received this message (and any attachments) in error and that any review, dissemination, distribution or copying of this message or any attachments is strictly prohibited. If you have received this message in error, please notify us immediately by e-mail and delete the original message and all and all attachments. Thank you.</span><span></span></p><p class=\"fab6k8g\"><span>&nbsp;</span></p></div></div></div>",
+      "text": "\nHello,\n\n\nFor the client mentioned below, I have attached the Rx above. Please schedule for MRI as soon as possible. Kindly advise through email if clients has been scheduled.\n\n\nRobledo, Iliana - DOL 03/13/2025\n\nF | Age 36 | 12/26/1988 | (323) 642-4430 | ilianarbld@gmail.com | English \n\n\nRobledo, Valery - DOL 03/13/2025\n\nF | Age 20 | 03/26/2004 | (323) 642-4430 | ilianarbld@gmail.com | English \n\n\nAddress: 5309 Maywood Ave, Maywood, CA 90270\n\n\nBest regards,\n\n\n\n\nVenus Duque\n\nCase Manager Assistant\n\n801 N. Brand Blvd., Suite 1130\n\nGlendale, CA 91203\n\nDirect: 818-797-7900| Fax: 818-208-4550\n\nwww.jtlegalgroup.com\n\n\n\n\n\nCONFIDENTIALITY MESSAGE: The information contained in this e-mail is intended only for the personal and confidential use of the recipient(s) named above. This message may be an attorney-client communication and, as such, is PRIVILEGED & CONFIDENTIAL. If the reader of this message is not the intended recipient or an agent responsible for delivering it to the intended recipient, you are hereby notified that you have received this message (and any attachments) in error and that any review, dissemination, distribution or copying of this message or any attachments is strictly prohibited. If you have received this message in error, please notify us immediately by e-mail and delete the original message and all and all attachments. Thank you.",
+      "error_type": null,
+      "version": null,
+      "subject": "EXTERNAL: Robledo, Iliana - DOL 03/13/2025 - DOB 12/26/1988",
+      "draft_mode": null,
+      "metadata": {},
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_24wci2p"
+            }
+          },
+          "name": "Venus Duque",
+          "handle": "venus@jtlegalgroup.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_19e9zi9"
+            }
+          },
+          "name": "Precise Imaging Records & Images",
+          "handle": "records@precisemri.com",
+          "role": "to"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": "Precise Imaging Scheduling & Orders",
+          "handle": "scheduling@precisemri.com",
+          "role": "to"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_20tfkg1"
+            }
+          },
+          "name": "Stacy Escalante",
+          "handle": "stacy@jtlegalgroup.com",
+          "role": "cc"
+        }
+      ],
+      "attachments": [
+        {
+          "id": "fil_12lpyz7l",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_osrtr7l/download/fil_12lpyz7l",
+          "filename": "image001.png",
+          "content_type": "image/png",
+          "size": 13346,
+          "metadata": {
+            "is_inline": true,
+            "cid": "image001.png@01DB9D9C.B269F8B0"
+          }
+        },
+        {
+          "id": "fil_12lpyz9d",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_osrtr7l/download/fil_12lpyz9d",
+          "filename": "Robledo Iliana_MRI CS LS Rx.pdf",
+          "content_type": "application/pdf",
+          "size": 94995,
+          "metadata": {
+            "is_inline": false
+          }
+        },
+        {
+          "id": "fil_12lpyzb5",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_osrtr7l/download/fil_12lpyzb5",
+          "filename": "Robledo Valery_MRI LS Rx.pdf",
+          "content_type": "application/pdf",
+          "size": 94040,
+          "metadata": {
+            "is_inline": false
+          }
+        }
+      ],
+      "signature": null,
+      "is_draft": false
+    }
+  ]
+}

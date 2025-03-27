@@ -1,0 +1,194 @@
+{
+  "_links": {
+    "self": "https://precise-imaging.api.frontapp.com/conversations/cnv_crosce9",
+    "related": {
+      "events": "https://precise-imaging.api.frontapp.com/conversations/cnv_crosce9/events",
+      "followers": "https://precise-imaging.api.frontapp.com/conversations/cnv_crosce9/followers",
+      "messages": "https://precise-imaging.api.frontapp.com/conversations/cnv_crosce9/messages",
+      "comments": "https://precise-imaging.api.frontapp.com/conversations/cnv_crosce9/comments",
+      "inboxes": "https://precise-imaging.api.frontapp.com/conversations/cnv_crosce9/inboxes",
+      "last_message": "https://precise-imaging.api.frontapp.com/messages/msg_ot0i1j5?referer=conversation"
+    }
+  },
+  "id": "cnv_crosce9",
+  "subject": "Re: EXTERNAL: New Lien Inquiry: Lien Inquiry, Lien Settlement  Peterson, Jessica",
+  "status": "unassigned",
+  "status_id": "sts_v8ltt",
+  "status_category": "open",
+  "ticket_ids": [],
+  "assignee": null,
+  "recipient": {
+    "_links": {
+      "related": {
+        "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_1a05f29"
+      }
+    },
+    "name": "Precise Imaging",
+    "handle": "noreply@precisemri.com",
+    "role": "from"
+  },
+  "tags": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_rlvr5",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_rlvr5/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_rlvnl",
+          "children": null
+        }
+      },
+      "id": "tag_rlvr5",
+      "name": "Bill or balance Request",
+      "highlight": "📄",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "updated_at": 1743043282.662,
+      "created_at": 1620743248.686
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_tq0e9",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_tq0e9/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": null,
+          "children": "https://precise-imaging.api.frontapp.com/tags/tag_tq0e9/children"
+        }
+      },
+      "id": "tag_tq0e9",
+      "name": "Bill Offer",
+      "highlight": "🤑",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "updated_at": 1743056926.912,
+      "created_at": 1666081638.131
+    }
+  ],
+  "links": [],
+  "custom_fields": {},
+  "created_at": 1743043043.736,
+  "waiting_since": 1743043048,
+  "is_private": false,
+  "scheduled_reminders": [],
+  "metadata": {},
+  "messages": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_ot0i1j5",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crosce9",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_ot0i1j5/seen"
+        }
+      },
+      "id": "msg_ot0i1j5",
+      "type": "email",
+      "is_inbound": false,
+      "created_at": 1743043046.447,
+      "blurb": "**This is an automated reply confirming we received your email/request.** Access our new attorney portal to e-sign liens, view bills, balances, reports, images and pay online @ Precise.RadFlow360.com",
+      "body": "<div><span style=\"font-size: 13px;\"><b>**This is an automated reply confirming we received your email/request.**</b></span></div><div><br /></div><div><b><span style=\"font-family: &quot;Helvetica Neue&quot;, &quot;Segoe UI&quot;, Helvetica, Arial, sans-serif; font-size: 13px;\">Access our new attorney portal to e-sign liens, view bills, balances, reports, images and pay online @ <a href=\"http://precise.radflow360.com/\" rel=\"noopener noreferrer\" target=\"_blank\">Precise.RadFlow360.com</a></span></b></div><div><br /></div><div><span style=\"font-family: 'Helvetica Neue', 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 400;\">Please allow </span><span style=\"font-family: 'Helvetica Neue', 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px;\"><b>three</b></span><span style=\"font-family: 'Helvetica Neue', 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 400;\"> </span><span style=\"font-family: 'Helvetica Neue', 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px;\"><b><u>full</u></b></span><span style=\"font-family: 'Helvetica Neue', 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 400;\"> business days for a response. (Business hours: Mon-Fri 9am-5pm).</span></div><div><span style=\"font-family: 'Helvetica Neue', 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 400;\"><br /></span></div><div><span style=\"font-size: 14px;\"><b style=\"font-style: inherit; color: rgb(29, 28, 29); font-family: Slack-Lato, appleLogo, sans-serif;\" data-stringify-type=\"bold\" class=\"fa-31vw68 facty68n\">If you do not receive a response within the&nbsp;</b><b style=\"font-style: inherit; color: rgb(29, 28, 29); font-family: Slack-Lato, appleLogo, sans-serif;\" data-stringify-type=\"bold\" class=\"fa-31vw68 facty68n\"><i data-stringify-type=\"italic\">allotted</i></b><b style=\"font-style: inherit; color: rgb(29, 28, 29); font-family: Slack-Lato, appleLogo, sans-serif;\" data-stringify-type=\"bold\" class=\"fa-31vw68 facty68n\">&nbsp;time, please call to follow up on your email/request.</b><b>&nbsp;</b></span></div><div><span style=\"font-size: 14px;\"><b><br /></b></span></div><div><u><span style=\"font-size: 14px;\"><b>New address for mailing payments:</b></span></u></div><div><br /></div><div><b>Precise Imaging</b></div><div><b>PO Box 510626</b></div><div><span style=\"font-size: 14px;\"><b>Livonia MI 48151<br /></b></span></div><div><span style=\"font-size: 14px;\"><b><br /></b></span></div><div style=\"margin-left: 7em;\"><u><span style=\"font-size: 14px;\"><b>IMPORTANT INFO BEFORE SUBMITTING PAYMENT</b></span></u></div><div><span style=\"font-size: 14px;\"><b><br /></b></span></div><ol data-front-editor-list style=\"margin-top: 0px; margin-bottom: 0px; list-style-type: decimal;\"><li><span style=\"font-size: 14px;\"><b>Two liens per case must be signed. <a href=\"https://precise.radflow360.com/\" rel=\"noopener noreferrer\" target=\"_blank\">E-sign all liens instantly</a>.&nbsp;</b></span><ol data-front-editor-list style=\"margin-top: 0px; margin-bottom: 0px; list-style-type: lower-alpha;\"><li><span style=\"font-size: 14px;\"><b>One for the images and&nbsp;</b></span></li><li><span style=\"font-size: 14px;\"><b>One for the radiologist report</b></span></li></ol></li><li><span style=\"font-size: 14px;\"><b><a href=\"https://precise.radflow360.com/\" rel=\"noopener noreferrer\" target=\"_blank\">Submit </a>a negotiation offer for your client's bill.</b></span><ol data-front-editor-list style=\"margin-top: 0px; margin-bottom: 0px; list-style-type: lower-alpha;\"><li><b>Payments submitted without an accepted negotiation offer will be rejected and returned to sender.</b></li></ol></li><li><b>Pay <a href=\"https://precise.radflow360.com/\" rel=\"noopener noreferrer\" target=\"_blank\">online via credit card, ACH</a> or mail a check.</b></li></ol><div><span style=\"font-weight: 700;\"><br /></span></div><div><span style=\"font-weight: 700;\">Thank you for your cooperation to ensure a speedy turnaround time for your client and our patient.<br /></span></div><div><span style=\"font-size: 14px;\"><b><br /></b></span></div><div><span style><span style=\"font-size: 14px; font-weight: bold;\">To submit a </span><span style=\"font-weight: 700;\">negotiation</span><span style=\"font-size: 14px; font-weight: bold;\">, please email <a href=\"mailto:offer@precisemri.com\" rel=\"noopener noreferrer\" target=\"_blank\">offer@precisemri.com</a>&nbsp;or <a href=\"https://precise.radflow360.com/\" rel=\"noopener noreferrer\" target=\"_blank\">submit online via the attorney portal</a></span></span></div><div><span style><span style=\"font-size: 14px; font-weight: bold;\"><br /></span></span></div><div><span style><span style=\"font-size: 14px; font-weight: bold;\">If you are requesting reports, records or images and to avoid any delays, please access the attorney portal @ <a href=\"http://www.precise.radflow360.com/\" rel=\"noopener noreferrer\" target=\"_blank\">www.Precise.RadFlow360.com</a><a href=\"https://precise.radflow360.com/\" rel=\"noopener noreferrer\" target=\"_blank\">https://precise.radflow360.com/</a></span></span></div><div><span style=\"font-family: 'Helvetica Neue', 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 400;\"><br /></span></div><div><span style=\"font-size: 13px;\">Thank you!</span></div>",
+      "text": "**This is an automated reply confirming we received your email/request.**\n\n\nAccess our new attorney portal to e-sign liens, view bills, balances, reports, images and pay online @ Precise.RadFlow360.com\n\n\nPlease allow three full business days for a response. (Business hours: Mon-Fri 9am-5pm).\n\n\nIf you do not receive a response within the allotted time, please call to follow up on your email/request. \n\n\nNew address for mailing payments:\n\n\nPrecise Imaging\nPO Box 510626\nLivonia MI 48151\n\n\n\nIMPORTANT INFO BEFORE SUBMITTING PAYMENT\n\n\n\nTwo liens per case must be signed. E-sign all liens instantly. \nOne for the images and \n\nOne for the radiologist report\n\n\n\nSubmit a negotiation offer for your client's bill.\nPayments submitted without an accepted negotiation offer will be rejected and returned to sender.\n\n\n\nPay online via credit card, ACH or mail a check.\n\n\n\nThank you for your cooperation to ensure a speedy turnaround time for your client and our patient.\n\n\n\nTo submit a negotiation, please email offer@precisemri.com or submit online via the attorney portal\n\n\nIf you are requesting reports, records or images and to avoid any delays, please access the attorney portal @ www.Precise.RadFlow360.comhttps://precise.radflow360.com/\n\n\nThank you!",
+      "error_type": null,
+      "version": null,
+      "subject": "Re: EXTERNAL: New Lien Inquiry: Lien Inquiry, Lien Settlement  Peterson, Jessica",
+      "draft_mode": null,
+      "metadata": {},
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18ie329"
+            }
+          },
+          "name": "Liens @ Precise Imaging",
+          "handle": "liens@precisemri.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_22wej9d"
+            }
+          },
+          "name": null,
+          "handle": "steph@shklaw.com",
+          "role": "to"
+        }
+      ],
+      "attachments": [],
+      "signature": null,
+      "is_draft": false
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_ot0i135",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crosce9",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_ot0i135/seen"
+        }
+      },
+      "id": "msg_ot0i135",
+      "type": "email",
+      "is_inbound": true,
+      "created_at": 1743043042,
+      "blurb": "Please Select Who You Are Attorney or Attorney's Office Office Name / Practice SHK LAW Corp Phone 818-650-9502 Your Name Stephanie Ceniceros Your Email steph@shklaw.com What Can We Help You With? Lien",
+      "body": "<div><div>\r\n</div><div class=\"fa0 front-email-body\"><table cellspacing=\"0\" style=\"font-size:16px;line-height:135%;border-bottom:1px solid #e3dede;\"><tbody><tr style=\"background-color:#f0efef;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Please Select Who You Are</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Attorney or Attorney's Office</td></tr><tr style=\"background-color:#ffffff;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Office Name / Practice</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">SHK LAW Corp</td></tr><tr style=\"background-color:#f0efef;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Phone</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">818-650-9502</td></tr><tr style=\"background-color:#ffffff;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Your Name</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Stephanie Ceniceros</td></tr><tr style=\"background-color:#f0efef;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Your Email</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">steph@shklaw.com</td></tr><tr style=\"background-color:#ffffff;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">What Can We Help You With?</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Lien Inquiry, Lien Settlement</td></tr><tr style=\"background-color:#f0efef;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Patient First Name</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Jessica</td></tr><tr style=\"background-color:#ffffff;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Patient Last Name</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Peterson</td></tr><tr style=\"background-color:#f0efef;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Patient DOB</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">August 11, 1989</td></tr><tr style=\"background-color:#ffffff;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Date of Injury/Accident</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">June 16, 2020</td></tr><tr style=\"background-color:#f0efef;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">How should we send the requested documents to you?</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Fax, Email</td></tr><tr style=\"background-color:#ffffff;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Fax Number</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">818-650-9502</td></tr><tr style=\"background-color:#f0efef;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Email Address</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">steph@shklaw.com</td></tr><tr style=\"background-color:#ffffff;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Please enter any specifics about your inquiry here</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">I need a copy of your 2025 W9 to issue payment, thank you.</td></tr><tr style=\"background-color:#f0efef;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Attach any related file(s)</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">You do not have permission to do that</td></tr><tr style=\"background-color:#ffffff;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">IP Address</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">98.152.209.154</td></tr><tr style=\"background-color:#f0efef;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">User-Agent (Browser/OS)</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Google Chrome 134.0.0.0 / Windows</td></tr><tr style=\"background-color:#ffffff;\"><th style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">Referrer</th><td style=\"text-align:left;color:#555555;padding:7px 9px;vertical-align:top;border-top:1px solid #e3dede;\">https://www.precisemri.com/request</td></tr></tbody></table><img src=\"https://ext.frontusercontent.com/v1/proxy/rTWYjdmtQ3Xb0YJmUBorqMilHHo5RaRsTVeqaMb_Bi7LXRGm4ZvEybgNqi4Q_4cFsMVbyvpWqJBGu682022or7It_2ZBSGHlL112AcFhgWvoHKbkF7USki3nGfRmragsZ854EM43Dr5usPVQlawRsQRE0esgAwWuKXrs7ziOHIWxpvKAbASrI9tfOyNL_c4454q-a4bmBxRGhnpGTYl4GOyEtzPhycJXu9GVHx6Hc8wr6QrAjLNAx4627go1hgl7TwyZvAUEqnNCwjzvEZ0n7pJn1N0CElOuah2G6TMKkRGhFxDqgze3_abil6ZYzHj95x3AtnFmTUQcNblHfB5s9cYGW63TEhjAq-TFG-Yn_fOnvd5nuDk8Kdi7w8se5GXNua660XvME3aOwGFSG5KwPhUDPQ4qRIfziDqb_BMwPhrbyGBhE4IExYFSfxMCpi6gZ4rAlyGfcZmgC40-6b9dTB_hPvRf0MY71o6QfA#http://url8563.precisemri.com/wf/open?upn=u001.MmDgyrGIlVC-2FF1L8eLI-2BUB7F8WQVPzwyQGjp2QVLgRR6r9t1zU7I9pFwc5LHMyNq9AKWM4lJ-2F6JMmednZ35Q1M5eQ2Q6VAW50Vrs-2Bnw6KCPuWvYbZotQX6Ih-2Bmz4u3aTFvBKyav9HgoEukXZRWcMI4zitclRTz-2FQYaJuMpo5EQfAVnpI66SBsTxfzHwwhofxe2rCPxB-2FB5I0o3RRptG3-2Fw-3D-3D\" alt width=\"1\" height=\"1\" border=\"0\" style=\"height:1px !important;width:1px !important;border-width:0 !important;margin-top:0 !important;margin-bottom:0 !important;margin-right:0 !important;margin-left:0 !important;padding-top:0 !important;padding-bottom:0 !important;padding-right:0 !important;padding-left:0 !important;\" /></div></div>",
+      "text": "Please Select Who You Are Attorney or Attorney's Office \nOffice Name / Practice SHK LAW Corp \nPhone 818-650-9502 \nYour Name Stephanie Ceniceros \nYour Email steph@shklaw.com \nWhat Can We Help You With? Lien Inquiry, Lien Settlement \nPatient First Name Jessica \nPatient Last Name Peterson \nPatient DOB August 11, 1989 \nDate of Injury/Accident June 16, 2020 \nHow should we send the requested documents to you? Fax, Email \nFax Number 818-650-9502 \nEmail Address steph@shklaw.com \nPlease enter any specifics about your inquiry here I need a copy of your 2025 W9 to issue payment, thank you. \nAttach any related file(s) You do not have permission to do that \nIP Address 98.152.209.154 \nUser-Agent (Browser/OS) Google Chrome 134.0.0.0 / Windows \nReferrer https://www.precisemri.com/request ",
+      "error_type": null,
+      "version": null,
+      "subject": "EXTERNAL: New Lien Inquiry: Lien Inquiry, Lien Settlement  Peterson, Jessica",
+      "draft_mode": null,
+      "metadata": {},
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_1a05f29"
+            }
+          },
+          "name": "Precise Imaging",
+          "handle": "noreply@precisemri.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18ie329"
+            }
+          },
+          "name": "Precise Imaging Liens",
+          "handle": "liens@precisemri.com",
+          "role": "to"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_22wej9d"
+            }
+          },
+          "name": "steph@shklaw.com",
+          "handle": "steph@shklaw.com",
+          "role": "reply-to"
+        }
+      ],
+      "attachments": [
+        {
+          "id": "fil_12m3zphd",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_ot0i135/download/fil_12m3zphd",
+          "filename": "Fax-Coversheet-Request-for-W9-.pdf",
+          "content_type": "application/pdf",
+          "size": 475592,
+          "metadata": {
+            "is_inline": false
+          }
+        }
+      ],
+      "signature": null,
+      "is_draft": false
+    }
+  ]
+}

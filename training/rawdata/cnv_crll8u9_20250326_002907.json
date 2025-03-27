@@ -1,0 +1,292 @@
+{
+  "_links": {
+    "self": "https://precise-imaging.api.frontapp.com/conversations/cnv_crll8u9",
+    "related": {
+      "events": "https://precise-imaging.api.frontapp.com/conversations/cnv_crll8u9/events",
+      "followers": "https://precise-imaging.api.frontapp.com/conversations/cnv_crll8u9/followers",
+      "messages": "https://precise-imaging.api.frontapp.com/conversations/cnv_crll8u9/messages",
+      "comments": "https://precise-imaging.api.frontapp.com/conversations/cnv_crll8u9/comments",
+      "inboxes": "https://precise-imaging.api.frontapp.com/conversations/cnv_crll8u9/inboxes",
+      "last_message": "https://precise-imaging.api.frontapp.com/messages/msg_ot0uagx?referer=conversation"
+    }
+  },
+  "id": "cnv_crll8u9",
+  "subject": "Re: EXTERNAL: Re: NEW BMS 2V MRI REF - BOGHOSIAN, BOGHOS - BKP - RADDICO",
+  "status": "archived",
+  "status_id": "sts_v8lxd",
+  "status_category": "resolved",
+  "ticket_ids": [],
+  "assignee": {
+    "_links": {
+      "self": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd",
+      "related": {
+        "inboxes": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/inboxes",
+        "conversations": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/conversations"
+      }
+    },
+    "id": "tea_2ditd",
+    "email": "ana.m@precisemri.com",
+    "username": "ana",
+    "first_name": "Ana",
+    "last_name": "Martinez",
+    "is_admin": false,
+    "is_available": true,
+    "is_blocked": false,
+    "type": "user",
+    "custom_fields": {}
+  },
+  "recipient": {
+    "_links": {
+      "related": {
+        "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18y0im9"
+      }
+    },
+    "name": null,
+    "handle": "eileencastro.cmc@gmail.com",
+    "role": "to"
+  },
+  "tags": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_vaq81",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_vaq81/conversations",
+          "owner": null,
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_vaq69",
+          "children": null
+        }
+      },
+      "id": "tag_vaq81",
+      "name": "AI:Training",
+      "highlight": "🧠",
+      "description": "Use to train AI on how to tag things correctly.",
+      "is_private": false,
+      "is_visible_in_conversation_lists": false,
+      "updated_at": 1743034379.416,
+      "created_at": 1739386232.786
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_3k7ll",
+          "children": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/children"
+        }
+      },
+      "id": "tag_tn98h",
+      "name": "RX",
+      "highlight": "blue",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "updated_at": 1743054887.05,
+      "created_at": 1663790297.907
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_3k5wx",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_3k5wx/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+          "children": null
+        }
+      },
+      "id": "tag_3k5wx",
+      "name": "Order Entered",
+      "highlight": "✅",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": false,
+      "updated_at": 1743052934.054,
+      "created_at": 1551378905.259
+    }
+  ],
+  "links": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/links/top_e3ou9"
+      },
+      "id": "top_e3ou9",
+      "name": "ID: PRE1062910",
+      "type": "app_df5cb65d50c3ff8b",
+      "external_url": "https://precise.radflow360.com/patient?patientid=PRE1062910",
+      "custom_fields": {}
+    }
+  ],
+  "custom_fields": {},
+  "created_at": 1742948947.423,
+  "waiting_since": 1743051707,
+  "is_private": false,
+  "scheduled_reminders": [],
+  "metadata": {},
+  "messages": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_ot0uagx",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crll8u9",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_ot0uagx/seen",
+          "message_replied_to": "https://precise-imaging.api.frontapp.com/messages/msg_ot0uagx/parent"
+        }
+      },
+      "id": "msg_ot0uagx",
+      "type": "email",
+      "is_inbound": false,
+      "created_at": 1743051705.751,
+      "blurb": "The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day. For your records, the patient ID is PRE1062910. Please use this",
+      "body": "<div>The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day.&nbsp;&nbsp;</div><div><br /></div><div><b style=\"color: rgb(29, 28, 29); font-family: Slack-Lato, Slack-Fractions, appleLogo, sans-serif; font-variant-ligatures: common-ligatures; text-align: left; background-color: rgb(248, 248, 248);\" data-stringify-type=\"bold\">For your records, the patient ID is PRE1062910.&nbsp; Please use this for all future communications.</b></div><div><br /></div><div><br /></div><div>We will also send them a text shortly letting them know to call us in case we miss them when we reach out.</div><div><br /></div><div><br /></div><div><b>The patient is welcome to call our direct scheduling line M-F 8am to 5pm @ 818-629-1169</b></div><div><br /></div><div><br /></div><div>Once we can schedule them and they complete their exam, reports are typically sent out within 24-72 hours.</div><div><br /></div><div></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">Patients can also view their appointment times, answer\nprescreening questions and sign all liens here:</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><u><span style=\"font-size: 12pt;\"><a href=\"https://precise.radflow360.com/patient-portal\" target=\"_blank\" rel=\"noopener noreferrer\">https://precise.radflow360.com/patient-portal</a></span></u></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><u><span style=\"font-size: 12pt;\">If this is also a personal injury case:</span></u></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><ul type=\"disc\" style=\"margin-bottom: 0in;\">\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">A report containing&nbsp;the findings of the exam will\n     also be sent to the attorney</span></b></li>\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">A bill will be sent to the attorney once both the\n     patient and the attorney sign all pending liens</span></b></li>\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">Please make sure to submit a negotiation offer before\n     sending the payment</span></b></li>\n</ul><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\"><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Access\nbills, appointment times, and e-sign liens​&nbsp; (Click request login if you\ndon't have an account)<br />\n</a></span></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\"><br /></a></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\"><a href=\"https://pacs.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Access\nreports &amp; images</a>&nbsp;&nbsp;</span><a href=\"https://www.precisemri.com/request\" target=\"_blank\" rel=\"noopener noreferrer\"><span style=\"font-size: 12pt;\">(Request login here for reports)</span></a></b></div><div><b><a href=\"https://www.precisemri.com/request\" rel=\"noopener noreferrer\" target=\"_blank\"></a></b></div><div><br /></div>",
+      "text": "The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day. \n\n\nFor your records, the patient ID is PRE1062910. Please use this for all future communications.\n\n\n\n\nWe will also send them a text shortly letting them know to call us in case we miss them when we reach out.\n\n\n\n\nThe patient is welcome to call our direct scheduling line M-F 8am to 5pm @ 818-629-1169\n\n\n\n\nOnce we can schedule them and they complete their exam, reports are typically sent out within 24-72 hours.\n\n\n\nPatients can also view their appointment times, answer\nprescreening questions and sign all liens here:\nhttps://precise.radflow360.com/patient-portal\n\nIf this is also a personal injury case:\n\n\nA report containing the findings of the exam will\nalso be sent to the attorney\n\nA bill will be sent to the attorney once both the\npatient and the attorney sign all pending liens\n\nPlease make sure to submit a negotiation offer before\nsending the payment\n\n\n\nAccess\nbills, appointment times, and e-sign liens​ (Click request login if you\ndon't have an account)\n\n\n\nAccess\nreports & images (Request login here for reports)",
+      "error_type": null,
+      "version": null,
+      "subject": "Re: EXTERNAL: Re: NEW BMS 2V MRI REF - BOGHOSIAN, BOGHOS - BKP - RADDICO",
+      "draft_mode": null,
+      "metadata": {},
+      "author": {
+        "_links": {
+          "self": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd",
+          "related": {
+            "inboxes": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/inboxes",
+            "conversations": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/conversations"
+          }
+        },
+        "id": "tea_2ditd",
+        "email": "ana.m@precisemri.com",
+        "username": "ana",
+        "first_name": "Ana",
+        "last_name": "Martinez",
+        "is_admin": false,
+        "is_available": true,
+        "is_blocked": false,
+        "type": "user",
+        "custom_fields": {}
+      },
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": null,
+          "handle": "scheduling@precisemri.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18y0im9"
+            }
+          },
+          "name": null,
+          "handle": "eileencastro.cmc@gmail.com",
+          "role": "to"
+        }
+      ],
+      "attachments": [],
+      "signature": null,
+      "is_draft": false
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_ossbby9",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crll8u9",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_ossbby9/seen"
+        }
+      },
+      "id": "msg_ossbby9",
+      "type": "email",
+      "is_inbound": true,
+      "created_at": 1742948946,
+      "blurb": "Im so sorry for the multiple emails but the patient needs a OPEN MRI please see RX Thank you, Eileen Castro BKP Medical & Orthopedic Group Bell Medical Solutions Phone: 623-248-8142 Cell: 818-486-0156",
+      "body": "<div><div>\r\n</div><div class=\"fa0 front-email-body\"><div dir=\"ltr\"><div>Im so sorry for the multiple emails but the patient&nbsp;needs a OPEN MRI please see RX</div><div><div dir=\"ltr\" class=\"fa2i3mrf\" data-smartmail=\"gmail_signature\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div><div style=\"font-size:13px\"><br /></div></div><div><font face=\"comic sans ms, sans-serif\" size=\"2\">Thank you,</font></div><div dir=\"ltr\"><font face=\"comic sans ms, sans-serif\"><font size=\"4\">Eileen Castro&nbsp;&nbsp;</font></font></div><div><span style=\"font-family:&quot;comic sans ms&quot;,sans-serif;font-weight:700;background-color:rgb(255,255,255)\"><font color=\"#ff0000\">BKP Medical &amp; Orthopedic Group</font></span></div><div><span style=\"color:rgb(0,0,255);font-family:&quot;comic sans ms&quot;,sans-serif;font-weight:700\">Bell Medical Solutions</span></div><div dir=\"ltr\"><font face=\"comic sans ms, sans-serif\">Phone: 623-248-8142</font></div><div dir=\"ltr\"><font face=\"comic sans ms, sans-serif\">Cell: 818-486-0156<br />Fax: 844-608-4981<br /><a href=\"http://www.cmcmedicalreferrals.com/\" target=\"_blank\" rel=\"noopener noreferrer\">www.bellmedicalsolutions.com</a></font></div><div dir=\"ltr\"><img src=\"/us-west-1/api/1/companies/88d6512b91118f61d8bf/attachments/fccffb272fdcc433ce0dedc14c5daaaa226232b8?resource_link_id=84032176193\" alt=\"Inline image 5\" width=\"177\" height=\"86\" style=\"font-size:13px;margin-right:0px\" front-cid=\"ii_1614da4227f47656\" />&nbsp;</div><div dir=\"ltr\"></div><div dir=\"ltr\"><br /></div><div dir=\"ltr\"><div><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div style=\"font-size:13px\"><i>\"Bell&nbsp;Medical&nbsp;Solutions-The Total Solution.\"</i></div><div style=\"font-size:13px\"><i><font face=\"Times New Roman\" style=\"font-style:normal;font-size:small;color:rgb(51,51,51);line-height:19.6px\">This email and its attachments may contain privileged and confidential information and/or protected health information (PHI), as defined by</font><span style=\"font-style:inherit;font-size:small;color:rgb(51,51,51);font-family:Helvetica,Arial,sans-serif;line-height:19.6px;margin:0px;padding:0px;border:0px;font-stretch:inherit;vertical-align:baseline\"><font face=\"Times New Roman\">&nbsp;the Health Insurance Portability and Accountability Act of 1996 (HIPAA), and is</font></span><font face=\"Times New Roman\" style=\"font-style:normal;font-size:small;color:rgb(51,51,51);line-height:19.6px\">&nbsp;intended solely for the use of Bell Medical Solutions and the recipient(s) named above.<span style=\"margin:0px;padding:0px;border:0px;font-style:inherit;font-variant:inherit;font-weight:inherit;font-stretch:inherit;line-height:inherit;font-family:inherit;vertical-align:baseline\">&nbsp;&nbsp;</span>If you are not the recipient, or the employee or agent responsible for delivering this message to the intended recipient, you are hereby notified that any review, dissemination, distribution, printing or copying of this email message and/or any attachments is strictly prohibited.<span style=\"margin:0px;padding:0px;border:0px;font-style:inherit;font-variant:inherit;font-weight:inherit;font-stretch:inherit;line-height:inherit;font-family:inherit;vertical-align:baseline\">&nbsp;&nbsp;</span>If you have received this transmission in error, please notify the sender immediately and permanently delete this email and any attachments.</font></i></div></div></div></div></div><br /></div></div></div></div></div></div></div></div></div></div></div><br /></div><br /><div class=\"gmail_quote fajo55w4\"><div dir=\"ltr\" class=\"fa-qphyz8\">On Tue, Mar 25, 2025 at 5:05 PM Eileen Castro &lt;<a href=\"mailto:eileencastro.cmc@gmail.com\" target=\"_blank\" rel=\"noopener noreferrer\">eileencastro.cmc@gmail.com</a>&gt; wrote:<br /></div><blockquote class=\"gmail_quote front-blockquote\" style=\"margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex\"><div dir=\"ltr\"><div>Please schedule in Woodland Hills, Ca</div><div><br /></div><div><div dir=\"ltr\" class=\"fa2i3mrf\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div><div style=\"font-size:13px\"><br /></div></div><div><font face=\"comic sans ms, sans-serif\" size=\"2\">Thank you,</font></div><div dir=\"ltr\"><font face=\"comic sans ms, sans-serif\"><font size=\"4\">Eileen Castro&nbsp;&nbsp;</font></font></div><div><span style=\"font-family:&quot;comic sans ms&quot;,sans-serif;font-weight:700;background-color:rgb(255,255,255)\"><font color=\"#ff0000\">BKP Medical &amp; Orthopedic Group</font></span></div><div><span style=\"color:rgb(0,0,255);font-family:&quot;comic sans ms&quot;,sans-serif;font-weight:700\">Bell Medical Solutions</span></div><div dir=\"ltr\"><font face=\"comic sans ms, sans-serif\">Phone: 623-248-8142</font></div><div dir=\"ltr\"><font face=\"comic sans ms, sans-serif\">Cell: 818-486-0156<br />Fax: 844-608-4981<br /><a href=\"http://www.cmcmedicalreferrals.com/\" target=\"_blank\" rel=\"noopener noreferrer\">www.bellmedicalsolutions.com</a></font></div><div dir=\"ltr\"><img src=\"/us-west-1/api/1/companies/88d6512b91118f61d8bf/attachments/fccffb272fdcc433ce0dedc14c5daaaa226232b8?resource_link_id=84032176193\" alt=\"Inline image 5\" width=\"177\" height=\"86\" style=\"font-size: 13px; margin-right: 0px;\" front-cid=\"ii_1614da4227f47656\" />&nbsp;</div><div dir=\"ltr\"></div><div dir=\"ltr\"><br /></div><div dir=\"ltr\"><div><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div style=\"font-size:13px\"><i>\"Bell&nbsp;Medical&nbsp;Solutions-The Total Solution.\"</i></div><div style=\"font-size:13px\"><i><font face=\"Times New Roman\" style=\"font-style:normal;font-size:small;color:rgb(51,51,51);line-height:19.6px\">This email and its attachments may contain privileged and confidential information and/or protected health information (PHI), as defined by</font><span style=\"font-style:inherit;font-size:small;color:rgb(51,51,51);font-family:Helvetica,Arial,sans-serif;line-height:19.6px;margin:0px;padding:0px;border:0px;font-stretch:inherit;vertical-align:baseline\"><font face=\"Times New Roman\">&nbsp;the Health Insurance Portability and Accountability Act of 1996 (HIPAA), and is</font></span><font face=\"Times New Roman\" style=\"font-style:normal;font-size:small;color:rgb(51,51,51);line-height:19.6px\">&nbsp;intended solely for the use of Bell Medical Solutions and the recipient(s) named above.<span style=\"margin:0px;padding:0px;border:0px;font-style:inherit;font-variant:inherit;font-weight:inherit;font-stretch:inherit;line-height:inherit;font-family:inherit;vertical-align:baseline\">&nbsp;&nbsp;</span>If you are not the recipient, or the employee or agent responsible for delivering this message to the intended recipient, you are hereby notified that any review, dissemination, distribution, printing or copying of this email message and/or any attachments is strictly prohibited.<span style=\"margin:0px;padding:0px;border:0px;font-style:inherit;font-variant:inherit;font-weight:inherit;font-stretch:inherit;line-height:inherit;font-family:inherit;vertical-align:baseline\">&nbsp;&nbsp;</span>If you have received this transmission in error, please notify the sender immediately and permanently delete this email and any attachments.</font></i></div></div></div></div></div><br /></div></div></div></div></div></div></div></div></div></div></div><br /></div><br /><div class=\"gmail_quote\"><div dir=\"ltr\" class=\"fa-qphyz8\">On Tue, Mar 25, 2025 at 4:43 PM Eileen Castro &lt;<a href=\"mailto:eileencastro.cmc@gmail.com\" target=\"_blank\" rel=\"noopener noreferrer\">eileencastro.cmc@gmail.com</a>&gt; wrote:<br /></div><blockquote class=\"gmail_quote front-blockquote\" style=\"margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex\"><div dir=\"ltr\"><div>Good afternoon Marylou,&nbsp;</div><div>Was this patient&nbsp;ever scheduled?&nbsp;</div><div><div dir=\"ltr\" class=\"fa2i3mrf\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div><div style=\"font-size:13px\"><br /></div></div><div><font face=\"comic sans ms, sans-serif\" size=\"2\">Thank you,</font></div><div dir=\"ltr\"><font face=\"comic sans ms, sans-serif\"><font size=\"4\">Eileen Castro&nbsp;&nbsp;</font></font></div><div><span style=\"font-family:&quot;comic sans ms&quot;,sans-serif;font-weight:700;background-color:rgb(255,255,255)\"><font color=\"#ff0000\">BKP Medical &amp; Orthopedic Group</font></span></div><div><span style=\"color:rgb(0,0,255);font-family:&quot;comic sans ms&quot;,sans-serif;font-weight:700\">Bell Medical Solutions</span></div><div dir=\"ltr\"><font face=\"comic sans ms, sans-serif\">Phone: 623-248-8142</font></div><div dir=\"ltr\"><font face=\"comic sans ms, sans-serif\">Cell: 818-486-0156<br />Fax: 844-608-4981<br /><a href=\"http://www.cmcmedicalreferrals.com/\" target=\"_blank\" rel=\"noopener noreferrer\">www.bellmedicalsolutions.com</a></font></div><div dir=\"ltr\"><img src=\"/us-west-1/api/1/companies/88d6512b91118f61d8bf/attachments/fccffb272fdcc433ce0dedc14c5daaaa226232b8?resource_link_id=84032176193\" alt=\"Inline image 5\" width=\"177\" height=\"86\" style=\"font-size: 13px; margin-right: 0px;\" front-cid=\"ii_1614da4227f47656\" />&nbsp;</div><div dir=\"ltr\"></div><div dir=\"ltr\"><br /></div><div dir=\"ltr\"><div><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div style=\"font-size:13px\"><i>\"Bell&nbsp;Medical&nbsp;Solutions-The Total Solution.\"</i></div><div style=\"font-size:13px\"><i><font face=\"Times New Roman\" style=\"font-style:normal;font-size:small;color:rgb(51,51,51);line-height:19.6px\">This email and its attachments may contain privileged and confidential information and/or protected health information (PHI), as defined by</font><span style=\"font-style:inherit;font-size:small;color:rgb(51,51,51);font-family:Helvetica,Arial,sans-serif;line-height:19.6px;margin:0px;padding:0px;border:0px;font-stretch:inherit;vertical-align:baseline\"><font face=\"Times New Roman\">&nbsp;the Health Insurance Portability and Accountability Act of 1996 (HIPAA), and is</font></span><font face=\"Times New Roman\" style=\"font-style:normal;font-size:small;color:rgb(51,51,51);line-height:19.6px\">&nbsp;intended solely for the use of Bell Medical Solutions and the recipient(s) named above.<span style=\"margin:0px;padding:0px;border:0px;font-style:inherit;font-variant:inherit;font-weight:inherit;font-stretch:inherit;line-height:inherit;font-family:inherit;vertical-align:baseline\">&nbsp;&nbsp;</span>If you are not the recipient, or the employee or agent responsible for delivering this message to the intended recipient, you are hereby notified that any review, dissemination, distribution, printing or copying of this email message and/or any attachments is strictly prohibited.<span style=\"margin:0px;padding:0px;border:0px;font-style:inherit;font-variant:inherit;font-weight:inherit;font-stretch:inherit;line-height:inherit;font-family:inherit;vertical-align:baseline\">&nbsp;&nbsp;</span>If you have received this transmission in error, please notify the sender immediately and permanently delete this email and any attachments.</font></i></div></div></div></div></div><br /></div></div></div></div></div></div></div></div></div></div></div><br /></div><br /><div class=\"gmail_quote\"><div dir=\"ltr\" class=\"fa-qphyz8\">On Mon, Mar 10, 2025 at 9:41 AM Eileen Castro &lt;<a href=\"mailto:eileencastro.cmc@gmail.com\" target=\"_blank\" rel=\"noopener noreferrer\">eileencastro.cmc@gmail.com</a>&gt; wrote:<br /></div><blockquote class=\"gmail_quote front-blockquote\" style=\"margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex\"><div dir=\"ltr\"><div>Happy Monday and Thank you .&nbsp;</div><div><div dir=\"ltr\" class=\"fa2i3mrf\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div><div style=\"font-size:13px\"><br /></div></div><div><font face=\"comic sans ms, sans-serif\" size=\"2\">Thank you,</font></div><div dir=\"ltr\"><font face=\"comic sans ms, sans-serif\"><font size=\"4\">Eileen Castro&nbsp;&nbsp;</font></font></div><div><span style=\"font-family:&quot;comic sans ms&quot;,sans-serif;font-weight:700;background-color:rgb(255,255,255)\"><font color=\"#ff0000\">BKP Medical &amp; Orthopedic Group</font></span></div><div><span style=\"color:rgb(0,0,255);font-family:&quot;comic sans ms&quot;,sans-serif;font-weight:700\">Bell Medical Solutions</span></div><div dir=\"ltr\"><font face=\"comic sans ms, sans-serif\">Phone: 623-248-8142</font></div><div dir=\"ltr\"><font face=\"comic sans ms, sans-serif\">Cell: 818-486-0156<br />Fax: 844-608-4981<br /><a href=\"http://www.cmcmedicalreferrals.com/\" target=\"_blank\" rel=\"noopener noreferrer\">www.bellmedicalsolutions.com</a></font></div><div dir=\"ltr\"><img src=\"/us-west-1/api/1/companies/88d6512b91118f61d8bf/attachments/fccffb272fdcc433ce0dedc14c5daaaa226232b8?resource_link_id=84032176193\" alt=\"Inline image 5\" width=\"177\" height=\"86\" style=\"font-size: 13px; margin-right: 0px;\" front-cid=\"ii_1614da4227f47656\" />&nbsp;</div><div dir=\"ltr\"></div><div dir=\"ltr\"><br /></div><div dir=\"ltr\"><div><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div style=\"font-size:13px\"><i>\"Bell&nbsp;Medical&nbsp;Solutions-The Total Solution.\"</i></div><div style=\"font-size:13px\"><i><font face=\"Times New Roman\" style=\"font-style:normal;font-size:small;color:rgb(51,51,51);line-height:19.6px\">This email and its attachments may contain privileged and confidential information and/or protected health information (PHI), as defined by</font><span style=\"font-style:inherit;font-size:small;color:rgb(51,51,51);font-family:Helvetica,Arial,sans-serif;line-height:19.6px;margin:0px;padding:0px;border:0px;font-stretch:inherit;vertical-align:baseline\"><font face=\"Times New Roman\">&nbsp;the Health Insurance Portability and Accountability Act of 1996 (HIPAA), and is</font></span><font face=\"Times New Roman\" style=\"font-style:normal;font-size:small;color:rgb(51,51,51);line-height:19.6px\">&nbsp;intended solely for the use of Bell Medical Solutions and the recipient(s) named above.<span style=\"margin:0px;padding:0px;border:0px;font-style:inherit;font-variant:inherit;font-weight:inherit;font-stretch:inherit;line-height:inherit;font-family:inherit;vertical-align:baseline\">&nbsp;&nbsp;</span>If you are not the recipient, or the employee or agent responsible for delivering this message to the intended recipient, you are hereby notified that any review, dissemination, distribution, printing or copying of this email message and/or any attachments is strictly prohibited.<span style=\"margin:0px;padding:0px;border:0px;font-style:inherit;font-variant:inherit;font-weight:inherit;font-stretch:inherit;line-height:inherit;font-family:inherit;vertical-align:baseline\">&nbsp;&nbsp;</span>If you have received this transmission in error, please notify the sender immediately and permanently delete this email and any attachments.</font></i></div></div></div></div></div><br /></div></div></div></div></div></div></div></div></div></div></div><br /></div><br /><div class=\"gmail_quote\"><div dir=\"ltr\" class=\"fa-qphyz8\">On Mon, Mar 10, 2025 at 9:04 AM Marylou Gonzalez &lt;<a href=\"mailto:mgonzalez@raddico.com\" target=\"_blank\" rel=\"noopener noreferrer\">mgonzalez@raddico.com</a>&gt; wrote:<br /></div><blockquote class=\"gmail_quote front-blockquote\" style=\"margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex\"><div dir=\"ltr\"><div>Good morning,</div><div>I left Mr. Boghossian a voicemail to give us a call at his earliest convenience&nbsp;to get him scheduled.</div><div><br /></div><div><div dir=\"ltr\" class=\"fa2i3mrf\"><div dir=\"ltr\"><div style=\"color:rgb(34,34,34)\"><font face=\"georgia, serif\">Best regards,</font></div><div style=\"color:rgb(34,34,34)\"><font face=\"georgia, serif\"><br /></font></div><div style=\"color:rgb(34,34,34)\"><b><font face=\"georgia, serif\">Marylou Gonzalez</font></b></div><div style=\"color:rgb(34,34,34)\"><font face=\"georgia, serif\"><b>Administrative Medical Assistant</b><br /></font></div><div style=\"color:rgb(34,34,34)\"><font face=\"georgia, serif\">Anthony Bledin MD Inc.</font></div><div style=\"color:rgb(34,34,34)\"><div><b><font face=\"georgia, serif\"><img src=\"https://ext.frontusercontent.com/v1/proxy/R0qFN8LEUpQAfgGSTj8whOPTolXEtyVHuS2ges_qxQ2JVMYp0AR0DQebR4L0dELaVPGRtjbJzt9ASXVlE_hQBLLmvTEZKLAY1HL7Jz_y-2Ih9vq9WQNCYUOtI_F0ZkwKn5neC7mswNFvsmpCbuCxrHwhhfhAp8D2N-sgeCE0xexLk61zOqpNk66-wsQRwbAA4lRVUcAQlXEWQ5scTf7iLKYEzidnAJf-zm0VO8n9#https://www.google.com/u/0/ac/images/logo.gif?uid=118257542375658194224&amp;service=google_gsuite\" width=\"96\" height=\"39\" /></font></b></div><div><div><b><font face=\"georgia, serif\">RADDICO THOUSAND OAKS</font></b></div><div><div><font face=\"georgia, serif\">375 Rolling Oaks Drive Suite 130</font></div><div><font face=\"georgia, serif\">Thousand Oaks, CA 91361</font></div></div><div><font face=\"georgia, serif\"><span style=\"color:rgb(51,51,51);font-size:14px;background-color:rgb(248,252,253)\">Phone: (805) 371-9100</span><br style=\"color:rgb(51,51,51);font-size:14px;background-color:rgb(248,252,253)\" /><span style=\"color:rgb(51,51,51);font-size:14px;background-color:rgb(248,252,253)\">Fax: (805) 321-3968</span></font></div></div></div></div></div></div><br /></div><br /><div class=\"gmail_quote\"><div dir=\"ltr\" class=\"fa-qphyz8\">On Fri, Mar 7, 2025 at 12:12 PM Eileen Castro &lt;<a href=\"mailto:eileencastro.cmc@gmail.com\" target=\"_blank\" rel=\"noopener noreferrer\">eileencastro.cmc@gmail.com</a>&gt; wrote:<br /></div><blockquote class=\"gmail_quote front-blockquote\" style=\"margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex\"><div dir=\"ltr\"><div><font color=\"#000000\" face=\"Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif\"><span style=\"font-size:16px\">Hi Precise and Marylou,&nbsp;</span></font></div><div><font color=\"#000000\" face=\"Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif\"><span style=\"font-size:16px\">Happy Friday!&nbsp;</span></font></div><div><span style=\"font-family:Aptos,Aptos_EmbeddedFont,Aptos_MSFontService,Calibri,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\"><br /></span></div><div><span style=\"font-family:Aptos,Aptos_EmbeddedFont,Aptos_MSFontService,Calibri,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\">The above-named patient was seen today and was recommended the following:<br /></span><div style=\"font-family:Aptos,Aptos_EmbeddedFont,Aptos_MSFontService,Calibri,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\"><b>MRI C/S AND L/S R/O DISC INJURY&nbsp;</b></div><div style=\"padding:5px;min-height:46px\"><div style=\"padding-left:5px\"><div style=\"font-family:Aptos,Aptos_EmbeddedFont,Aptos_MSFontService,Calibri,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\"><i><br />Birth Date</i></div><div style=\"font-family:Aptos,Aptos_EmbeddedFont,Aptos_MSFontService,Calibri,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\">07-16-1966</div></div></div><hr style=\"margin:0px;width:70.1875px;height:1px\" /><div style=\"padding:5px;min-height:46px\"><div style=\"padding-left:5px\"><div style=\"font-family:Aptos,Aptos_EmbeddedFont,Aptos_MSFontService,Calibri,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\"><i>Sex</i></div><div style=\"font-family:Aptos,Aptos_EmbeddedFont,Aptos_MSFontService,Calibri,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\">Male</div></div></div><hr style=\"margin:0px;width:70.1875px;height:1px\" /><div style=\"padding:5px;min-height:46px\"><div style=\"padding-left:5px\"><div style=\"font-family:Aptos,Aptos_EmbeddedFont,Aptos_MSFontService,Calibri,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\">DOI 02/05/25</div></div></div><hr style=\"margin:0px;width:70.1875px;height:1px\" /><div style=\"padding:5px;min-height:46px\"><div style=\"padding-left:5px\"><div style=\"font-family:Aptos,Aptos_EmbeddedFont,Aptos_MSFontService,Calibri,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\"><i>Contact Information</i></div><div style=\"font-family:Aptos,Aptos_EmbeddedFont,Aptos_MSFontService,Calibri,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\">Home: 818-378-5933</div></div></div><hr style=\"margin:0px;width:70.1875px;height:1px\" /><div style=\"padding:5px;min-height:46px\"><div style=\"padding-left:5px\"><div style=\"font-family:Aptos,Aptos_EmbeddedFont,Aptos_MSFontService,Calibri,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\"><i>Address</i></div><div style=\"font-family:Aptos,Aptos_EmbeddedFont,Aptos_MSFontService,Calibri,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\">23011 BLYTHE ST</div><div style=\"font-family:Aptos,Aptos_EmbeddedFont,Aptos_MSFontService,Calibri,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\">West Hills, CA 91304</div><div style=\"font-family:Aptos,Aptos_EmbeddedFont,Aptos_MSFontService,Calibri,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\"><br /></div></div></div><div style=\"font-family:Aptos,Aptos_EmbeddedFont,Aptos_MSFontService,Calibri,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\"><br /></div><div style=\"font-family:Aptos,Aptos_EmbeddedFont,Aptos_MSFontService,Calibri,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\">&nbsp;<b style=\"font-family:Arial,Helvetica,sans-serif;font-size:small;color:rgb(34,34,34)\"><span style=\"font-family:Garamond,serif\">Bernice Palomeque</span></b></div><p class=\"fab6k8g\"><b><span style=\"font-family:Garamond,serif\">Case Manager<u></u><u></u></span></b></p><p class=\"fab6k8g\"><span style=\"font-family:Garamond,serif\"><img width=\"171\" height=\"40\" id=\"m_-8177595982131664803m_-4702681007177604560m_7307464299919812645m_4331985459095752566m_115746875470179868m_2766004700011542609m_-3351828665828265394m_-920305648584379059Picture_x0020_5\" alt=\"• KL Logo online horiontal1\" style=\"width: 1.7812in; height: 0.4166in;\" /></span><span style=\"font-size:11pt;font-family:Garamond,serif\"><u></u><u></u></span></p><p class=\"fab6k8g\"><span style=\"font-size:10pt;font-family:Garamond,serif\">4630 Van Nuys Boulevard<u></u><u></u></span></p><p class=\"fab6k8g\"><span style=\"font-size:10pt;font-family:Garamond,serif\">Sherman Oaks, California 91403<u></u><u></u></span></p><p class=\"fab6k8g\"><span style=\"font-size:10pt;font-family:Garamond,serif\">(818) 986-9331 tel&nbsp;<b>|</b>&nbsp;(818) 986-9341 fax<u></u><u></u></span></p><p class=\"fab6k8g\"><a href=\"mailto:bernice@keosianlaw.com\" target=\"_blank\" rel=\"noopener noreferrer\"><span style=\"font-size:10pt;font-family:Garamond,serif;color:rgb(5,99,193)\"><span>bernice@keosianlaw.com</span></span></a><span style=\"font-size:10pt;font-family:Garamond,serif\">&nbsp;<b>|</b>&nbsp;<a href=\"http://keosianlaw.com/\" target=\"_blank\" rel=\"noopener noreferrer\">keosianlaw.com</a>&nbsp; &nbsp; &nbsp; &nbsp;</span></p></div><div><div dir=\"ltr\" class=\"fa2i3mrf\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div><div style=\"font-size:13px\"><br /></div></div><div><font face=\"comic sans ms, sans-serif\" size=\"2\">Thank you,</font></div><div dir=\"ltr\"><font face=\"comic sans ms, sans-serif\"><font size=\"4\">Eileen Castro&nbsp;&nbsp;</font></font></div><div><span style=\"font-family:&quot;comic sans ms&quot;,sans-serif;font-weight:700;background-color:rgb(255,255,255)\"><font color=\"#ff0000\">BKP Medical &amp; Orthopedic Group</font></span></div><div><span style=\"color:rgb(0,0,255);font-family:&quot;comic sans ms&quot;,sans-serif;font-weight:700\">Bell Medical Solutions</span></div><div dir=\"ltr\"><font face=\"comic sans ms, sans-serif\">Phone: 623-248-8142</font></div><div dir=\"ltr\"><font face=\"comic sans ms, sans-serif\">Cell: 818-486-0156<br />Fax: 844-608-4981<br /><a href=\"http://www.cmcmedicalreferrals.com/\" target=\"_blank\" rel=\"noopener noreferrer\">www.bellmedicalsolutions.com</a></font></div><div dir=\"ltr\"><img src=\"/us-west-1/api/1/companies/88d6512b91118f61d8bf/attachments/fccffb272fdcc433ce0dedc14c5daaaa226232b8?resource_link_id=84032176193\" alt=\"Inline image 5\" width=\"177\" height=\"86\" style=\"font-size: 13px; margin-right: 0px;\" front-cid=\"ii_1614da4227f47656\" />&nbsp;</div><div dir=\"ltr\"></div><div dir=\"ltr\"><br /></div><div dir=\"ltr\"><div><div dir=\"ltr\"><div dir=\"ltr\"><div dir=\"ltr\"><div style=\"font-size:13px\"><i>\"Bell&nbsp;Medical&nbsp;Solutions-The Total Solution.\"</i></div><div style=\"font-size:13px\"><i><font face=\"Times New Roman\" style=\"font-style:normal;font-size:small;color:rgb(51,51,51);line-height:19.6px\">This email and its attachments may contain privileged and confidential information and/or protected health information (PHI), as defined by</font><span style=\"font-style:inherit;font-size:small;color:rgb(51,51,51);font-family:Helvetica,Arial,sans-serif;line-height:19.6px;margin:0px;padding:0px;border:0px;font-stretch:inherit;vertical-align:baseline\"><font face=\"Times New Roman\">&nbsp;the Health Insurance Portability and Accountability Act of 1996 (HIPAA), and is</font></span><font face=\"Times New Roman\" style=\"font-style:normal;font-size:small;color:rgb(51,51,51);line-height:19.6px\">&nbsp;intended solely for the use of Bell Medical Solutions and the recipient(s) named above.<span style=\"margin:0px;padding:0px;border:0px;font-style:inherit;font-variant:inherit;font-weight:inherit;font-stretch:inherit;line-height:inherit;font-family:inherit;vertical-align:baseline\">&nbsp;&nbsp;</span>If you are not the recipient, or the employee or agent responsible for delivering this message to the intended recipient, you are hereby notified that any review, dissemination, distribution, printing or copying of this email message and/or any attachments is strictly prohibited.<span style=\"margin:0px;padding:0px;border:0px;font-style:inherit;font-variant:inherit;font-weight:inherit;font-stretch:inherit;line-height:inherit;font-family:inherit;vertical-align:baseline\">&nbsp;&nbsp;</span>If you have received this transmission in error, please notify the sender immediately and permanently delete this email and any attachments.</font></i></div></div></div></div></div><br /></div></div></div></div></div></div></div></div></div></div></div><div class=\"gmail_quote\"><div><div dir=\"ltr\"><div id=\"m_-8177595982131664803m_-4702681007177604560m_7307464299919812645m_4331985459095752566m_115746875470179868m_2766004700011542609m_-559167315001439054Signature\"><span style=\"font-family:Calibri,Arial,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)\"><br /></span></div></div></div></div></div></blockquote></div><br /><b style=\"color:rgb(11,83,148);font-family:Arial,Helvetica,sans-serif;font-size:small\">IMPORTANT NOTICE</b><span style=\"color:rgb(11,83,148);font-family:Arial,Helvetica,sans-serif;font-size:small\">&nbsp;-- &nbsp;</span><i style=\"color:rgb(11,83,148);font-family:Arial,Helvetica,sans-serif;font-size:small\">The information contained in this e-mail message is intended only for the personal and confidential use of the intended recipients.&nbsp; This message is&nbsp;privileged&nbsp;and confidential and not a public record under the California Public Records Act.&nbsp; If the reader of this message is not an intended recipient, &nbsp;you are hereby notified that any review, use, dissemination, forwarding or copying of this message is strictly prohibited.&nbsp; Please notify me immediately by reply e-mail or telephone and delete the original message and all attachments from your system.&nbsp; Thank you.</i><br /></blockquote></div></blockquote></div></blockquote></div></blockquote></div></div></div>",
+      "text": "\nIm so sorry for the multiple emails but the patient needs a OPEN MRI please see RX\n\n\n\nThank you,\nEileen Castro \nBKP Medical & Orthopedic Group\n\nBell Medical Solutions\nPhone: 623-248-8142\nCell: 818-486-0156\nFax: 844-608-4981\nwww.bellmedicalsolutions.com\n\n\n\n\n\n\n\"Bell Medical Solutions-The Total Solution.\"\nThis email and its attachments may contain privileged and confidential information and/or protected health information (PHI), as defined by the Health Insurance Portability and Accountability Act of 1996 (HIPAA), and is intended solely for the use of Bell Medical Solutions and the recipient(s) named above. If you are not the recipient, or the employee or agent responsible for delivering this message to the intended recipient, you are hereby notified that any review, dissemination, distribution, printing or copying of this email message and/or any attachments is strictly prohibited. If you have received this transmission in error, please notify the sender immediately and permanently delete this email and any attachments.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n> On Tue, Mar 25, 2025 at 5:05 PM Eileen Castro <eileencastro.cmc@gmail.com> wrote:\n\n\n>> Please schedule in Woodland Hills, Ca\n\n\n\n\n\n>> Thank you,\n>> Eileen Castro \n>> BKP Medical & Orthopedic Group\n\n>> Bell Medical Solutions\n>> Phone: 623-248-8142\n>> Cell: 818-486-0156\n>> Fax: 844-608-4981\n>> www.bellmedicalsolutions.com\n\n>> \n\n\n\n\n>> \"Bell Medical Solutions-The Total Solution.\"\n>> This email and its attachments may contain privileged and confidential information and/or protected health information (PHI), as defined by>> the Health Insurance Portability and Accountability Act of 1996 (HIPAA), and is>> intended solely for the use of Bell Medical Solutions and the recipient(s) named above. If you are not the recipient, or the employee or agent responsible for delivering this message to the intended recipient, you are hereby notified that any review, dissemination, distribution, printing or copying of this email message and/or any attachments is strictly prohibited. If you have received this transmission in error, please notify the sender immediately and permanently delete this email and any attachments.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n>>> On Tue, Mar 25, 2025 at 4:43 PM Eileen Castro <eileencastro.cmc@gmail.com> wrote:\n\n\n>>>> Good afternoon Marylou, \n\n>>>> Was this patient ever scheduled? \n\n\n\n>>>> Thank you,\n>>>> Eileen Castro \n>>>> BKP Medical & Orthopedic Group\n\n>>>> Bell Medical Solutions\n>>>> Phone: 623-248-8142\n>>>> Cell: 818-486-0156\n>>>> Fax: 844-608-4981\n>>>> www.bellmedicalsolutions.com\n\n>>>> \n\n\n\n\n>>>> \"Bell Medical Solutions-The Total Solution.\"\n>>>> This email and its attachments may contain privileged and confidential information and/or protected health information (PHI), as defined by>>>> the Health Insurance Portability and Accountability Act of 1996 (HIPAA), and is>>>> intended solely for the use of Bell Medical Solutions and the recipient(s) named above. If you are not the recipient, or the employee or agent responsible for delivering this message to the intended recipient, you are hereby notified that any review, dissemination, distribution, printing or copying of this email message and/or any attachments is strictly prohibited. If you have received this transmission in error, please notify the sender immediately and permanently delete this email and any attachments.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n>>>>> On Mon, Mar 10, 2025 at 9:41 AM Eileen Castro <eileencastro.cmc@gmail.com> wrote:\n\n\n>>>>>> Happy Monday and Thank you . \n\n\n\n>>>>>> Thank you,\n>>>>>> Eileen Castro \n>>>>>> BKP Medical & Orthopedic Group\n\n>>>>>> Bell Medical Solutions\n>>>>>> Phone: 623-248-8142\n>>>>>> Cell: 818-486-0156\n>>>>>> Fax: 844-608-4981\n>>>>>> www.bellmedicalsolutions.com\n\n>>>>>> \n\n\n\n\n>>>>>> \"Bell Medical Solutions-The Total Solution.\"\n>>>>>> This email and its attachments may contain privileged and confidential information and/or protected health information (PHI), as defined by>>>>>> the Health Insurance Portability and Accountability Act of 1996 (HIPAA), and is>>>>>> intended solely for the use of Bell Medical Solutions and the recipient(s) named above. If you are not the recipient, or the employee or agent responsible for delivering this message to the intended recipient, you are hereby notified that any review, dissemination, distribution, printing or copying of this email message and/or any attachments is strictly prohibited. If you have received this transmission in error, please notify the sender immediately and permanently delete this email and any attachments.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n>>>>>>> On Mon, Mar 10, 2025 at 9:04 AM Marylou Gonzalez <mgonzalez@raddico.com> wrote:\n\n\n>>>>>>>> Good morning,\n\n>>>>>>>> I left Mr. Boghossian a voicemail to give us a call at his earliest convenience to get him scheduled.\n\n\n>>>>>>>> Best regards,\n\n\n>>>>>>>> Marylou Gonzalez\n>>>>>>>> Administrative Medical Assistant\n\n>>>>>>>> Anthony Bledin MD Inc.\n\n>>>>>>>> RADDICO THOUSAND OAKS\n>>>>>>>> 375 Rolling Oaks Drive Suite 130\n>>>>>>>> Thousand Oaks, CA 91361\n\n>>>>>>>> Phone: (805) 371-9100\n>>>>>>>> Fax: (805) 321-3968\n\n\n\n\n\n\n\n\n\n>>>>>>>>> On Fri, Mar 7, 2025 at 12:12 PM Eileen Castro <eileencastro.cmc@gmail.com> wrote:\n\n>>>>>>>>>> Hi Precise and Marylou, \n>>>>>>>>>> Happy Friday! \n\n\n\n>>>>>>>>>> The above-named patient was seen today and was recommended the following:\n\n>>>>>>>>>> MRI C/S AND L/S R/O DISC INJURY \n\n\n>>>>>>>>>> Birth Date\n\n>>>>>>>>>> 07-16-1966\n\n\n\n\n>>>>>>>>>> Sex\n\n>>>>>>>>>> Male\n\n\n\n\n>>>>>>>>>> DOI 02/05/25\n\n\n\n\n>>>>>>>>>> Contact Information\n\n>>>>>>>>>> Home: 818-378-5933\n\n\n\n\n>>>>>>>>>> Address\n\n>>>>>>>>>> 23011 BLYTHE ST\n\n>>>>>>>>>> West Hills, CA 91304\n\n\n\n\n\n\n\n>>>>>>>>>> Bernice Palomeque\n\n>>>>>>>>>> Case Manager\n\n\n>>>>>>>>>> 4630 Van Nuys Boulevard\n\n>>>>>>>>>> Sherman Oaks, California 91403\n\n>>>>>>>>>> (818) 986-9331 tel | (818) 986-9341 fax\n\n>>>>>>>>>> bernice@keosianlaw.com | keosianlaw.com \n\n\n\n\n>>>>>>>>>> Thank you,\n>>>>>>>>>> Eileen Castro \n>>>>>>>>>> BKP Medical & Orthopedic Group\n\n>>>>>>>>>> Bell Medical Solutions\n>>>>>>>>>> Phone: 623-248-8142\n>>>>>>>>>> Cell: 818-486-0156\n>>>>>>>>>> Fax: 844-608-4981\n>>>>>>>>>> www.bellmedicalsolutions.com\n\n>>>>>>>>>> \n\n\n\n\n>>>>>>>>>> \"Bell Medical Solutions-The Total Solution.\"\n>>>>>>>>>> This email and its attachments may contain privileged and confidential information and/or protected health information (PHI), as defined by>>>>>>>>>> the Health Insurance Portability and Accountability Act of 1996 (HIPAA), and is>>>>>>>>>> intended solely for the use of Bell Medical Solutions and the recipient(s) named above. If you are not the recipient, or the employee or agent responsible for delivering this message to the intended recipient, you are hereby notified that any review, dissemination, distribution, printing or copying of this email message and/or any attachments is strictly prohibited. If you have received this transmission in error, please notify the sender immediately and permanently delete this email and any attachments.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n>>>>>>>> IMPORTANT NOTICE -- The information contained in this e-mail message is intended only for the personal and confidential use of the intended recipients. This message is privileged and confidential and not a public record under the California Public Records Act. If the reader of this message is not an intended recipient, you are hereby notified that any review, use, dissemination, forwarding or copying of this message is strictly prohibited. Please notify me immediately by reply e-mail or telephone and delete the original message and all attachments from your system. Thank you.",
+      "error_type": null,
+      "version": null,
+      "subject": "EXTERNAL: Re: NEW BMS 2V MRI REF - BOGHOSIAN, BOGHOS - BKP - RADDICO",
+      "draft_mode": null,
+      "metadata": {},
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18y0im9"
+            }
+          },
+          "name": "Eileen Castro",
+          "handle": "eileencastro.cmc@gmail.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_24inoxt"
+            }
+          },
+          "name": "Marylou Gonzalez",
+          "handle": "mgonzalez@raddico.com",
+          "role": "to"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": "Precise Imaging Scheduling & Orders",
+          "handle": "scheduling@precisemri.com",
+          "role": "cc"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_19n4jlt"
+            }
+          },
+          "name": "Bertha Trejo",
+          "handle": "btrejo.cmc@gmail.com",
+          "role": "cc"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18igvr5"
+            }
+          },
+          "name": "Bell Medical Solutions",
+          "handle": "bms@bellmedicalsolutions.com",
+          "role": "cc"
+        }
+      ],
+      "attachments": [
+        {
+          "id": "fil_12lql64h",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_ossbby9/download/fil_12lql64h",
+          "filename": "image.png",
+          "content_type": "image/png",
+          "size": 254792,
+          "metadata": {
+            "is_inline": true,
+            "cid": "ii_1614da4227f47656"
+          }
+        },
+        {
+          "id": "fil_12lql669",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_ossbby9/download/fil_12lql669",
+          "filename": "fax-20250325-202037-8187880386.pdf",
+          "content_type": "application/pdf",
+          "size": 9951,
+          "metadata": {
+            "is_inline": false
+          }
+        }
+      ],
+      "signature": null,
+      "is_draft": false
+    }
+  ]
+}

@@ -1,0 +1,160 @@
+{
+  "_links": {
+    "self": "https://precise-imaging.api.frontapp.com/conversations/cnv_crotxc1",
+    "related": {
+      "events": "https://precise-imaging.api.frontapp.com/conversations/cnv_crotxc1/events",
+      "followers": "https://precise-imaging.api.frontapp.com/conversations/cnv_crotxc1/followers",
+      "messages": "https://precise-imaging.api.frontapp.com/conversations/cnv_crotxc1/messages",
+      "comments": "https://precise-imaging.api.frontapp.com/conversations/cnv_crotxc1/comments",
+      "inboxes": "https://precise-imaging.api.frontapp.com/conversations/cnv_crotxc1/inboxes",
+      "last_message": "https://precise-imaging.api.frontapp.com/messages/msg_ot0lzr5?referer=conversation"
+    }
+  },
+  "id": "cnv_crotxc1",
+  "subject": "EXTERNAL: Lien Reduction Request: James Patrick Daily DOB: 11/16/1989",
+  "status": "unassigned",
+  "status_id": "sts_v8ltt",
+  "status_category": "open",
+  "ticket_ids": [],
+  "assignee": null,
+  "recipient": {
+    "_links": {
+      "related": {
+        "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_23jg4jl"
+      }
+    },
+    "name": "Sheenah Mae Cabading Jaravata",
+    "handle": "sheenah@camdenfirm.com",
+    "role": "from"
+  },
+  "tags": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_tq0e9",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_tq0e9/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": null,
+          "children": "https://precise-imaging.api.frontapp.com/tags/tag_tq0e9/children"
+        }
+      },
+      "id": "tag_tq0e9",
+      "name": "Bill Offer",
+      "highlight": "🤑",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "updated_at": 1743056926.912,
+      "created_at": 1666081638.131
+    }
+  ],
+  "links": [],
+  "custom_fields": {},
+  "created_at": 1743045364.629,
+  "waiting_since": 1743045363,
+  "is_private": false,
+  "scheduled_reminders": [],
+  "metadata": {},
+  "messages": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_ot0lzr5",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crotxc1",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_ot0lzr5/seen"
+        }
+      },
+      "id": "msg_ot0lzr5",
+      "type": "email",
+      "is_inbound": true,
+      "created_at": 1743045363,
+      "blurb": "Hi, Please find attached our request for the full payment of the outstanding balance for above mentioned client. Upon acceptance, please sign and return. Kindly send us a copy of your W9 form for chec",
+      "body": "<div><div>\r\n<style type=\"text/css\" style=\"display:none;\"> #fae_ot0lzr5 P {margin-top:0;margin-bottom:0;} </style></div><div dir=\"ltr\" class=\"fa0 front-email-body\"><div class=\"fahlgi9y\" style=\"margin: 0px; font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\">Hi,</div><div class=\"fahlgi9y\" style=\"margin: 0px; font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\"><br /></div><div class=\"fahlgi9y\" style=\"margin: 0px; font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\">Please find attached our request for the full payment of the outstanding balance for above mentioned client.&nbsp;</div><div class=\"fahlgi9y\" style=\"margin: 0px; font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\"><br /></div><div class=\"fahlgi9y\" style=\"margin: 0px; font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\">Upon acceptance, please sign and return. Kindly send us a copy of your W9 form for check issuance. Thank you.</div><div class=\"fahlgi9y\" style=\"margin: 0px; font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\"><br /></div><div id=\"Signature\" class=\"fahlgi9y\"><div style=\"text-align: left; text-indent: 0px; margin-top: 1em; margin-bottom: 1em; font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\">Best Regards,</div><div style=\"text-align: left; text-indent: 0px; margin-top: 1em; margin-bottom: 1em; font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\"><img alt=\"horizontal bar\" style=\"max-width: 800px;\" data-outlook-trace=\"F:1|T:1\" src=\"/us-west-1/api/1/companies/88d6512b91118f61d8bf/attachments/412132618985d6e008fc86001ad0e0293fb18168?resource_link_id=84054840065\" front-cid=\"35929aad-f154-445e-a6f8-87aaaf638c25\" /></div><div style=\"text-align: left; text-indent: 0px; margin-top: 1em; margin-bottom: 1em; font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\"><b>Sheenah</b></div><div style=\"text-align: left; text-indent: 0px; margin-top: 1em; margin-bottom: 1em; font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\">Liens Negotiator</div><p style=\"text-align: left; text-indent: 0px; background-color: white; margin: 0px;\"><span style=\"font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\">Camden Law Firm<br /><img alt=\"Camden Law Firm\" style=\"max-width: 800px; margin-top: 0px; margin-bottom: 0px;\" data-outlook-trace=\"F:1|T:1\" src=\"/us-west-1/api/1/companies/88d6512b91118f61d8bf/attachments/91707ede5798dd0431f8580745126e0a33908c84?resource_link_id=84054840129\" front-cid=\"52cc728c-ed76-4a5f-9751-dc165440eb12\" /><br /></span><span style=\"font-family: Arial, sans-serif; font-size: 11pt; color: rgb(36, 36, 36);\">9465 Wilshire Boulevard, Suite 300<br />Beverly Hills, CA 90212<br />Tel: (424) 279-9989</span></p><p style=\"text-align: left; text-indent: 0px; background-color: white; margin: 0px;\"><span style=\"font-family: Arial, sans-serif; font-size: 11pt; color: rgb(36, 36, 36);\">Fax:&nbsp;(424) 274-3174</span><span style=\"font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\"><br />Web: <a href=\"http://www.camdenfirm.com/\" target=\"_blank\" id=\"OWA7e3826cf-5d4a-d2ff-0407-fe396b8186e6\" class=\"fa-a4snjd\" rel=\"noopener noreferrer\" data-linkindex=\"1\" data-auth=\"NotApplicable\" style=\"margin: 0px;\">http://www.camdenfirm.com</a></span></p></div></div></div>",
+      "text": "\nHi,\n\n\n\nPlease find attached our request for the full payment of the outstanding balance for above mentioned client. \n\n\n\nUpon acceptance, please sign and return. Kindly send us a copy of your W9 form for check issuance. Thank you.\n\n\n\nBest Regards,\n\n\nSheenah\n\nLiens Negotiator\n\nCamden Law Firm\n\n\n9465 Wilshire Boulevard, Suite 300\n\nBeverly Hills, CA 90212\n\nTel: (424) 279-9989\n\nFax: (424) 274-3174\n\nWeb: http://www.camdenfirm.com",
+      "error_type": null,
+      "version": null,
+      "subject": "EXTERNAL: Lien Reduction Request: James Patrick Daily DOB: 11/16/1989",
+      "draft_mode": null,
+      "metadata": {},
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_23jg4jl"
+            }
+          },
+          "name": "Sheenah Mae Cabading Jaravata",
+          "handle": "sheenah@camdenfirm.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_2293vr5"
+            }
+          },
+          "name": "Precise Imaging Negotiations",
+          "handle": "negotiation@precisemri.com",
+          "role": "to"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_24j5b29"
+            }
+          },
+          "name": "JamesPatrickDailyVSDOLZ2115168@camdenfirm.filevineapp.com",
+          "handle": "jamespatrickdailyvsdolz2115168@camdenfirm.filevineapp.com",
+          "role": "cc"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_23eyhs1"
+            }
+          },
+          "name": "Lien Reduction - Camden Law Firm",
+          "handle": "liens@camdenfirm.com",
+          "role": "cc"
+        }
+      ],
+      "attachments": [
+        {
+          "id": "fil_12m42xs1",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_ot0lzr5/download/fil_12m42xs1",
+          "filename": "Lien Reduction Request - Precise MRI - James Patrick Daily.pdf",
+          "content_type": "application/pdf",
+          "size": 150371,
+          "metadata": {
+            "is_inline": false
+          }
+        },
+        {
+          "id": "fil_12m42xq9",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_ot0lzr5/download/fil_12m42xq9",
+          "filename": "Outlook-Camden Law.png",
+          "content_type": "image/png",
+          "size": 4622,
+          "metadata": {
+            "is_inline": true,
+            "cid": "52cc728c-ed76-4a5f-9751-dc165440eb12"
+          }
+        },
+        {
+          "id": "fil_12m42xoh",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_ot0lzr5/download/fil_12m42xoh",
+          "filename": "Outlook-horizontal.png",
+          "content_type": "image/png",
+          "size": 126,
+          "metadata": {
+            "is_inline": true,
+            "cid": "35929aad-f154-445e-a6f8-87aaaf638c25"
+          }
+        }
+      ],
+      "signature": null,
+      "is_draft": false
+    }
+  ]
+}

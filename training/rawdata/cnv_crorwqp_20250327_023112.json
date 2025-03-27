@@ -1,0 +1,175 @@
+{
+  "_links": {
+    "self": "https://precise-imaging.api.frontapp.com/conversations/cnv_crorwqp",
+    "related": {
+      "events": "https://precise-imaging.api.frontapp.com/conversations/cnv_crorwqp/events",
+      "followers": "https://precise-imaging.api.frontapp.com/conversations/cnv_crorwqp/followers",
+      "messages": "https://precise-imaging.api.frontapp.com/conversations/cnv_crorwqp/messages",
+      "comments": "https://precise-imaging.api.frontapp.com/conversations/cnv_crorwqp/comments",
+      "inboxes": "https://precise-imaging.api.frontapp.com/conversations/cnv_crorwqp/inboxes",
+      "last_message": "https://precise-imaging.api.frontapp.com/messages/msg_ot0h79d?referer=conversation"
+    }
+  },
+  "id": "cnv_crorwqp",
+  "subject": "",
+  "status": "unassigned",
+  "status_id": "sts_v8ltt",
+  "status_category": "open",
+  "ticket_ids": [],
+  "assignee": null,
+  "recipient": {
+    "_links": {
+      "related": {
+        "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_264ptdt"
+      }
+    },
+    "name": null,
+    "handle": "+18186509502",
+    "role": "from"
+  },
+  "tags": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_3k5tt",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_3k5tt/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": null,
+          "children": null
+        }
+      },
+      "id": "tag_3k5tt",
+      "name": "SMS",
+      "highlight": "📱",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "updated_at": 1743042674.116,
+      "created_at": 1551299412.171
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_trwld",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_trwld/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_3k7ll",
+          "children": null
+        }
+      },
+      "id": "tag_trwld",
+      "name": "Apt status req",
+      "highlight": "purple",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "updated_at": 1743070961.293,
+      "created_at": 1667845054.944
+    }
+  ],
+  "links": [],
+  "custom_fields": {},
+  "created_at": 1743042672.826,
+  "waiting_since": 1743042672.437,
+  "is_private": false,
+  "scheduled_reminders": [],
+  "metadata": {},
+  "messages": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_ot0h79d",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crorwqp",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_ot0h79d/seen"
+        }
+      },
+      "id": "msg_ot0h79d",
+      "type": "sms",
+      "is_inbound": false,
+      "created_at": 1743042674.41,
+      "blurb": "Precise has received your message however our normal business hours are M-F 9am to 5pm. I will alert our team members to see if somebody is available to reply after hours. If nobody is available you w",
+      "body": "<div>Precise has received your message however our normal business hours are M-F 9am to 5pm. I will alert our team members to see if somebody is available to reply after hours. If nobody is available you will receive a reply during regular business hours.</div>",
+      "text": "Precise has received your message however our normal business hours are M-F 9am to 5pm. I will alert our team members to see if somebody is available to reply after hours. If nobody is available you will receive a reply during regular business hours.",
+      "error_type": null,
+      "version": null,
+      "draft_mode": null,
+      "metadata": {
+        "external_id": "SM44eec6981c6722739a2f2068433aee16"
+      },
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": null
+            }
+          },
+          "name": null,
+          "handle": "+18005582223",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_264ptdt"
+            }
+          },
+          "name": null,
+          "handle": "+18186509502",
+          "role": "to"
+        }
+      ],
+      "attachments": [],
+      "signature": null,
+      "is_draft": false
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_ot0h6yp",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crorwqp",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_ot0h6yp/seen"
+        }
+      },
+      "id": "msg_ot0h6yp",
+      "type": "sms",
+      "is_inbound": true,
+      "created_at": 1743042672.437,
+      "blurb": "Good evening, this is Stephanie from SHK Law. I need an updated W9 with a 2025 date. Can you please fax it to this number, our office fax number which is (818) 285-8474, or email it to steph@shklaw.c",
+      "body": "<div>Good evening,  this is Stephanie from SHK Law. I need an updated W9 with a 2025 date. Can you please fax it to this number, our office fax number which is (818) 285-8474, or email it to <a href=\"mailto:steph@shklaw.com\" target=\"_blank\" rel=\"noopener noreferrer\">steph@shklaw.com</a></div>",
+      "text": "Good evening,  this is Stephanie from SHK Law. I need an updated W9 with a 2025 date. Can you please fax it to this number, our office fax number which is (818) 285-8474, or email it to steph@shklaw.com",
+      "error_type": null,
+      "version": null,
+      "draft_mode": null,
+      "metadata": {
+        "external_id": "SM17315aff72a56edac12749240a7e8df7"
+      },
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": null
+            }
+          },
+          "name": null,
+          "handle": "+18005582223",
+          "role": "to"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_264ptdt"
+            }
+          },
+          "name": null,
+          "handle": "+18186509502",
+          "role": "from"
+        }
+      ],
+      "attachments": [],
+      "signature": null,
+      "is_draft": false
+    }
+  ]
+}

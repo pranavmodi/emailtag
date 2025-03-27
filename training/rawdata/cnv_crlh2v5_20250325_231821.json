@@ -1,0 +1,232 @@
+{
+  "_links": {
+    "self": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlh2v5",
+    "related": {
+      "events": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlh2v5/events",
+      "followers": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlh2v5/followers",
+      "messages": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlh2v5/messages",
+      "comments": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlh2v5/comments",
+      "inboxes": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlh2v5/inboxes",
+      "last_message": "https://precise-imaging.api.frontapp.com/messages/msg_ot0nw5d?referer=conversation"
+    }
+  },
+  "id": "cnv_crlh2v5",
+  "subject": "Re: EXTERNAL: NEW CLIENT FOR MRI: DZHEMMA ARAKELIAN DOL: 10/08/2024",
+  "status": "archived",
+  "status_id": "sts_v8lxd",
+  "status_category": "resolved",
+  "ticket_ids": [],
+  "assignee": {
+    "_links": {
+      "self": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd",
+      "related": {
+        "inboxes": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/inboxes",
+        "conversations": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/conversations"
+      }
+    },
+    "id": "tea_2ditd",
+    "email": "ana.m@precisemri.com",
+    "username": "ana",
+    "first_name": "Ana",
+    "last_name": "Martinez",
+    "is_admin": false,
+    "is_available": true,
+    "is_blocked": false,
+    "type": "user",
+    "custom_fields": {}
+  },
+  "recipient": {
+    "_links": {
+      "related": {
+        "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_258qd1d"
+      }
+    },
+    "name": null,
+    "handle": "mtamayo@apexinjury.law",
+    "role": "to"
+  },
+  "tags": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_3k7ll",
+          "children": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/children"
+        }
+      },
+      "id": "tag_tn98h",
+      "name": "RX",
+      "highlight": "blue",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "updated_at": 1743054887.05,
+      "created_at": 1663790297.907
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_3k5wx",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_3k5wx/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+          "children": null
+        }
+      },
+      "id": "tag_3k5wx",
+      "name": "Order Entered",
+      "highlight": "✅",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": false,
+      "updated_at": 1743052934.054,
+      "created_at": 1551378905.259
+    }
+  ],
+  "links": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/links/top_daqdd"
+      },
+      "id": "top_daqdd",
+      "name": "ID: PRE1050686",
+      "type": "app_df5cb65d50c3ff8b",
+      "external_url": "https://precise.radflow360.com/patient?patientid=PRE1050686",
+      "custom_fields": {}
+    }
+  ],
+  "custom_fields": {},
+  "created_at": 1742944701.443,
+  "waiting_since": 1743053025,
+  "is_private": false,
+  "scheduled_reminders": [],
+  "metadata": {},
+  "messages": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_ot0nw5d",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlh2v5",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_ot0nw5d/seen",
+          "message_replied_to": "https://precise-imaging.api.frontapp.com/messages/msg_ot0nw5d/parent"
+        }
+      },
+      "id": "msg_ot0nw5d",
+      "type": "email",
+      "is_inbound": false,
+      "created_at": 1743053024.063,
+      "blurb": "The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day. For your records, the patient ID is PRE1050686. Please use this",
+      "body": "<div>The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day.&nbsp;&nbsp;</div><div><br /></div><div><b style=\"color: rgb(29, 28, 29); font-family: Slack-Lato, Slack-Fractions, appleLogo, sans-serif; font-variant-ligatures: common-ligatures; text-align: left; background-color: rgb(248, 248, 248);\" data-stringify-type=\"bold\">For your records, the patient ID is PRE1050686.&nbsp; Please use this for all future communications.</b></div><div><br /></div><div><br /></div><div>We will also send them a text shortly letting them know to call us in case we miss them when we reach out.</div><div><br /></div><div><br /></div><div><b>The patient is welcome to call our direct scheduling line M-F 8am to 5pm @ 818-629-1169</b></div><div><br /></div><div><br /></div><div>Once we can schedule them and they complete their exam, reports are typically sent out within 24-72 hours.</div><div><br /></div><div></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">Patients can also view their appointment times, answer\nprescreening questions and sign all liens here:</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><u><span style=\"font-size: 12pt;\"><a href=\"https://precise.radflow360.com/patient-portal\" target=\"_blank\" rel=\"noopener noreferrer\">https://precise.radflow360.com/patient-portal</a></span></u></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><u><span style=\"font-size: 12pt;\">If this is also a personal injury case:</span></u></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><ul type=\"disc\" style=\"margin-bottom: 0in;\">\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">A report containing&nbsp;the findings of the exam will\n     also be sent to the attorney</span></b></li>\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">A bill will be sent to the attorney once both the\n     patient and the attorney sign all pending liens</span></b></li>\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">Please make sure to submit a negotiation offer before\n     sending the payment</span></b></li>\n</ul><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\"><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Access\nbills, appointment times, and e-sign liens​&nbsp; (Click request login if you\ndon't have an account)<br />\n</a></span></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\"><br /></a></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\"><a href=\"https://pacs.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Access\nreports &amp; images</a>&nbsp;&nbsp;</span><a href=\"https://www.precisemri.com/request\" target=\"_blank\" rel=\"noopener noreferrer\"><span style=\"font-size: 12pt;\">(Request login here for reports)</span></a></b></div><div><b><a href=\"https://www.precisemri.com/request\" rel=\"noopener noreferrer\" target=\"_blank\"></a></b></div><div><br /></div>",
+      "text": "The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day. \n\n\nFor your records, the patient ID is PRE1050686. Please use this for all future communications.\n\n\n\n\nWe will also send them a text shortly letting them know to call us in case we miss them when we reach out.\n\n\n\n\nThe patient is welcome to call our direct scheduling line M-F 8am to 5pm @ 818-629-1169\n\n\n\n\nOnce we can schedule them and they complete their exam, reports are typically sent out within 24-72 hours.\n\n\n\nPatients can also view their appointment times, answer\nprescreening questions and sign all liens here:\nhttps://precise.radflow360.com/patient-portal\n\nIf this is also a personal injury case:\n\n\nA report containing the findings of the exam will\nalso be sent to the attorney\n\nA bill will be sent to the attorney once both the\npatient and the attorney sign all pending liens\n\nPlease make sure to submit a negotiation offer before\nsending the payment\n\n\n\nAccess\nbills, appointment times, and e-sign liens​ (Click request login if you\ndon't have an account)\n\n\n\nAccess\nreports & images (Request login here for reports)",
+      "error_type": null,
+      "version": null,
+      "subject": "Re: EXTERNAL: NEW CLIENT FOR MRI: DZHEMMA ARAKELIAN DOL: 10/08/2024",
+      "draft_mode": null,
+      "metadata": {},
+      "author": {
+        "_links": {
+          "self": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd",
+          "related": {
+            "inboxes": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/inboxes",
+            "conversations": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/conversations"
+          }
+        },
+        "id": "tea_2ditd",
+        "email": "ana.m@precisemri.com",
+        "username": "ana",
+        "first_name": "Ana",
+        "last_name": "Martinez",
+        "is_admin": false,
+        "is_available": true,
+        "is_blocked": false,
+        "type": "user",
+        "custom_fields": {}
+      },
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": null,
+          "handle": "scheduling@precisemri.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_258qd1d"
+            }
+          },
+          "name": null,
+          "handle": "mtamayo@apexinjury.law",
+          "role": "to"
+        }
+      ],
+      "attachments": [],
+      "signature": null,
+      "is_draft": false
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_osrwtfl",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlh2v5",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_osrwtfl/seen"
+        }
+      },
+      "id": "msg_osrwtfl",
+      "type": "email",
+      "is_inbound": true,
+      "created_at": 1742943802,
+      "blurb": "Good afternoon Could you please schedule our client for a third MRI of her left knee, attached referral PRE1050686 Best Regards Formerly known as DYA Personal Injury Attorneys. Maria Tamayo Medical Ca",
+      "body": "<div><div>\r\n<style type=\"text/css\" style=\"display:none;\"> #fae_osrwtfl P {margin-top:0;margin-bottom:0;} </style></div><div dir=\"ltr\" class=\"fa0 front-email-body\"><div class=\"fahlgi9y\" style=\"font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\">Good afternoon&nbsp;</div><div class=\"fahlgi9y\" style=\"font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\"><br /></div><div class=\"fahlgi9y\" style=\"font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt;\"><span style=\"color: rgb(0, 0, 0);\">Could you please schedule our client for a third MRI of her left knee, attached referral </span><span style=\"color: black;\">PRE1050686&nbsp;</span></div><div style=\"font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\"><br /></div><div id=\"Signature\"><p style=\"text-align: left; text-indent: 0px; margin: 0in 0in 0in 0px;\"><span style=\"font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\">Best Regards&nbsp;</span></p><p style=\"text-align: left; text-indent: 0px; margin: 0in 0in 0in 0px;\"><span style=\"font-family: Aptos, Aptos_EmbeddedFont, Aptos_MSFontService, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);\"><br /></span></p><div style=\"text-align: left; text-indent: 0px; margin: 0px; font-family: Raavi, &quot;Nirmala UI&quot;, &quot;Gurmukhi MN&quot;, sans-serif; font-size: 11pt; color: rgb(0, 0, 0);\"><span style=\"font-weight: 700;\"><i>Formerly known as DYA Personal Injury Attorneys.</i></span><br /><br /></div><table id=\"table_0\" style=\"text-align: left; text-indent: 0px; line-height: 0px; margin: 0px; color: rgb(36, 36, 36); box-sizing: border-box; border-collapse: collapse; border-spacing: 0px;\"><tbody><tr><td style=\"width: 150px; height: 149.992px; text-align: left; text-indent: 0px; line-height: 0px; border-right: 2px solid rgb(37, 176, 248); padding-right: 15px;\"><span style=\"font-family: Raavi, &quot;Nirmala UI&quot;, &quot;Gurmukhi MN&quot;, sans-serif; font-size: 11pt; color: rgb(0, 0, 0);\"><a href=\"https://www.apexinjury.law/\" target=\"_blank\" id=\"OWA178ef474-d6f7-9b6d-d379-ece9938fb2bb\" class=\"fa-a4snjd\" rel=\"noopener noreferrer\" data-linkindex=\"0\" data-auth=\"NotApplicable\" style=\"margin: 0px; border-width: 4px; border-style: initial; border-color: initial;\"><img alt=\"AIA-Blackversion\" width=\"150\" style=\"width: 150px; margin: 0px;\" src=\"https://ext.frontusercontent.com/v1/proxy/0GTf8WlNPnIkqekdMXXQ63PTzU0uGXlXOnSkYyjAilKoowdqXkDdnB-uZGCcYJSRSAz1iu_IReFx94YNC-Xz7q46g2g-VdbLn53dFzW-91VmtYL5gUasRIhUDOqW3WwG3huHDF-Yu2t0I7xPDcG2K153X44r3LCmQfFd6Qie6UG11zZVllRdUN2Xyqhj7hBEMXm5ontwBiCDQbaGoPDWl-C_oUQQQZjPGG6r0tx98WuKzxfSRCum74J8gVkYlQE6oXigZrLRVdMq_S1y1GPtYxXrwjt_kPQ0Z6gwQ8zV8NlpuVjFaJwnrW12ivfrMjh2nA1T444A#https://firebasestorage.googleapis.com/v0/b/email-signatures-42b5d.appspot.com/o/aledja22%2FAIA-Blackversion.png?alt=media&amp;token=b2515646-15b5-46d6-8361-65c30e4be451\" /></a></span></td><td style=\"width: 230px; height: 149.992px; text-align: left; text-indent: 0px; line-height: 0px; border-right: 2px solid rgb(37, 176, 248); padding-left: 15px;\"><table style=\"text-align: left; text-indent: 0px; line-height: 0px; margin: 0px; width: 230px; box-sizing: border-box; border-collapse: collapse; border-spacing: 0px;\"><tbody><tr><td style=\"width: 230px; height: 34px; text-align: left; text-indent: 0px; line-height: 12pt; padding-top: 2px;\"><div style=\"text-align: left; text-indent: 0px; line-height: 12pt; margin: 0px; font-family: Raavi, &quot;Nirmala UI&quot;, &quot;Gurmukhi MN&quot;, sans-serif; font-size: 11pt; color: rgb(0, 0, 0);\"><b>Maria Tamayo&nbsp;</b></div><div style=\"text-align: left; text-indent: 0px; line-height: 12pt; margin: 0px; font-family: Raavi, &quot;Nirmala UI&quot;, &quot;Gurmukhi MN&quot;, sans-serif; font-size: 11pt; color: rgb(37, 176, 248);\"><span style=\"line-height: 12pt;\"><b>Medical Case Manager</b></span></div></td></tr><tr><td style=\"width: 230px; height: 66.9922px; text-align: left; text-indent: 0px; line-height: 14pt; padding-top: 10px;\"><div style=\"text-align: left; text-indent: 0px; line-height: 14pt; margin: 0px; font-family: Raavi, &quot;Nirmala UI&quot;, &quot;Gurmukhi MN&quot;, sans-serif; font-size: 11pt; color: rgb(0, 0, 0);\"><b>O : </b>(818)230-8380</div><p style=\"text-align: left; text-indent: 0px; line-height: normal; margin: 0px;\"><span style=\"font-family: Raavi, &quot;Nirmala UI&quot;, &quot;Gurmukhi MN&quot;, sans-serif; font-size: 11pt; color: rgb(0, 0, 0);\"><b>D: </b>( 747) 474 4145</span></p><div style=\"text-align: left; text-indent: 0px; line-height: 14pt; margin: 0px; font-family: Raavi, &quot;Nirmala UI&quot;, &quot;Gurmukhi MN&quot;, sans-serif; font-size: 11pt; color: rgb(0, 0, 0);\"><b>E &nbsp;:&nbsp; &nbsp;</b><span style=\"color: black;\"><a href=\"mailto:Krystina@apexinjury.law\" id=\"OWAe7123b3b-d2a5-76c2-2a3e-b828dcefa74c\" class=\"fa-a4snjd\" data-linkindex=\"1\" style=\"color: black; margin: 0px; border-width: 4px; border-style: initial; border-color: initial;\" target=\"_blank\" rel=\"noopener noreferrer\">mtamayo@apexinjury.law</a></span></div><div style=\"text-align: left; text-indent: 0px; line-height: 14pt; margin: 0px; font-family: Raavi, &quot;Nirmala UI&quot;, &quot;Gurmukhi MN&quot;, sans-serif; font-size: 11pt; color: rgb(0, 0, 0);\"><b>W :&nbsp; &nbsp;</b><span style=\"color: black;\"><a href=\"https://www.apexinjury.law/\" target=\"_blank\" id=\"OWAf2c5dcb0-3ddd-9954-60df-7d738c8e949b\" class=\"fa-a4snjd\" rel=\"noopener noreferrer\" data-linkindex=\"2\" data-auth=\"NotApplicable\" style=\"color: black; margin: 0px; border-width: 4px; border-style: initial; border-color: initial;\">www.apexinjury.law</a></span></div></td></tr></tbody></table></td><td style=\"width: 90px; height: 149.992px; text-align: left; text-indent: 0px; line-height: 0px; padding-top: 2px; padding-left: 15px;\"><table style=\"text-align: left; text-indent: 0px; line-height: 0px; margin: 0px; width: 90px; box-sizing: border-box; border-collapse: collapse; border-spacing: 0px;\"><tbody><tr><td style=\"width: 92px; height: 72.6016px; text-align: left; text-indent: 0px; line-height: 0px;\"><span style=\"font-family: Raavi, &quot;Nirmala UI&quot;, &quot;Gurmukhi MN&quot;, sans-serif; font-size: 11pt; color: rgb(0, 0, 0);\"><img alt=\"SuperLawyers-Logo-Selectedportion\" width=\"90\" style=\"width: 90px; margin: 0px;\" src=\"https://ext.frontusercontent.com/v1/proxy/3hGGPuk_f6UnYWuqr-gb-iTH3V6sMZRl2c3lYVKSNb7H84dsxwDFSkE3CzxuQGMZu0owzLWFaHUQ6K4jFwtfHNbMDFUVcuS-C1b8PJeXZpiykWa2L0COX5jm-iEHHLT-olFrtncYXiZSZyJZZXP-3QUb60ulpoyB_TJu1w1mxOfp3u6upU_5v8mLw3_ypXczyDJHVKWTOyh3F4FV5N3QWwwY78HTl8vT71s_OuqMl2GXVhmETrG_WkOkJpWeUn2ZAZMoHg1JXO8CC30-he6le-R5-Ms0ibjy8u0Ck_bAJVLKs3c5RTcUCEbB6XA-vD4BLLiES1WGDzj_FuKp_awrZHxNdrs0w6k#https://firebasestorage.googleapis.com/v0/b/email-signatures-42b5d.appspot.com/o/aledja22%2FSuperLawyers-Logo-Selectedportion.png?alt=media&amp;token=e3cac7b1-a935-45bc-8798-6e977ceea2a4\" /></span></td></tr><tr><td align=\"center\" style=\"width: 92px; height: 31px; text-indent: 0px; line-height: 0px; padding-top: 10px;\"><span style=\"font-family: Raavi, &quot;Nirmala UI&quot;, &quot;Gurmukhi MN&quot;, sans-serif; font-size: 11pt; color: rgb(0, 0, 0);\"><a href=\"https://www.facebook.com/apexinjurylawyers\" target=\"_blank\" id=\"OWA3ac19781-4c87-e7dc-671b-623626519f73\" class=\"fa-a4snjd\" rel=\"noopener noreferrer\" data-linkindex=\"3\" data-auth=\"NotApplicable\" style=\"margin: 0px; border-width: 4px; border-style: initial; border-color: initial;\"><img alt=\"facebook\" width=\"20\" height=\"20\" style=\"width: 20px; height: 20px; margin: 0px;\" src=\"https://ext.frontusercontent.com/v1/proxy/u8gcqNxwPIxX9LXcgfiqta8Tb4FJz4bKIX0HXjQHcqAW1g9rhe4GvVcrS3MqZDQGmr4WrXyEG4yC6gcDkQThE4KVbDpm7RXhFayBIK0571fvADpQeALcHtwOSE_f_asV9pVUCxmnjeLb2KfSLYYzSKWGrWBr8meGEe9Dt4VJCDLQcbpCtQe8ewd2jTGurF37BsQ#https://i.postimg.cc/bNLH8gfV/facebook-2024-03-13-T235912-260.png\" /></a>&nbsp; <a href=\"https://www.instagram.com/apexinjurylawyers/\" target=\"_blank\" id=\"OWA2ba0a56a-31d4-51f6-63eb-ac3f396f6af0\" class=\"fa-a4snjd\" rel=\"noopener noreferrer\" data-linkindex=\"4\" data-auth=\"NotApplicable\" style=\"margin: 0px; border-width: 4px; border-style: initial; border-color: initial;\"><img alt=\"instagram\" width=\"20\" height=\"20\" style=\"width: 20px; height: 20px; margin: 0px;\" src=\"https://ext.frontusercontent.com/v1/proxy/2Bba93jAkRWs785_E8fbfyymIIKplgyWEc0FAM5SJi3qd1R2NGJ1hmz2LfGZhV7XKiOwpq2A2J4WmKDYnfiaxiACxcJNVBqyCfwiylEgd6EMChC8SKj1bEijgFWRIvGJelh-OoyYggr0VEfKTMxuxub2vqN53qO0og3SHX_FCMlu28dvJa39wuscgMLsv_56KCcS#https://i.postimg.cc/Jzn3hX1r/instagram-2024-03-13-T235903-584.png\" /></a>&nbsp; <a href=\"https://www.twitter.com/apexinjurylawyers\" target=\"_blank\" id=\"OWA8819710e-a120-310d-80d3-cc234485d8a9\" class=\"fa-a4snjd\" rel=\"noopener noreferrer\" data-linkindex=\"5\" data-auth=\"NotApplicable\" style=\"margin: 0px; border-width: 4px; border-style: initial; border-color: initial;\"><img alt=\"twitter\" width=\"20\" height=\"20\" style=\"width: 20px; height: 20px; margin: 0px;\" src=\"https://ext.frontusercontent.com/v1/proxy/zRPdxbPlcfmfd9NcJblqiPipnuVN8GjQP59gj-5NVw5B7rNZufIJw3sabLkZANXyfa7WzKMVV6rrsfQPW3GErwl-0_Ex_i1fATgp-z0-B-GtZ-5UNOpD6oLet031ScOV6-99L48CFMH_diRmba1_Fej71nqpNUgc-L_oJaE#https://i.postimg.cc/3J3CP6VD/twitter-86.png\" /></a></span></td></tr></tbody></table></td></tr></tbody></table><div style=\"text-align: left; text-indent: 0px; margin: 0px; font-family: Raavi, &quot;Nirmala UI&quot;, &quot;Gurmukhi MN&quot;, sans-serif; font-size: 11pt; color: rgb(0, 0, 0);\">            101 N BRAND BLVD. STE 602, GLENDALE, CA 91203&nbsp;</div><div style=\"text-align: left; text-indent: 0px; margin: 0px; font-family: Raavi, &quot;Nirmala UI&quot;, &quot;Gurmukhi MN&quot;, sans-serif; font-size: 11pt; color: rgb(0, 0, 0);\"><b>Los Angeles | Orange | Riverside | San Diego | Bakersfield | San Francisco | Sacramento</b></div></div><div id=\"appendonsend\"></div><hr style=\"display:inline-block;width:98%\" /><div id=\"divRplyFwdMsg\" dir=\"ltr\"><font face=\"Calibri, sans-serif\" style=\"font-size:11pt\" color=\"#000000\"><b>From:</b> Precise Imaging Records &amp; Images &lt;<a href=\"mailto:records@precisemri.com\" target=\"_blank\" rel=\"noopener noreferrer\">records@precisemri.com</a>&gt;<br /><b>Sent:</b> Wednesday, March 12, 2025 4:18 PM<br /><b>To:</b> Maria Tamayo &lt;<a href=\"mailto:mtamayo@apexinjury.law\" target=\"_blank\" rel=\"noopener noreferrer\">mtamayo@apexinjury.law</a>&gt;<br /><b>Subject:</b> Re: EXTERNAL: NEW CLIENT FOR MRI: DZHEMMA ARAKELIAN DOL: 10/08/2024</font> <div>&nbsp;</div></div><div><div class=\"faai8ojp\" style><div class=\"faxamhrh\" style=\"font-family:Tahoma,Geneva,sans-serif\"><h4>I have attached the following items</h4><ul><li><b>Reports</b></li></ul><div><b><br /></b></div><div><b>Below is a table of all the studies we have for the patient.</b></div><div><b><br /></b></div><div><b>Patient ID</b>: <b>PRE1050686</b></div><div><b><br /></b></div><table id=\"x_patients_study\" cellpadding=\"5\" cellspacing=\"1\" class=\"fa-wl7yyp\" style=\"border:1px solid black\"><tbody><tr bgcolor=\"#e3e3e3\" class=\"fa-wl7yyp\" style=\"border:1px solid #e3e3e3\"><th>Study ID</th><th>Study Description</th><th>Exam Status</th><th>Study Date</th><th>Location</th><th>Images Available</th><th>Report Available</th><th>Bills Available</th></tr><tr><td>RAM1004682</td><td>MRI CERVICAL SPINE W/O CONTRAST</td><td>SIGNED</td><td>03/03/25 @ 02:32 PM</td><td>6710 Kester Ave. Suite 126 Van Nuys CA 91405</td><td>Yes</td><td>Yes</td><td>No</td></tr><tr><td>RAM1004683</td><td>MRI LUMBAR SPINE W/O CONTRAST</td><td>SIGNED</td><td>03/03/25 @ 02:50 PM</td><td>6710 Kester Ave. Suite 126 Van Nuys CA 91405</td><td>Yes</td><td>Yes</td><td>No</td></tr></tbody></table><div><br /></div><div></div></div></div><img alt=\"Sent from Front\" style=\"width:1px; height:1px\" src=\"https://app.frontapp.com/api/1/noauth/companies/88d6512b91118f61d8bf/seen/msg_oqbb6pt/0/74ff5dc9.gif\" /> <p>--</p><table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:transparent!important; color:#191919; max-width:440px; width:477.887px\"><tbody><tr><td style=\"border-bottom:1px solid #191919; width:472px\"><table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:transparent!important; width:440px\"><tbody><tr><td><span style=\"color:#19688c; font-size:14pt\"><strong>Reports &amp; Images </strong></span><br /><span style=\"color:#808080; font-size:11pt\">Records Department</span></td><td style=\"text-align:right\"><a href=\"https://www.precisemri.com.com/\" target=\"_blank\" rel=\"noopener noreferrer\"><img style=\"border:0; height:auto; width:149px\" src=\"https://ext.frontusercontent.com/v1/proxy/ysgiivVGUQx0T3UekSorVJeY9tVTB6WajXU8wTbMi4kxPKyC9teZNcQ6wNaAfDqLn8CaJfAw0KQrJ4FOcDWazGW70TzRHpJgxVsuJV8k6yuWYJYSWU4BGekO4fKOfqtndIcoxZjVZL2xKXYhTa1mmISiEMKMXGMnytHQU5poW4BAIhm_p3bVwa6gluW8FhdKk32fCbUW2zdtBsoswkuJLmk55rU#https://precisemri.com/wp-content/uploads/2023/07/Signature_blue-red-logo-trans.png\" /></a></td></tr></tbody></table></td></tr><tr><td style=\"width:472px\"><table style=\"background:transparent!important; width:480.887px\"><tbody><tr><td style=\"width:95px\"><p><a href=\"https://precisemri.com/rx\" target=\"_blank\" rel=\"noopener noreferrer\">Upload RX</a><br /><a href=\"https://pacs.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Images Portal</a><br /><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Billing Portal</a><br /><a href=\"https://precise.radflow360.com/patient-portal\" target=\"_blank\" rel=\"noopener noreferrer\">Patient Portal</a><br /><a href=\"https://precisemri.com/locations\" target=\"_blank\" rel=\"noopener noreferrer\">View Locations</a></p></td><td style=\"width:15px\"><p>&nbsp;</p><p>&nbsp;</p></td><td style=\"width:348px\"><span style=\"color:#191919; font-size:9pt\">T: 818-907-7723 Ext. 9000 | F</span><span style=\"color:#191919; font-size:9pt\">: 888-398-2921</span><br /><a href=\"mailto:records@precisemri.com\" style=\"text-decoration:none!important; font-size:9pt; color:#191919\" target=\"_blank\" rel=\"noopener noreferrer\"><span style=\"color:#191919; font-size:9pt\">records@precisemri.com</span></a> | <a href=\"http://www.precisemri.com/\" rel=\"noopener noreferrer\" target=\"_blank\" style=\"font-size:9pt; color:#19688c!important; text-decoration:none!important; font-weight:bold\"><strong>www.PreciseMRI.com</strong></a><br /><span style=\"color:#191919; font-size:9pt\">6710 kester Ave Suite 126</span><span style=\"color:#191919; font-size:9pt\">, </span><span style=\"color:#191919; font-size:9pt\">Van Nuys, CA 91405</span> <p><a href=\"https://www.facebook.com/preciseimaging/\" rel=\"noopener noreferrer\" target=\"_blank\"><img style=\"border:0; height:26px; width:26px\" src=\"https://ext.frontusercontent.com/v1/proxy/yk-Tf8hRvBt5JhACnAvmSugAW4ju2NgFQDwuYuxEUd2Md3tJPFYlEtjqApkxENpJVlzvhPojFZpTFDLg15k-fDAudOGxZTM2ziP8XsmTmC6NPaCUjuG0Pa41EsySio9l_Km9qwYjXH9jIkTtx8Mup0MYRfJkU_poF3vbPSzj_1hryEB1z4su7ueLe2idgoimTEcEDnIil7ern4CZ6muPHCQ#https://www.mail-signatures.com/signature-generator/img/templates/charity/fb.png\" /></a>&nbsp;<a href=\"https://twitter.com/preciseimaging\" rel=\"noopener noreferrer\" target=\"_blank\"><img style=\"border:0; height:26px; width:26px\" src=\"https://ext.frontusercontent.com/v1/proxy/pXFK-5ehVdNvvSTbxLwz6MZvkkrxtGthcQuIK8_UzPmYpkakrnejivpgyAex7OVk4QOjDk_qyvequIPOUEr7I7Iityn2jpRLNq3yPHwl4Oq49yaqcUZ92VwdxEk8NyT2LEAlsOFhLb7UQ8FPMknHPOs3PUbH1yCFG2nC8GIE1vViY9CvcHeib15Ox9nk9JdsgtDZdpIIlDdFk6XOPU-ZmRw#https://www.mail-signatures.com/signature-generator/img/templates/charity/tt.png\" /></a>&nbsp;<a href=\"https://youtube.com/@preciseimagingmri3857?si=H9HGQ21f-htuWDUV\" rel=\"noopener noreferrer\" target=\"_blank\"><img style=\"border:0; height:26px; width:26px\" src=\"https://ext.frontusercontent.com/v1/proxy/LF4UDAyQRmXlCrQ3Xvo9QzByVv-axlv8xR0S2ZmrSBhLFfRpXkHnIUxny36q4XUkcFaUtdeEks3SqyzvIi0Q_rNu6KyX4x2Sg5fV6qQfR5Uya_YYVXOX_AM3GJjf1toT7r3t9p2_jZrjf7xiQLhsBK2RFhm-VaWEzL_JjLkR1YxBFv3a2kEoJBIq5aHy3lyr4K1dfFtILXBIcjTX5MxluE8#https://www.mail-signatures.com/signature-generator/img/templates/charity/yt.png\" /></a>&nbsp;<a href=\"https://www.linkedin.com/company/precise-imaging/\" rel=\"noopener noreferrer\" target=\"_blank\"><img style=\"border:0; height:26px; width:26px\" src=\"https://ext.frontusercontent.com/v1/proxy/9ZS6BVz0xnWUqZJTU9Me1_QDPHcMfM6QESBaJr8dkY0GASbL2g7wXIXaR7iDbUmb2RLAlZduS6YskvnnZz6o4Jg3a034O7CSb5oq7fv8vfOD9bS9GDefeA-KaCMsN-jnfV-udETnF4WGJrydwf6nu1UtsC8pJELTfwaUo8PuKq4Kj7AJrkyYy1V_Urs0epbqAVWc3VnNd3JrFzGZP4fKpBU#https://www.mail-signatures.com/signature-generator/img/templates/charity/ln.png\" /></a>&nbsp;<a href=\"https://www.instagram.com/preciseimaging/\" rel=\"noopener noreferrer\" target=\"_blank\"><img style=\"height:26px; width:26px\" src=\"https://ext.frontusercontent.com/v1/proxy/p2q3vAXonJJFXdipaENCioflbZNpPTaZAqUV-drHr9BSmT-MhuWQohSIjcAXFqoKF-SY7YiYGB2_fSICE9HorJwW7NRpq4CGeouNFenDxoXw-Drx2W7gsC9cHH9wU7iRbAJjga34e8m-9tOKxNyM3rmoo4ZbUgxZ5IOQizk8LrVXlItn6Vhe1VfLA3fHZNheOoPXkiSgkyehqNwR89B9EkU#https://www.mail-signatures.com/signature-generator/img/templates/charity/it.png\" /></a>&nbsp;</p></td></tr></tbody></table></td></tr><tr><td style=\"width:472px\"><a href=\"https://www.precisemri.com/locations\" rel=\"noopener noreferrer\" target=\"_blank\"><img alt=\"View Precise Imaging Facility Locations\" style=\"max-width:440px; width:440px\" src=\"https://ext.frontusercontent.com/v1/proxy/KkP3-wWx7_N8rdQ3iEdSTYr_iKb4tu9UTasCidMgqGw0OF3U35Wnpbb26Mfju4D-Nhg-gU29KbyxOFRkmveTwJ7v7cjqoDbDeYyHPA7sw50-TQ2uf8rwwsQBQtNVaMc8eRatftpd55xYSuIJYzFD2jc7ac4XNXQMyGoe-Jz1I9kVRGbuEq-YXAOY4AxNZRuajfoXlGDYIeBj#https://www.precisemri.com/wp-content/uploads/2023/10/view-locations.png\" /></a></td></tr></tbody></table><p>Precise Imaging Disclaimer: This email message, its contents and any attachments hereto, are for the sole use of the intended recipient(s) and may contain confidential and privileged information. Any unauthorized review, use, disclosure or distribution is prohibited. Notwithstanding the Uniform Electronic Transactions Act or the applicability of any other law of similar substance or effect, absent an express statement to the contrary hereinabove, this e-mail communication, its contents and any attachments hereto, are not intended to represent an offer or acceptance to enter into a contract and are not otherwise intended to bind the sender, any of its clients, or any other person or entity.</p></div></div></div>",
+      "text": "\nGood afternoon \n\n\n\nCould you please schedule our client for a third MRI of her left knee, attached referral PRE1050686 \n\n\n\nBest Regards \n\n\n\nFormerly known as DYA Personal Injury Attorneys.\n\n\n\nMaria Tamayo \n\nMedical Case Manager\n\n\nO : (818)230-8380\n\nD: ( 747) 474 4145\n\nE : mtamayo@apexinjury.law\n\nW : www.apexinjury.law\n\n\n\n\n\n\n\n\n101 N BRAND BLVD. STE 602, GLENDALE, CA 91203 \n\nLos Angeles | Orange | Riverside | San Diego | Bakersfield | San Francisco | Sacramento\n\n\n\nFrom: Precise Imaging Records & Images <records@precisemri.com>\nSent: Wednesday, March 12, 2025 4:18 PM\nTo: Maria Tamayo <mtamayo@apexinjury.law>\nSubject: Re: EXTERNAL: NEW CLIENT FOR MRI: DZHEMMA ARAKELIAN DOL: 10/08/2024\n\n\n\nI have attached the following items\n\nReports\n\n\n\n\nBelow is a table of all the studies we have for the patient.\n\n\n\nPatient ID: PRE1050686\n\n\nStudy ID Study Description Exam Status Study Date Location Images Available Report Available Bills Available \nRAM1004682 MRI CERVICAL SPINE W/O CONTRAST SIGNED 03/03/25 @ 02:32 PM 6710 Kester Ave. Suite 126 Van Nuys CA 91405 Yes Yes No \nRAM1004683 MRI LUMBAR SPINE W/O CONTRAST SIGNED 03/03/25 @ 02:50 PM 6710 Kester Ave. Suite 126 Van Nuys CA 91405 Yes Yes No \n\n\n\n\n\n\n\n--\nReports & Images \nRecords Department \n\n\n\nUpload RX\n\nImages Portal\n\nBilling Portal\n\nPatient Portal\n\nView Locations\n\n\n\n\nT: 818-907-7723 Ext. 9000 | F: 888-398-2921\nrecords@precisemri.com | www.PreciseMRI.com\n6710 kester Ave Suite 126, Van Nuys, CA 91405 \n\n\n\n\n\n\n\nPrecise Imaging Disclaimer: This email message, its contents and any attachments hereto, are for the sole use of the intended recipient(s) and may contain confidential and privileged information. Any unauthorized review, use, disclosure or distribution is prohibited. Notwithstanding the Uniform Electronic Transactions Act or the applicability of any other law of similar substance or effect, absent an express statement to the contrary hereinabove, this e-mail communication, its contents and any attachments hereto, are not intended to represent an offer or acceptance to enter into a contract and are not otherwise intended to bind the sender, any of its clients, or any other person or entity.",
+      "error_type": null,
+      "version": null,
+      "subject": "Re: EXTERNAL: NEW CLIENT FOR MRI: DZHEMMA ARAKELIAN DOL: 10/08/2024",
+      "draft_mode": null,
+      "metadata": {},
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_258qd1d"
+            }
+          },
+          "name": "Maria Tamayo",
+          "handle": "mtamayo@apexinjury.law",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_19e9zi9"
+            }
+          },
+          "name": "Precise Imaging Records & Images",
+          "handle": "records@precisemri.com",
+          "role": "to"
+        }
+      ],
+      "attachments": [
+        {
+          "id": "fil_12lq2ept",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_osrwtfl/download/fil_12lq2ept",
+          "filename": "03.14.2025 Imaging Orders DA.pdf",
+          "content_type": "application/pdf",
+          "size": 131960,
+          "metadata": {
+            "is_inline": false
+          }
+        }
+      ],
+      "signature": null,
+      "is_draft": false
+    }
+  ]
+}

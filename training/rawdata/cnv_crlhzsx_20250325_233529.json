@@ -1,0 +1,252 @@
+{
+  "_links": {
+    "self": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlhzsx",
+    "related": {
+      "events": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlhzsx/events",
+      "followers": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlhzsx/followers",
+      "messages": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlhzsx/messages",
+      "comments": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlhzsx/comments",
+      "inboxes": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlhzsx/inboxes",
+      "last_message": "https://precise-imaging.api.frontapp.com/messages/msg_ot0s1q9?referer=conversation"
+    }
+  },
+  "id": "cnv_crlhzsx",
+  "subject": "Re: EXTERNAL: NEW ONLINE ORDER RX SUBMISSION for Alexis Castillo June 20, 1973",
+  "status": "archived",
+  "status_id": "sts_v8lxd",
+  "status_category": "resolved",
+  "ticket_ids": [],
+  "assignee": {
+    "_links": {
+      "self": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd",
+      "related": {
+        "inboxes": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/inboxes",
+        "conversations": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/conversations"
+      }
+    },
+    "id": "tea_2ditd",
+    "email": "ana.m@precisemri.com",
+    "username": "ana",
+    "first_name": "Ana",
+    "last_name": "Martinez",
+    "is_admin": false,
+    "is_available": true,
+    "is_blocked": false,
+    "type": "user",
+    "custom_fields": {}
+  },
+  "recipient": {
+    "_links": {
+      "related": {
+        "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_1a05f29"
+      }
+    },
+    "name": null,
+    "handle": "noreply@precisemri.com",
+    "role": "to"
+  },
+  "tags": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_3k7ll",
+          "children": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/children"
+        }
+      },
+      "id": "tag_tn98h",
+      "name": "RX",
+      "highlight": "blue",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "updated_at": 1743054887.05,
+      "created_at": 1663790297.907
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_3k5wx",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_3k5wx/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+          "children": null
+        }
+      },
+      "id": "tag_3k5wx",
+      "name": "Order Entered",
+      "highlight": "✅",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": false,
+      "updated_at": 1743052934.054,
+      "created_at": 1551378905.259
+    }
+  ],
+  "links": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/links/top_ef6pt"
+      },
+      "id": "top_ef6pt",
+      "name": "ID: PRE146525",
+      "type": "app_df5cb65d50c3ff8b",
+      "external_url": "https://precise.radflow360.com/patient?patientid=PRE146525",
+      "custom_fields": {}
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/links/top_eg729"
+      },
+      "id": "top_eg729",
+      "name": "ID: PRE1068823",
+      "type": "app_df5cb65d50c3ff8b",
+      "external_url": "https://precise.radflow360.com/patient?patientid=PRE1068823",
+      "custom_fields": {}
+    }
+  ],
+  "custom_fields": {},
+  "created_at": 1742945729.146,
+  "waiting_since": 1743049794,
+  "is_private": false,
+  "scheduled_reminders": [],
+  "metadata": {},
+  "messages": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_ot0s1q9",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlhzsx",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_ot0s1q9/seen",
+          "message_replied_to": "https://precise-imaging.api.frontapp.com/messages/msg_ot0s1q9/parent"
+        }
+      },
+      "id": "msg_ot0s1q9",
+      "type": "email",
+      "is_inbound": false,
+      "created_at": 1743049792.918,
+      "blurb": "The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day. For your records, the patient ID is PRE1068823. Please use this",
+      "body": "<div>The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day.&nbsp;&nbsp;</div><div><br /></div><div><b style=\"color: rgb(29, 28, 29); font-family: Slack-Lato, Slack-Fractions, appleLogo, sans-serif; font-variant-ligatures: common-ligatures; text-align: left; background-color: rgb(248, 248, 248);\" data-stringify-type=\"bold\">For your records, the patient ID is PRE1068823.&nbsp; Please use this for all future communications.</b></div><div><br /></div><div><br /></div><div>We will also send them a text shortly letting them know to call us in case we miss them when we reach out.</div><div><br /></div><div><br /></div><div><b>The patient is welcome to call our direct scheduling line M-F 8am to 5pm @ 818-629-1169</b></div><div><br /></div><div><br /></div><div>Once we can schedule them and they complete their exam, reports are typically sent out within 24-72 hours.</div><div><br /></div><div></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">Patients can also view their appointment times, answer\nprescreening questions and sign all liens here:</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><u><span style=\"font-size: 12pt;\"><a href=\"https://precise.radflow360.com/patient-portal\" target=\"_blank\" rel=\"noopener noreferrer\">https://precise.radflow360.com/patient-portal</a></span></u></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><u><span style=\"font-size: 12pt;\">If this is also a personal injury case:</span></u></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><ul type=\"disc\" style=\"margin-bottom: 0in;\">\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">A report containing&nbsp;the findings of the exam will\n     also be sent to the attorney</span></b></li>\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">A bill will be sent to the attorney once both the\n     patient and the attorney sign all pending liens</span></b></li>\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">Please make sure to submit a negotiation offer before\n     sending the payment</span></b></li>\n</ul><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\"><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Access\nbills, appointment times, and e-sign liens​&nbsp; (Click request login if you\ndon't have an account)<br />\n</a></span></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\"><br /></a></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\"><a href=\"https://pacs.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Access\nreports &amp; images</a>&nbsp;&nbsp;</span><a href=\"https://www.precisemri.com/request\" target=\"_blank\" rel=\"noopener noreferrer\"><span style=\"font-size: 12pt;\">(Request login here for reports)</span></a></b></div><div><b><a href=\"https://www.precisemri.com/request\" rel=\"noopener noreferrer\" target=\"_blank\"></a></b></div><div><br /></div>",
+      "text": "The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day. \n\n\nFor your records, the patient ID is PRE1068823. Please use this for all future communications.\n\n\n\n\nWe will also send them a text shortly letting them know to call us in case we miss them when we reach out.\n\n\n\n\nThe patient is welcome to call our direct scheduling line M-F 8am to 5pm @ 818-629-1169\n\n\n\n\nOnce we can schedule them and they complete their exam, reports are typically sent out within 24-72 hours.\n\n\n\nPatients can also view their appointment times, answer\nprescreening questions and sign all liens here:\nhttps://precise.radflow360.com/patient-portal\n\nIf this is also a personal injury case:\n\n\nA report containing the findings of the exam will\nalso be sent to the attorney\n\nA bill will be sent to the attorney once both the\npatient and the attorney sign all pending liens\n\nPlease make sure to submit a negotiation offer before\nsending the payment\n\n\n\nAccess\nbills, appointment times, and e-sign liens​ (Click request login if you\ndon't have an account)\n\n\n\nAccess\nreports & images (Request login here for reports)",
+      "error_type": null,
+      "version": null,
+      "subject": "Re: EXTERNAL: NEW ONLINE ORDER RX SUBMISSION for Alexis Castillo June 20, 1973",
+      "draft_mode": null,
+      "metadata": {},
+      "author": {
+        "_links": {
+          "self": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd",
+          "related": {
+            "inboxes": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/inboxes",
+            "conversations": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/conversations"
+          }
+        },
+        "id": "tea_2ditd",
+        "email": "ana.m@precisemri.com",
+        "username": "ana",
+        "first_name": "Ana",
+        "last_name": "Martinez",
+        "is_admin": false,
+        "is_available": true,
+        "is_blocked": false,
+        "type": "user",
+        "custom_fields": {}
+      },
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": null,
+          "handle": "scheduling@precisemri.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_1a05f29"
+            }
+          },
+          "name": null,
+          "handle": "noreply@precisemri.com",
+          "role": "to"
+        }
+      ],
+      "attachments": [],
+      "signature": null,
+      "is_draft": false
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_oss3ts1",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crlhzsx",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_oss3ts1/seen"
+        }
+      },
+      "id": "msg_oss3ts1",
+      "type": "email",
+      "is_inbound": true,
+      "created_at": 1742945728,
+      "blurb": "MRI - CAT SCAN - XRAY - ULTRASOUND - PET SCAN - BONE DENSITY - NUCLEAR MEDICINE - FULL BODY SCAN Patient's Name Castillo , Alexis Patients Phone 323-926-0770 Patient's DOB June 20, 1973 Patient's Addr",
+      "body": "<div><div>\r\n</div><div class=\"fa0 front-email-body\"><p style=\"text-align: center;\"><img style=\"display: block; margin-left: auto; margin-right: auto;\" src=\"https://ext.frontusercontent.com/v1/proxy/fHJb0jeziXtXD3Zjl-LfkHMPPA8D3UfM93qcHe6qrLX0nG0X1aL_CaPdbJphXQoJlH02n09SJ_3NeYKU-ydSa6bhEq-2QZnb8WNvpd76PswbZww8HWtr6wFoRhvA9qHIm9eMd-IKl0PR3EYCjBSaHypEK4jb2cgoW_qNI5XTEp_tBWNvCSuLFHNYrYA6tTna1XVUUA#https://www.precisemri.com/wp-content/uploads/2017/03/rx-header.jpg\" alt width=\"571\" height=\"96\" /> <span style=\"font-size: xx-small;\">MRI - CAT SCAN - XRAY - ULTRASOUND - PET SCAN - BONE DENSITY - NUCLEAR MEDICINE - FULL BODY SCAN</span></p><table style=\"height: 188px; width: 746px;\" align=\"center\"><tbody><tr><td style=\"width: 162.5px;\"><strong>Patient's Name</strong></td><td style=\"text-align: left; width: 570.5px;\">Castillo , Alexis</td></tr><tr><td style=\"width: 162.5px;\"><strong>Patients Phone</strong></td><td style=\"text-align: left; width: 570.5px;\">323-926-0770</td></tr><tr><td style=\"width: 162.5px;\"><strong>Patient's DOB</strong></td><td style=\"text-align: left; width: 570.5px;\">June 20, 1973</td></tr><tr><td style=\"width: 162.5px;\"><strong>Patient's Address</strong></td><td style=\"text-align: left; width: 570.5px;\">, </td></tr><tr><td style=\"width: 162.5px;\"><strong>Referring Physician</strong></td><td style=\"text-align: left; width: 570.5px;\">Roksana Shokouh, D.C. <strong>fax:</strong> 323-233-0593 <strong>ph:</strong> 323-233-0504</td></tr><tr><td style=\"width: 162.5px;\"><strong>Attorney / DOI</strong></td><td style=\"text-align: left; width: 570.5px;\"><strong>Name: Alex Narayan DOI</strong>: February 23, 2025 /&nbsp;&nbsp;<strong>Type</strong>: Auto / Alex Narayan</td></tr><tr><td style=\"width: 162.5px;\"><strong>Financial Type</strong></td><td style=\"text-align: left; width: 570.5px;\">Personal Injury Lien</td></tr><tr><td style=\"width: 162.5px;\"><strong>Exam Location</strong></td><td style=\"text-align: left; width: 570.5px;\"></td></tr><tr><td style=\"width: 162.5px;\"><strong>Auth. XRAY Prescreen if needed</strong></td><td style=\"text-align: left; width: 570.5px;\">Yes, I Authorize</td></tr><tr><td style=\"width: 162.5px;\"><strong>Additional Info</strong></td><td style=\"text-align: left; width: 570.5px;\"></td></tr></tbody></table><table style=\"width: 737px;\" width=\"750\" align=\"center\"><tbody><tr><th style=\"text-align: center; width: 164px;\">Modality</th><th style=\"text-align: center; width: 150px;\">Body Part</th><th style=\"text-align: center; width: 225px;\">DX</th><th style=\"text-align: center; width: 164px;\">Contrast</th><th style=\"text-align: center; width: 15px;\">Laterality</th></tr><tr><td style=\"text-align: center; width: 164px;\">MRI</td><td style=\"text-align: center; width: 150px;\">CERVICAL SPINE</td><td style=\"text-align: center; width: 225px;\">History of MVA</td><td style=\"text-align: center; width: 164px;\">Without contrast</td><td style=\"text-align: center; width: 15px;\"></td></tr><tr><td style=\"text-align: center; width: 164px;\">MRI</td><td style=\"text-align: center; width: 150px;\">LUMBAR SPINE</td><td style=\"text-align: center; width: 225px;\">History of MVA</td><td style=\"text-align: center; width: 164px;\">Without contrast</td><td style=\"text-align: center; width: 15px;\"></td></tr></tbody></table><p>&nbsp;</p><table width=\"750\" align=\"center\"><tbody><tr><td>Electronically signed by:</td><td><img src=\"https://ext.frontusercontent.com/v1/proxy/j7B6nZxS7asQ0-7TfMLXpJgXPwUFApxvwDdYSeYt3uD75CBgkZMlp2T_PzNJxoQN1hI2lg4_h9TzXEgDBaaXf0VoDbfpLMs-NiwENQ6zILgNHfy9mziNzpAvKD5SCXidE2UxMrl6gEXCEWolufH1ZqXLs9IcprhKNJKCOty9jU0-2g5R8DGxb7ORMEXTmOiN-f3E0nlEEbRnAjq6r-NFr2ms9eYcP6Q8tqBJgVL0ybq6TcLGNpOy74VNHwgcBms5KA#https://www.precisemri.com/wp-content/uploads/formidable/signatures/signature-412-47480.png?timestamp=1742945718\" /></td></tr></tbody></table><p><span style=\"font-size: medium;\">6710 Kester Ave Suite 126 Van Nuys, CA 91405 Office: (818) 907-7723 Fax: (888) 715-7001 </span></p><p><span style=\"font-size: medium;\"><strong>TOLL FREE: 800-558-2223</strong></span></p><p>Submitted timestamp: March 25, 2025 at 4:35 pm</p><div id=\"USE_CHAT_GPT_AI_ROOT\" style=\"display: none; z-index: -1; position: absolute; top: -10000px; left: -10000px; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none;\">usechatgpt init success</div><p>User Information<br />IP Address: 2603:8000:b93c:f2e0:90a0:e43d:bc82:b2ca<br />User-Agent (Browser/OS): Google Chrome 134.0.0.0 / Windows<br />Referrer: <a href=\"https://www.precisemri.com/referral-order-form\" target=\"_blank\" rel=\"noopener noreferrer\">https://www.precisemri.com/referral-order-form</a></p><img src=\"https://ext.frontusercontent.com/v1/proxy/sRqKXWXru6kvW5ttPZsTum6TvQdJFPWfMEnYwKPA8eklo6SQSw9NvV6_gVWW2x-EP-H2Yukk3OEUlli3Dcbm4H2qARwUm8rwMFqYga4ySEYZu8dJeSB2z3tQV-lUT0vlqsIWhWlAvWK0G64vOBZ8N3teHnfUACFXUeSEzKTvejYa_Vs9nQeU2Sj7N3I3j-o5LoGHUbT3iG6jaZSP7RiolX0Y2L5_GUoSHG-TwiEv5leMkiU1_2K72KH81mBehWVh2N-SKQarEnr1QI13ygUlQLABh6SZfix20tmEwcFZSG7mKRMpkusWzPpqtmwERWfEkzeuHGyUivhwXYguJBz9ZSDKcR7m6-GtW70JXyBaZTInm9Ma3O8KjgjRlEWcAeOhBM5A-quLWrqjpF3psEvR-OjfelmzIDliKM-Y0sDqqlR73qxJx7lE3GXFdrdW9pPAle278DHKuxDBNcmozjQz_VsaUu_phyvC#http://url8563.precisemri.com/wf/open?upn=u001.uezcnY7URKw2C29oGxN7ZMmnI-2FAm55nCEUSLsRDptq3vQDwkQOa8deM9cdLRiWga4Rq1kDS6n5A4gQ2aTPyaemBAr7ln1U2o62k8j1h7-2BKJ3VKuYfJ5wF2gB8yh20s3RNWohf2jKQT6-2FO4lNbAerMDBaDnrBS79-2BnHByY8k7APIw8UvuT8nu6I-2FG6MKrl-2BxgZDWA3gEVVSpo0YqjAQ1mIw-3D-3D\" alt width=\"1\" height=\"1\" border=\"0\" style=\"height:1px !important;width:1px !important;border-width:0 !important;margin-top:0 !important;margin-bottom:0 !important;margin-right:0 !important;margin-left:0 !important;padding-top:0 !important;padding-bottom:0 !important;padding-right:0 !important;padding-left:0 !important;\" /></div></div>",
+      "text": "\nMRI - CAT SCAN - XRAY - ULTRASOUND - PET SCAN - BONE DENSITY - NUCLEAR MEDICINE - FULL BODY SCAN\nPatient's Name Castillo , Alexis \nPatients Phone 323-926-0770 \nPatient's DOB June 20, 1973 \nPatient's Address , \nReferring Physician Roksana Shokouh, D.C. fax: 323-233-0593 ph: 323-233-0504 \nAttorney / DOI Name: Alex Narayan DOI: February 23, 2025 / Type: Auto / Alex Narayan \nFinancial Type Personal Injury Lien \nExam Location \nAuth. XRAY Prescreen if needed Yes, I Authorize \nAdditional Info \n\nModality Body Part DX Contrast Laterality \nMRI CERVICAL SPINE History of MVA Without contrast \nMRI LUMBAR SPINE History of MVA Without contrast \n\n\n\nElectronically signed by: \n\n\n6710 Kester Ave Suite 126 Van Nuys, CA 91405 Office: (818) 907-7723 Fax: (888) 715-7001 \n\nTOLL FREE: 800-558-2223\n\nSubmitted timestamp: March 25, 2025 at 4:35 pm\n\nusechatgpt init success\n\nUser Information\n\nIP Address: 2603:8000:b93c:f2e0:90a0:e43d:bc82:b2ca\n\nUser-Agent (Browser/OS): Google Chrome 134.0.0.0 / Windows\n\nReferrer: https://www.precisemri.com/referral-order-form",
+      "error_type": null,
+      "version": null,
+      "subject": "EXTERNAL: NEW ONLINE ORDER RX SUBMISSION for Alexis Castillo June 20, 1973",
+      "draft_mode": null,
+      "metadata": {},
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_1a05f29"
+            }
+          },
+          "name": "NEW ONLINE RX ORDER",
+          "handle": "noreply@precisemri.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": "Precise Imaging Scheduling & Orders",
+          "handle": "scheduling@precisemri.com",
+          "role": "to"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18jdvlt"
+            }
+          },
+          "name": "metrochirorehab@gmail.com",
+          "handle": "metrochirorehab@gmail.com",
+          "role": "reply-to"
+        }
+      ],
+      "attachments": [
+        {
+          "id": "fil_12lq916p",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_oss3ts1/download/fil_12lq916p",
+          "filename": "frm-referral-form-2025-03-25-7dk3p.pdf",
+          "content_type": "application/pdf",
+          "size": 9999,
+          "metadata": {
+            "is_inline": false
+          }
+        }
+      ],
+      "signature": null,
+      "is_draft": false
+    }
+  ]
+}

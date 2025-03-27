@@ -1,0 +1,252 @@
+{
+  "_links": {
+    "self": "https://precise-imaging.api.frontapp.com/conversations/cnv_crldw5d",
+    "related": {
+      "events": "https://precise-imaging.api.frontapp.com/conversations/cnv_crldw5d/events",
+      "followers": "https://precise-imaging.api.frontapp.com/conversations/cnv_crldw5d/followers",
+      "messages": "https://precise-imaging.api.frontapp.com/conversations/cnv_crldw5d/messages",
+      "comments": "https://precise-imaging.api.frontapp.com/conversations/cnv_crldw5d/comments",
+      "inboxes": "https://precise-imaging.api.frontapp.com/conversations/cnv_crldw5d/inboxes",
+      "last_message": "https://precise-imaging.api.frontapp.com/messages/msg_ot0k7y9?referer=conversation"
+    }
+  },
+  "id": "cnv_crldw5d",
+  "subject": "Re: EXTERNAL: New Referral - Hamman-Cueto, Celia - (DOL 12/21/2024)",
+  "status": "archived",
+  "status_id": "sts_v8lxd",
+  "status_category": "resolved",
+  "ticket_ids": [],
+  "assignee": {
+    "_links": {
+      "self": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd",
+      "related": {
+        "inboxes": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/inboxes",
+        "conversations": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/conversations"
+      }
+    },
+    "id": "tea_2ditd",
+    "email": "ana.m@precisemri.com",
+    "username": "ana",
+    "first_name": "Ana",
+    "last_name": "Martinez",
+    "is_admin": false,
+    "is_available": true,
+    "is_blocked": false,
+    "type": "user",
+    "custom_fields": {}
+  },
+  "recipient": {
+    "_links": {
+      "related": {
+        "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_260wm2p"
+      }
+    },
+    "name": null,
+    "handle": "osman@colonylaw.com",
+    "role": "to"
+  },
+  "tags": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_3k7ll",
+          "children": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/children"
+        }
+      },
+      "id": "tag_tn98h",
+      "name": "RX",
+      "highlight": "blue",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "updated_at": 1743054887.05,
+      "created_at": 1663790297.907
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_3k5wx",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_3k5wx/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+          "children": null
+        }
+      },
+      "id": "tag_3k5wx",
+      "name": "Order Entered",
+      "highlight": "✅",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": false,
+      "updated_at": 1743052934.054,
+      "created_at": 1551378905.259
+    }
+  ],
+  "links": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/links/top_eg6bl"
+      },
+      "id": "top_eg6bl",
+      "name": "ID: PRE1068802",
+      "type": "app_df5cb65d50c3ff8b",
+      "external_url": "https://precise.radflow360.com/patient?patientid=PRE1068802",
+      "custom_fields": {}
+    }
+  ],
+  "custom_fields": {},
+  "created_at": 1742943467.293,
+  "waiting_since": 1743046788,
+  "is_private": false,
+  "scheduled_reminders": [],
+  "metadata": {},
+  "messages": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_ot0k7y9",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crldw5d",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_ot0k7y9/seen",
+          "message_replied_to": "https://precise-imaging.api.frontapp.com/messages/msg_ot0k7y9/parent"
+        }
+      },
+      "id": "msg_ot0k7y9",
+      "type": "email",
+      "is_inbound": false,
+      "created_at": 1743046787.754,
+      "blurb": "The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day. For your records, the patient ID is PRE1068802. Please use this",
+      "body": "<div>The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day.&nbsp;&nbsp;</div><div><br /></div><div><b style=\"color: rgb(29, 28, 29); font-family: Slack-Lato, Slack-Fractions, appleLogo, sans-serif; font-variant-ligatures: common-ligatures; text-align: left; background-color: rgb(248, 248, 248);\" data-stringify-type=\"bold\">For your records, the patient ID is PRE1068802.&nbsp; Please use this for all future communications.</b></div><div><br /></div><div><br /></div><div>We will also send them a text shortly letting them know to call us in case we miss them when we reach out.</div><div><br /></div><div><br /></div><div><b>The patient is welcome to call our direct scheduling line M-F 8am to 5pm @ 818-629-1169</b></div><div><br /></div><div><br /></div><div>Once we can schedule them and they complete their exam, reports are typically sent out within 24-72 hours.</div><div><br /></div><div></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">Patients can also view their appointment times, answer\nprescreening questions and sign all liens here:</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><u><span style=\"font-size: 12pt;\"><a href=\"https://precise.radflow360.com/patient-portal\" target=\"_blank\" rel=\"noopener noreferrer\">https://precise.radflow360.com/patient-portal</a></span></u></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><u><span style=\"font-size: 12pt;\">If this is also a personal injury case:</span></u></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><ul type=\"disc\" style=\"margin-bottom: 0in;\">\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">A report containing&nbsp;the findings of the exam will\n     also be sent to the attorney</span></b></li>\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">A bill will be sent to the attorney once both the\n     patient and the attorney sign all pending liens</span></b></li>\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">Please make sure to submit a negotiation offer before\n     sending the payment</span></b></li>\n</ul><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\"><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Access\nbills, appointment times, and e-sign liens​&nbsp; (Click request login if you\ndon't have an account)<br />\n</a></span></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\"><br /></a></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\"><a href=\"https://pacs.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Access\nreports &amp; images</a>&nbsp;&nbsp;</span><a href=\"https://www.precisemri.com/request\" target=\"_blank\" rel=\"noopener noreferrer\"><span style=\"font-size: 12pt;\">(Request login here for reports)</span></a></b></div><div><b><a href=\"https://www.precisemri.com/request\" rel=\"noopener noreferrer\" target=\"_blank\"></a></b></div><div><br /></div>",
+      "text": "The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day. \n\n\nFor your records, the patient ID is PRE1068802. Please use this for all future communications.\n\n\n\n\nWe will also send them a text shortly letting them know to call us in case we miss them when we reach out.\n\n\n\n\nThe patient is welcome to call our direct scheduling line M-F 8am to 5pm @ 818-629-1169\n\n\n\n\nOnce we can schedule them and they complete their exam, reports are typically sent out within 24-72 hours.\n\n\n\nPatients can also view their appointment times, answer\nprescreening questions and sign all liens here:\nhttps://precise.radflow360.com/patient-portal\n\nIf this is also a personal injury case:\n\n\nA report containing the findings of the exam will\nalso be sent to the attorney\n\nA bill will be sent to the attorney once both the\npatient and the attorney sign all pending liens\n\nPlease make sure to submit a negotiation offer before\nsending the payment\n\n\n\nAccess\nbills, appointment times, and e-sign liens​ (Click request login if you\ndon't have an account)\n\n\n\nAccess\nreports & images (Request login here for reports)",
+      "error_type": null,
+      "version": null,
+      "subject": "Re: EXTERNAL: New Referral - Hamman-Cueto, Celia - (DOL 12/21/2024)",
+      "draft_mode": null,
+      "metadata": {},
+      "author": {
+        "_links": {
+          "self": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd",
+          "related": {
+            "inboxes": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/inboxes",
+            "conversations": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/conversations"
+          }
+        },
+        "id": "tea_2ditd",
+        "email": "ana.m@precisemri.com",
+        "username": "ana",
+        "first_name": "Ana",
+        "last_name": "Martinez",
+        "is_admin": false,
+        "is_available": true,
+        "is_blocked": false,
+        "type": "user",
+        "custom_fields": {}
+      },
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": null,
+          "handle": "scheduling@precisemri.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_260wm2p"
+            }
+          },
+          "name": null,
+          "handle": "osman@colonylaw.com",
+          "role": "to"
+        }
+      ],
+      "attachments": [],
+      "signature": null,
+      "is_draft": false
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_osrvbcx",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crldw5d",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_osrvbcx/seen"
+        }
+      },
+      "id": "msg_osrvbcx",
+      "type": "email",
+      "is_inbound": true,
+      "created_at": 1742943466,
+      "blurb": "Dear [Team/Provider], We want to refer a new client for an MRI in Cervical, Lumbar Spine and Right Knee. Don't hesitate to get in touch with the client directly to schedule an appointment using the de",
+      "body": "<div><div>\r\n</div><div class=\"fa0 front-email-body\"><div dir=\"ltr\"><div>Dear [Team/Provider],<div><br /></div><div>We want to refer a new client for an MRI in Cervical, Lumbar Spine and Right Knee. Don't hesitate to get in touch with the client directly to schedule an appointment using the details below:</div><div><br /></div><div>&nbsp; &nbsp; Client Name: Celia Irene Hamman-Cueto</div><div>&nbsp; &nbsp; Date of Loss (DOL): 12/21/2024</div><div>&nbsp; &nbsp; Phone: (510) 417-0654</div><div>&nbsp; &nbsp; Address: 663 Alcatraz Ave,&nbsp;APT #2,&nbsp;Oakland CA&nbsp;94609,</div><div><br /></div><div>Please schedule the client in the Concord facility,</div><div><br /></div><div>Kindly confirm once the appointment has been scheduled. If you require any additional information, please let us know.</div><div><br /></div><div>Best regards,</div></div><div><div><div dir=\"ltr\" style=\"color:rgb(34,34,34)\"><div><div dir=\"ltr\"><table cellspacing=\"0\" cellpadding=\"0\" border=\"0\" width=\"500\" style=\"margin-top:1em;margin-bottom:0px;font-size:12px;font-family:&quot;Helvetica Neue&quot;,Helvetica,Arial,sans-serif;line-height:1.25;width:500px\"><tbody><tr style=\"border:0px;margin:0px;padding:0px\"><td style=\"vertical-align:top;width:86px\"><img src=\"https://ext.frontusercontent.com/v1/proxy/-n_ofU6UD1Zr_VLcE1At4ZvWY8RlPJicWud6Dpo72AHtZwdwJj3qRha0mJ63oQp7cXKJl0y7pqhTv_oOSTM3eapsdvNuwKor_aMwL61gWIIhShGlC5jA2nri4PNZG2NgeEehrM-PEjcX5yVEr4mD5hlzc5gDmG-aNfvIG2NpXr4K2OPZYExHaWWb5Fqsqenbm7l7Qvf_KSPOZWl4xnH8FTeS0OO9IacqB9MOPqMsGOVLi7Y#https://share1.cloudhq-mkt3.net/4cc3c76faf88079d3cd56a8b319e050eb1ab695c.png?v=0.38457033357744996\" width=\"76\" height=\"76\" /></td><td style=\"margin-right:10px;border-left-width:1px;border-left-style:solid;vertical-align:top;width:10px\"></td><td style=\"vertical-align:top\"><table cellspacing=\"0\" cellpadding=\"0\" border=\"0\" style=\"margin-bottom:0px;line-height:1.25\"><tbody><tr style=\"border:0px;margin:0px;padding:0px;height:17.5px\"><td style=\"vertical-align:top\"><font color=\"#004770\"><span style=\"font-size:14px\"><b>Osman Prado</b></span></font></td></tr><tr style=\"border:0px;margin:0px;padding:0px;height:11.25px\"><td style=\"vertical-align:top\">Case Manager Assistant</td></tr><tr style=\"border:0px;margin:0px;padding:0px\"><td style=\"vertical-align:top\"><div></div></td></tr><tr style=\"border:0px;margin:0px;padding:0px\"><td style=\"vertical-align:top\"><div>8889 West Olympic Boulevard, 3rd Floor<br />Beverly Hills, California 90211&nbsp;</div><div><span style=\"border:0px;margin:0px;padding:0px;line-height:1.25\"><a href=\"http://www.colonylaw.com/\" style=\"color:rgb(17,85,204)\" target=\"_blank\" rel=\"noopener noreferrer\">www.colonylaw.com</a>&nbsp;</span></div><div>tel:&nbsp;<a target=\"_blank\" rel=\"noopener noreferrer\"></a><a href=\"tel:3108826336\" style=\"color:rgb(17,85,204)\" target=\"_blank\" rel=\"noopener noreferrer\">310-882-6336</a>&nbsp;ext&nbsp;<a target=\"_blank\" rel=\"noopener noreferrer\">111</a></div><div><span style=\"border:0px;margin:0px;padding:0px;line-height:1.25\">fax:&nbsp;<a target=\"_blank\" rel=\"noopener noreferrer\"></a><a href=\"tel:3108826334\" style=\"color:rgb(17,85,204)\" target=\"_blank\" rel=\"noopener noreferrer\">310-882-6334</a>&nbsp;</span></div></td></tr></tbody></table></td></tr></tbody></table><div></div><table cellspacing=\"0\" cellpadding=\"0\" border=\"0\" width=\"500\" style=\"margin-bottom:0px;font-size:12px;font-family:&quot;Helvetica Neue&quot;,Helvetica,Arial,sans-serif;line-height:1.25;width:500px\"><tbody><tr style=\"border:0px;margin:0px;padding:0px\"><td style=\"vertical-align:top\"><table width=\"100%\" style=\"border-collapse:initial;margin-bottom:0px\"><tbody><tr style=\"border:0px;margin:0px;padding:0px\"><td style=\"padding-top:4px;padding-bottom:4px;vertical-align:top;font-family:Arial\"><br />Check out our firm's features in&nbsp;<a href=\"https://www.forbes.com/sites/alanohnsman/2019/05/31/not-his-wish-star-of-disneys-aladdin-sues-tesla-for-defective-model-3-in-hollywood-crash/#5b5bacc36995\" style=\"color:rgb(17,85,204)\" target=\"_blank\" rel=\"noopener noreferrer\"><b>Forbes</b></a>&nbsp;and&nbsp;<a href=\"https://www.billboard.com/articles/business/7933891/starfest-next-fyre-festival-plano-texas-pulls-contract\" style=\"color:rgb(17,85,204)\" target=\"_blank\" rel=\"noopener noreferrer\"><b>Billboard</b></a>.<br /></td></tr></tbody></table></td></tr></tbody></table><table cellspacing=\"0\" cellpadding=\"0\" border=\"0\" width=\"500\" style=\"margin-bottom:0px;font-size:8px;font-family:&quot;Helvetica Neue&quot;,Helvetica,Arial,sans-serif;line-height:1.25;width:500px\"><tbody><tr style=\"border:0px;margin:0px;padding:0px\"><td style=\"vertical-align:top\"><div></div><font color=\"#666666\">Confidential Communication: The information contained in this communication is confidential and if directed to a client, or between lawyers or experts for a client, it is intended by the sender to be subject to the attorney-client and attorney-work product privileges. This information may be subject to further restrictions on disclosure by contract or other binding agreement and is intended only for the use of the intended recipient. This communication is the property of Colony Law PC and/or its clients. Any unauthorized use, disclosure or copying of this communication or any part thereof is strictly prohibited and may be unlawful. If you have received this email in error, please notify us immediately via e-mail at&nbsp;<a href=\"mailto:claims@colonylaw.com\" style=\"color:rgb(17,85,204)\" target=\"_blank\" rel=\"noopener noreferrer\">claims@colonylaw.com</a>, and then destroy this communication and all copies thereof, including all attachments. Thank you.<br /><br /></font></td></tr></tbody></table></div></div></div></div></div></div><br /><div class=\"fa-bptsvz\" style=\"display:inline-block;line-height:24px;color:#999999;font-size:13px;font-family:arial;white-space:nowrap\">Sent with <a style=\"color:#1155cc\" target=\"_blank\" href=\"https://app.mixmax.com/signup?ref=Default%20Signature&amp;userId=67919262ae76c93ee6f28b0a\" rel=\"noopener noreferrer\">Mixmax</a></div></div></div>",
+      "text": "\nDear [Team/Provider],\n\n\nWe want to refer a new client for an MRI in Cervical, Lumbar Spine and Right Knee. Don't hesitate to get in touch with the client directly to schedule an appointment using the details below:\n\n\n\nClient Name: Celia Irene Hamman-Cueto\n\nDate of Loss (DOL): 12/21/2024\n\nPhone: (510) 417-0654\n\nAddress: 663 Alcatraz Ave, APT #2, Oakland CA 94609,\n\n\n\nPlease schedule the client in the Concord facility,\n\n\n\nKindly confirm once the appointment has been scheduled. If you require any additional information, please let us know.\n\n\n\nBest regards,\n\nOsman Prado \nCase Manager Assistant \n\n\n\n8889 West Olympic Boulevard, 3rd Floor\n\nBeverly Hills, California 90211 \n\nwww.colonylaw.com \n\ntel: 310-882-6336 ext 111\n\nfax: 310-882-6334 \n\n\n\n\n\n\nCheck out our firm's features in Forbes and Billboard.\n\n\n\n\n\nConfidential Communication: The information contained in this communication is confidential and if directed to a client, or between lawyers or experts for a client, it is intended by the sender to be subject to the attorney-client and attorney-work product privileges. This information may be subject to further restrictions on disclosure by contract or other binding agreement and is intended only for the use of the intended recipient. This communication is the property of Colony Law PC and/or its clients. Any unauthorized use, disclosure or copying of this communication or any part thereof is strictly prohibited and may be unlawful. If you have received this email in error, please notify us immediately via e-mail at claims@colonylaw.com, and then destroy this communication and all copies thereof, including all attachments. Thank you.\n\n\n\n\n\n\n\n\n\n\n\nSent with Mixmax",
+      "error_type": null,
+      "version": null,
+      "subject": "EXTERNAL: New Referral - Hamman-Cueto, Celia - (DOL 12/21/2024)",
+      "draft_mode": null,
+      "metadata": {},
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_260wm2p"
+            }
+          },
+          "name": "Osman Prado",
+          "handle": "osman@colonylaw.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": "Precise Imaging Scheduling & Orders",
+          "handle": "scheduling@precisemri.com",
+          "role": "to"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_252s2v5"
+            }
+          },
+          "name": "Dominic Ramirez",
+          "handle": "dominic@colonylaw.com",
+          "role": "cc"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": null
+            }
+          },
+          "name": "CeliaHammanCuetofile@colonylaw.filevineapp.com",
+          "handle": "celiahammancuetofile@colonylaw.filevineapp.com",
+          "role": "cc"
+        }
+      ],
+      "attachments": [
+        {
+          "id": "fil_12lq12pt",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_osrvbcx/download/fil_12lq12pt",
+          "filename": "Active Health Center - C-L Spine and R Knee MRI Rx.pdf",
+          "content_type": "application/pdf",
+          "size": 180917,
+          "metadata": {
+            "is_inline": false
+          }
+        }
+      ],
+      "signature": null,
+      "is_draft": false
+    }
+  ]
+}

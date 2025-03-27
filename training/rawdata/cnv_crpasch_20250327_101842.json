@@ -1,0 +1,118 @@
+{
+  "_links": {
+    "self": "https://precise-imaging.api.frontapp.com/conversations/cnv_crpasch",
+    "related": {
+      "events": "https://precise-imaging.api.frontapp.com/conversations/cnv_crpasch/events",
+      "followers": "https://precise-imaging.api.frontapp.com/conversations/cnv_crpasch/followers",
+      "messages": "https://precise-imaging.api.frontapp.com/conversations/cnv_crpasch/messages",
+      "comments": "https://precise-imaging.api.frontapp.com/conversations/cnv_crpasch/comments",
+      "inboxes": "https://precise-imaging.api.frontapp.com/conversations/cnv_crpasch/inboxes",
+      "last_message": "https://precise-imaging.api.frontapp.com/messages/msg_ot1rsch?referer=conversation"
+    }
+  },
+  "id": "cnv_crpasch",
+  "subject": "EXTERNAL: A fax has arrived from: ''",
+  "status": "unassigned",
+  "status_id": "sts_v8ltt",
+  "status_category": "open",
+  "ticket_ids": [],
+  "assignee": null,
+  "recipient": {
+    "_links": {
+      "related": {
+        "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18oc18h"
+      }
+    },
+    "name": "WestFax FaxForward Receiver",
+    "handle": "westfaxff@westfax.com",
+    "role": "from"
+  },
+  "tags": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_trwld",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_trwld/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_3k7ll",
+          "children": null
+        }
+      },
+      "id": "tag_trwld",
+      "name": "Apt status req",
+      "highlight": "purple",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "updated_at": 1743070961.293,
+      "created_at": 1667845054.944
+    }
+  ],
+  "links": [],
+  "custom_fields": {},
+  "created_at": 1743070722.211,
+  "waiting_since": 1743070720,
+  "is_private": false,
+  "scheduled_reminders": [],
+  "metadata": {},
+  "messages": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_ot1rsch",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crpasch",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_ot1rsch/seen"
+        }
+      },
+      "id": "msg_ot1rsch",
+      "type": "email",
+      "is_inbound": true,
+      "created_at": 1743070720,
+      "blurb": "You received a fax! * Your fax is attached. * Click here to login. Fax Details: Date and Time: 3/27/2025 6:18 AM ET Number of Pages: 1 Your Fax Number: (888) 715-7001 Caller ID: CSID: Thank You for Ch",
+      "body": "<div><div>\r\n<style>\r\n#fae_ot1rsch img{border:none;}\r\n#fae_ot1rsch .faujck2t{color:#000000;font-family:\"Trebuchet MS\", Verdana, san-serif, Arial;font-size:12px;}\r\n#fae_ot1rsch .fapldv1y{color:#ff0000;font-family:Corbel, \"Trebuchet MS\", Verdana, Arial, san-serif;font-size:22px;text-align:center;}\r\n#fae_ot1rsch .fabnac2{color:#000000;font-family:\"Trebuchet MS\", Verdana, Arial, san-serif;font-size:20px;text-align:center;}\r\n#fae_ot1rsch .fa-i0z7m{background-color:#FFFFFF;color:#000000;font-family:\"Trebuchet MS\", Verdana, san-serif, Arial;font-size:18px;font-weight:normal;padding-left:10px;text-align:left;}\r\n#fae_ot1rsch .faki782o{background-color:#FFFFFF;color:#000000;font-family:\"Trebuchet MS\", Verdana, san-serif, Arial;font-size:18px;font-weight:normal;padding-left:10px;text-align:center;}\r\n#fae_ot1rsch .fa-nh54aa{background-color:#FFFFFF;color:#000000;font-family:\"Trebuchet MS\", Verdana, san-serif, Arial;font-size:18px;font-weight:normal;padding-right:10px;text-align:right;}\r\n#fae_ot1rsch .fa-89c6po{padding-top:20px;width:800px;}\r\n#fae_ot1rsch #bficon{height:112px;margin-top:20px;width:99px;}\r\n#fae_ot1rsch #customer_care{background-color:#FFFFFF;color:#000000;font-family:\"Trebuchet MS\", Verdana, Arial, san-serif;font-size:18px;padding-right:20px;text-align:right;width:289px;}\r\n#fae_ot1rsch #footer{background-color:#222222;color:#FFFFFF;font-family:\"Trebuchet MS\", Verdana, Arial, san-serif;font-size:12px;height:24px;text-align:center;}\r\n#fae_ot1rsch #logo{height:108px;width:511px;}\r\n#fae_ot1rsch #report_table{border:1px solid #222222;width:540px;}\r\n#fae_ot1rsch #subhead_table{border-top:4px solid #b4232d;width:800px;}\r\n</style></div><div style=\"margin:0px 0px 0px 0px;width:800px;\" class=\"fa0 front-email-body\"><table style=\"width:800px;\" cellpadding=\"0\" cellspacing=\"0\"><tbody><tr><td><img src=\"https://ext.frontusercontent.com/v1/proxy/85pwui-hDdneFmhEobyIuCkubBq3gvJokYUu4YsDz9KAjF4MnHGIlmBCxmBnZJzxDawlZTTX5TbTlTOfJB2WTk_yt5sTfjDx8TSpuqgdiakMd528z0tq2jf1HkxKH7cCJmeOVmhGujdr9KHYvISs753ZQpD4e43nWeJZL4OhU6fkcpGus4XxVBhqrg#http://bit-storm.net/temp/img/Header/Fax/reportHeader5.jpg\" id=\"logo\" /></td><td id=\"customer_care\"></td></tr></tbody></table><table id=\"subhead_table\" cellpadding=\"0\"><tbody><tr></tr></tbody></table><table style=\"width:800px;\" cellpadding=\"0\" cellspacing=\"0\"><tbody><tr><td><div style=\"width:800px;\"><table style=\"width:540px;\" align=\"center\" cellpadding=\"0\" cellspacing=\"0\"><tbody><tr><td class=\"fabnac2\"><br /><div>You received a fax!</div><br /></td></tr></tbody></table></div><div class=\"fapldv1y\" align=\"center\">* Your fax is attached. *</div><div class=\"faki782o\" align=\"center\">Click <a href=\"https://home.westfax.com/\" style=\"color:#000000\" target=\"_blank\" rel=\"noopener noreferrer\">here</a> to login.</div><br /><div class=\"fabnac2\">Fax Details: </div><div class=\"fa-89c6po\"><table id=\"report_table\" align=\"center\" cellpadding=\"2\" cellspacing=\"2\"><tbody><tr><td class=\"fa-nh54aa\">Date and Time:</td><td id=\"Time\" class=\"fa-i0z7m\">3/27/2025 6:18 AM ET</td></tr><tr><td class=\"fa-nh54aa\">Number of Pages:</td><td id=\"Pages\" class=\"fa-i0z7m\">1</td></tr><tr><td class=\"fa-nh54aa\">Your Fax Number:</td><td id=\"Number\" class=\"fa-i0z7m\">(888) 715-7001</td></tr><tr><td class=\"fa-nh54aa\">Caller ID:</td><td id=\"CallerID\" class=\"fa-i0z7m\"></td></tr><tr><td class=\"fa-nh54aa\">CSID:</td><td id=\"RemoteCSID\" class=\"fa-i0z7m\"></td></tr></tbody></table></div></td></tr></tbody></table><table class=\"fa-89c6po\" cellpadding=\"0\" cellspacing=\"0\"><tbody><tr><td class=\"fabnac2\" style=\"padding-bottom:20px;\">Thank You for Choosing WestFax!</td></tr><tr></tr></tbody></table><table id=\"subhead_table\" cellpadding=\"0\"><tbody><tr></tr></tbody></table><span class=\"faujck2t\">© 2025 WestFax&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href=\"https://westfax.com/terms-and-conditions/\" style=\"color:#000000\" target=\"_blank\" rel=\"noopener noreferrer\">Terms and Conditions</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href=\"https://home.westfax.com/\" style=\"color:#000000\" target=\"_blank\" rel=\"noopener noreferrer\">Login here</a> </span></div></div>",
+      "text": "\n\n\n\n\n\nYou received a fax!\n\n\n\n\n\n* Your fax is attached. *\n\nClick here to login.\n\n\nFax Details: \nDate and Time: 3/27/2025 6:18 AM ET \nNumber of Pages: 1 \nYour Fax Number: (888) 715-7001 \nCaller ID: \nCSID: \n\n\n\n\nThank You for Choosing WestFax! \n\n\n\n\n© 2025 WestFax Terms and Conditions Login here ",
+      "error_type": null,
+      "version": null,
+      "subject": "EXTERNAL: A fax has arrived from: ''",
+      "draft_mode": null,
+      "metadata": {},
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18oc18h"
+            }
+          },
+          "name": "WestFax FaxForward Receiver",
+          "handle": "westfaxff@westfax.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": "Precise Imaging Scheduling & Orders",
+          "handle": "scheduling@precisemri.com",
+          "role": "to"
+        }
+      ],
+      "attachments": [
+        {
+          "id": "fil_12m5u0qp",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_ot1rsch/download/fil_12m5u0qp",
+          "filename": "2025-03-27T10-18-17.0173_39.pdf",
+          "content_type": "application/pdf",
+          "size": 24077,
+          "metadata": {
+            "is_inline": false
+          }
+        }
+      ],
+      "signature": null,
+      "is_draft": false
+    }
+  ]
+}

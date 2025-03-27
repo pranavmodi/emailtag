@@ -1,0 +1,242 @@
+{
+  "_links": {
+    "self": "https://precise-imaging.api.frontapp.com/conversations/cnv_crld1dt",
+    "related": {
+      "events": "https://precise-imaging.api.frontapp.com/conversations/cnv_crld1dt/events",
+      "followers": "https://precise-imaging.api.frontapp.com/conversations/cnv_crld1dt/followers",
+      "messages": "https://precise-imaging.api.frontapp.com/conversations/cnv_crld1dt/messages",
+      "comments": "https://precise-imaging.api.frontapp.com/conversations/cnv_crld1dt/comments",
+      "inboxes": "https://precise-imaging.api.frontapp.com/conversations/cnv_crld1dt/inboxes",
+      "last_message": "https://precise-imaging.api.frontapp.com/messages/msg_ot0fu81?referer=conversation"
+    }
+  },
+  "id": "cnv_crld1dt",
+  "subject": "Re: EXTERNAL: Rodrigo Ruiz",
+  "status": "archived",
+  "status_id": "sts_v8lxd",
+  "status_category": "resolved",
+  "ticket_ids": [],
+  "assignee": {
+    "_links": {
+      "self": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd",
+      "related": {
+        "inboxes": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/inboxes",
+        "conversations": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/conversations"
+      }
+    },
+    "id": "tea_2ditd",
+    "email": "ana.m@precisemri.com",
+    "username": "ana",
+    "first_name": "Ana",
+    "last_name": "Martinez",
+    "is_admin": false,
+    "is_available": true,
+    "is_blocked": false,
+    "type": "user",
+    "custom_fields": {}
+  },
+  "recipient": {
+    "_links": {
+      "related": {
+        "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_24eptq9"
+      }
+    },
+    "name": null,
+    "handle": "nancy@ympklaw.com",
+    "role": "to"
+  },
+  "tags": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_3k7ll",
+          "children": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/children"
+        }
+      },
+      "id": "tag_tn98h",
+      "name": "RX",
+      "highlight": "blue",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "updated_at": 1743054887.05,
+      "created_at": 1663790297.907
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_3k5wx",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_3k5wx/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+          "children": null
+        }
+      },
+      "id": "tag_3k5wx",
+      "name": "Order Entered",
+      "highlight": "✅",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": false,
+      "updated_at": 1743052934.054,
+      "created_at": 1551378905.259
+    }
+  ],
+  "links": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/links/top_7nsqp"
+      },
+      "id": "top_7nsqp",
+      "name": "ID: PRE920798",
+      "type": "app_df5cb65d50c3ff8b",
+      "external_url": "https://precise.radflow360.com/patient?patientid=PRE920798",
+      "custom_fields": {}
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/links/top_7netd"
+      },
+      "id": "top_7netd",
+      "name": "ID: PRE847842",
+      "type": "app_df5cb65d50c3ff8b",
+      "external_url": "https://precise.radflow360.com/patient?patientid=PRE847842",
+      "custom_fields": {}
+    }
+  ],
+  "custom_fields": {},
+  "created_at": 1742942689.707,
+  "waiting_since": 1743046790,
+  "is_private": false,
+  "scheduled_reminders": [],
+  "metadata": {},
+  "messages": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_ot0fu81",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crld1dt",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_ot0fu81/seen",
+          "message_replied_to": "https://precise-imaging.api.frontapp.com/messages/msg_ot0fu81/parent"
+        }
+      },
+      "id": "msg_ot0fu81",
+      "type": "email",
+      "is_inbound": false,
+      "created_at": 1743046789.408,
+      "blurb": "The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day. For your records, the patient ID is PRE847842. Please use this ",
+      "body": "<div>The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day.&nbsp;&nbsp;</div><div><br /></div><div><b style=\"color: rgb(29, 28, 29); font-family: Slack-Lato, Slack-Fractions, appleLogo, sans-serif; font-variant-ligatures: common-ligatures; text-align: left; background-color: rgb(248, 248, 248);\" data-stringify-type=\"bold\">For your records, the patient ID is PRE847842.&nbsp; Please use this for all future communications.</b></div><div><br /></div><div><br /></div><div>We will also send them a text shortly letting them know to call us in case we miss them when we reach out.</div><div><br /></div><div><br /></div><div><b>The patient is welcome to call our direct scheduling line M-F 8am to 5pm @ 818-629-1169</b></div><div><br /></div><div><br /></div><div>Once we can schedule them and they complete their exam, reports are typically sent out within 24-72 hours.</div><div><br /></div><div></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">Patients can also view their appointment times, answer\nprescreening questions and sign all liens here:</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><u><span style=\"font-size: 12pt;\"><a href=\"https://precise.radflow360.com/patient-portal\" target=\"_blank\" rel=\"noopener noreferrer\">https://precise.radflow360.com/patient-portal</a></span></u></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><u><span style=\"font-size: 12pt;\">If this is also a personal injury case:</span></u></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><ul type=\"disc\" style=\"margin-bottom: 0in;\">\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">A report containing&nbsp;the findings of the exam will\n     also be sent to the attorney</span></b></li>\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">A bill will be sent to the attorney once both the\n     patient and the attorney sign all pending liens</span></b></li>\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">Please make sure to submit a negotiation offer before\n     sending the payment</span></b></li>\n</ul><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\"><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Access\nbills, appointment times, and e-sign liens​&nbsp; (Click request login if you\ndon't have an account)<br />\n</a></span></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\"><br /></a></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\"><a href=\"https://pacs.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Access\nreports &amp; images</a>&nbsp;&nbsp;</span><a href=\"https://www.precisemri.com/request\" target=\"_blank\" rel=\"noopener noreferrer\"><span style=\"font-size: 12pt;\">(Request login here for reports)</span></a></b></div><div><b><a href=\"https://www.precisemri.com/request\" rel=\"noopener noreferrer\" target=\"_blank\"></a></b></div><div><br /></div>",
+      "text": "The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day. \n\n\nFor your records, the patient ID is PRE847842. Please use this for all future communications.\n\n\n\n\nWe will also send them a text shortly letting them know to call us in case we miss them when we reach out.\n\n\n\n\nThe patient is welcome to call our direct scheduling line M-F 8am to 5pm @ 818-629-1169\n\n\n\n\nOnce we can schedule them and they complete their exam, reports are typically sent out within 24-72 hours.\n\n\n\nPatients can also view their appointment times, answer\nprescreening questions and sign all liens here:\nhttps://precise.radflow360.com/patient-portal\n\nIf this is also a personal injury case:\n\n\nA report containing the findings of the exam will\nalso be sent to the attorney\n\nA bill will be sent to the attorney once both the\npatient and the attorney sign all pending liens\n\nPlease make sure to submit a negotiation offer before\nsending the payment\n\n\n\nAccess\nbills, appointment times, and e-sign liens​ (Click request login if you\ndon't have an account)\n\n\n\nAccess\nreports & images (Request login here for reports)",
+      "error_type": null,
+      "version": null,
+      "subject": "Re: EXTERNAL: Rodrigo Ruiz",
+      "draft_mode": null,
+      "metadata": {},
+      "author": {
+        "_links": {
+          "self": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd",
+          "related": {
+            "inboxes": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/inboxes",
+            "conversations": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/conversations"
+          }
+        },
+        "id": "tea_2ditd",
+        "email": "ana.m@precisemri.com",
+        "username": "ana",
+        "first_name": "Ana",
+        "last_name": "Martinez",
+        "is_admin": false,
+        "is_available": true,
+        "is_blocked": false,
+        "type": "user",
+        "custom_fields": {}
+      },
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": null,
+          "handle": "scheduling@precisemri.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_24eptq9"
+            }
+          },
+          "name": null,
+          "handle": "nancy@ympklaw.com",
+          "role": "to"
+        }
+      ],
+      "attachments": [],
+      "signature": null,
+      "is_draft": false
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_osrt7k1",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crld1dt",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_osrt7k1/seen"
+        }
+      },
+      "id": "msg_osrt7k1",
+      "type": "email",
+      "is_inbound": true,
+      "created_at": 1742942688,
+      "blurb": "Good afternoon, Can you please schedule the client for MRI's CS, LS? Please see attached the referral form. Client Name: Rodrigo Ruiz Phone Number: (626)703-0481 Date of Birth: 04/15/1983 Date of Loss",
+      "body": "<div><div>\r\n</div><div class=\"fa0 front-email-body\"><div dir=\"ltr\"><div>Good afternoon,&nbsp;</div><div><br /></div><div>Can you&nbsp;please schedule the client for MRI's CS, LS?</div><div>Please see attached the referral form.&nbsp;</div><div><br /></div><div>Client Name: Rodrigo Ruiz</div><div>Phone Number: (626)703-0481</div><div>Date of Birth: 04/15/1983</div><div>Date of Loss: 02/28/23 and 8/30/2023</div><div><br /></div><div>Kindly provide me with the appointment details once scheduled.&nbsp;</div><div><br /></div><div>Thank you!</div><div><br /></div><div><br /></div><div><br /></div><div><div dir=\"ltr\" class=\"fa2i3mrf\" data-smartmail=\"gmail_signature\"><div dir=\"ltr\"><br /><div><div style=\"font-size:12.8px;background-color:transparent;color:rgb(34,34,34)\"><table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" align=\"left\" width=\"153\" style=\"color:rgb(80,0,80);width:114.85pt;border-collapse:collapse;margin-left:6.75pt;margin-right:6.75pt\"><tbody><tr style=\"height:77.4pt\"><td valign=\"top\" style=\"border-top:none;border-bottom:none;border-left:none;border-right:1pt solid black;padding:0in 5.4pt;height:77.4pt\"><p class=\"fab6k8g\" style=\"margin-bottom:0in;line-height:normal\"><u><span style=\"font-size:36pt\"><font face=\"georgia, serif\" color=\"#073763\">Y</font><font color=\"#073763\" face=\"georgia, serif\">MPK</font></span></u><span style=\"font-size:12pt;font-family:&quot;Times New Roman&quot;,serif\"></span></p><p class=\"fab6k8g\" style=\"margin-bottom:0in;line-height:normal\"><b><span style=\"font-size:9.5pt;font-family:&quot;Times New Roman&quot;,serif;color:rgb(7,55,99)\">&nbsp; &nbsp; &nbsp;LAW GROUP, LLP</span></b><span style=\"font-size:12pt;font-family:&quot;Times New Roman&quot;,serif\"></span></p></td></tr></tbody></table><b style=\"font-family:georgia,serif;font-size:small\"><font color=\"#073763\">NANCY&nbsp; CORONEL</font></b><span style=\"color:black;font-family:&quot;Open Sans&quot;,sans-serif;font-size:10pt\"><br /></span></div><div style=\"color:rgb(80,0,80);font-size:12.8px\"><span style=\"color:black;background-color:transparent;font-family:&quot;Open Sans&quot;,sans-serif;font-size:10pt\">5503 Cahuenga Blvd. #200</span><p class=\"fab6k8g\" style=\"margin-bottom:0in;background-color:transparent;line-height:normal;background-image:initial;background-position:initial;background-repeat:initial\"><span style=\"font-size:12pt;font-family:&quot;Times New Roman&quot;,serif\"></span></p><p class=\"fab6k8g\" style=\"margin-bottom:0in;background-color:transparent;line-height:normal;background-image:initial;background-position:initial;background-repeat:initial\"><span style=\"font-size:10pt;font-family:&quot;Open Sans&quot;,sans-serif;color:black\">North Hollywood, CA 9160</span></p><p class=\"fab6k8g\" style=\"margin-bottom:0in;line-height:normal;background-image:initial;background-position:initial;background-repeat:initial\"><span style=\"color:rgb(34,34,34);background-color:transparent;font-size:10pt;font-family:&quot;Open Sans&quot;,sans-serif\">Phone: (323)&nbsp;</span><span style=\"font-size:10pt;font-family:&quot;Open Sans&quot;,sans-serif\"><font color=\"#000000\">999-4903&nbsp;</font><span style=\"background-color:rgb(207,226,243)\"><b><font color=\"#073763\">EXT: 1023</font></b></span></span></p><p class=\"fab6k8g\" style=\"margin-bottom:0in;background-color:transparent;line-height:normal;background-image:initial;background-position:initial;background-repeat:initial\"><span style=\"font-size:10pt;font-family:&quot;Open Sans&quot;,sans-serif;color:rgb(34,34,34)\">Fax: (818) 967-5353</span><span style=\"color:rgb(0,0,0);font-family:&quot;Open Sans&quot;,sans-serif;font-size:13.3333px\">1</span></p><p class=\"fab6k8g\" style=\"margin-bottom:0in;background-color:transparent;line-height:normal;background-image:initial;background-position:initial;background-repeat:initial\"><font color=\"#222222\" style=\"font-family:&quot;Open Sans&quot;,sans-serif;font-size:13.3333px\">Email:&nbsp;</font><a href=\"mailto:Arusya@ympklaw.com\" style=\"color:rgb(17,85,204);font-family:&quot;Open Sans&quot;,sans-serif;font-size:13.3333px\" target=\"_blank\" rel=\"noopener noreferrer\"><b><font color=\"#073763\">Nancy@ympklaw.com</font></b></a><span style=\"font-size:10pt;font-family:&quot;Open Sans&quot;,sans-serif;color:rgb(34,34,34)\"></span></p><p class=\"fab6k8g\" style=\"margin-bottom:0in;background-color:transparent;line-height:normal;background-image:initial;background-position:initial;background-repeat:initial\"><span style=\"font-size:10pt;font-family:&quot;Open Sans&quot;,sans-serif;color:rgb(34,34,34)\"><br /></span></p><p class=\"fab6k8g\" style=\"margin-bottom:0in;background-color:transparent;line-height:normal;background-image:initial;background-position:initial;background-repeat:initial\"><span style=\"font-size:10pt;font-family:&quot;Open Sans&quot;,sans-serif;color:rgb(34,34,34)\"><br /></span></p><p style=\"color:rgb(136,136,136);font-family:&quot;times new roman&quot;,serif;font-size:small;margin:0px;padding:0px\"><font size=\"1\">PRIVILEGED AND CONFIDENTIAL COMMUNICATION</font></p><p style=\"color:rgb(136,136,136);font-family:&quot;times new roman&quot;,serif;font-size:small;margin:0px;padding:0px\"><font size=\"1\">This electronic transmission, and any doc</font><span style=\"font-size:x-small\">uments attached hereto, (a) are protected by the Electronic Communications Privacy Act (18 USC §§ 2510-2521), (b) may contain confidential and/or legally privileged information, and (c) are for the sole use of the intended recipient named above.&nbsp;If you are not the intended recipient, or the employee or agent responsible for delivery of this message to the intended recipient, you are hereby notified that any dissemination, distribution or copying of this e-mail message is strictly prohibited.&nbsp;If you have received this electronic message in error, please notify the sender and delete the electronic message.&nbsp;Thank you very much. No attorney-client relationship is formed unless agreed to explicitly in writing.</span></p><p class=\"fab6k8g\" style=\"margin-bottom:0in;background-color:transparent;line-height:normal;background-image:initial;background-position:initial;background-repeat:initial\"><br /></p></div></div></div></div></div></div></div></div>",
+      "text": "\nGood afternoon, \n\n\n\nCan you please schedule the client for MRI's CS, LS?\n\nPlease see attached the referral form. \n\n\n\nClient Name: Rodrigo Ruiz\n\nPhone Number: (626)703-0481\n\nDate of Birth: 04/15/1983\n\nDate of Loss: 02/28/23 and 8/30/2023\n\n\n\nKindly provide me with the appointment details once scheduled. \n\n\n\nThank you!\n\n\n\n\n\n\n\nYMPK\n\nLAW GROUP, LLP\n\n\nNANCY CORONEL\n\n\n5503 Cahuenga Blvd. #200\n\nNorth Hollywood, CA 9160\n\nPhone: (323) 999-4903 EXT: 1023\n\nFax: (818) 967-53531\nEmail: Nancy@ympklaw.com\n\n\n\n\nPRIVILEGED AND CONFIDENTIAL COMMUNICATION\nThis electronic transmission, and any doc\numents attached hereto, (a) are protected by the Electronic Communications Privacy Act (18 USC §§ 2510-2521), (b) may contain confidential and/or legally privileged information, and (c) are for the sole use of the intended recipient named above. If you are not the intended recipient, or the employee or agent responsible for delivery of this message to the intended recipient, you are hereby notified that any dissemination, distribution or copying of this e-mail message is strictly prohibited. If you have received this electronic message in error, please notify the sender and delete the electronic message. Thank you very much. No attorney-client relationship is formed unless agreed to explicitly in writing.",
+      "error_type": null,
+      "version": null,
+      "subject": "EXTERNAL: Rodrigo Ruiz",
+      "draft_mode": null,
+      "metadata": {},
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_24eptq9"
+            }
+          },
+          "name": "Nancy Coronel",
+          "handle": "nancy@ympklaw.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": "Precise Imaging Scheduling & Orders",
+          "handle": "scheduling@precisemri.com",
+          "role": "to"
+        }
+      ],
+      "attachments": [
+        {
+          "id": "fil_12lpxe4h",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_osrt7k1/download/fil_12lpxe4h",
+          "filename": "Rx- MRI CS, LS 3.18.25.pdf",
+          "content_type": "application/pdf",
+          "size": 1574051,
+          "metadata": {
+            "is_inline": false
+          }
+        }
+      ],
+      "signature": null,
+      "is_draft": false
+    }
+  ]
+}

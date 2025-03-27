@@ -1,0 +1,137 @@
+{
+  "_links": {
+    "self": "https://precise-imaging.api.frontapp.com/conversations/cnv_croys1t",
+    "related": {
+      "events": "https://precise-imaging.api.frontapp.com/conversations/cnv_croys1t/events",
+      "followers": "https://precise-imaging.api.frontapp.com/conversations/cnv_croys1t/followers",
+      "messages": "https://precise-imaging.api.frontapp.com/conversations/cnv_croys1t/messages",
+      "comments": "https://precise-imaging.api.frontapp.com/conversations/cnv_croys1t/comments",
+      "inboxes": "https://precise-imaging.api.frontapp.com/conversations/cnv_croys1t/inboxes",
+      "last_message": "https://precise-imaging.api.frontapp.com/messages/msg_ot0xsap?referer=conversation"
+    }
+  },
+  "id": "cnv_croys1t",
+  "subject": "EXTERNAL: New Referral Jae Chang",
+  "status": "unassigned",
+  "status_id": "sts_v8ltt",
+  "status_category": "open",
+  "ticket_ids": [],
+  "assignee": null,
+  "recipient": {
+    "_links": {
+      "related": {
+        "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_23eqq69"
+      }
+    },
+    "name": "Scheduling | Newflex",
+    "handle": "scheduling@newflexgroup.org",
+    "role": "from"
+  },
+  "tags": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_3k7ll",
+          "children": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/children"
+        }
+      },
+      "id": "tag_tn98h",
+      "name": "RX",
+      "highlight": "blue",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "updated_at": 1743054887.05,
+      "created_at": 1663790297.907
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_2tj8x",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_2tj8x/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+          "children": null
+        }
+      },
+      "id": "tag_2tj8x",
+      "name": "Order Pending",
+      "highlight": "⏳",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "updated_at": 1743054887.63,
+      "created_at": 1550786870.379
+    }
+  ],
+  "links": [],
+  "custom_fields": {},
+  "created_at": 1743054851.946,
+  "waiting_since": 1743054850,
+  "is_private": false,
+  "scheduled_reminders": [],
+  "metadata": {},
+  "messages": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_ot0xsap",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_croys1t",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_ot0xsap/seen"
+        }
+      },
+      "id": "msg_ot0xsap",
+      "type": "email",
+      "is_inbound": true,
+      "created_at": 1743054850,
+      "blurb": "Hi Team We have received a new referral for Xray in LA Same case as Charles Kim. Please see demos below: Patient Info Name: Jae Chang (JC, CK) Mobile: (213) 663-2288 Home Phone: (213) 400-2284 Charles",
+      "body": "<div><div>\r\n</div><div class=\"fa0 front-email-body\"><div dir=\"ltr\"><div><div dir=\"ltr\"><div dir=\"ltr\">Hi Team<br /><br />We have received a new referral for Xray&nbsp;in LA</div><div dir=\"ltr\"><br /></div><div dir=\"ltr\">Same case as Charles Kim.&nbsp;<br /><br />Please see demos below:</div><div><div dir=\"ltr\" class=\"fa2i3mrf\"><div dir=\"ltr\"></div></div></div></div><br /></div><div><p style=\"box-sizing:border-box;margin:0px 0px 10px;color:rgb(0,0,0);font-family:&quot;Open Sans&quot;,sans-serif;font-size:12px;font-weight:bold;max-width:400px;border-radius:0px\">Patient Info</p><table class=\"fa-phc55j\" style=\"border-collapse:collapse;border-spacing:0px;max-width:100%;color:rgb(0,0,0);font-family:&quot;Open Sans&quot;,sans-serif;font-size:12px;border-radius:0px\"><tbody style=\"box-sizing:border-box\"><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\">Name:</th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\">Jae Chang (JC, CK)&nbsp;</td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\">Mobile:</th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\">(213) 663-2288&nbsp;</td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\">Home Phone:</th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\">(213) 400-2284 Charles Kim&nbsp;</td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\">Email:</th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\"><a href=\"mailto:charlesjaekim0826@yahoo.com\" target=\"_blank\" rel=\"noopener noreferrer\">charlesjaekim0826@yahoo.com</a>&nbsp;</td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\">DOB:</th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\">02-01-1952&nbsp;</td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\">DOL:</th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\">09-30-2024&nbsp;</td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\">Address:</th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\">201 South Hudson Avenue Los Angeles, CA 90004&nbsp;</td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\">City:</th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\">&nbsp;</td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\">State:</th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\">CA&nbsp;</td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\">Zip:</th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\">&nbsp;</td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\">Attorney:</th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\">Morgan and Morgan&nbsp;<br style=\"box-sizing:border-box\" />633 West Fifth Street, Suite 2652&nbsp;<br style=\"box-sizing:border-box\" />Los Angeles,&nbsp; CA&nbsp;90071&nbsp;<span class=\"fa-smuks4\">&nbsp;</span></td></tr></tbody></table></div><div><div dir=\"ltr\" class=\"fa2i3mrf\" data-smartmail=\"gmail_signature\"><div dir=\"ltr\"><table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"440px\" style=\"color:rgb(34,34,34);font-family:Lato,sans-serif\"><tbody><tr><td style=\"padding:10px 0px 12px;font-size:13px\"><font color=\"#787878\">Kind Regards,</font><br /></td></tr><tr><td style=\"vertical-align:top\"><table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"440px\"><tbody><tr><td style=\"margin-top:20px;padding-right:10px;vertical-align:middle;display:flex\"><img src=\"https://ext.frontusercontent.com/v1/proxy/aqolNl_W4XmkKiyNdCJNHQRQQwicVa8Agfxue1ZcqXB86Tg_xsReO1hy9_KqyCsNIQJ2v_3P7trNLn_EEyrIPQFrNkIjmbzxBocXfENh79NNNKvQJqEhkbE8R_jT039YZpT27oJBxIg3o7OLu3St0g#https://i.imgur.com/7J9eUZG.png\" width=\"90\" style=\"display:block;max-width:120px\" /></td><td valign=\"top\" style=\"margin-top:18px;padding:0px 0px 0px 10px;width:320px;border-left:1px solid rgb(207,215,220)\"><table align=\"left\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"padding-top:5px\"><tbody><tr><td style=\"font-size:13px;color:rgb(28,117,188);font-weight:bold\">Luzangie Martínez</td></tr><tr><td><p style=\"color:rgb(137,139,142);padding-top:2px;padding-bottom:8px;font-size:13px;line-height:16px;margin:0px\">Intake Specialist<br /></p></td></tr><tr><td style=\"font-size:13px;padding:2px 0px;color:rgb(28,117,188)\"><img height=\"10\" src=\"https://ext.frontusercontent.com/v1/proxy/tctDV2gWyuSjebdMqehLNbL51cc1KBnUrjayjT9qLMtCAdVtOLyuU_OSL-nC_E3KsSCTae2ePMKOY6ySvFecP_KxSUD_4DrGCNg4Dy9AR-_eft6fwHKtApbxXIgQeBUonTwhqvBeG0JP-3p2kaz6_w#https://i.imgur.com/xPqyBjN.png\" width=\"10\" style=\"padding:0px\" />&nbsp;<span style=\"color:rgb(137,139,142)\">(323) 387-3279 | Office</span></td></tr><tr><td style=\"font-size:13px;padding:2px 0px;color:rgb(28,117,188)\"><img height=\"10\" src=\"https://ext.frontusercontent.com/v1/proxy/tctDV2gWyuSjebdMqehLNbL51cc1KBnUrjayjT9qLMtCAdVtOLyuU_OSL-nC_E3KsSCTae2ePMKOY6ySvFecP_KxSUD_4DrGCNg4Dy9AR-_eft6fwHKtApbxXIgQeBUonTwhqvBeG0JP-3p2kaz6_w#https://i.imgur.com/xPqyBjN.png\" width=\"10\" style=\"padding:0px\" />&nbsp;<span style=\"color:rgb(137,139,142)\">(323) 614-7618 | Direct</span></td></tr><tr><td style=\"font-size:13px;padding:2px 0px;color:rgb(28,117,188)\"><img height=\"10\" src=\"https://ext.frontusercontent.com/v1/proxy/kjSo3Y3QoQJmW16UV0wly7OuiX7AuR8bIX-U1rimGXU7YvfRKfC6zFLtne9naheOSUtWeSNzFMm4BIvfqCXc-HFQLp2g-ojyGb8Zq3yCVWYTkMIHAJxeFEp0A4sjhFlr-U9PEtxZ-mV4zCsOwu6Hwg#https://i.imgur.com/mnq0fiP.png\" width=\"10\" style=\"padding:0px\" />&nbsp;<span style=\"color:rgb(137,139,142)\">(310) 579-8693 | Fax</span></td></tr><tr><td style=\"font-size:13px;padding:2px 0px 8px;color:rgb(28,117,188)\"><img height=\"10\" src=\"https://ext.frontusercontent.com/v1/proxy/qLYxR_GPXN3VXxKLYHnz8UFSqF3fDyBeuuLH9OxHaUo5EbcnPq9Vm75nS8E_Ra1BrkQd0R_x0cObLz89KlB8R5KN__jeGDgQzR9jKNv6G2E_IYLzef_IeDrVwHTVm2ehXmSOOGXYs61cDseVFMSV-Q#https://i.imgur.com/5kwfexj.png\" width=\"10\" style=\"padding:0px\" />&nbsp;<span style=\"color:rgb(137,139,142)\"><a href=\"http://www.newflexgroup.org/\" style=\"color:rgb(17,85,204)\" target=\"_blank\" rel=\"noopener noreferrer\">www.newflexgroup.org</a></span></td></tr><tr><td style=\"border-top:1px solid rgb(153,153,153);width:320px;font-size:13px;padding-top:10px\"><img height=\"10\" src=\"https://ext.frontusercontent.com/v1/proxy/EftHlHNLKqklGe0pe1cLt0oY6AqVLKgEb01XGd0_fqCXNr116F0auaK7gDBUniBAYDwIQ16eS7V3bPz9f_sdtSNPuv2HFz379A3RQzki5vYPI0v_9h6_bapg250Y1chokSwJz_Nke3cc-PyVh7L4BA#https://i.imgur.com/5sRpFZp.png\" width=\"10\" style=\"padding:0px\" />&nbsp;<span style=\"color:rgb(137,139,142)\"><a href=\"mailto:Gabby@NewflexGroup.org\" target=\"_blank\" rel=\"noopener noreferrer\">Gabby@NewflexGroup.org</a> | Direct Supervisor</span></td></tr></tbody></table></td></tr></tbody></table></td></tr><tr><td style=\"color:rgb(120,120,120);padding:0px\"><p style=\"border-top:1px solid rgb(153,153,153);width:440px;margin-top:10px;line-height:14px;text-align:center;font-size:10px\"></p><p style=\"margin:5px 0px 0px;padding-top:2px;padding-bottom:8px;width:440px;line-height:14px;text-align:justify;font-size:10px\"><strong>NEWFLEX</strong>&nbsp;IS NOT A HEALTHCARE PROVIDER AND WE ARE NOT QUALIFIED TO GIVE MEDICAL ADVICE.IF YOU HAVE AN URGENT MEDICAL CONDITION, PLEASE CALL 911 OR GO TO YOUR NEAREST EMERGENCY ROOM.<br /><br />By using our service, you agree that Newflex cannot be held liable for any inaccuracies in the information provided or actions taken based on such information. Newflex does not guarantee the availability of appointments or the qualifications of providers. By utilizing our service, you are also consenting to the sharing of your medical information with healthcare providers and legal representatives as needed for coordinating care. The information contained in this transmission may contain privileged and confidential information, including patient information protected by federal and state privacy laws. It is intended only for the use of the person(s) named above. If you are not the intended recipient, you are hereby notified that any review, dissemination, distribution, or duplication of this communication is strictly prohibited. If you are not the intended recipient, please contact the sender by reply to this email and destroy all copies of the original message.</p></td></tr></tbody></table></div></div></div></div></div></div>",
+      "text": "\nHi Team\n\n\nWe have received a new referral for Xray in LA\n\n\n\nSame case as Charles Kim. \n\n\nPlease see demos below:\n\n\n\n\n\n\n\nPatient Info\nName: Jae Chang (JC, CK) \nMobile: (213) 663-2288 \nHome Phone: (213) 400-2284 Charles Kim \nEmail: charlesjaekim0826@yahoo.com \nDOB: 02-01-1952 \nDOL: 09-30-2024 \nAddress: 201 South Hudson Avenue Los Angeles, CA 90004 \nCity: \nState: CA \nZip: \nAttorney: Morgan and Morgan \n633 West Fifth Street, Suite 2652 \nLos Angeles, CA 90071 \n\n\nKind Regards,\n\nLuzangie Martínez \n\nIntake Specialist\n\n\n(323) 387-3279 | Office \n(323) 614-7618 | Direct \n(310) 579-8693 | Fax \nwww.newflexgroup.org \nGabby@NewflexGroup.org | Direct Supervisor \n\n\n\n\n\n\nNEWFLEX IS NOT A HEALTHCARE PROVIDER AND WE ARE NOT QUALIFIED TO GIVE MEDICAL ADVICE.IF YOU HAVE AN URGENT MEDICAL CONDITION, PLEASE CALL 911 OR GO TO YOUR NEAREST EMERGENCY ROOM.\n\n\nBy using our service, you agree that Newflex cannot be held liable for any inaccuracies in the information provided or actions taken based on such information. Newflex does not guarantee the availability of appointments or the qualifications of providers. By utilizing our service, you are also consenting to the sharing of your medical information with healthcare providers and legal representatives as needed for coordinating care. The information contained in this transmission may contain privileged and confidential information, including patient information protected by federal and state privacy laws. It is intended only for the use of the person(s) named above. If you are not the intended recipient, you are hereby notified that any review, dissemination, distribution, or duplication of this communication is strictly prohibited. If you are not the intended recipient, please contact the sender by reply to this email and destroy all copies of the original message.",
+      "error_type": null,
+      "version": null,
+      "subject": "EXTERNAL: New Referral Jae Chang",
+      "draft_mode": null,
+      "metadata": {},
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_23eqq69"
+            }
+          },
+          "name": "Scheduling | Newflex",
+          "handle": "scheduling@newflexgroup.org",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": "Precise Imaging Scheduling & Orders",
+          "handle": "scheduling@precisemri.com",
+          "role": "to"
+        }
+      ],
+      "attachments": [
+        {
+          "id": "fil_12m4l935",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_ot0xsap/download/fil_12m4l935",
+          "filename": "CHANG, JAE RX.PDF",
+          "content_type": "application/pdf",
+          "size": 677905,
+          "metadata": {
+            "is_inline": false
+          }
+        }
+      ],
+      "signature": null,
+      "is_draft": false
+    }
+  ]
+}

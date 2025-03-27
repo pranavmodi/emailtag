@@ -1,0 +1,232 @@
+{
+  "_links": {
+    "self": "https://precise-imaging.api.frontapp.com/conversations/cnv_crld8ap",
+    "related": {
+      "events": "https://precise-imaging.api.frontapp.com/conversations/cnv_crld8ap/events",
+      "followers": "https://precise-imaging.api.frontapp.com/conversations/cnv_crld8ap/followers",
+      "messages": "https://precise-imaging.api.frontapp.com/conversations/cnv_crld8ap/messages",
+      "comments": "https://precise-imaging.api.frontapp.com/conversations/cnv_crld8ap/comments",
+      "inboxes": "https://precise-imaging.api.frontapp.com/conversations/cnv_crld8ap/inboxes",
+      "last_message": "https://precise-imaging.api.frontapp.com/messages/msg_ot0gl4x?referer=conversation"
+    }
+  },
+  "id": "cnv_crld8ap",
+  "subject": "Re: EXTERNAL: New Referral - Chunhung Koo - MRI",
+  "status": "archived",
+  "status_id": "sts_v8lxd",
+  "status_category": "resolved",
+  "ticket_ids": [],
+  "assignee": {
+    "_links": {
+      "self": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd",
+      "related": {
+        "inboxes": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/inboxes",
+        "conversations": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/conversations"
+      }
+    },
+    "id": "tea_2ditd",
+    "email": "ana.m@precisemri.com",
+    "username": "ana",
+    "first_name": "Ana",
+    "last_name": "Martinez",
+    "is_admin": false,
+    "is_available": true,
+    "is_blocked": false,
+    "type": "user",
+    "custom_fields": {}
+  },
+  "recipient": {
+    "_links": {
+      "related": {
+        "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_23omuo1"
+      }
+    },
+    "name": null,
+    "handle": "harold@newflexgroup.org",
+    "role": "to"
+  },
+  "tags": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_3k7ll",
+          "children": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h/children"
+        }
+      },
+      "id": "tag_tn98h",
+      "name": "RX",
+      "highlight": "blue",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "updated_at": 1743054887.05,
+      "created_at": 1663790297.907
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/tags/tag_3k5wx",
+        "related": {
+          "conversations": "https://precise-imaging.api.frontapp.com/tags/tag_3k5wx/conversations",
+          "owner": "https://precise-imaging.api.frontapp.com/teams/tim_awm1",
+          "parent_tag": "https://precise-imaging.api.frontapp.com/tags/tag_tn98h",
+          "children": null
+        }
+      },
+      "id": "tag_3k5wx",
+      "name": "Order Entered",
+      "highlight": "✅",
+      "description": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": false,
+      "updated_at": 1743052934.054,
+      "created_at": 1551378905.259
+    }
+  ],
+  "links": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/links/top_eg64h"
+      },
+      "id": "top_eg64h",
+      "name": "ID: PRE1068794",
+      "type": "app_df5cb65d50c3ff8b",
+      "external_url": "https://precise.radflow360.com/patient?patientid=PRE1068794",
+      "custom_fields": {}
+    }
+  ],
+  "custom_fields": {},
+  "created_at": 1742942826.383,
+  "waiting_since": 1743042403,
+  "is_private": false,
+  "scheduled_reminders": [],
+  "metadata": {},
+  "messages": [
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_ot0gl4x",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crld8ap",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_ot0gl4x/seen",
+          "message_replied_to": "https://precise-imaging.api.frontapp.com/messages/msg_ot0gl4x/parent"
+        }
+      },
+      "id": "msg_ot0gl4x",
+      "type": "email",
+      "is_inbound": false,
+      "created_at": 1743042402.058,
+      "blurb": "The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day. For your records, the patient ID is PRE1068794. Please use this",
+      "body": "<div>The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day.&nbsp;&nbsp;</div><div><br /></div><div><b style=\"color: rgb(29, 28, 29); font-family: Slack-Lato, Slack-Fractions, appleLogo, sans-serif; font-variant-ligatures: common-ligatures; text-align: left; background-color: rgb(248, 248, 248);\" data-stringify-type=\"bold\">For your records, the patient ID is PRE1068794.&nbsp; Please use this for all future communications.</b></div><div><br /></div><div><br /></div><div>We will also send them a text shortly letting them know to call us in case we miss them when we reach out.</div><div><br /></div><div><br /></div><div><b>The patient is welcome to call our direct scheduling line M-F 8am to 5pm @ 818-629-1169</b></div><div><br /></div><div><br /></div><div>Once we can schedule them and they complete their exam, reports are typically sent out within 24-72 hours.</div><div><br /></div><div></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">Patients can also view their appointment times, answer\nprescreening questions and sign all liens here:</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><u><span style=\"font-size: 12pt;\"><a href=\"https://precise.radflow360.com/patient-portal\" target=\"_blank\" rel=\"noopener noreferrer\">https://precise.radflow360.com/patient-portal</a></span></u></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><u><span style=\"font-size: 12pt;\">If this is also a personal injury case:</span></u></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><ul type=\"disc\" style=\"margin-bottom: 0in;\">\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">A report containing&nbsp;the findings of the exam will\n     also be sent to the attorney</span></b></li>\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">A bill will be sent to the attorney once both the\n     patient and the attorney sign all pending liens</span></b></li>\n <li style=\"margin: 0in 0in 8pt; line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\">Please make sure to submit a negotiation offer before\n     sending the payment</span></b></li>\n</ul><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><span style=\"font-size: 12pt;\">&nbsp;</span></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\"><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Access\nbills, appointment times, and e-sign liens​&nbsp; (Click request login if you\ndon't have an account)<br />\n</a></span></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><a href=\"https://precise.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\"><br /></a></b></div><div style=\"line-height: normal;\" class=\"fa-oq4s2r\"><b><span style=\"font-size: 12pt;\"><a href=\"https://pacs.radflow360.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Access\nreports &amp; images</a>&nbsp;&nbsp;</span><a href=\"https://www.precisemri.com/request\" target=\"_blank\" rel=\"noopener noreferrer\"><span style=\"font-size: 12pt;\">(Request login here for reports)</span></a></b></div><div><b><a href=\"https://www.precisemri.com/request\" rel=\"noopener noreferrer\" target=\"_blank\"></a></b></div><div><br /></div>",
+      "text": "The referral has been entered into our scheduling system and a team member will reach out to the patient today or the next business day. \n\n\nFor your records, the patient ID is PRE1068794. Please use this for all future communications.\n\n\n\n\nWe will also send them a text shortly letting them know to call us in case we miss them when we reach out.\n\n\n\n\nThe patient is welcome to call our direct scheduling line M-F 8am to 5pm @ 818-629-1169\n\n\n\n\nOnce we can schedule them and they complete their exam, reports are typically sent out within 24-72 hours.\n\n\n\nPatients can also view their appointment times, answer\nprescreening questions and sign all liens here:\nhttps://precise.radflow360.com/patient-portal\n\nIf this is also a personal injury case:\n\n\nA report containing the findings of the exam will\nalso be sent to the attorney\n\nA bill will be sent to the attorney once both the\npatient and the attorney sign all pending liens\n\nPlease make sure to submit a negotiation offer before\nsending the payment\n\n\n\nAccess\nbills, appointment times, and e-sign liens​ (Click request login if you\ndon't have an account)\n\n\n\nAccess\nreports & images (Request login here for reports)",
+      "error_type": null,
+      "version": null,
+      "subject": "Re: EXTERNAL: New Referral - Chunhung Koo - MRI",
+      "draft_mode": null,
+      "metadata": {},
+      "author": {
+        "_links": {
+          "self": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd",
+          "related": {
+            "inboxes": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/inboxes",
+            "conversations": "https://precise-imaging.api.frontapp.com/teammates/tea_2ditd/conversations"
+          }
+        },
+        "id": "tea_2ditd",
+        "email": "ana.m@precisemri.com",
+        "username": "ana",
+        "first_name": "Ana",
+        "last_name": "Martinez",
+        "is_admin": false,
+        "is_available": true,
+        "is_blocked": false,
+        "type": "user",
+        "custom_fields": {}
+      },
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": null,
+          "handle": "scheduling@precisemri.com",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_23omuo1"
+            }
+          },
+          "name": null,
+          "handle": "harold@newflexgroup.org",
+          "role": "to"
+        }
+      ],
+      "attachments": [],
+      "signature": null,
+      "is_draft": false
+    },
+    {
+      "_links": {
+        "self": "https://precise-imaging.api.frontapp.com/messages/msg_osrtn0h",
+        "related": {
+          "conversation": "https://precise-imaging.api.frontapp.com/conversations/cnv_crld8ap",
+          "message_seen": "https://precise-imaging.api.frontapp.com/messages/msg_osrtn0h/seen"
+        }
+      },
+      "id": "msg_osrtn0h",
+      "type": "email",
+      "is_inbound": true,
+      "created_at": 1742942825,
+      "blurb": "Hello Team, We have received a new MRI referral at your Los Gatos office. Patient Info Name: Chunhung Koo Mobile: 408-981-8158 Home Phone: Email: dtakeow122@gmail.com DOB: 07-12-1980 DOL: 01-17-2025",
+      "body": "<div><div>\r\n</div><div class=\"fa0 front-email-body\"><div dir=\"ltr\"><div><div class=\"fahewjmj\" style=\"font-family:&quot;trebuchet ms&quot;,sans-serif\">Hello Team,</div><br /><div class=\"fahewjmj\" style=\"font-family:&quot;trebuchet ms&quot;,sans-serif\">We have received a new MRI referral at your Los Gatos office.</div><font face=\"trebuchet ms, sans-serif\"><br /></font><div class=\"fahewjmj\"><font face=\"trebuchet ms, sans-serif\"><span style=\"color:rgb(0,0,0);font-size:12px;font-weight:bold\">Patient Info</span></font></div><table style=\"border-collapse:collapse;border-spacing:0px;max-width:100%;color:rgb(0,0,0);font-size:12px;border-radius:0px\"><tbody style=\"box-sizing:border-box\"><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">Name:</font></th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\"><span class=\"fa-l5vjgo\">Chunhung</span>&nbsp;<span class=\"fa-l5vjgo\">Koo</span>&nbsp;</font></td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">Mobile:</font></th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">408-981-8158&nbsp;</font></td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">Home Phone:</font></th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">&nbsp;</font></td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">Email:</font></th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\"><a href=\"mailto:dtakeow122@gmail.com\" target=\"_blank\" rel=\"noopener noreferrer\">dtakeow122@gmail.com</a>&nbsp;</font></td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">DOB:</font></th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">07-12-1980&nbsp;</font></td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">DOL:</font></th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">01-17-2025&nbsp;</font></td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">Address:</font></th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">1133 Saratoga Ave. San Jose, CA 95129&nbsp;</font></td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">City:</font></th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">&nbsp;</font></td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">State:</font></th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">CA&nbsp;</font></td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">Zip:</font></th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">&nbsp;</font></td></tr><tr style=\"box-sizing:border-box\"><th align=\"left\" style=\"box-sizing:border-box;padding:0px;text-align:left;float:left;width:100px;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">Attorney:</font></th><td style=\"box-sizing:border-box;padding:0px;float:left;border-radius:0px\"><font face=\"trebuchet ms, sans-serif\">ME Lawyers, APLC &nbsp;<br style=\"box-sizing:border-box\" />11110 Ohio Ave., Suite 201&nbsp;<br style=\"box-sizing:border-box\" />CA&nbsp;90025&nbsp;&nbsp;</font></td></tr></tbody></table><br class=\"fa-1lqlll\" /><br /></div><div><br /></div><span class=\"fam67vav\">-- </span><br /><div dir=\"ltr\" class=\"fa2i3mrf\" data-smartmail=\"gmail_signature\"><div dir=\"ltr\"><table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"440px\" style=\"color:rgb(34,34,34);font-family:Lato,sans-serif\"><tbody><tr><td style=\"color:rgb(120,120,120);padding:10px 0px 12px;font-size:13px\">Kind Regards,<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"440px\"><tbody><tr><td style=\"margin-top:20px;padding-right:10px;vertical-align:middle;display:flex\"><img src=\"https://ext.frontusercontent.com/v1/proxy/LSEDOKKF8PSWYshOXDQ75m0F3Vvkn8WFtQ6Fiu17cvxsxLl4BfASrt5-eeKvP-2Lm8QbbNbGNyGcW14P1N2-NcPBh1taGRKKIbZr5BSvE6veO6gdsulBqOWip-gK1_hLoONjpJOpr03D4KbX9_kMoA#https://i.imgur.com/7J9eUZG.png\" width=\"90\" style=\"display:block;max-width:120px\" /></td><td valign=\"top\" style=\"margin-top:18px;padding:0px 0px 0px 10px;width:320px;border-left:1px solid rgb(207,215,220)\"><table align=\"left\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"padding-top:5px\"><tbody><tr><td style=\"color:rgb(28,117,188);font-weight:bold\">Harold Ortiz</td></tr><tr><td><p style=\"color:rgb(137,139,142);padding-top:2px;padding-bottom:8px;line-height:16px;margin:0px\">Support Specialist</p></td></tr><tr><td style=\"padding:2px 0px;color:rgb(28,117,188)\"><img height=\"10\" src=\"https://ext.frontusercontent.com/v1/proxy/hCsD_Reorj05N4jBiu6NDMa8_aClIlGbIhTIIV3VFEuwxarHsh_RiU2qJG73378eQHpSHE47GMf6EWkzI_XjnPel19B3j2azo4PuC0cAbixZZYOwoDnKasI6Mdr8hnS9fFsN1e0FYNmQ4DZXxEeYPQ#https://i.imgur.com/xPqyBjN.png\" width=\"10\" style=\"padding:0px\" />&nbsp;<span style=\"color:rgb(137,139,142)\">(323) 387-3279 | Office</span></td></tr><tr><td style=\"padding:2px 0px;color:rgb(28,117,188)\"><img height=\"10\" src=\"https://ext.frontusercontent.com/v1/proxy/hCsD_Reorj05N4jBiu6NDMa8_aClIlGbIhTIIV3VFEuwxarHsh_RiU2qJG73378eQHpSHE47GMf6EWkzI_XjnPel19B3j2azo4PuC0cAbixZZYOwoDnKasI6Mdr8hnS9fFsN1e0FYNmQ4DZXxEeYPQ#https://i.imgur.com/xPqyBjN.png\" width=\"10\" style=\"padding:0px\" />&nbsp;<span style=\"color:rgb(137,139,142)\">(323) 400-4381 | Direct</span></td></tr><tr><td style=\"padding:2px 0px;color:rgb(28,117,188)\"><img height=\"10\" src=\"https://ext.frontusercontent.com/v1/proxy/SUFzijkKQpEwS7EtGIT17o5ULRF4lS-oFhlNHAJJlc5Ltt6ThrGH0_xSZ8iMN1bv5d8xQfIpx8uja7KtRVApKQ2ZPCb2M1k38sJfZrEFLC-PJx5687gzb5FeaYq8pAjvnuX8RwTQly0KQ9-U3b2mYQ#https://i.imgur.com/mnq0fiP.png\" width=\"10\" style=\"padding:0px\" />&nbsp;<span style=\"color:rgb(137,139,142)\">(310) 579-8693 | Fax</span></td></tr><tr><td style=\"padding:2px 0px 8px;color:rgb(28,117,188)\"><img height=\"10\" src=\"https://ext.frontusercontent.com/v1/proxy/dPqZqzKER0Tv5XO3TQbwkomlIG8Y8Mnl_ayP8Vph383fdYRsEfbg3JLx35s0KdfKTV4j1LNPbGc8k5zh-BxKBKtatuE8JUoIvLMIs4px4V_lEtTGss6sL0cAGlHGM0edXGhHjEE83fEhZ1eScbLTcw#https://i.imgur.com/5kwfexj.png\" width=\"10\" style=\"padding:0px\" />&nbsp;<span style=\"color:rgb(137,139,142)\"><a href=\"http://www.newflexgroup.org/\" style=\"color:rgb(17,85,204)\" target=\"_blank\" rel=\"noopener noreferrer\">www.newflexgroup.org</a></span></td></tr><tr><td style=\"border-top:1px solid rgb(153,153,153);width:320px;padding-top:10px\"><img height=\"10\" src=\"https://ext.frontusercontent.com/v1/proxy/Ik9EdFDZamnMdQyyp8MZ-wAaGkAFpiWQtxluaVQGCBG75nbgaEiugBwg0cri-fwCE_d56LaKYCrHnLyFOAha2kqcE4GtUEjRwEc8pNLDZxYu2Mz-Dwoi3tFwTJ2pmLSD6MZo27v0ziMOcslpX1eL1g#https://i.imgur.com/5sRpFZp.png\" width=\"10\" style=\"padding:0px\" />&nbsp;<span style=\"color:rgb(137,139,142)\"><a href=\"mailto:Gabby@NewflexGroup.org\" target=\"_blank\" rel=\"noopener noreferrer\">Gabby@NewflexGroup.org</a> | Direct Supervisor</span></td></tr></tbody></table></td></tr></tbody></table><p style=\"border-top:1px solid rgb(153,153,153);width:440px;margin-top:10px;line-height:14px;text-align:center;font-size:10px\"></p><p style=\"margin:5px 0px 0px;padding-top:2px;padding-bottom:8px;width:440px;line-height:14px;text-align:justify;font-size:10px\"><strong>NEWFLEX</strong>&nbsp;IS NOT A HEALTHCARE PROVIDER AND WE ARE NOT QUALIFIED TO GIVE MEDICAL ADVICE.IF YOU HAVE AN URGENT MEDICAL CONDITION, PLEASE CALL 911 OR GO TO YOUR NEAREST EMERGENCY ROOM.<br /><br />By using our service, you agree that Newflex cannot be held liable for any inaccuracies in the information provided or actions taken based on such information. Newflex does not guarantee the availability of appointments or the qualifications of providers. By utilizing our service, you are also consenting to the sharing of your medical information with healthcare providers and legal representatives as needed for coordinating care. The information contained in this transmission may contain privileged and confidential information, including patient information protected by federal and state privacy laws. It is intended only for the use of the person(s) named above. If you are not the intended recipient, you are hereby notified that any review, dissemination, distribution, or duplication of this communication is strictly prohibited. If you are not the intended recipient, please contact the sender by reply to this email and destroy all copies of the original message.</p></td></tr></tbody></table></div></div></div></div></div>",
+      "text": "\nHello Team,\n\n\nWe have received a new MRI referral at your Los Gatos office.\n\nPatient Info\nName: Chunhung Koo \nMobile: 408-981-8158 \nHome Phone: \nEmail: dtakeow122@gmail.com \nDOB: 07-12-1980 \nDOL: 01-17-2025 \nAddress: 1133 Saratoga Ave. San Jose, CA 95129 \nCity: \nState: CA \nZip: \nAttorney: ME Lawyers, APLC \n11110 Ohio Ave., Suite 201 \nCA 90025 \n\n\n\n\n\n\n\n-- \nKind Regards, Harold Ortiz \n\nSupport Specialist\n\n(323) 387-3279 | Office \n(323) 400-4381 | Direct \n(310) 579-8693 | Fax \nwww.newflexgroup.org \nGabby@NewflexGroup.org | Direct Supervisor \n\n\n\n\n\nNEWFLEX IS NOT A HEALTHCARE PROVIDER AND WE ARE NOT QUALIFIED TO GIVE MEDICAL ADVICE.IF YOU HAVE AN URGENT MEDICAL CONDITION, PLEASE CALL 911 OR GO TO YOUR NEAREST EMERGENCY ROOM.\n\n\nBy using our service, you agree that Newflex cannot be held liable for any inaccuracies in the information provided or actions taken based on such information. Newflex does not guarantee the availability of appointments or the qualifications of providers. By utilizing our service, you are also consenting to the sharing of your medical information with healthcare providers and legal representatives as needed for coordinating care. The information contained in this transmission may contain privileged and confidential information, including patient information protected by federal and state privacy laws. It is intended only for the use of the person(s) named above. If you are not the intended recipient, you are hereby notified that any review, dissemination, distribution, or duplication of this communication is strictly prohibited. If you are not the intended recipient, please contact the sender by reply to this email and destroy all copies of the original message.",
+      "error_type": null,
+      "version": null,
+      "subject": "EXTERNAL: New Referral - Chunhung Koo - MRI",
+      "draft_mode": null,
+      "metadata": {},
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_23omuo1"
+            }
+          },
+          "name": "Harold | Newflex",
+          "handle": "harold@newflexgroup.org",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://precise-imaging.api.frontapp.com/contacts/crd_18j14e9"
+            }
+          },
+          "name": "Precise Imaging Scheduling & Orders",
+          "handle": "scheduling@precisemri.com",
+          "role": "to"
+        }
+      ],
+      "attachments": [
+        {
+          "id": "fil_12lpytvl",
+          "url": "https://precise-imaging.api.frontapp.com/messages/msg_osrtn0h/download/fil_12lpytvl",
+          "filename": "KOO, CHUNHUNG mri.pdf",
+          "content_type": "application/pdf",
+          "size": 33254,
+          "metadata": {
+            "is_inline": false
+          }
+        }
+      ],
+      "signature": null,
+      "is_draft": false
+    }
+  ]
+}
