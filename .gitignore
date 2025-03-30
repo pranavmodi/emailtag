@@ -1,9 +1,13 @@
+# Data directories
+/home/fret/data/emailtag/
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+env/
 build/
 develop-eggs/
 dist/
@@ -22,7 +26,6 @@ wheels/
 
 # Virtual Environment
 venv/
-env/
 ENV/
 emailtag/
 
