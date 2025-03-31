@@ -265,4 +265,75 @@ Apply the migration:
 
 ```bash
 alembic upgrade head
+```
+
+## Data Processing
+
+The system includes several data processing steps:
+
+### 1. Raw Data Collection
+- Receives emails via webhook
+- Stores raw conversation and message data in `/data/emailtag/rawdata/`
+- Files are named with conversation ID and timestamp:
+  - `conv_[conversation_id]_[timestamp].json`: Raw conversation data
+  - `msgs_[conversation_id]_[timestamp].json`: Raw message data
+
+### 2. Data Cleaning
+The `training/clean_conversations.py` script processes raw data into a cleaned format:
+
+```bash
+# Process all conversations
+python3 training/clean_conversations.py
+
+# Debug mode - process single conversation
+python3 training/clean_conversations.py --debug
+
+# Debug mode - process specific conversation
+python3 training/clean_conversations.py --debug --conv-id cnv_xxxxx
+```
+
+Cleaned data is stored in `/data/emailtag/cleaned_data/cleaned_conversations.jsonl` with:
+- One conversation per line in JSONL format
+- Cleaned HTML content (tags removed, whitespace normalized)
+- Normalized email addresses
+- Structured sender and recipient information
+- Attachment metadata
+- Conversation metadata (tags, status, etc.)
+
+### 3. Training Data
+- Processed data is used to train the AI tagging system
+- Training examples include both cleaned and raw data
+- Stored in `/data/emailtag/training_set.jsonl`
+
+## Development Guidelines
+
+- Follow PEP 8 style guidelines
+- Write comprehensive docstrings
+- Include unit tests for all functionality
+- Use environment variables for configuration
+- Log all errors and important events
+
+## Environment Variables
+
+Required environment variables:
+- `DATA_DIR`: Base directory for data storage
+- `FRONT_APP_TOKEN`: FrontApp API authentication token
+- `FRONT_APP_CHANNEL_ID`: FrontApp channel ID for webhook
+- `FRONT_APP_TAG_ID`: FrontApp tag ID for AI-tagged conversations
+
+## Project Structure
+
+```
+emailtag/
+├── data/
+│   └── emailtag/
+│       ├── rawdata/          # Raw conversation and message data
+│       ├── cleaned_data/     # Processed and cleaned data
+│       └── training_set.jsonl # Training data for AI
+├── training/
+│   ├── create_training_set.py    # Creates training examples
+│   └── clean_conversations.py    # Cleans raw data
+├── webhook/
+│   └── app.py                    # Webhook endpoint
+└── .env                         # Environment variables
 ``` 
