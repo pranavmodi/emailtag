@@ -69,17 +69,13 @@ def process_conversation(conv_file: str, msgs_file: str) -> Dict[str, Any]:
         Dict[str, Any]: Processed conversation data
     """
     try:
-        print(f"\nDebug: Loading conversation file: {conv_file}")
         # Load conversation data
         with open(conv_file, 'r') as f:
             conv_data = json.load(f)
-            print(f"Debug: Conversation data loaded. ID: {conv_data.get('id', 'unknown')}")
             
-        print(f"Debug: Loading messages file: {msgs_file}")
         # Load messages data
         with open(msgs_file, 'r') as f:
             msgs_data = json.load(f)
-            print(f"Debug: Messages data loaded. Count: {len(msgs_data)}")
             
         # Extract basic conversation info
         conversation = {
@@ -98,9 +94,6 @@ def process_conversation(conv_file: str, msgs_file: str) -> Dict[str, Any]:
         messages = []
         for i, msg in enumerate(msgs_data, 1):
             try:
-                print(f"\nDebug: Processing message {i}/{len(msgs_data)}")
-                print(f"Debug: Message ID: {msg.get('id', 'unknown')}")
-                
                 # Extract sender info - handle both author and from recipient
                 sender = {
                     'name': 'Unknown',
@@ -110,7 +103,6 @@ def process_conversation(conv_file: str, msgs_file: str) -> Dict[str, Any]:
                 # First try to get sender from author
                 author = msg.get('author', {})
                 if author:
-                    print(f"Debug: Author data: {author}")
                     sender = {
                         'name': f"{author.get('first_name', '')} {author.get('last_name', '')}".strip() or "Unknown",
                         'email': clean_email(author.get('email', ''))
@@ -158,18 +150,20 @@ def process_conversation(conv_file: str, msgs_file: str) -> Dict[str, Any]:
                     'attachments': attachments
                 }
                 messages.append(message)
-                print(f"Debug: Successfully processed message {i}")
                 
             except Exception as e:
-                print(f"Error processing message {i}: {str(e)}")
+                print(f"\nError processing message {i}: {str(e)}")
                 print(f"Message data: {msg}")
+                print(f"Full error details:", e.__class__.__name__)
+                import traceback
+                traceback.print_exc()
                 continue
         
         conversation['messages'] = messages
         return conversation
         
     except Exception as e:
-        print(f"Error processing conversation {conv_file}: {str(e)}")
+        print(f"\nError processing conversation {conv_file}: {str(e)}")
         print(f"Full error details:", e.__class__.__name__)
         import traceback
         traceback.print_exc()
