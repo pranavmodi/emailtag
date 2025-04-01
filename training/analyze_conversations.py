@@ -193,6 +193,27 @@ def analyze_untagged_conversations(conversations: List[Dict[str, Any]], categori
                     for subsubcategory, subtags in tags.items():
                         valid_tags.update(subtags)
     
+    # Print valid tags for reference
+    print("\nValid tags in hierarchy:")
+    print("-" * 60)
+    for category, subcategories in categories.items():
+        print(f"\n{category}:")
+        if isinstance(subcategories, list):
+            for tag in subcategories:
+                print(f"  - {tag}")
+        else:
+            for subcategory, tags in subcategories.items():
+                print(f"  {subcategory}:")
+                if isinstance(tags, list):
+                    for tag in tags:
+                        print(f"    - {tag}")
+                else:
+                    for subsubcategory, subtags in tags.items():
+                        print(f"    {subsubcategory}:")
+                        for tag in subtags:
+                            print(f"      - {tag}")
+    print("-" * 60)
+    
     # Find conversations with no valid tags and collect invalid tags
     untagged_conversations = []
     invalid_tag_counts = Counter()
