@@ -117,9 +117,12 @@ def classify_conversation(client: OpenAI, conversation: Dict[str, Any], examples
     # Create prompt
     prompt = create_few_shot_prompt(examples, conversation)
     
+    # Get model version from environment or use default
+    model_version = os.getenv('OPENAI_MODEL_VERSION', 'gpt-4o')
+    
     # Get classification from OpenAI
     response = client.chat.completions.create(
-        model="gpt-4",
+        model=model_version,
         messages=[
             {"role": "system", "content": "You are a helpful assistant that classifies email conversations into top-level categories. Respond with just the category name."},
             {"role": "user", "content": prompt}

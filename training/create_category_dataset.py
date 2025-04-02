@@ -51,26 +51,30 @@ def get_tag_categories(categories: Dict[str, Any]) -> Dict[str, str]:
     Create a mapping of tags to their top-level categories.
     
     Args:
-        categories (Dict[str, Any]): Category hierarchy
+        categories (Dict[str, Any]): Category hierarchy from environment
         
     Returns:
-        Dict[str, str]: Mapping of tag names to their top-level categories
+        Dict[str, str]: Mapping of tag names to top-level categories
     """
     tag_to_category = {}
     
-    for category, subcategories in categories.items():
-        if isinstance(subcategories, list):
-            for tag in subcategories:
+    def process_level(data: Any, category: str) -> None:
+        """Helper function to process each level of the hierarchy."""
+        if isinstance(data, list):
+            # Handle list of tags
+            for tag in data:
                 tag_to_category[tag] = category
-        else:
-            for subcategory, tags in subcategories.items():
-                if isinstance(tags, list):
-                    for tag in tags:
-                        tag_to_category[tag] = category
-                else:
-                    for subsubcategory, subtags in tags.items():
-                        for tag in subtags:
-                            tag_to_category[tag] = category
+        elif isinstance(data, dict):
+            # Handle nested dictionary
+            for key, value in data.items():
+                process_level(value, category)
+        elif isinstance(data, str):
+            # Handle single tag
+            tag_to_category[data] = category
+    
+    # Process each top-level category
+    for category, subcategories in categories.items():
+        process_level(subcategories, category)
     
     return tag_to_category
 
@@ -99,7 +103,7 @@ def get_conversation_category(conv: Dict[str, Any], tag_to_category: Dict[str, s
     return Counter(categories).most_common(1)[0][0]
 
 def create_balanced_dataset(conversations: List[Dict[str, Any]], tag_to_category: Dict[str, str], 
-                          min_samples: int = 100) -> List[Dict[str, Any]]:
+                          min_samples: int = 20) -> List[Dict[str, Any]]:
     """
     Create a balanced dataset by sampling conversations for each category.
     

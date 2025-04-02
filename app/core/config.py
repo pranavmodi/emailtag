@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     
     # Model settings
     LLM_PROVIDER: Optional[str] = None
-    LLM_MODEL: Optional[str] = None
+    OPENAI_MODEL_VERSION: Optional[str] = None
     AGENT_MODEL: Optional[str] = None
 
     @field_validator("ASYNC_DATABASE_URL", mode="before")
