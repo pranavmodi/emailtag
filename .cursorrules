@@ -1,3 +1,5 @@
+NEVER use 'gpt-4' model for LLM calls. Always use 'gpt-4o'
+
 Start every reply with "Hey Mofo!"
 This is a Python project for email tagging. Emails from a CRM (FrontApp) are forwarded to a webhook defined by this repo. The system uses AI to tag emails, enabling the right departments at Precise Imaging to view relevant emails.
 
@@ -16,4 +18,6 @@ Development guidelines:
 - Log all errors and important events
 
 When an email comes into the CRM - FrontApp - it sends the email to a webhook defined by this repo. 
+
+
 
