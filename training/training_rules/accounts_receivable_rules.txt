@@ -1,0 +1,20 @@
+Classification Rules for Accounts Receivable:
+
+1. **Subject Line Keywords**: 
+   - If the subject contains keywords such as "Bill", "Billing", "Lien", "Payment", "Balance", "Records Request", "W-9", or "Offer", it is likely an Accounts Receivable email.
+
+2. **Content Patterns and Phrases**:
+   - If the content includes phrases like "bill balance", "payment date", "lien signed", "process payment", "generate bill", "remittance", "tax purposes", or "W-9 form", classify it as Accounts Receivable.
+   - Look for instructions related to payment processing, such as "send your payments", "anticipated payment date", or "e-sign liens".
+
+3. **Associated Tags**:
+   - Emails tagged with "Bill or balance Request", "Bill Offer", "Rad Lien", "Tech Lien", "ASL", or "SLA Applies" are typically related to Accounts Receivable.
+
+4. **Purpose or Intent**:
+   - If the email's main purpose is to discuss or request payment, provide billing information, negotiate payment terms, or request financial documentation (e.g., W-9 forms), it belongs to the Accounts Receivable category.
+
+5. **Unique Characteristics**:
+   - Emails that involve legal or formal language related to financial transactions, such as "full and final payment", "tax ID", "confidential information", or "attorney-client privileges", are indicative of Accounts Receivable.
+   - Look for references to specific patient or client identifiers, such as "Patient ID", "PRE-NUMBER", or "DOB", which are often used in billing contexts.
+
+By applying these rules, you can effectively identify and classify emails that belong to the Accounts Receivable category.

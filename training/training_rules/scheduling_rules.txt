@@ -1,0 +1,22 @@
+Classification Rules for Scheduling:
+
+1. **Subject Line Keywords**: 
+   - If the subject line contains keywords such as "Referral", "Scheduled", "Reschedule", "Appointment", "MRI", "Scan", or "DOL" (Date of Loss), it is likely a Scheduling email.
+
+2. **Content Patterns and Phrases**:
+   - If the content includes phrases like "patient has been scheduled", "reschedule an MRI", "appointment times", "scheduling department", "call our scheduling dept.", or "referral has been entered into our scheduling system", classify it as Scheduling.
+   - Mentions of specific actions related to scheduling, such as "contact us to reschedule or cancel", "reach out to the patient", or "call our direct scheduling line", indicate a Scheduling email.
+
+3. **Associated Tags**:
+   - Emails tagged with "Order Entered", "Order Pending", or "RX" are often associated with Scheduling.
+
+4. **Purpose or Intent**:
+   - If the main purpose of the email is to confirm, arrange, or modify an appointment or referral, it belongs to the Scheduling category.
+   - Emails that discuss the logistics of patient appointments, such as providing directions, rescheduling, or confirming attendance, are typically Scheduling emails.
+
+5. **Unique Characteristics**:
+   - Emails that provide patient IDs and request the use of these IDs for future communications are indicative of Scheduling.
+   - References to patient portals for viewing appointment times, answering prescreening questions, or signing liens are unique to Scheduling emails.
+   - If the email includes instructions for patients to contact a specific phone number for scheduling-related inquiries, it is likely a Scheduling email.
+
+By applying these rules, you can effectively classify emails into the Scheduling category based on their content, intent, and associated metadata.

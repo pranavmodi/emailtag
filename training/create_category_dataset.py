@@ -172,6 +172,55 @@ def save_dataset(dataset: List[Dict[str, Any]], output_file: str) -> None:
     
     print(f"\nDataset saved to {output_file}")
 
+def create_train_test_split(dataset: List[Dict[str, Any]], test_size: float = 0.2) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Create a train/test split from the balanced dataset.
+    
+    Args:
+        dataset (List[Dict[str, Any]]): List of conversations with their categories
+        test_size (float): Proportion of data to use for testing (default: 0.2)
+        
+    Returns:
+        Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]: Train and test datasets
+    """
+    # Group conversations by category
+    category_conversations = defaultdict(list)
+    for conv in dataset:
+        category = conv.get('top_level_category')
+        if category != "Unknown":
+            category_conversations[category].append(conv)
+    
+    # Split each category's conversations
+    train_data = []
+    test_data = []
+    
+    for category, convs in category_conversations.items():
+        # Shuffle the conversations
+        random.shuffle(convs)
+        
+        # Calculate split index
+        split_idx = int(len(convs) * (1 - test_size))
+        
+        # Split the conversations
+        train_data.extend(convs[:split_idx])
+        test_data.extend(convs[split_idx:])
+    
+    # Print split statistics
+    print("\nTrain/Test Split Statistics:")
+    print("-" * 60)
+    train_distribution = Counter(conv['top_level_category'] for conv in train_data)
+    test_distribution = Counter(conv['top_level_category'] for conv in test_data)
+    
+    print("Train set distribution:")
+    for category, count in train_distribution.items():
+        print(f"{category}: {count} conversations")
+    
+    print("\nTest set distribution:")
+    for category, count in test_distribution.items():
+        print(f"{category}: {count} conversations")
+    
+    return train_data, test_data
+
 def main():
     """Main function to create the category prediction dataset."""
     try:
@@ -188,11 +237,19 @@ def main():
         print("\nCreating balanced dataset...")
         balanced_dataset = create_balanced_dataset(conversations, tag_to_category)
         
-        # Save dataset
+        # Create train/test split
+        print("\nCreating train/test split...")
+        train_data, test_data = create_train_test_split(balanced_dataset)
+        
+        # Save datasets
         data_dir = os.getenv('DATA_DIR')
-        output_file = os.path.join(data_dir, 'category_dataset', 'category_dataset.jsonl')
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        save_dataset(balanced_dataset, output_file)
+        os.makedirs(os.path.join(data_dir, 'category_dataset'), exist_ok=True)
+        
+        train_file = os.path.join(data_dir, 'category_dataset', 'train_dataset.jsonl')
+        test_file = os.path.join(data_dir, 'category_dataset', 'test_dataset.jsonl')
+        
+        save_dataset(train_data, train_file)
+        save_dataset(test_data, test_file)
         
     except Exception as e:
         print(f"\nError creating dataset: {str(e)}")

@@ -1,0 +1,79 @@
+=== Scheduling RULES ===
+
+Classification Rules for Scheduling:
+
+1. **Subject Line Keywords**: 
+   - If the subject line contains keywords such as "Referral", "Scheduled", "Reschedule", "Appointment", "MRI", "Scan", or "DOL" (Date of Loss), it is likely a Scheduling email.
+
+2. **Content Patterns and Phrases**:
+   - If the content includes phrases like "patient has been scheduled", "reschedule an MRI", "appointment times", "scheduling department", "call our scheduling dept.", or "referral has been entered into our scheduling system", classify it as Scheduling.
+   - Mentions of specific actions related to scheduling, such as "contact us to reschedule or cancel", "reach out to the patient", or "call our direct scheduling line", indicate a Scheduling email.
+
+3. **Associated Tags**:
+   - Emails tagged with "Order Entered", "Order Pending", or "RX" are often associated with Scheduling.
+
+4. **Purpose or Intent**:
+   - If the main purpose of the email is to confirm, arrange, or modify an appointment or referral, it belongs to the Scheduling category.
+   - Emails that discuss the logistics of patient appointments, such as providing directions, rescheduling, or confirming attendance, are typically Scheduling emails.
+
+5. **Unique Characteristics**:
+   - Emails that provide patient IDs and request the use of these IDs for future communications are indicative of Scheduling.
+   - References to patient portals for viewing appointment times, answering prescreening questions, or signing liens are unique to Scheduling emails.
+   - If the email includes instructions for patients to contact a specific phone number for scheduling-related inquiries, it is likely a Scheduling email.
+
+By applying these rules, you can effectively classify emails into the Scheduling category based on their content, intent, and associated metadata.
+
+==================================================
+
+=== Accounts Receivable RULES ===
+
+Classification Rules for Accounts Receivable:
+
+1. **Subject Line Keywords**: 
+   - If the subject contains keywords such as "Bill", "Billing", "Lien", "Payment", "Balance", "Records Request", "W-9", or "Offer", it is likely an Accounts Receivable email.
+
+2. **Content Patterns and Phrases**:
+   - If the content includes phrases like "bill balance", "payment date", "lien signed", "process payment", "generate bill", "remittance", "tax purposes", or "W-9 form", classify it as Accounts Receivable.
+   - Look for instructions related to payment processing, such as "send your payments", "anticipated payment date", or "e-sign liens".
+
+3. **Associated Tags**:
+   - Emails tagged with "Bill or balance Request", "Bill Offer", "Rad Lien", "Tech Lien", "ASL", or "SLA Applies" are typically related to Accounts Receivable.
+
+4. **Purpose or Intent**:
+   - If the email's main purpose is to discuss or request payment, provide billing information, negotiate payment terms, or request financial documentation (e.g., W-9 forms), it belongs to the Accounts Receivable category.
+
+5. **Unique Characteristics**:
+   - Emails that involve legal or formal language related to financial transactions, such as "full and final payment", "tax ID", "confidential information", or "attorney-client privileges", are indicative of Accounts Receivable.
+   - Look for references to specific patient or client identifiers, such as "Patient ID", "PRE-NUMBER", or "DOB", which are often used in billing contexts.
+
+By applying these rules, you can effectively identify and classify emails that belong to the Accounts Receivable category.
+
+==================================================
+
+=== Medical Records & Images RULES ===
+
+Classification Rules for Medical Records & Images:
+
+1. **Subject Line Keywords**:
+   - If the subject line contains keywords such as "Imaging request," "Images," "Radiology film," "MRI," "CT," "X-ray," "DICOM," or "CD Request," classify the email as Medical Records & Images.
+
+2. **Content Keywords and Phrases**:
+   - If the email content includes phrases like "images have been uploaded," "view/download reports," "burn images onto a CD," "push images into portal," or "radiology film request," it should be classified as Medical Records & Images.
+   - Mentions of specific imaging modalities such as "MRI," "CT," "X-ray," or "DICOM images" are strong indicators of this category.
+
+3. **Associated Tags**:
+   - Emails tagged with "Image Request," "Release of Records," or "Report Request" are likely to belong to the Medical Records & Images category.
+
+4. **Purpose and Intent**:
+   - If the main purpose of the email is to request, provide, or discuss medical images or radiology reports, it should be classified under Medical Records & Images.
+   - Emails that facilitate the access, sharing, or management of medical imaging data, such as through a portal or CD, fall into this category.
+
+5. **Unique Characteristics**:
+   - Emails often reference patient identifiers, such as patient names, IDs, or dates of birth, in conjunction with imaging requests or reports.
+   - The presence of instructions or links to portals for accessing or managing medical images is a distinguishing feature.
+   - Communication often involves medical records clerks or legal representatives requesting or managing imaging data.
+
+By applying these rules, you can effectively classify emails into the Medical Records & Images category based on their content, purpose, and associated metadata.
+
+==================================================
+

@@ -33,7 +33,7 @@ def load_category_dataset() -> List[Dict[str, Any]]:
     if not data_dir:
         raise ValueError("DATA_DIR environment variable not set")
         
-    input_file = os.path.join(data_dir, 'category_dataset', 'category_dataset.jsonl')
+    input_file = os.path.join(data_dir, 'category_dataset', 'train_dataset.jsonl')
     
     conversations = []
     with open(input_file, 'r') as f:

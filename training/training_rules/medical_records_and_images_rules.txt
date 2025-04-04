@@ -1,0 +1,22 @@
+Classification Rules for Medical Records & Images:
+
+1. **Subject Line Keywords**:
+   - If the subject line contains keywords such as "Imaging request," "Images," "Radiology film," "MRI," "CT," "X-ray," "DICOM," or "CD Request," classify the email as Medical Records & Images.
+
+2. **Content Keywords and Phrases**:
+   - If the email content includes phrases like "images have been uploaded," "view/download reports," "burn images onto a CD," "push images into portal," or "radiology film request," it should be classified as Medical Records & Images.
+   - Mentions of specific imaging modalities such as "MRI," "CT," "X-ray," or "DICOM images" are strong indicators of this category.
+
+3. **Associated Tags**:
+   - Emails tagged with "Image Request," "Release of Records," or "Report Request" are likely to belong to the Medical Records & Images category.
+
+4. **Purpose and Intent**:
+   - If the main purpose of the email is to request, provide, or discuss medical images or radiology reports, it should be classified under Medical Records & Images.
+   - Emails that facilitate the access, sharing, or management of medical imaging data, such as through a portal or CD, fall into this category.
+
+5. **Unique Characteristics**:
+   - Emails often reference patient identifiers, such as patient names, IDs, or dates of birth, in conjunction with imaging requests or reports.
+   - The presence of instructions or links to portals for accessing or managing medical images is a distinguishing feature.
+   - Communication often involves medical records clerks or legal representatives requesting or managing imaging data.
+
+By applying these rules, you can effectively classify emails into the Medical Records & Images category based on their content, purpose, and associated metadata.
