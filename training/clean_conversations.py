@@ -12,6 +12,8 @@ import re
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 import argparse
+import mailparser
+import html2text
 
 # Load environment variables
 load_dotenv()
@@ -56,6 +58,97 @@ def clean_email(email: str) -> str:
     if not email:
         return ""
     return email.lower().strip()
+
+def extract_email_content(email_text: str) -> str:
+    """
+    Extract the main content from an email using mailparser.
+    Handles delivery failure messages by extracting the original message content.
+    
+    Args:
+        email_text (str): Raw email text
+        
+    Returns:
+        str: Extracted content
+    """
+    try:
+        # Parse the email
+        parsed = mailparser.parse_from_string(email_text)
+        
+        # Check if this is a delivery failure message
+        subject = parsed.subject.lower() if parsed.subject else ""
+        headers = parsed.headers
+        
+        # Common indicators of delivery failure messages
+        failure_indicators = [
+            "delivery has failed",
+            "delivery failure",
+            "undeliverable",
+            "failure notice",
+            "delivery status notification",
+            "mail delivery subsystem",
+            "postmaster"
+        ]
+        
+        is_delivery_failure = (
+            any(indicator in subject for indicator in failure_indicators) or
+            any(indicator in str(headers).lower() for indicator in failure_indicators)
+        )
+        
+        if is_delivery_failure:
+            # Try to find the original message in the body
+            text_body = parsed.text_plain if parsed.text_plain else parsed.text_html
+            
+            if text_body:
+                # Look for common patterns that indicate the start of the original message
+                original_message_markers = [
+                    "original message:",
+                    "original message headers:",
+                    "begin forwarded message:",
+                    "-----original message-----",
+                    "----- forwarded message -----"
+                ]
+                
+                # Find the earliest occurrence of any marker
+                earliest_marker = None
+                earliest_pos = len(text_body)
+                
+                for marker in original_message_markers:
+                    pos = text_body.lower().find(marker.lower())
+                    if pos != -1 and pos < earliest_pos:
+                        earliest_marker = marker
+                        earliest_pos = pos
+                
+                if earliest_marker:
+                    # Extract everything after the marker
+                    original_content = text_body[earliest_pos + len(earliest_marker):].strip()
+                    
+                    # Try to parse this as a new email to get just the content
+                    try:
+                        original_parsed = mailparser.parse_from_string(original_content)
+                        return original_parsed.text_plain or original_parsed.text_html or original_content
+                    except:
+                        return original_content
+                
+                # If we couldn't find a marker, return the whole body
+                return text_body
+            
+            return ""
+        
+        # For normal emails, get the text body
+        text_body = parsed.text_plain
+        
+        if not text_body:
+            # If no plain text, try to get HTML body
+            text_body = parsed.text_html
+            if text_body:
+                # Convert HTML to plain text
+                text_body = html2text.html2text(text_body)
+        
+        return text_body.strip() if text_body else ""
+        
+    except Exception as e:
+        print(f"Error extracting email content: {str(e)}")
+        return ""
 
 def process_conversation(conv_file: str, msgs_file: str) -> Dict[str, Any]:
     """

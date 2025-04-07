@@ -11,7 +11,8 @@ The complete pipeline consists of the following steps:
 3. Clean and process conversations
 4. Create a balanced category dataset
 5. Analyze conversations and tag usage
-6. Classify new conversations using few-shot learning
+6. Analyze classification errors
+7. Classify new conversations using few-shot learning
 
 ## Pipeline Steps
 
@@ -205,6 +206,49 @@ Total          20           21            19         60
 
 The evaluation results are also saved to a JSON file for further analysis.
 
-### 6. Classify New Conversations
+### 6. Analyze Classification Errors
+The `analyze_errors.py` script helps improve classification accuracy by analyzing misclassified conversations and suggesting rule improvements:
+
+1. **Process**:
+   - Takes `errors.csv` as input (generated during evaluation)
+   - For each misclassified conversation:
+     - Loads the conversation details
+     - Analyzes why the classification was incorrect
+     - Suggests specific improvements to the rules
+   - Uses OpenAI to provide detailed analysis and recommendations
+
+2. **Features**:
+   - Interactive mode with prompt preview
+   - Detailed error analysis for each misclassification
+   - Specific rule improvement suggestions
+   - Saves analysis results to `error_analysis.txt`
+
+Run the analysis script:
+```bash
+# Basic usage
+python3 analyze_errors.py
+
+# The script will:
+# 1. Load current classification rules
+# 2. Process each error from errors.csv
+# 3. Show prompts before sending to OpenAI
+# 4. Save analysis results to error_analysis.txt
+```
+
+Example analysis output:
+```
+Analyzing error 1 of 10...
+
+ANALYSIS:
+The conversation was misclassified because the current rules for Medical Records & Images
+didn't adequately capture the pattern of patients requesting their imaging results...
+
+IMPROVEMENTS:
+1. Add explicit rule for handling patient requests for imaging results
+2. Include keywords: "my images", "imaging results", "radiology report"
+3. Consider adding context about patient-initiated requests
+```
+
+### 7. Classify New Conversations
 Classify new conversations using few-shot learning:
 ```

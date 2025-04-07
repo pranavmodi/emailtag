@@ -14,6 +14,9 @@ from openai import OpenAI
 import httpx
 import urllib3
 from collections import Counter, defaultdict
+import csv
+from datetime import datetime
+import random
 
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -48,10 +51,14 @@ def load_test_dataset() -> List[Dict[str, Any]]:
     if not data_dir:
         raise ValueError("DATA_DIR environment variable not set")
     
-    test_file = os.path.join(data_dir, 'category_dataset', 'test_dataset.jsonl')
+    # Use the full categorized dataset instead of just the test split
+    test_file = os.path.join(data_dir, 'category_dataset', 'all_categorized_conversations.jsonl')
     test_data = load_dataset(test_file)
     
-    print(f"Loaded {len(test_data)} test conversations")
+    # Randomize the dataset
+    random.shuffle(test_data)
+    
+    print(f"Loaded and randomized {len(test_data)} conversations for evaluation")
     return test_data
 
 def load_rules(rules_dir: str) -> Dict[str, str]:
@@ -187,7 +194,33 @@ def classify_with_rules(client: OpenAI, rules: Dict[str, str], conversation: Dic
     
     return prediction, confidence
 
-def evaluate_rules(client: OpenAI, rules: Dict[str, str], test_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+def format_conversation_for_display(conv: Dict[str, Any]) -> str:
+    """
+    Format a conversation for human-readable display.
+    
+    Args:
+        conv (Dict[str, Any]): Conversation data
+        
+    Returns:
+        str: Formatted conversation text
+    """
+    subject = conv.get('subject', 'No Subject')
+    messages = conv.get('messages', [])
+    tags = [tag.get('name', '') for tag in conv.get('tags', [])]
+    
+    formatted = f"\nSubject: {subject}\n"
+    formatted += f"Tags: {', '.join(tags)}\n"
+    
+    if messages:
+        formatted += "\nMessages:\n"
+        for msg in messages:
+            content = msg.get('content', 'No Content')
+            formatted += f"{content}\n"
+            formatted += "-" * 80 + "\n"
+    
+    return formatted
+
+def evaluate_rules(client: OpenAI, rules: Dict[str, str], test_data: List[Dict[str, Any]], debug: bool = False) -> Dict[str, Any]:
     """
     Evaluate the rules on the test set.
     
@@ -195,6 +228,7 @@ def evaluate_rules(client: OpenAI, rules: Dict[str, str], test_data: List[Dict[s
         client (OpenAI): OpenAI client
         rules (Dict[str, str]): Dictionary mapping categories to rules
         test_data (List[Dict[str, Any]]): Test dataset
+        debug (bool): Whether to show detailed error information
         
     Returns:
         Dict[str, Any]: Evaluation results
@@ -204,11 +238,21 @@ def evaluate_rules(client: OpenAI, rules: Dict[str, str], test_data: List[Dict[s
         'correct': 0,
         'incorrect': 0,
         'accuracy': 0.0,
-        'by_category': defaultdict(lambda: {'correct': 0, 'total': 0, 'accuracy': 0.0}),
-        'confusion_matrix': defaultdict(lambda: defaultdict(int))
+        'by_category': defaultdict(lambda: {'correct': 0, 'total': 0, 'accuracy': 0.0, 'incorrect_predictions': defaultdict(int)}),
+        'confusion_matrix': defaultdict(lambda: defaultdict(int)),
+        'errors': []  # Store error details
     }
     
     print("\nEvaluating rules on test set...")
+    
+    # Use fixed error file in the same directory as the script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    error_file = os.path.join(script_dir, 'errors.csv')
+    
+    # Initialize error file with headers
+    with open(error_file, 'w', newline='') as csvfile:
+        error_writer = csv.writer(csvfile)
+        error_writer.writerow(['Conversation ID', 'Predicted Category', 'True Category'])
     
     for i, conv in enumerate(test_data, 1):
         true_category = conv.get('top_level_category', 'Unknown')
@@ -233,10 +277,63 @@ def evaluate_rules(client: OpenAI, rules: Dict[str, str], test_data: List[Dict[s
             results['by_category'][true_category]['correct'] += 1
         else:
             results['incorrect'] += 1
+            # Update incorrect predictions for this category
+            results['by_category'][true_category]['incorrect_predictions'][predicted_category] += 1
+            
+            # Store error details
+            results['errors'].append({
+                'id': conv.get('id', 'Unknown'),
+                'true_category': true_category,
+                'predicted_category': predicted_category
+            })
+            
+            # Display error details and wait for user input only in debug mode
+            if debug:
+                print("\n" + "="*80)
+                print(f"ERROR #{results['incorrect']}")
+                print(f"Conversation ID: {conv.get('id', 'Unknown')}")
+                print(f"True Category: {true_category}")
+                print(f"Predicted Category: {predicted_category}")
+                print("\nConversation Details:")
+                print(format_conversation_for_display(conv))
+                input("\nPress Enter to continue to next error...")
         
-        # Print progress
-        if i % 5 == 0 or i == len(test_data):
-            print(f"Processed {i}/{len(test_data)} test conversations...")
+        # Print progress every 100 conversations
+        if i % 100 == 0 or i == len(test_data):
+            current_accuracy = results['correct'] / i
+            print(f"\nProgress: {i}/{len(test_data)} conversations processed")
+            print(f"Current accuracy: {current_accuracy:.2%}")
+            print("Current category distribution:")
+            for category, stats in results['by_category'].items():
+                if stats['total'] > 0:
+                    cat_accuracy = stats['correct'] / stats['total']
+                    print(f"{category}: {stats['correct']}/{stats['total']} ({cat_accuracy:.2%})")
+                    if stats['incorrect_predictions']:
+                        print("  Incorrectly predicted as:")
+                        for pred_cat, count in stats['incorrect_predictions'].items():
+                            print(f"    {pred_cat}: {count}")
+            
+            # Write current errors to file
+            with open(error_file, 'w', newline='') as csvfile:
+                error_writer = csv.writer(csvfile)
+                error_writer.writerow(['Conversation ID', 'Predicted Category', 'True Category'])
+                for error in results['errors']:
+                    error_writer.writerow([
+                        error['id'],
+                        error['predicted_category'],
+                        error['true_category']
+                    ])
+            
+            # Pause for user input after every 100 conversations
+            if i < len(test_data):  # Don't pause at the end
+                while True:
+                    response = input("\nContinue evaluation? (y/n): ").lower()
+                    if response in ['y', 'n']:
+                        break
+                    print("Please enter 'y' or 'n'")
+                if response == 'n':
+                    print("\nEvaluation stopped by user")
+                    return results
     
     # Calculate overall accuracy
     if results['total'] > 0:
@@ -247,6 +344,7 @@ def evaluate_rules(client: OpenAI, rules: Dict[str, str], test_data: List[Dict[s
         if stats['total'] > 0:
             stats['accuracy'] = stats['correct'] / stats['total']
     
+    print(f"\nError details saved to {error_file}")
     return results
 
 def print_evaluation_results(results: Dict[str, Any]) -> None:
@@ -334,9 +432,9 @@ def main():
     """Main function to evaluate category classifiers."""
     parser = argparse.ArgumentParser(description='Evaluate category classifiers using existing rules')
     parser.add_argument('--rules-dir', type=str, 
-                        help='Directory containing rule files (default: DATA_DIR/category_rules)')
+                        help='Directory containing rule files (default: training/training_rules)')
     parser.add_argument('--debug', action='store_true', 
-                        help='Print prompts without making API calls')
+                        help='Print prompts without making API calls and show detailed error information')
     parser.add_argument('--output', type=str, 
                         help='Path to save evaluation results (default: DATA_DIR/evaluation_results.json)')
     args = parser.parse_args()
@@ -353,8 +451,8 @@ def main():
         if not data_dir:
             raise ValueError("DATA_DIR environment variable not set")
         
-        # Set default rules directory
-        rules_dir = args.rules_dir or os.path.join(data_dir, 'category_rules')
+        # Set default rules directory to training/training_rules
+        rules_dir = args.rules_dir or os.path.join('training', 'training_rules')
         
         # Load rules
         print(f"Loading rules from {rules_dir}...")
@@ -374,7 +472,7 @@ def main():
             print("-" * 60)
             print("Debug mode: Skipping evaluation")
         else:
-            results = evaluate_rules(client, rules, test_data)
+            results = evaluate_rules(client, rules, test_data, debug=args.debug)
             print_evaluation_results(results)
             
             # Save results if output path is provided

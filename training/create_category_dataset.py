@@ -102,18 +102,16 @@ def get_conversation_category(conv: Dict[str, Any], tag_to_category: Dict[str, s
     # Return the most common category
     return Counter(categories).most_common(1)[0][0]
 
-def create_balanced_dataset(conversations: List[Dict[str, Any]], tag_to_category: Dict[str, str], 
-                          min_samples: int = 20) -> List[Dict[str, Any]]:
+def create_unbalanced_dataset(conversations: List[Dict[str, Any]], tag_to_category: Dict[str, str]) -> List[Dict[str, Any]]:
     """
-    Create a balanced dataset by sampling conversations for each category.
+    Create an unbalanced dataset using all available conversations.
     
     Args:
         conversations (List[Dict[str, Any]]): List of all conversations
         tag_to_category (Dict[str, str]): Mapping of tags to categories
-        min_samples (int): Minimum number of samples per category
         
     Returns:
-        List[Dict[str, Any]]: Balanced dataset of conversations with top-level categories
+        List[Dict[str, Any]]: Dataset of conversations with top-level categories
     """
     # Group conversations by category
     category_conversations = defaultdict(list)
@@ -125,27 +123,21 @@ def create_balanced_dataset(conversations: List[Dict[str, Any]], tag_to_category
             category_conversations[category].append(conv)
     
     # Print category distribution
-    print("\nCategory distribution in full dataset:")
+    print("\nCategory distribution in dataset:")
     print("-" * 60)
     for category, convs in category_conversations.items():
         print(f"{category}: {len(convs)} conversations")
     
-    # Sample conversations for each category
-    balanced_dataset = []
-    for category, convs in category_conversations.items():
-        if len(convs) >= min_samples:
-            # Randomly sample min_samples conversations
-            sampled_convs = random.sample(convs, min_samples)
-            balanced_dataset.extend(sampled_convs)
+    # Combine all conversations into a single dataset and randomize
+    dataset = []
+    for convs in category_conversations.values():
+        dataset.extend(convs)
     
-    # Print final distribution
-    print("\nCategory distribution in balanced dataset:")
-    print("-" * 60)
-    final_distribution = Counter(conv['top_level_category'] for conv in balanced_dataset)
-    for category, count in final_distribution.items():
-        print(f"{category}: {count} conversations")
+    # Randomize the dataset
+    random.shuffle(dataset)
+    print("\nDataset has been randomized")
     
-    return balanced_dataset
+    return dataset
 
 def save_dataset(dataset: List[Dict[str, Any]], output_file: str) -> None:
     """
@@ -233,26 +225,33 @@ def main():
         print("\nCreating tag to category mapping...")
         tag_to_category = get_tag_categories(categories)
         
-        # Create balanced dataset
-        print("\nCreating balanced dataset...")
-        balanced_dataset = create_balanced_dataset(conversations, tag_to_category)
+        # Create unbalanced dataset
+        print("\nCreating unbalanced dataset...")
+        dataset = create_unbalanced_dataset(conversations, tag_to_category)
+        
+        # Save all categorized conversations to a single file
+        data_dir = os.getenv('DATA_DIR')
+        os.makedirs(os.path.join(data_dir, 'category_dataset'), exist_ok=True)
+        
+        all_categorized_file = os.path.join(data_dir, 'category_dataset', 'all_categorized_conversations.jsonl')
+        print("\nSaving all categorized conversations...")
+        save_dataset(dataset, all_categorized_file)
         
         # Create train/test split
         print("\nCreating train/test split...")
-        train_data, test_data = create_train_test_split(balanced_dataset)
-        
-        # Save datasets
-        data_dir = os.getenv('DATA_DIR')
-        os.makedirs(os.path.join(data_dir, 'category_dataset'), exist_ok=True)
+        train_data, test_data = create_train_test_split(dataset)
         
         train_file = os.path.join(data_dir, 'category_dataset', 'train_dataset.jsonl')
         test_file = os.path.join(data_dir, 'category_dataset', 'test_dataset.jsonl')
         
+        print("\nSaving train and test datasets...")
         save_dataset(train_data, train_file)
         save_dataset(test_data, test_file)
         
+        print("\nDataset creation completed successfully!")
+        
     except Exception as e:
-        print(f"\nError creating dataset: {str(e)}")
+        print(f"\nError during dataset creation: {str(e)}")
         print(f"Full error details:", e.__class__.__name__)
         import traceback
         traceback.print_exc()
