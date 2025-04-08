@@ -1,66 +1,72 @@
 Conversation ID,Predicted Category,True Category
-cnv_cplpttt,Medical Records & Images,Accounts Receivable
-cnv_cp5o2f5,Medical Records & Images,Scheduling
-cnv_cpvnt1d,Medical Records & Images,Scheduling
-cnv_cpy0hkx,Medical Records & Images,Accounts Receivable
-cnv_cqet1a9,Medical Records & Images,Accounts Receivable
-cnv_cqqarnl,Medical Records & Images,Accounts Receivable
-cnv_ckxtou9,Accounts Receivable,Scheduling
-cnv_cqqoosh,Accounts Receivable,Scheduling
-cnv_cpi9gu9,Accounts Receivable,Scheduling
-cnv_cp2f2o1,Medical Records & Images,Accounts Receivable
-cnv_crub88x,Medical Records & Images,Accounts Receivable
-cnv_cm9h6ip,Medical Records & Images,Scheduling
-cnv_cp1a7gh,Medical Records & Images,Accounts Receivable
-cnv_cpzearl,Accounts Receivable,Medical Records & Images
-cnv_cpc2ibl,Medical Records & Images,Accounts Receivable
+cnv_corh0ap,Medical Records & Images,Accounts Receivable
+cnv_cpzg96p,Medical Records & Images,Accounts Receivable
 cnv_coyj001,Accounts Receivable,Medical Records & Images
-cnv_crkfqbl,Medical Records & Images,Accounts Receivable
-cnv_clomxj5,Accounts Receivable,Scheduling
-cnv_cqlfuf5,Scheduling,Accounts Receivable
-cnv_cpfnym9,Scheduling,Accounts Receivable
 cnv_cpaiif5,Medical Records & Images,Accounts Receivable
-cnv_corqk1t,Medical Records & Images,Scheduling
-cnv_cpltpz5,Scheduling,Accounts Receivable
-cnv_cow77cx,Medical Records & Images,Accounts Receivable
-cnv_cov9475,Accounts Receivable,Scheduling
-cnv_cpitabl,None,Accounts Receivable
-cnv_cjsoyv5,Medical Records & Images,Scheduling
-cnv_cq8tupt,Medical Records & Images,Accounts Receivable
-cnv_cphss3l,Accounts Receivable,Scheduling
-cnv_cq5voht,Medical Records & Images,Accounts Receivable
-cnv_coryo75,Medical Records & Images,Accounts Receivable
-cnv_cq5av29,Medical Records & Images,Accounts Receivable
-cnv_cqo72f5,Scheduling,Accounts Receivable
-cnv_covziyp,Medical Records & Images,Scheduling
-cnv_cr6ecu9,Scheduling,Accounts Receivable
-cnv_crb0abl,Scheduling,Accounts Receivable
-cnv_cpui7gh,Medical Records & Images,Accounts Receivable
-cnv_cpz96dd,Accounts Receivable,Scheduling
-cnv_cqq9szl,Medical Records & Images,Accounts Receivable
-cnv_cghrzy9,Medical Records & Images,Accounts Receivable
-cnv_craz0w1,Medical Records & Images,Scheduling
-cnv_cqws1s1,Medical Records & Images,Accounts Receivable
-cnv_cpzjb5t,Scheduling,Accounts Receivable
-cnv_cn8ogu9,Medical Records & Images,Accounts Receivable
-cnv_cqke2o1,Medical Records & Images,Scheduling
-cnv_coz8iwx,Medical Records & Images,Accounts Receivable
-cnv_cppi5hd,Medical Records & Images,Accounts Receivable
-cnv_counq0x,Accounts Receivable,Medical Records & Images
-cnv_cq2f3ep,Medical Records & Images,Accounts Receivable
-cnv_cplx8ch,Medical Records & Images,Accounts Receivable
-cnv_coxdv9d,Medical Records & Images,Accounts Receivable
-cnv_crjvs3l,Scheduling,Accounts Receivable
-cnv_coutedd,Medical Records & Images,Scheduling
-cnv_cpi9fpd,Accounts Receivable,Scheduling
-cnv_coyl4ap,Accounts Receivable,Medical Records & Images
-cnv_corhidd,Medical Records & Images,Accounts Receivable
-cnv_cr3buf5,Medical Records & Images,Accounts Receivable
-cnv_crgir9d,Medical Records & Images,Accounts Receivable
-cnv_cpf94n5,Accounts Receivable,Medical Records & Images
-cnv_cp5ege9,Accounts Receivable,Scheduling
-cnv_cpltkht,Scheduling,Accounts Receivable
-cnv_corrdj5,Medical Records & Images,Accounts Receivable
-cnv_coji2ip,Accounts Receivable,Scheduling
 cnv_covzold,Scheduling,Accounts Receivable
+cnv_cqws1s1,Medical Records & Images,Accounts Receivable
+cnv_cqlfuf5,Scheduling,Accounts Receivable
+cnv_coz5poh,Scheduling,Accounts Receivable
+cnv_cppi5hd,Medical Records & Images,Accounts Receivable
+cnv_covziyp,Medical Records & Images,Scheduling
+cnv_cpui7gh,Medical Records & Images,Accounts Receivable
+cnv_cqnf6td,Medical Records & Images,Accounts Receivable
+cnv_cqqoosh,Accounts Receivable,Scheduling
+cnv_coykg1t,Scheduling,Accounts Receivable
+cnv_cpltkht,Scheduling,Accounts Receivable
+cnv_crub88x,Medical Records & Images,Accounts Receivable
+cnv_cpvnt1d,Medical Records & Images,Scheduling
+cnv_cpf94n5,Accounts Receivable,Medical Records & Images
+cnv_crr71j5,Scheduling,Accounts Receivable
+cnv_cq5voht,Medical Records & Images,Accounts Receivable
+cnv_covdum9,Scheduling,Accounts Receivable
+cnv_coryo75,Medical Records & Images,Accounts Receivable
+cnv_cphss3l,Accounts Receivable,Scheduling
+cnv_cpi9fpd,Accounts Receivable,Scheduling
+cnv_cplx8ch,Medical Records & Images,Accounts Receivable
+cnv_cpltpz5,Scheduling,Accounts Receivable
+cnv_cqqarnl,Medical Records & Images,Accounts Receivable
+cnv_cpfnym9,Scheduling,Accounts Receivable
+cnv_cpz96dd,Accounts Receivable,Scheduling
+cnv_crgir9d,Medical Records & Images,Accounts Receivable
+cnv_coxdv9d,Medical Records & Images,Accounts Receivable
+cnv_cov9475,Accounts Receivable,Scheduling
+cnv_cf9o8xt,Medical Records & Images,Accounts Receivable
+cnv_cpi9gu9,Accounts Receivable,Scheduling
+cnv_crb0abl,Scheduling,Accounts Receivable
+cnv_cp2f2o1,Medical Records & Images,Accounts Receivable
+cnv_cp1a7gh,Medical Records & Images,Accounts Receivable
+cnv_counq0x,Accounts Receivable,Medical Records & Images
+cnv_ckxtou9,Accounts Receivable,Scheduling
+cnv_crab3ep,Medical Records & Images,Scheduling
+cnv_cow77cx,Medical Records & Images,Accounts Receivable
+cnv_cplpttt,Medical Records & Images,Accounts Receivable
+cnv_cpi969t,Accounts Receivable,Scheduling
+cnv_cr6ecu9,Scheduling,Accounts Receivable
+cnv_cr3buf5,Medical Records & Images,Accounts Receivable
+cnv_coji2ip,Accounts Receivable,Scheduling
+cnv_clemnb5,Medical Records & Images,Scheduling
+cnv_coyl4ap,Accounts Receivable,Medical Records & Images
+cnv_corqk1t,Medical Records & Images,Scheduling
+cnv_cpc2ibl,Medical Records & Images,Accounts Receivable
+cnv_cp12pmp,Scheduling,Accounts Receivable
+cnv_cpus8ap,Scheduling,Accounts Receivable
+cnv_coutedd,Medical Records & Images,Scheduling
+cnv_cpy0hkx,Medical Records & Images,Accounts Receivable
+cnv_cq8tupt,Medical Records & Images,Accounts Receivable
+cnv_coz8iwx,Medical Records & Images,Accounts Receivable
+cnv_cqq9szl,Medical Records & Images,Accounts Receivable
+cnv_crjvs3l,Scheduling,Accounts Receivable
+cnv_corrdj5,Medical Records & Images,Accounts Receivable
+cnv_cq2oikh,Medical Records & Images,Accounts Receivable
 cnv_cr06v41,Scheduling,Medical Records & Images
+cnv_cqkm6dd,Medical Records & Images,Accounts Receivable
+cnv_cp5qtdt,Scheduling,Accounts Receivable
+cnv_cqo72f5,Scheduling,Accounts Receivable
+cnv_cozaz29,Scheduling,Accounts Receivable
+cnv_cpaesox,Medical Records & Images,Scheduling
+cnv_cpitabl,Medical Records & Images,Accounts Receivable
+cnv_cn8ogu9,Medical Records & Images,Accounts Receivable
+cnv_clomxj5,Accounts Receivable,Scheduling
+cnv_cm9h6ip,Medical Records & Images,Scheduling
+cnv_cpy7b0h,Medical Records & Images,Accounts Receivable
