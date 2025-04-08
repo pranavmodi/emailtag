@@ -61,6 +61,31 @@ def load_test_dataset() -> List[Dict[str, Any]]:
     print(f"Loaded and randomized {len(test_data)} conversations for evaluation")
     return test_data
 
+def find_conversation_by_id(conversation_id: str) -> Dict[str, Any]:
+    """
+    Find a conversation by its ID in the dataset.
+    
+    Args:
+        conversation_id (str): The ID of the conversation to find
+        
+    Returns:
+        Dict[str, Any]: The conversation data or None if not found
+    """
+    data_dir = os.getenv('DATA_DIR')
+    if not data_dir:
+        raise ValueError("DATA_DIR environment variable not set")
+    
+    # Use the full categorized dataset
+    dataset_file = os.path.join(data_dir, 'category_dataset', 'all_categorized_conversations.jsonl')
+    
+    with open(dataset_file, 'r') as f:
+        for line in f:
+            conversation = json.loads(line)
+            if conversation.get('id') == conversation_id:
+                return conversation
+    
+    return None
+
 def load_rules(rules_dir: str) -> Dict[str, str]:
     """
     Load classification rules from files.
@@ -179,9 +204,7 @@ def classify_with_rules(client: OpenAI, rules: Dict[str, str], conversation: Dic
         messages=[
             {"role": "system", "content": "You are an expert at classifying email conversations into categories. Respond with just the category name."},
             {"role": "user", "content": prompt}
-        ],
-        temperature=0.0,
-        max_tokens=10
+        ]
     )
     
     # Extract prediction
@@ -220,7 +243,7 @@ def format_conversation_for_display(conv: Dict[str, Any]) -> str:
     
     return formatted
 
-def evaluate_rules(client: OpenAI, rules: Dict[str, str], test_data: List[Dict[str, Any]], debug: bool = False) -> Dict[str, Any]:
+def evaluate_rules(client: OpenAI, rules: Dict[str, str], test_data: List[Dict[str, Any]], debug: bool = False, batch_size: int = 100) -> Dict[str, Any]:
     """
     Evaluate the rules on the test set.
     
@@ -229,6 +252,7 @@ def evaluate_rules(client: OpenAI, rules: Dict[str, str], test_data: List[Dict[s
         rules (Dict[str, str]): Dictionary mapping categories to rules
         test_data (List[Dict[str, Any]]): Test dataset
         debug (bool): Whether to show detailed error information
+        batch_size (int): Number of emails to process before pausing for user input
         
     Returns:
         Dict[str, Any]: Evaluation results
@@ -298,8 +322,8 @@ def evaluate_rules(client: OpenAI, rules: Dict[str, str], test_data: List[Dict[s
                 print(format_conversation_for_display(conv))
                 input("\nPress Enter to continue to next error...")
         
-        # Print progress every 100 conversations
-        if i % 100 == 0 or i == len(test_data):
+        # Print progress every batch_size conversations
+        if i % batch_size == 0 or i == len(test_data):
             current_accuracy = results['correct'] / i
             print(f"\nProgress: {i}/{len(test_data)} conversations processed")
             print(f"Current accuracy: {current_accuracy:.2%}")
@@ -324,7 +348,7 @@ def evaluate_rules(client: OpenAI, rules: Dict[str, str], test_data: List[Dict[s
                         error['true_category']
                     ])
             
-            # Pause for user input after every 100 conversations
+            # Pause for user input after every batch_size conversations
             if i < len(test_data):  # Don't pause at the end
                 while True:
                     response = input("\nContinue evaluation? (y/n): ").lower()
@@ -428,6 +452,60 @@ def save_evaluation_results(results: Dict[str, Any], output_file: str) -> None:
     
     print(f"\nEvaluation results saved to {output_file}")
 
+def evaluate_single_conversation(client: OpenAI, rules: Dict[str, str], conversation: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Evaluate a single conversation using the rules.
+    
+    Args:
+        client (OpenAI): OpenAI client
+        rules (Dict[str, str]): Dictionary mapping categories to rules
+        conversation (Dict[str, Any]): Conversation to evaluate
+        
+    Returns:
+        Dict[str, Any]: Evaluation results for the single conversation
+    """
+    true_category = conversation.get('top_level_category', 'Unknown')
+    
+    # Skip conversations with unknown category
+    if true_category == 'Unknown':
+        print(f"Warning: Conversation {conversation.get('id', 'Unknown')} has unknown category")
+        return None
+    
+    # Classify the conversation
+    predicted_category, confidence = classify_with_rules(client, rules, conversation)
+    
+    # Check if prediction is correct
+    is_correct = predicted_category == true_category
+    
+    # Create results for this single conversation
+    results = {
+        'id': conversation.get('id', 'Unknown'),
+        'true_category': true_category,
+        'predicted_category': predicted_category,
+        'is_correct': is_correct,
+        'confidence': confidence
+    }
+    
+    # Print results
+    print("\nEvaluation Results for Conversation:")
+    print("-" * 60)
+    print(f"Conversation ID: {results['id']}")
+    print(f"True Category: {results['true_category']}")
+    print(f"Predicted Category: {results['predicted_category']}")
+    print(f"Correct: {'Yes' if results['is_correct'] else 'No'}")
+    
+    # Handle None confidence value
+    if results['confidence'] is not None:
+        print(f"Confidence: {results['confidence']:.2f}")
+    else:
+        print("Confidence: N/A")
+    
+    # Print conversation details
+    print("\nConversation Details:")
+    print(format_conversation_for_display(conversation))
+    
+    return results
+
 def main():
     """Main function to evaluate category classifiers."""
     parser = argparse.ArgumentParser(description='Evaluate category classifiers using existing rules')
@@ -437,6 +515,10 @@ def main():
                         help='Print prompts without making API calls and show detailed error information')
     parser.add_argument('--output', type=str, 
                         help='Path to save evaluation results (default: DATA_DIR/evaluation_results.json)')
+    parser.add_argument('--batch-size', type=int, default=100,
+                        help='Number of emails to process before pausing for user input (default: 100)')
+    parser.add_argument('--conversation-id', type=str,
+                        help='Evaluate a specific conversation by ID')
     args = parser.parse_args()
     
     try:
@@ -458,29 +540,56 @@ def main():
         print(f"Loading rules from {rules_dir}...")
         rules = load_rules(rules_dir)
         
-        # Load test dataset
-        test_data = load_test_dataset()
-        
-        # Evaluate the rules on the test set
-        if args.debug:
-            # Just print a sample prompt without making API call
-            print("\nSample classification prompt:")
-            print("-" * 60)
-            sample_conv = test_data[0]
-            prompt = create_classification_prompt(rules, sample_conv)
-            print(prompt)
-            print("-" * 60)
-            print("Debug mode: Skipping evaluation")
-        else:
-            results = evaluate_rules(client, rules, test_data, debug=args.debug)
-            print_evaluation_results(results)
+        # Check if we're evaluating a specific conversation
+        if args.conversation_id:
+            print(f"Looking for conversation with ID: {args.conversation_id}")
+            conversation = find_conversation_by_id(args.conversation_id)
             
-            # Save results if output path is provided
-            if args.output:
-                save_evaluation_results(results, args.output)
+            if conversation is None:
+                print(f"Error: Conversation with ID {args.conversation_id} not found")
+                return
+            
+            # Evaluate the single conversation
+            if args.debug:
+                # Just print a sample prompt without making API call
+                print("\nSample classification prompt:")
+                print("-" * 60)
+                prompt = create_classification_prompt(rules, conversation)
+                print(prompt)
+                print("-" * 60)
+                print("Debug mode: Skipping evaluation")
             else:
-                output_file = os.path.join(data_dir, 'evaluation_results.json')
-                save_evaluation_results(results, output_file)
+                results = evaluate_single_conversation(client, rules, conversation)
+                
+                # Save results if output path is provided
+                if args.output and results:
+                    with open(args.output, 'w') as f:
+                        json.dump(results, f, indent=2)
+                    print(f"\nEvaluation results saved to {args.output}")
+        else:
+            # Load test dataset
+            test_data = load_test_dataset()
+            
+            # Evaluate the rules on the test set
+            if args.debug:
+                # Just print a sample prompt without making API call
+                print("\nSample classification prompt:")
+                print("-" * 60)
+                sample_conv = test_data[0]
+                prompt = create_classification_prompt(rules, sample_conv)
+                print(prompt)
+                print("-" * 60)
+                print("Debug mode: Skipping evaluation")
+            else:
+                results = evaluate_rules(client, rules, test_data, debug=args.debug, batch_size=args.batch_size)
+                print_evaluation_results(results)
+                
+                # Save results if output path is provided
+                if args.output:
+                    save_evaluation_results(results, args.output)
+                else:
+                    output_file = os.path.join(data_dir, 'evaluation_results.json')
+                    save_evaluation_results(results, output_file)
         
     except Exception as e:
         print(f"\nError during evaluation: {str(e)}")
