@@ -1,0 +1,13 @@
+
+================================================================================
+ERROR PATTERN ANALYSIS: Scheduling → Accounts Receivable
+Analyzed up to 5 examples
+
+ANALYSIS:
+• Many of the misclassified emails contain content that overlaps between scheduling and financial processing. Although they include terms like “appointment,” “scheduled,” or “referral,” they also embed strong AR cues – such as “bill,” “billing,” “lien,” “payment,” “balance,” “negotiation offer,” or instructions to “eSign liens” – that indicate the primary intent is to process a financial or lien matter.
+• The current rules for Scheduling are triggered almost solely by the presence of scheduling keywords or phrases (e.g., “scheduled,” “reschedule,” “appointment”); however, these indicators are often present in emails that simultaneously include substantive Accounts Receivable (AR) content. As a result, if both scheduling and billing terms appear, the scheduling classifier may “win” even when the mention of bills, liens, or financial reconciliation is the primary driver.
+• The rules for AR do include numerous financial keywords, but they are not given priority over scheduling when there’s a mix. There is insufficient “override” logic so that if any strong AR term is present, the email is classified as AR even if scheduling vocabulary is also mentioned.
+• Additionally, emails that originate from systems such as fax notifications mix imaging/scheduling content with financial follow-up (e.g., “bill balance” or “lien signed”) but are misclassified by the presence of scheduling metadata rather than by their financial instructions.
+
+UPDATED CLASSIFIERS:
+

@@ -1,22 +1,24 @@
 Classification Rules for Accounts Receivable:
 
 1. Subject Line Keywords:
-   a. If the subject contains any strong financial keywords such as “Bill,” “Billing,” “Lien,” “Payment,” “Balance,” “Records Request” (in a financial context), “W‑9,” or “Offer,” classify the email as Accounts Receivable.
-   b. Even if imaging-related words are present (e.g., “IMG REQUEST”), if the subject also includes key billing indicators, classify the email as Accounts Receivable.
+ a. If the subject contains any strong financial/billing keywords such as:
+  – “Bill”, “Billing”, “Lien”, “Payment”, “Balance”, “W‑9”, “Offer”, “Remittance”, “Payment Date”, “Billing Report Request”, or any phrase indicating a billing process,
+  then classify the email as Accounts Receivable.
+ b. Even if imaging-related words like “IMG” or “Medical Records” appear, if any of the strong financial indicators above are present, default to Accounts Receivable.
+ c. For fax notification subjects such as “EXTERNAL: A fax has arrived from: …”, check for additional context; if no distinct imaging portal or viewing instructions are included, classify as Accounts Receivable.
 
 2. Content Patterns and Phrases:
-   a. IF the content includes phrases like “bill balance,” “payment date,” “lien signed,” “process payment,” “generate bill,” “remittance,” “tax purposes,” “negotiation offer,” “e‑sign liens,” or explicit payment instructions, classify it as Accounts Receivable.
-   b. In cases where imaging study details are mentioned, if they are accompanied or interwoven with billing information (e.g., “Bills Available,” “billing status,” financial balances), classify the email as Accounts Receivable.
-   c. In ambiguous cases, determine the dominant theme based on the proportion of financial language relative to imaging details.
+ a. IF the email body includes phrases such as “bill balance”, “payment date”, “lien signed”, “process payment”, “generate bill”, “remittance”, “financial reconciliation”, “W‑9”, “negotiation offer”, or explicit instructions linked to payment processing, classify as Accounts Receivable.
+ b. If the email mixes imaging details with any billing or lien processing information (e.g., “Medical Records & Billing Report Request”), determine the primary intent by checking for explicit financial instructions. If financial instructions are prominent, classify as Accounts Receivable.
 
-3. Associated Tags:
-   a. Emails tagged with “Bill or balance Request,” “Bill Offer,” “Rad Lien,” “Tech Lien,” “ASL,” or “SLA Applies” are to be classified as Accounts Receivable, regardless of the presence of imaging details.
-   b. Even if an email is tagged for imaging (e.g., “Report Request”), if billing or lien instructions are referenced, classify it as Accounts Receivable.
+3. Associated Tags & Metadata:
+ a. Emails tagged with billing or financial labels (e.g., “Bill or Balance Request”, “Bill Offer”, “Rad Lien”, “Tech Lien”, “ASL”, “SLA Applies”) are immediately classified as Accounts Receivable.
+ b. If any associated tag implies financial processing despite the presence of imaging keywords, classify under Accounts Receivable.
 
-4. Purpose or Intent:
-   a. Classify as Accounts Receivable if the email’s primary purpose is to discuss or request payment, provide billing information, negotiate payment terms, or process billing documents (e.g., liens, financial forms such as W‑9).
-   b. IF the email involves legal/financial correspondence including patient or client payment instructions, or negotiation offers, the focus should clearly be billed under Accounts Receivable.
+4. Purpose and Intent:
+ a. Classify as Accounts Receivable when the main purpose of the email is to discuss or initiate payment, provide billing information, set up payment arrangements, or process financial documents (including liens and billing forms).
+ b. For emails with mixed content, require that any explicit billing instructions (e.g., “contact billing”, “process payment”, “financial coordinator”) drive the classification to Accounts Receivable.
 
-5. Unique Characteristics:
-   a. Emails may combine patient identifiers with billing details (e.g., “Patient ID” with a bill balance or lien status). In such cases, if the financial information is prominent, classify as Accounts Receivable.
-   b. Include emails that refer to billing portals, e-signing of liens, and negotiation of payment offers as strong indicators for Accounts Receivable, even if imaging terms are mentioned for context.
+5. Unique Identifiers and Special Cases:
+ a. Fax notifications (e.g., “You received a fax! Your fax is attached.”) should normally be routed to Accounts Receivable if there is no explicit imaging portal or download instructions provided.
+ b. Any email referencing a financial contact (e.g., “PI Billing Coordinator”, “Cedar Financial”, or similar) should be classified as Accounts Receivable regardless of any incidental imaging references.

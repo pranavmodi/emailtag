@@ -30,7 +30,7 @@ python -m training.erroranalysis.analyze_errors --count-done-tags
 ### Analyze errors between specific categories
 
 ```bash
-python -m training.erroranalysis.analyze_errors --from-category "Category A" --to-category "Category B" --max-examples 5
+python -m training.erroranalysis.analyze_errors --predicted-category "Medical Records & Images" --actual-category "Accounts Receivable" --max-examples 5
 ```
 
 ### Analyze all errors

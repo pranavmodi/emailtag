@@ -1,10 +1,14 @@
 
 ================================================================================
 ERROR PATTERN ANALYSIS: Medical Records & Images → Accounts Receivable
-Analyzed up to 3 examples
+Analyzed up to 5 examples
 
 ANALYSIS:
-A recurring pattern in the misclassified emails is that they include overlapping terminology from both categories. Although many emails mention imaging studies (e.g., “MRI,” “X-ray,” “IMG REQUEST,” “reports”) which trigger the Medical Records & Images classifier, they also contain strong billing/financial language such as “bill balance,” “lien,” “generate bill,” “payment,” “e-sign liens,” and phrases indicating that the intent is to process payments or request billing documents. In some cases, the subject lines (like “IMG REQUEST …”) and content contain mixed information—listing imaging details alongside billing status and account-related instructions. This dual content leads the current rules to erroneously classify these messages as Medical Records & Images when, in fact, the primary purpose is Accounts Receivable.
+• Common patterns in these misclassifications:
+ – Many emails include mixed language by combining “medical records” or “images” with clearly financial or billing-related phrases such as “Billing Report Request,” “PI Billing Coordinator,” or explicit instructions to contact a billing department or payment processing service.
+ – Some subjects or content mention “Medical Records & Billing Report Request” or include imaging portal language right next to billing portal language. This blend causes ambiguity when the current rules give too much weight to imaging keywords even when key billing indicators are present.
+ – The “fax received” emails (even if they have an “EXTERNAL” subject) are very transactional; however, when other emails contain “Medical Records” along with “Billing” or “Lien” details and a legal context, they are being misclassified to Medical Records & Images despite the primary business function being Accounts Receivable.
+ – In essence, when both imaging and billing keywords are present the decision logic has not consistently prioritized the strong financial or lien-related keywords.
 
 UPDATED CLASSIFIERS:
 
