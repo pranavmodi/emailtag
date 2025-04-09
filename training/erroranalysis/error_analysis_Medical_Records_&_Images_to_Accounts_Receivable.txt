@@ -1,0 +1,10 @@
+
+================================================================================
+ERROR PATTERN ANALYSIS: Medical Records & Images → Accounts Receivable
+Analyzed up to 3 examples
+
+ANALYSIS:
+A recurring pattern in the misclassified emails is that they include overlapping terminology from both categories. Although many emails mention imaging studies (e.g., “MRI,” “X-ray,” “IMG REQUEST,” “reports”) which trigger the Medical Records & Images classifier, they also contain strong billing/financial language such as “bill balance,” “lien,” “generate bill,” “payment,” “e-sign liens,” and phrases indicating that the intent is to process payments or request billing documents. In some cases, the subject lines (like “IMG REQUEST …”) and content contain mixed information—listing imaging details alongside billing status and account-related instructions. This dual content leads the current rules to erroneously classify these messages as Medical Records & Images when, in fact, the primary purpose is Accounts Receivable.
+
+UPDATED CLASSIFIERS:
+

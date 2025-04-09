@@ -243,7 +243,7 @@ def format_conversation_for_display(conv: Dict[str, Any]) -> str:
     
     return formatted
 
-def evaluate_rules(client: OpenAI, rules: Dict[str, str], test_data: List[Dict[str, Any]], debug: bool = False, batch_size: int = 100) -> Dict[str, Any]:
+def evaluate_rules(client: OpenAI, rules: Dict[str, str], test_data: List[Dict[str, Any]], debug: bool = False, batch_size: int = 500) -> Dict[str, Any]:
     """
     Evaluate the rules on the test set.
     
@@ -515,8 +515,8 @@ def main():
                         help='Print prompts without making API calls and show detailed error information')
     parser.add_argument('--output', type=str, 
                         help='Path to save evaluation results (default: DATA_DIR/evaluation_results.json)')
-    parser.add_argument('--batch-size', type=int, default=100,
-                        help='Number of emails to process before pausing for user input (default: 100)')
+    parser.add_argument('--batch-size', type=int, default=500,
+                        help='Number of emails to process before pausing for user input (default: 500)')
     parser.add_argument('--conversation-id', type=str,
                         help='Evaluate a specific conversation by ID')
     args = parser.parse_args()
@@ -527,6 +527,13 @@ def main():
             api_key=os.getenv('OPENAI_API_KEY'),
             http_client=httpx.Client(verify=False)  # Disable SSL verification
         )
+        
+        # Print batch size
+        print(f"Using batch size: {args.batch_size}")
+        
+        # Print OpenAI model
+        model = os.getenv('OPENAI_MODEL_VERSION', 'gpt-4o')
+        print(f"Using OpenAI model: {model}")
         
         # Get data directory
         data_dir = os.getenv('DATA_DIR')

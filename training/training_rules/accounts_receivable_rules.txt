@@ -1,20 +1,22 @@
 Classification Rules for Accounts Receivable:
 
-1. **Subject Line Keywords**: 
-   - If the subject contains keywords such as "Bill", "Billing", "Lien", "Payment", "Balance", "Records Request", "W-9", or "Offer", it is likely an Accounts Receivable email.
+1. Subject Line Keywords:
+   a. If the subject contains any strong financial keywords such as “Bill,” “Billing,” “Lien,” “Payment,” “Balance,” “Records Request” (in a financial context), “W‑9,” or “Offer,” classify the email as Accounts Receivable.
+   b. Even if imaging-related words are present (e.g., “IMG REQUEST”), if the subject also includes key billing indicators, classify the email as Accounts Receivable.
 
-2. **Content Patterns and Phrases**:
-   - If the content includes phrases like "bill balance", "payment date", "lien signed", "process payment", "generate bill", "remittance", "tax purposes", or "W-9 form", classify it as Accounts Receivable.
-   - Look for instructions related to payment processing, such as "send your payments", "anticipated payment date", or "e-sign liens".
+2. Content Patterns and Phrases:
+   a. IF the content includes phrases like “bill balance,” “payment date,” “lien signed,” “process payment,” “generate bill,” “remittance,” “tax purposes,” “negotiation offer,” “e‑sign liens,” or explicit payment instructions, classify it as Accounts Receivable.
+   b. In cases where imaging study details are mentioned, if they are accompanied or interwoven with billing information (e.g., “Bills Available,” “billing status,” financial balances), classify the email as Accounts Receivable.
+   c. In ambiguous cases, determine the dominant theme based on the proportion of financial language relative to imaging details.
 
-3. **Associated Tags**:
-   - Emails tagged with "Bill or balance Request", "Bill Offer", "Rad Lien", "Tech Lien", "ASL", or "SLA Applies" are typically related to Accounts Receivable.
+3. Associated Tags:
+   a. Emails tagged with “Bill or balance Request,” “Bill Offer,” “Rad Lien,” “Tech Lien,” “ASL,” or “SLA Applies” are to be classified as Accounts Receivable, regardless of the presence of imaging details.
+   b. Even if an email is tagged for imaging (e.g., “Report Request”), if billing or lien instructions are referenced, classify it as Accounts Receivable.
 
-4. **Purpose or Intent**:
-   - If the email's main purpose is to discuss or request payment, provide billing information, negotiate payment terms, or request financial documentation (e.g., W-9 forms), it belongs to the Accounts Receivable category.
+4. Purpose or Intent:
+   a. Classify as Accounts Receivable if the email’s primary purpose is to discuss or request payment, provide billing information, negotiate payment terms, or process billing documents (e.g., liens, financial forms such as W‑9).
+   b. IF the email involves legal/financial correspondence including patient or client payment instructions, or negotiation offers, the focus should clearly be billed under Accounts Receivable.
 
-5. **Unique Characteristics**:
-   - Emails that involve legal or formal language related to financial transactions, such as "full and final payment", "tax ID", "confidential information", or "attorney-client privileges", are indicative of Accounts Receivable.
-   - Look for references to specific patient or client identifiers, such as "Patient ID", "PRE-NUMBER", or "DOB", which are often used in billing contexts.
-
-By applying these rules, you can effectively identify and classify emails that belong to the Accounts Receivable category.
+5. Unique Characteristics:
+   a. Emails may combine patient identifiers with billing details (e.g., “Patient ID” with a bill balance or lien status). In such cases, if the financial information is prominent, classify as Accounts Receivable.
+   b. Include emails that refer to billing portals, e-signing of liens, and negotiation of payment offers as strong indicators for Accounts Receivable, even if imaging terms are mentioned for context.
