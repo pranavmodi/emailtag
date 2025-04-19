@@ -133,14 +133,6 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
             logger.warning("No conversation ID found in webhook data")
             return
         
-        # Check if we've already processed this conversation
-        existing_email = await email_crud.get_by_front_conversation_id(
-            db, front_conversation_id=conversation_id
-        )
-        if existing_email:
-            logger.info(f"Conversation {conversation_id} already processed")
-            return
-        
         # Extract message data from target.data
         message = webhook_data.target.get("data", {})
         sender = webhook_data.conversation.get("recipient", {}).get("handle", "unknown@example.com")

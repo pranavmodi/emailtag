@@ -11,7 +11,7 @@ from app.crud.sync import email as email_crud_sync
 from app.crud.sync import tag as tag_crud_sync
 from app.db.session import SessionLocal
 from app.services.ai import analyze_email_content
-from app.services.frontapp import update_conversation_tags
+from app.services.frontapp_service import add_conversation_tags
 from app.tasks.worker import celery_app
 
 logger = logging.getLogger(__name__)
@@ -84,10 +84,13 @@ def tag_email(email_id: str) -> Dict:
         
         # Update tags in FrontApp
         if email_obj.front_conversation_id:
-            update_conversation_tags(
-                email_obj.front_conversation_id, 
-                [tag.front_tag_id for tag in db_tags if tag.front_tag_id]
-            )
+            try:
+                add_conversation_tags(
+                    email_obj.front_conversation_id, 
+                    suggested_tags
+                )
+            except Exception as front_error:
+                logger.error(f"Failed to update tags in Front for email {email_id} / conversation {email_obj.front_conversation_id}: {front_error}")
         
         # Mark email as processed using synchronous CRUD
         email_crud_sync.mark_as_processed(db, email_id=email_uuid)
