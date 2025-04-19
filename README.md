@@ -336,4 +336,67 @@ emailtag/
 ├── webhook/
 │   └── app.py                    # Webhook endpoint
 └── .env                         # Environment variables
-``` 
+```
+
+## Testing Utilities
+
+### Simulating Inbound Emails (Webhook)
+
+The `test_webhook.py` script allows you to simulate incoming emails from FrontApp without actually sending emails. This is useful for testing the webhook processing and AI tagging logic.
+
+**Prerequisites:**
+- Install required packages: `pip install requests python-dotenv`
+- Optionally, add `FRONTAPP_WEBHOOK_SECRET` to your `.env` file (defaults to "testsecret").
+
+**Usage:**
+```bash
+# Send a random test email to the default endpoint (localhost:8444)
+python test_webhook.py
+
+# Send a specific template (e.g., urgent results request)
+python test_webhook.py --template 2
+
+# Send to a specific URL
+python test_webhook.py --url https://your-webhook-url.com/api/v1/webhooks/frontapp
+
+# Send multiple emails
+python test_webhook.py --count 5
+
+# Disable SSL verification (for self-signed certs not on localhost)
+python test_webhook.py --no-verify-ssl
+
+# Send a complex email with raw data and attachment simulation
+python test_webhook.py --raw
+```
+See the script's comments for more details and options (`test_webhook.py`).
+
+### Creating Test Conversations via API
+
+The `test/test_create_conversation.py` script allows you to directly create a new conversation in FrontApp using the API. This can be useful for testing downstream workflows or seeding data.
+
+**Prerequisites:**
+- Install required packages: `pip install requests python-dotenv`
+- Add `FRONTAPP_API_KEY` and `FRONTAPP_CHANNEL_ID` to your `.env` file.
+
+**Usage:**
+```bash
+# Create a conversation with default subject/body
+python test/test_create_conversation.py --recipient someone@example.com
+
+# Create a conversation with custom subject and body
+python test/test_create_conversation.py --recipient user@domain.tld --subject "Important Test" --body "Please review this API-generated message."
+```
+
+## Contributing
+
+Contributions are welcome! Please follow these guidelines:
+
+- Follow PEP 8 style guidelines
+- Write comprehensive docstrings
+- Include unit tests for all new functionality
+- Use environment variables for configuration
+- Log all errors and important events
+
+## License
+
+This project is licensed under the MIT License. 

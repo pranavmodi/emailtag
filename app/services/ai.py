@@ -99,7 +99,7 @@ def analyze_email_content(content_text: str, content_html: str = None) -> List[s
         
         # Call OpenAI API
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that analyzes emails and suggests tags."},
                 {"role": "user", "content": prompt}

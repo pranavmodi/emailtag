@@ -102,4 +102,15 @@ class FrontAppWebhook(BaseModel):
     _links: Dict[str, Any]
     id: str
     type: str
-    payload: Dict[str, Any] 
+    conversation: Dict[str, Any] = Field(default_factory=dict)
+    target: Dict[str, Any] = Field(default_factory=dict)
+    source: Dict[str, Any] = Field(default_factory=dict)
+    emitted_at: float
+
+
+class PreprocessingWebhook(BaseModel):
+    """Schema for preprocessing service webhook payload."""
+    
+    email_id: UUID
+    # Add other fields expected from the preprocessing service if known
+    # e.g., cleaned_text: str, entities: List[str], etc. 

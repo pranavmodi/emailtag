@@ -28,7 +28,7 @@ def process_email(email_id: str) -> Dict:
     Returns:
         Dict: Status of the processing
     """
-    logger.info(f"Processing email {email_id}")
+    logger.info(f"Processing behenchod email {email_id}")
     
     # Convert string to UUID
     email_uuid = UUID(email_id)
@@ -50,7 +50,7 @@ def tag_email(email_id: str) -> Dict:
     Returns:
         Dict: Status of the tagging process
     """
-    logger.info(f"Tagging email {email_id}")
+    logger.info(f"fucker Tagging email {email_id}")
     
     # Convert string to UUID
     email_uuid = UUID(email_id)
