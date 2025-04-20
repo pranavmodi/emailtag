@@ -1,0 +1,92 @@
+Classification Rules for Email Categories
+========================================
+
+**Categories:** Scheduling, Medical Records & Images, Accounts Receivable
+
+Please use the following rules to classify the provided email content into one of the above categories.
+
+--- START SCHEDULING RULES ---
+
+Classification Rules for Scheduling:
+
+1. **Subject Line Keywords**: 
+   - If the subject line contains keywords such as "Referral", "Scheduled", "Reschedule", "Appointment", "MRI", "Scan", or "DOL" (Date of Loss), it is likely a Scheduling email.
+
+2. **Content Patterns and Phrases**:
+   - If the content includes phrases like "patient has been scheduled", "reschedule an MRI", "appointment times", "scheduling department", "call our scheduling dept.", or "referral has been entered into our scheduling system", classify it as Scheduling.
+   - Mentions of specific actions related to scheduling, such as "contact us to reschedule or cancel", "reach out to the patient", or "call our direct scheduling line", indicate a Scheduling email.
+
+3. **Associated Tags**:
+   - Emails tagged with "Order Entered", "Order Pending", or "RX" are often associated with Scheduling.
+
+4. **Purpose or Intent**:
+   - If the main purpose of the email is to confirm, arrange, or modify an appointment or referral, it belongs to the Scheduling category.
+   - Emails that discuss the logistics of patient appointments, such as providing directions, rescheduling, or confirming attendance, are typically Scheduling emails.
+
+5. **Unique Characteristics**:
+   - Emails that provide patient IDs and request the use of these IDs for future communications are indicative of Scheduling.
+   - References to patient portals for viewing appointment times, answering prescreening questions, or signing liens are unique to Scheduling emails.
+   - If the email includes instructions for patients to contact a specific phone number for scheduling-related inquiries, it is likely a Scheduling email.
+
+By applying these rules, you can effectively classify emails into the Scheduling category based on their content, intent, and associated metadata.
+
+--- END SCHEDULING RULES ---
+
+
+--- START MEDICAL RECORDS & IMAGES RULES ---
+
+Classification Rules for Medical Records & Images:
+
+1. Subject Line Keywords:
+ a. If the subject contains one or more imaging-specific keywords such as:
+  – "Imaging request", "Images", "Radiology film", "MRI", "CT", "X‑ray", "DICOM", "CD Request", or related phrases,
+  AND DOES NOT contain any strong financial keywords (e.g., "bill", "billing", "payment", "balance", "lien", "W‑9", "offer", "remittance", "negotiation") OR any phrases that imply a financial transaction (e.g., "Billing Report Request", "PI Billing", "contact Cedar Financial"),
+  then tag the email as a candidate for Medical Records & Images.
+ b. If both imaging and one or more financial keywords appear in the subject, perform further review:
+  – Examine the overall content for primary intent. If the email's dominant discussion centers exclusively on managing imaging data (e.g., links or instructions to view/download images, descriptions of imaging modalities, imaging portal instructions) with minimal, incidental reference to billing, classify as Medical Records & Images.
+  – If the email includes detailed payment instructions, lien processing, or scheduling of billing transactions, override imaging cues and do not classify as Medical Records & Images.
+ c. If the email subject contains "A fax has arrived from" it CANNOT be Medical Records & Images
+
+2. Content Screening:
+ a. Classify as Medical Records & Images only if the body of the email includes imaging-specific phrases such as "images have been uploaded", "view/download imaging reports", "burn images onto a CD", "push images into portal", "radiology film request", or similar language, and no paragraphs contain explicit financial directions.
+ b. If any content section includes strong financial or billing phrases (e.g., "bill balance", "process payment", "generate bill", "e‑sign liens", "payment due", "contact billing"), do not classify as Medical Records & Images.
+
+3. Associated Tags & Metadata:
+ a. Apply the Medical Records & Images category if associated tags are solely imaging related (e.g., "Image Request", "Report Request") and there is no accompanying billing or lien-related tag.
+ b. If tags include "Bill or Balance Request", "Bill Offer", "Rad Lien", "Tech Lien", "ASL", "SLA Applies", or similar, immediately classify under Accounts Receivable.
+
+4. Purpose and Context:
+ a. Use Medical Records & Images only when the primary purpose is to request, share, or discuss medical imaging data exclusively.
+ b. Disregard imaging references if they are provided only as supplemental information in an email whose main focus is on financial processing or lien management.
+
+--- END MEDICAL RECORDS & IMAGES RULES ---
+
+
+--- START ACCOUNTS RECEIVABLE RULES ---
+
+Classification Rules for Accounts Receivable:
+
+1. Subject Line Keywords:
+ a. If the subject contains any strong financial/billing keywords such as:
+  – "Bill", "Billing", "Lien", "Payment", "Balance", "W‑9", "Offer", "Remittance", "Payment Date", "Billing Report Request", or any phrase indicating a billing process,
+  then classify the email as Accounts Receivable.
+ b. Even if imaging-related words like "IMG" or "Medical Records" appear, if any of the strong financial indicators above are present, default to Accounts Receivable.
+ c. For fax notification subjects such as "EXTERNAL: A fax has arrived from: ..." check for additional context; if no distinct imaging portal or viewing instructions are included, classify as Accounts Receivable.
+
+2. Content Patterns and Phrases:
+ a. IF the email body includes phrases such as "bill balance", "payment date", "lien signed", "process payment", "generate bill", "remittance", "financial reconciliation", "W‑9", "negotiation offer", or explicit instructions linked to payment processing, classify as Accounts Receivable.
+ b. If the email mixes imaging details with any billing or lien processing information (e.g., "Medical Records & Billing Report Request"), determine the primary intent by checking for explicit financial instructions. If financial instructions are prominent, classify as Accounts Receivable.
+
+3. Associated Tags & Metadata:
+ a. Emails tagged with billing or financial labels (e.g., "Bill or Balance Request", "Bill Offer", "Rad Lien", "Tech Lien", "ASL", "SLA Applies") are immediately classified as Accounts Receivable.
+ b. If any associated tag implies financial processing despite the presence of imaging keywords, classify under Accounts Receivable.
+
+4. Purpose and Intent:
+ a. Classify as Accounts Receivable when the main purpose of the email is to discuss or initiate payment, provide billing information, set up payment arrangements, or process financial documents (including liens and billing forms).
+ b. For emails with mixed content, require that any explicit billing instructions (e.g., "contact billing", "process payment", "financial coordinator") drive the classification to Accounts Receivable.
+
+5. Unique Identifiers and Special Cases:
+ a. Fax notifications (e.g., "You received a fax! Your fax is attached.") should normally be routed to Accounts Receivable if there is no explicit imaging portal or download instructions provided.
+ b. Any email referencing a financial contact (e.g., "PI Billing Coordinator", "Cedar Financial", or similar) should be classified as Accounts Receivable regardless of any incidental imaging references.
+
+--- END ACCOUNTS RECEIVABLE RULES --- 

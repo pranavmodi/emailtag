@@ -30,7 +30,8 @@ def list_front_tags() -> List[Dict[str, Any]]:
         "Accept": "application/json",
     }
 
-    with httpx.Client() as client:
+    # TODO: Configure SSL verification properly
+    with httpx.Client(verify=False) as client:
         try:
             logger.info(f"Fetching tags from Front API: {url}")
             response = client.get(url, headers=headers)
@@ -75,7 +76,8 @@ def create_front_tag(tag_name: str) -> Dict[str, Any]:
         "Content-Type": "application/json"
     }
 
-    with httpx.Client() as client:
+    # TODO: Configure SSL verification properly
+    with httpx.Client(verify=False) as client:
         try:
             logger.info(f"Attempting to create tag '{tag_name}' in Front: POST {url}")
             response = client.post(url, headers=headers, json=payload)
@@ -156,7 +158,8 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> None:
         auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
         
         # Add tags to conversation
-        with httpx.Client() as client:
+        # TODO: Configure SSL verification properly
+        with httpx.Client(verify=False) as client:
             url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/tags"
             payload = {"tag_ids": tag_ids_to_add}
             headers = {
@@ -188,3 +191,70 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> None:
     except Exception as e:
         logger.exception(f"Unexpected error adding tags to conversation {conversation_id}: {str(e)}")
         raise # Re-raise unexpected errors 
+
+
+def get_conversation_text(conversation_id: str) -> str:
+    """Fetch all message bodies from a Front conversation and concatenate them.
+
+    Args:
+        conversation_id (str): The Front conversation ID.
+
+    Returns:
+        str: A single string containing the concatenated text of all message bodies.
+             Returns an empty string if the conversation is not found or has no messages.
+
+    Raises:
+        ValueError: If required Front configuration is missing.
+        httpx.HTTPStatusError: If the request to Front fails.
+    """
+    if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
+        logger.error("Missing required Front configuration for fetching conversation messages.")
+        raise ValueError("Missing required Front configuration")
+
+    auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
+    # NOTE: The API might return messages in reverse chronological order.
+    # We might need to reverse the list or adjust the prompt if order matters significantly.
+    url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/messages"
+    headers = {
+        "Authorization": auth_header,
+        "Accept": "application/json",
+    }
+
+    all_messages_text: List[str] = []
+
+    # TODO: Configure SSL verification properly
+    with httpx.Client(verify=False) as client:
+        try:
+            logger.info(f"Fetching messages for Front conversation {conversation_id} from {url}")
+            response = client.get(url, headers=headers)
+            response.raise_for_status()  # Raise exception for 4xx/5xx status codes
+            
+            data = response.json()
+            messages = data.get("_results", [])
+            logger.info(f"Successfully fetched {len(messages)} messages for conversation {conversation_id}.")
+
+            # Extract body from each message (assuming 'body' field contains plain text)
+            # TODO: Handle potential HTML content or different fields if necessary.
+            for message in messages:
+                body = message.get('body', '')
+                if body:
+                    # Simple concatenation with newlines
+                    all_messages_text.append(body.strip())
+            
+            # Consider message order if needed. API likely returns newest first.
+            # If oldest first is desired: all_messages_text.reverse()
+
+            # Join all message bodies into a single string
+            full_conversation = "\n\n---\n\n".join(all_messages_text)
+            logger.info(f"Concatenated conversation length: {len(full_conversation)} chars")
+            return full_conversation
+        
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                logger.warning(f"Conversation {conversation_id} not found in Front.")
+                return "" # Return empty string if conversation not found
+            logger.error(f"HTTP error fetching Front messages for {conversation_id}: {e.response.status_code} - {e.response.text}")
+            raise
+        except Exception as e:
+            logger.error(f"Error fetching Front messages for {conversation_id}: {str(e)}", exc_info=True)
+            raise 

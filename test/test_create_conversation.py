@@ -142,7 +142,7 @@ def main():
     # --- Hardcoded values ---
     test_conversation_id = "test_conv_12345" # Hardcoded ID for testing
     subject = f"Chat Conversation {test_conversation_id}" # Match working example format
-    body = "This is a hardcoded test message created via API script."
+    body = "When is my appointment?"
     # --- End Hardcoded values ---
 
     # --- Basic Logging Setup --- #

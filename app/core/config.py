@@ -102,6 +102,9 @@ class Settings(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str
 
+    # Classification Rules
+    CLASSIFICATION_RULES_PATH: str = str(ROOT / "app" / "prompts" / "classification_rules.txt")
+
     # FrontApp
     FRONTAPP_API_KEY: str # Kept for potential other uses, but token preferred
     FRONTAPP_WEBHOOK_SECRET: str
