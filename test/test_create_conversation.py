@@ -9,6 +9,7 @@ import requests
 import json
 import dotenv
 import logging
+import argparse
 from datetime import datetime
 
 # Load environment variables from .env file
@@ -126,24 +127,27 @@ def create_conversation(auth_token: str, webhook_url: str, test_conversation_id:
 
 def main():
     """Main function to create a test conversation."""
-    # parser = argparse.ArgumentParser(description='Create a test conversation in FrontApp.')
-    # parser.add_argument('--subject', type=str, default=f"Test Conversation {datetime.now().isoformat()}",
-    #                     help='Subject for the test conversation.')
-    # parser.add_argument('--body', type=str, default="This is a test message created via API script.",
-    #                     help='Body for the test conversation.')
-    # parser.add_argument('--recipient', type=str, required=True,
-    #                     help='Recipient email address for the test conversation.')
-    # # Removed recipient-name argument as it's not directly supported by the /channels/{channel_id}/messages endpoint this way.
-    # # parser.add_argument('--recipient-name', type=str,
-    # #                     help='Recipient name (optional).')
-    #
-    # args = parser.parse_args() # Remove this line
+    parser = argparse.ArgumentParser(description='Create a test conversation in FrontApp.')
+    parser.add_argument('--conversation-id', type=str,
+                      help='Conversation ID to use. If not provided, a new one will be generated.')
+    parser.add_argument('--subject', type=str,
+                      help='Subject for the conversation. Defaults to a standard format.')
+    parser.add_argument('--body', type=str, default="Hello, I'd like to schedule an imaging appointment. What availability do you have next week?",
+                      help='Body content for the conversation.')
+    args = parser.parse_args()
 
-    # --- Hardcoded values ---
-    test_conversation_id = "test_conv_12345" # Hardcoded ID for testing
-    subject = f"Chat Conversation {test_conversation_id}" # Match working example format
-    body = "When is my appointment?"
-    # --- End Hardcoded values ---
+    # Generate conversation ID if not provided
+    if args.conversation_id:
+        test_conversation_id = args.conversation_id
+        print(f"Using provided conversation ID: {test_conversation_id}")
+    else:
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        test_conversation_id = f"conv_{timestamp}"
+        print(f"Generated new conversation ID: {test_conversation_id}")
+
+    # Use provided subject or generate one
+    subject = args.subject or f"New Patient Inquiry ({test_conversation_id})"
+    body = args.body
 
     # --- Basic Logging Setup --- #
     logging.basicConfig(level=logging.INFO,

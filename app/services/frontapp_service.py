@@ -3,6 +3,8 @@
 import logging
 import httpx
 from typing import List, Dict, Any
+from datetime import datetime
+import pytz  # Add this import at the top
 
 from app.core.config import settings
 
@@ -193,15 +195,18 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> None:
         raise # Re-raise unexpected errors 
 
 
-def get_conversation_text(conversation_id: str) -> str:
-    """Fetch all message bodies from a Front conversation and concatenate them.
+def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
+    """Fetch all message bodies, sender info, and timestamps from a Front conversation.
 
     Args:
         conversation_id (str): The Front conversation ID.
 
     Returns:
-        str: A single string containing the concatenated text of all message bodies.
-             Returns an empty string if the conversation is not found or has no messages.
+        Dict[str, Any]: A dictionary containing:
+            'text' (str): Concatenated text of all message bodies.
+            'senders' (List[str]): List of sender emails or usernames.
+            'timestamps' (List[str]): List of message creation timestamps in readable format.
+            Returns {'text': '', 'senders': [], 'timestamps': []} if conversation not found or has no messages.
 
     Raises:
         ValueError: If required Front configuration is missing.
@@ -212,8 +217,6 @@ def get_conversation_text(conversation_id: str) -> str:
         raise ValueError("Missing required Front configuration")
 
     auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
-    # NOTE: The API might return messages in reverse chronological order.
-    # We might need to reverse the list or adjust the prompt if order matters significantly.
     url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/messages"
     headers = {
         "Authorization": auth_header,
@@ -221,40 +224,96 @@ def get_conversation_text(conversation_id: str) -> str:
     }
 
     all_messages_text: List[str] = []
+    senders: List[str] = []
+    timestamps: List[str] = []  # Changed to store formatted datetime strings
 
     # TODO: Configure SSL verification properly
     with httpx.Client(verify=False) as client:
         try:
             logger.info(f"Fetching messages for Front conversation {conversation_id} from {url}")
             response = client.get(url, headers=headers)
-            response.raise_for_status()  # Raise exception for 4xx/5xx status codes
+            response.raise_for_status()
             
             data = response.json()
+            logger.info(f"Raw message data: {data}")
             messages = data.get("_results", [])
             logger.info(f"Successfully fetched {len(messages)} messages for conversation {conversation_id}.")
 
-            # Extract body from each message (assuming 'body' field contains plain text)
-            # TODO: Handle potential HTML content or different fields if necessary.
-            for message in messages:
+            for i, message in enumerate(messages):
                 body = message.get('body', '')
+                created_at = message.get('created_at')  # Unix timestamp
+                
                 if body:
-                    # Simple concatenation with newlines
                     all_messages_text.append(body.strip())
-            
-            # Consider message order if needed. API likely returns newest first.
-            # If oldest first is desired: all_messages_text.reverse()
+
+                # First try to get sender from author
+                sender_name = "Unknown Sender"
+                author = message.get('author')
+                if author:
+                    sender_name = author.get('email', author.get('username', 
+                        f"{author.get('first_name', '')} {author.get('last_name', '')}".strip()))
+                
+                # If no author or no valid author info, try recipients
+                if not sender_name or sender_name == "Unknown Sender":
+                    recipients = message.get('recipients', [])
+                    for recipient in recipients:
+                        if recipient.get('role') == 'from':
+                            # Prefer name over handle if available
+                            sender_name = recipient.get('name') or recipient.get('handle', "Unknown Sender")
+                            break
+
+                senders.append(sender_name)
+                
+                # Convert Unix timestamp to readable format
+                if created_at is not None:
+                    try:
+                        # Convert Unix timestamp to datetime
+                        dt = datetime.fromtimestamp(float(created_at), tz=pytz.UTC)
+                        # Format as readable string (adjust format as needed)
+                        formatted_time = dt.strftime('%Y-%m-%d %H:%M:%S %Z')
+                        timestamps.append(formatted_time)
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Could not parse timestamp '{created_at}' for message in conversation {conversation_id}: {e}")
+                        timestamps.append("Unknown Time")
+                else:
+                    timestamps.append("Unknown Time")
 
             # Join all message bodies into a single string
             full_conversation = "\n\n---\n\n".join(all_messages_text)
             logger.info(f"Concatenated conversation length: {len(full_conversation)} chars")
-            return full_conversation
-        
+            
+            return {
+                'text': full_conversation,
+                'senders': senders,
+                'timestamps': timestamps
+            }
+
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 logger.warning(f"Conversation {conversation_id} not found in Front.")
-                return "" # Return empty string if conversation not found
-            logger.error(f"HTTP error fetching Front messages for {conversation_id}: {e.response.status_code} - {e.response.text}")
+                return {'text': '', 'senders': [], 'timestamps': []}
+            logger.error(f"HTTP error fetching messages for {conversation_id}: {e.response.status_code} - {e.response.text}")
             raise
         except Exception as e:
-            logger.error(f"Error fetching Front messages for {conversation_id}: {str(e)}", exc_info=True)
-            raise 
+            logger.error(f"Error fetching messages for conversation {conversation_id}: {str(e)}")
+            raise
+
+# Example usage (for testing purposes)
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    test_conversation_id = "conv_xxx"  # Replace with a real ID for testing
+    if test_conversation_id != "conv_xxx":
+        try:
+            print(f"Testing get_conversation_text for {test_conversation_id}...")
+            conversation_data = get_conversation_text(test_conversation_id)
+            print("Conversation Data Received:")
+            print(f"  Text Length: {len(conversation_data.get('text', ''))}")
+            print(f"  Senders: {conversation_data.get('senders')}")
+            print(f"  Timestamps: {conversation_data.get('timestamps')}")
+            # print(f"  Full Text:\n{conversation_data.get('text')[:500]}...")
+        except (ValueError, httpx.HTTPStatusError) as e:
+            print(f"Test failed: {e}")
+        except Exception as e:
+            print(f"An unexpected error occurred during test: {e}")
+    else:
+        print("Please replace 'conv_xxx' with a valid Front conversation ID to run the test.") 

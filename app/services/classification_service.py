@@ -66,14 +66,15 @@ def load_classification_rules() -> str:
         raise
 
 
-def create_classification_prompt(rules: str, conversation_text: str, existing_tags: List[str]) -> str:
+def create_classification_prompt(rules: str, conversation_text: str, sender_info: str, message_times: str) -> str:
     """
     Create a prompt instructing the LLM to classify using the provided rules.
 
     Args:
         rules (str): The classification rules.
         conversation_text (str): Full text content of the conversation.
-        existing_tags (List[str]): Existing tags of the conversation (if any).
+        sender_info (str): Information about the sender(s).
+        message_times (str): Timestamps or timing information for the messages.
 
     Returns:
         str: Formatted prompt for the LLM.
@@ -90,7 +91,8 @@ def create_classification_prompt(rules: str, conversation_text: str, existing_ta
         f"{rules}\n"
         "--- END CLASSIFICATION RULES ---\n\n"
         "Now, classify this conversation:\n\n"
-        f"Existing Tags: {existing_tags}\n"
+        f"Sender Information: {sender_info}\n"
+        f"Message Timestamps: {message_times}\n"
         "Full Conversation Text (newest messages might be at the top or bottom depending on source):\n"
         '"""\n' # Start of triple quotes for content
         f"{safe_content[:4000]}...\n"
@@ -107,6 +109,8 @@ def classify_email_category(front_conversation_id: str, existing_tags: List[str]
     Args:
         front_conversation_id (str): The Front conversation ID.
         existing_tags (List[str]): Existing tags associated with the conversation (if any).
+        sender_info (str): Information about the sender(s). TODO: Fetch this.
+        message_times (str): Timestamps or timing information. TODO: Fetch this.
 
     Returns:
         Tuple[Optional[str], float]: Predicted category name and confidence score (currently default 1.0).
@@ -118,23 +122,46 @@ def classify_email_category(front_conversation_id: str, existing_tags: List[str]
 
         # Fetch full conversation text from FrontApp using the ID
         # !! IMPORTANT: Implement get_conversation_text in app/services/frontapp_service.py !!
+        # !! This function needs to be updated to return sender_info and message_times as well !!
         try:
-            conversation_text = get_conversation_text(front_conversation_id)
-            if not conversation_text:
-                 logger.warning(f"Received empty conversation text for Front conversation ID: {front_conversation_id}. Cannot classify.")
+            # TODO: Update get_conversation_text to return a dict or tuple with text, sender_info, message_times
+            conversation_data = get_conversation_text(front_conversation_id)
+            # Assuming get_conversation_text now returns a dictionary like:
+            # {'text': '...', 'sender': '...', 'times': '...'}
+            # Adjust extraction based on actual return type of updated get_conversation_text
+            if not conversation_data or not isinstance(conversation_data, dict) or 'text' not in conversation_data:
+                 logger.warning(f"Received incomplete or invalid conversation data for Front conversation ID: {front_conversation_id}. Cannot classify.")
                  return None, 0.0
+
+            conversation_text = conversation_data.get('text', '')
+            # Placeholder - Replace with actual data extraction once get_conversation_text is updated
+            raw_senders = conversation_data.get('senders', ['Unknown Sender'])
+            raw_timestamps = conversation_data.get('timestamps', ['Unknown Timestamps'])
+            
+            # Format sender and timestamp info for the prompt
+            sender_info = ", ".join(map(str, raw_senders)) if raw_senders else "Unknown Sender"
+            # Convert timestamps (floats) to readable strings (e.g., ISO format) or keep as string list
+            # For simplicity, let's join them as strings for now. Consider datetime conversion later.
+            message_times = ", ".join(map(str, raw_timestamps)) if raw_timestamps else "Unknown Timestamps"
+
+            if not conversation_text:
+                logger.warning(f"Received empty conversation text for Front conversation ID: {front_conversation_id}. Cannot classify.")
+                return None, 0.0
+
         except Exception as fetch_error:
-            logger.error(f"Failed to fetch conversation text for Front conversation ID {front_conversation_id}: {fetch_error}", exc_info=True)
+            logger.error(f"Failed to fetch or process conversation data for Front conversation ID {front_conversation_id}: {fetch_error}", exc_info=True)
             return None, 0.0
 
 
         # Create prompt using the rules and the full conversation text
-        prompt = create_classification_prompt(rules, conversation_text, existing_tags)
+        prompt = create_classification_prompt(rules, conversation_text, sender_info, message_times)
 
         # Log the complete prompt for debugging
         logger.info(f"=== START CLASSIFICATION PROMPT (Conversation ID: {front_conversation_id}) ===")
         logger.info(f"Conversation Text Length: {len(conversation_text)} characters")
-        logger.info(f"Existing Tags: {existing_tags}")
+        # logger.info(f"Existing Tags: {existing_tags}") # Removed as per request
+        logger.info(f"Sender Info: {sender_info}")
+        logger.info(f"Message Times: {message_times}")
         # Avoid logging potentially very long prompts fully, log snippet or just key info
         # logger.info("Prompt (truncated):")
         # logger.info(prompt[:500] + "...")

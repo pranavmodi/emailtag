@@ -85,7 +85,9 @@ async def frontapp_webhook(
     """
     # Get the raw request body
     body = await request.body()
-    logger.info(f"Received raw FrontApp webhook body: {body.decode()}")
+    # logger.info(f"Received raw FrontApp webhook request: {body.decode()}")
+    logger.info(f"Received raw FrontApp webhook request")
+
     
     # Verify webhook signature in production
     # if not settings.DEBUG:
