@@ -3,8 +3,9 @@
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
+import json
 
-from pydantic import PostgresDsn, field_validator, model_validator
+from pydantic import PostgresDsn, field_validator, model_validator, Json
 from pydantic_settings import BaseSettings
 
 # Project directory
@@ -40,6 +41,9 @@ class Settings(BaseSettings):
     POSTGRES_PORT: Optional[str] = None
     POSTGRES_DB: Optional[str] = None
     
+    # Email Classification Categories
+    EMAIL_CATEGORIES: Json[Dict[str, Any]]
+
     # Model settings
     LLM_PROVIDER: Optional[str] = None
     OPENAI_MODEL_VERSION: Optional[str] = None

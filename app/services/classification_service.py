@@ -215,6 +215,84 @@ def classify_email_category(front_conversation_id: str, existing_tags: List[str]
         logger.error(f"Unexpected error during email classification for conversation {front_conversation_id}: {e}", exc_info=True)
         return None, 0.0
 
+def classify_email_subcategory(front_conversation_id: str, top_level_category: str, conversation_text: str, sender_info: str, message_times: str) -> Tuple[Optional[str], float]:
+    """
+    Classify an email into a subcategory based on its top-level category.
+
+    Args:
+        front_conversation_id (str): The Front conversation ID
+        top_level_category (str): The already classified top-level category
+        conversation_text (str): The full conversation text
+        sender_info (str): Information about the sender(s)
+        message_times (str): Timestamps of messages
+
+    Returns:
+        Tuple[Optional[str], float]: Predicted subcategory name and confidence score
+    """
+    try:
+        client = get_openai_client()
+        
+        # Create subcategory classification prompt
+        subcategory_map = settings.EMAIL_CATEGORIES[top_level_category]
+        
+        # Extract the list of valid subcategory *tags*
+        valid_subcategories = []
+        if isinstance(subcategory_map, dict):
+            for key, value in subcategory_map.items():
+                if isinstance(value, list): # If value is a list, the key is the tag
+                    valid_subcategories.append(key)
+                else: # If value is a string, the value is the tag
+                    valid_subcategories.append(value)
+        elif isinstance(subcategory_map, list): # If the top level maps directly to a list
+            valid_subcategories.extend(subcategory_map)
+        
+        # Create a formatted string of available subcategories for the prompt
+        subcategories_list_str = "\n- " + "\n- ".join(valid_subcategories)
+
+        prompt = (
+            f"You are classifying an email that belongs to the {top_level_category} category.\n"
+            f"Choose ONE of the following subcategories for {top_level_category}:\n{subcategories_list_str}\n\n"
+            "Classify this conversation into exactly ONE of the subcategories listed above. Respond with ONLY the chosen subcategory name.\n\n"
+            f"Sender Information: {sender_info}\n"
+            f"Message Timestamps: {message_times}\n"
+            "Full Conversation Text:\n"
+            '"""\n'
+            f"{conversation_text[:4000]}...\n"
+            '"""\n\n'
+            "Predicted Subcategory:"
+        )
+
+        logger.info(f"=== START SUBCATEGORY CLASSIFICATION PROMPT (Conversation ID: {front_conversation_id}) ===")
+        logger.info(f"Top-level Category: {top_level_category}")
+        # logger.info(f"Available Subcategories (Raw Map): {subcategory_map}") # Log raw map if needed
+        logger.info(f"Subcategories presented to LLM: {subcategories_list_str}")
+        logger.info("=== END SUBCATEGORY CLASSIFICATION PROMPT ===")
+
+        # Get classification from OpenAI
+        response = client.chat.completions.create(
+            model=settings.OPENAI_MODEL_VERSION,
+            messages=[
+                {"role": "system", "content": f"You are an expert email classifier. Classify the email into ONE subcategory of {top_level_category} from the provided list. Respond with ONLY the subcategory name."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.0,
+            max_tokens=20 # Keep max_tokens low for single word/phrase response
+        )
+
+        prediction = response.choices[0].message.content.strip()
+        prediction = prediction.strip("'").strip('"')
+        
+        # Validate prediction against the extracted list of valid subcategories
+        if prediction not in valid_subcategories:
+            logger.warning(f"Invalid or unexpected subcategory prediction '{prediction}' for category {top_level_category}. Expected one of: {valid_subcategories}")
+            return None, 0.0
+
+        return prediction, 1.0
+
+    except Exception as e:
+        logger.error(f"Error in subcategory classification for conversation {front_conversation_id}: {e}", exc_info=True)
+        return None, 0.0
+
 # Example usage (for testing purposes) - Needs update to work with conversation ID
 if __name__ == "__main__":
     # This testing block needs to be updated to work with conversation IDs
