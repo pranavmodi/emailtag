@@ -11,7 +11,7 @@ from app.crud.sync import email as email_crud_sync
 from app.crud.sync import tag as tag_crud_sync
 from app.db.session import SessionLocal
 from app.services.classification_service import classify_email_category, classify_email_subcategory
-from app.services.frontapp_service import add_conversation_tags, get_conversation_text
+from app.services.frontapp_service import add_conversation_tags, get_conversation_text, get_conversation_tags
 from app.tasks.worker import celery_app
 
 logger = logging.getLogger(__name__)
@@ -91,7 +91,13 @@ def tag_email(email_id: str) -> Dict:
         message_times = ", ".join(map(str, conversation_data.get('timestamps', ['Unknown Timestamps'])))
 
         # Get existing tags
-        existing_tags: List[str] = []
+        existing_tags_data = get_conversation_tags(front_conversation_id)
+        if existing_tags_data:
+            existing_tags = [tag.get('name') for tag in existing_tags_data if tag.get('name')]
+            logger.info(f"Found existing tags for {front_conversation_id}: {existing_tags}")
+        else:
+            existing_tags = []
+            logger.warning(f"Could not retrieve existing tags for {front_conversation_id} or none exist.")
 
         # Step 1: Top-level classification
         predicted_category, confidence = classify_email_category(

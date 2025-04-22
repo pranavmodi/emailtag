@@ -117,6 +117,7 @@ def classify_email_category(front_conversation_id: str, existing_tags: List[str]
                                       Returns (None, 0.0) on failure.
     """
     try:
+        logger.info(f"the existing tags are: {existing_tags}")
         client = get_openai_client()
         rules = load_classification_rules()  # Load rules (cached)
 
@@ -166,9 +167,10 @@ def classify_email_category(front_conversation_id: str, existing_tags: List[str]
         # logger.info("Prompt (truncated):")
         # logger.info(prompt[:500] + "...")
         # Log the full prompt for debugging:
-        logger.info("Full Prompt:")
-        logger.info(prompt)
-        logger.info(f"=== END CLASSIFICATION PROMPT (Conversation ID: {front_conversation_id}) ===")
+
+        # logger.info("Full Prompt:")
+        # logger.info(prompt)
+        # logger.info(f"=== END CLASSIFICATION PROMPT (Conversation ID: {front_conversation_id}) ===")
 
         # Get model version from environment or use default
         model_version = settings.OPENAI_MODEL_VERSION
@@ -235,15 +237,17 @@ def classify_email_subcategory(front_conversation_id: str, top_level_category: s
         # Create subcategory classification prompt
         subcategory_map = settings.EMAIL_CATEGORIES[top_level_category]
         
-        # Extract the list of valid subcategory *tags*
+        # Extract the list of valid subcategory *tags* for the second level
         valid_subcategories = []
         if isinstance(subcategory_map, dict):
             for key, value in subcategory_map.items():
-                if isinstance(value, list): # If value is a list, the key is the tag
+                if isinstance(value, list): # e.g., "Negotiations": [...] -> tag is "Negotiations"
                     valid_subcategories.append(key)
-                else: # If value is a string, the value is the tag
+                elif isinstance(value, dict): # e.g., "Liens": {...} -> tag is "Liens"
+                    valid_subcategories.append(key)
+                else: # e.g., "Billing": "Bill or balance Request" -> tag is "Bill or balance Request"
                     valid_subcategories.append(value)
-        elif isinstance(subcategory_map, list): # If the top level maps directly to a list
+        elif isinstance(subcategory_map, list): # e.g., "Medical Records & Images": [...] -> tags are items in list
             valid_subcategories.extend(subcategory_map)
         
         # Create a formatted string of available subcategories for the prompt

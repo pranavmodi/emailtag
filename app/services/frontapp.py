@@ -48,6 +48,27 @@ def get_conversation(conversation_id: str) -> Optional[Dict]:
         return None
 
 
+def get_conversation_tags(conversation_id: str) -> Optional[List[Dict]]:
+    """
+    Get the tags for a specific conversation from FrontApp.
+    
+    Args:
+        conversation_id: The ID of the conversation
+        
+    Returns:
+        Optional[List[Dict]]: A list of tag objects or None if an error occurs or no tags are found.
+    """
+    conversation_data = get_conversation(conversation_id)
+    
+    if conversation_data:
+        tags = conversation_data.get("tags", [])
+        logger.info(f"Retrieved {len(tags)} tags for conversation {conversation_id}")
+        return tags
+    else:
+        # Error getting conversation logged in get_conversation
+        return None
+
+
 def update_conversation_tags(conversation_id: str, tag_ids: List[str]) -> bool:
     """
     Update the tags for a conversation in FrontApp.
