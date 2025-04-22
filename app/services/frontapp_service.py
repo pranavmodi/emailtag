@@ -285,6 +285,95 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> None:
         raise # Re-raise unexpected errors 
 
 
+def remove_conversation_tags(conversation_id: str, tag_names_to_remove: List[str]) -> bool:
+    """Remove specified tags from a Front conversation.
+
+    Args:
+        conversation_id (str): The Front conversation ID.
+        tag_names_to_remove (List[str]): The names of the tags to remove.
+
+    Returns:
+        bool: True if the tags were removed successfully or if no tags needed removal,
+              False if an error occurred.
+
+    Raises:
+        ValueError: If required Front configuration is missing.
+        httpx.HTTPStatusError: If the API request to Front fails.
+    """
+    if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
+        logger.error("Missing required Front configuration for removing tags (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
+        raise ValueError("Missing required Front configuration")
+
+    if not tag_names_to_remove:
+        logger.info(f"No tag names provided for removal on conversation {conversation_id}. Skipping.")
+        return True
+
+    try:
+        # Get all available tags to find IDs
+        available_tags = list_front_tags()
+        tag_name_to_id_map = {tag.get('name'): tag.get('id') for tag in available_tags if tag.get('name') and tag.get('id')}
+
+        tag_ids_to_remove = []
+        not_found_tags = []
+        for name in tag_names_to_remove:
+            tag_id = tag_name_to_id_map.get(name)
+            if tag_id:
+                tag_ids_to_remove.append(tag_id)
+            else:
+                not_found_tags.append(name)
+
+        if not_found_tags:
+            logger.warning(f"Cannot remove tags for conversation {conversation_id} as they were not found in Front: {', '.join(not_found_tags)}. Proceeding with found tags.")
+
+        if not tag_ids_to_remove:
+            logger.info(f"No valid tag IDs found to remove for conversation {conversation_id} based on names: {tag_names_to_remove}.")
+            return True # Nothing to remove
+
+        # Prepare for DELETE request
+        auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
+        url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/tags"
+        payload = {"tag_ids": tag_ids_to_remove}
+        headers = {
+            "Authorization": auth_header,
+            "Accept": "application/json",
+            "Content-Type": "application/json" # Important: DELETE requests with body often need Content-Type
+        }
+
+        # TODO: Configure SSL verification properly
+        with httpx.Client(verify=False) as client:
+            logger.info(f"Attempting to remove tags from Front conversation {conversation_id}")
+            logger.info(f"URL: DELETE {url}")
+            logger.info(f"Payload (tag_ids): {payload}")
+
+            response = client.delete(url, headers=headers, json=payload)
+
+            logger.info(f"Front API tag removal response status for {conversation_id}: {response.status_code}")
+
+            # Front API often returns 204 No Content on successful DELETE
+            if response.status_code == 204:
+                removed_tag_names = [name for name, tag_id in tag_name_to_id_map.items() if tag_id in tag_ids_to_remove] 
+                logger.info(f"Successfully removed tags '{', '.join(removed_tag_names)}' (IDs: {tag_ids_to_remove}) from conversation {conversation_id}")
+                return True
+            else:
+                # Log error for unexpected success codes or actual errors
+                logger.error(f"Front API error/unexpected status during tag removal ({response.status_code}) for {conversation_id}: {response.text}")
+                try:
+                    response.raise_for_status() # Raise HTTPStatusError for non-2xx codes
+                except httpx.HTTPStatusError as http_err:
+                    raise http_err # Re-raise the specific HTTP error
+                return False # Should not be reached if raise_for_status works
+
+    except httpx.HTTPStatusError as e:
+        # Logged above or in list_front_tags
+        raise # Re-raise the specific HTTP error
+    except ValueError as e:
+        # Logged above or in list_front_tags
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error removing tags from conversation {conversation_id}: {str(e)}")
+        raise # Re-raise unexpected errors
+
+
 def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
     """Fetch all message bodies, sender info, and timestamps from a Front conversation.
 

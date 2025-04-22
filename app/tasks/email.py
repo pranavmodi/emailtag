@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.crud.sync import email as email_crud_sync
 from app.crud.sync import tag as tag_crud_sync
 from app.db.session import SessionLocal
-from app.services.classification_service import classify_email_category, classify_email_subcategory
+from app.services.classification_service import classify_email_tags_hierarchical
 from app.services.frontapp_service import add_conversation_tags, get_conversation_text, get_conversation_tags
 from app.tasks.worker import celery_app
 
@@ -99,32 +99,22 @@ def tag_email(email_id: str) -> Dict:
             existing_tags = []
             logger.warning(f"Could not retrieve existing tags for {front_conversation_id} or none exist.")
 
-        # Step 1: Top-level classification
-        predicted_category, confidence = classify_email_category(
+        # *** NEW: Hierarchical Classification ***
+        tags_to_apply = classify_email_tags_hierarchical(
             front_conversation_id=front_conversation_id,
-            existing_tags=existing_tags
-        )
-
-        if not predicted_category:
-            logger.error(f"AI classification failed for email {email_id}. No category determined.")
-            email_crud_sync.mark_as_processed(db, email_id=email_uuid)
-            return {"status": "error", "message": "AI classification failed"}
-
-        # Step 2: Sub-category classification
-        predicted_subcategory, subcat_confidence = classify_email_subcategory(
-            front_conversation_id=front_conversation_id,
-            top_level_category=predicted_category,
             conversation_text=conversation_text,
             sender_info=sender_info,
             message_times=message_times
         )
+        # *** END NEW ***
 
-        tags_to_apply = [predicted_category]
-        if predicted_subcategory:
-            tags_to_apply.append(predicted_subcategory)
-            logger.info(f"Email {email_id} classified as '{predicted_category}/{predicted_subcategory}' with confidence {confidence:.2f}/{subcat_confidence:.2f}")
-        else:
-            logger.info(f"Email {email_id} classified as '{predicted_category}' (no subcategory) with confidence {confidence:.2f}")
+        if not tags_to_apply:
+             logger.error(f"Hierarchical classification failed for email {email_id}. No tags determined.")
+             # Optionally mark as processed even if tagging failed, or leave for retry?
+             # email_crud_sync.mark_as_processed(db, email_id=email_uuid) 
+             return {"status": "error", "message": "Hierarchical classification failed to determine tags"}
+
+        logger.info(f"Email {email_id} classified with tags: {tags_to_apply}")
 
         # Create and associate tags in database
         db_tags = []
@@ -139,6 +129,7 @@ def tag_email(email_id: str) -> Dict:
         # Update tags in FrontApp
         if email_obj.front_conversation_id:
             try:
+                # Use the tags determined by the new function
                 add_conversation_tags(
                     email_obj.front_conversation_id,
                     tags_to_apply
@@ -150,11 +141,13 @@ def tag_email(email_id: str) -> Dict:
         # Mark email as processed
         email_crud_sync.mark_as_processed(db, email_id=email_uuid)
 
+        # Update return value - maybe just return the tags?
         return {
             "status": "success",
             "email_id": email_id,
-            "category": predicted_category,
-            "subcategory": predicted_subcategory
+            "applied_tags": tags_to_apply 
+            # "category": predicted_category, # Removed old category/subcategory
+            # "subcategory": predicted_subcategory
         }
 
     except Exception as e:
