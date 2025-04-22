@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.crud.sync import email as email_crud_sync
 from app.crud.sync import tag as tag_crud_sync
 from app.db.session import SessionLocal
-from app.services.classification_service import classify_email_tags_hierarchical
+from app.services.classification_service import classify_email_tags_hierarchical, remove_conflicting_tags
 from app.services.frontapp_service import add_conversation_tags, get_conversation_text, get_conversation_tags
 from app.tasks.worker import celery_app
 
@@ -108,6 +108,13 @@ def tag_email(email_id: str) -> Dict:
         )
         # *** END NEW ***
 
+        # Ensure tags are unique before proceeding
+        if tags_to_apply:
+             unique_tags_to_apply = list(dict.fromkeys(tags_to_apply)) # Preserve order while deduplicating
+             if len(unique_tags_to_apply) != len(tags_to_apply):
+                 logger.info(f"Removed duplicate tags. Original: {tags_to_apply}, Unique: {unique_tags_to_apply}")
+                 tags_to_apply = unique_tags_to_apply
+
         if not tags_to_apply:
              logger.error(f"Hierarchical classification failed for email {email_id}. No tags determined.")
              # Optionally mark as processed even if tagging failed, or leave for retry?
@@ -115,6 +122,22 @@ def tag_email(email_id: str) -> Dict:
              return {"status": "error", "message": "Hierarchical classification failed to determine tags"}
 
         logger.info(f"Email {email_id} classified with tags: {tags_to_apply}")
+
+        # *** NEW: Remove conflicting tags before adding new ones ***
+        logger.info(f"Attempting to remove conflicting tags for {front_conversation_id} based on hierarchy.")
+        removal_success = remove_conflicting_tags(
+            conversation_id=front_conversation_id,
+            existing_tags=existing_tags, # Pass the original list fetched earlier
+            new_tags=tags_to_apply, # Pass the unique list determined by classification
+            hierarchy=settings.EMAIL_CATEGORIES # Pass the hierarchy from settings
+        )
+        if not removal_success:
+            logger.warning(f"Failed to remove conflicting tags for conversation {front_conversation_id}. Proceeding to add new tags anyway.")
+            # Decide if you want to stop processing here or continue.
+            # Continuing might leave conflicting tags, but ensures new tags are applied.
+        else:
+            logger.info(f"Successfully processed conflicting tag removal for {front_conversation_id}.")
+        # *** END NEW ***
 
         # Create and associate tags in database
         db_tags = []

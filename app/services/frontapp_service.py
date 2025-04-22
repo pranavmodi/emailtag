@@ -2,6 +2,7 @@
 
 import logging
 import httpx
+import json
 from typing import List, Dict, Any
 from typing import Dict, List, Optional
 
@@ -345,7 +346,13 @@ def remove_conversation_tags(conversation_id: str, tag_names_to_remove: List[str
             logger.info(f"URL: DELETE {url}")
             logger.info(f"Payload (tag_ids): {payload}")
 
-            response = client.delete(url, headers=headers, json=payload)
+            # Use client.request for DELETE with body
+            response = client.request(
+                "DELETE",
+                url, 
+                headers=headers, 
+                content=json.dumps(payload) # Encode dict to JSON string for content
+            )
 
             logger.info(f"Front API tag removal response status for {conversation_id}: {response.status_code}")
 
