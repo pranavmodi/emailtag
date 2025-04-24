@@ -110,8 +110,6 @@ class Settings(BaseSettings):
     CLASSIFICATION_RULES_PATH: str = str(ROOT / "app" / "prompts" / "classification_rules.txt")
 
     # FrontApp
-    FRONTAPP_API_KEY: str # Kept for potential other uses, but token preferred
-    FRONTAPP_WEBHOOK_SECRET: str
     FRONT_AUTH_TOKEN: str # Use Bearer token for API calls
     FRONT_API_BASE_URL: str = "https://api2.frontapp.com" # Default Front API base URL
 

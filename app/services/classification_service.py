@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 # Global OpenAI client (consider dependency injection for better testing)
 _openai_client: Optional[OpenAI] = None
 
+# Define top-level categories explicitly for the conflict check
+_TOP_LEVEL_CATEGORIES = ["Scheduling", "Medical Records & Images", "Accounts Receivable"]
+
 def get_openai_client() -> OpenAI:
     """Initializes and returns the OpenAI client."""
     global _openai_client
@@ -118,32 +121,22 @@ def classify_email_category(front_conversation_id: str, existing_tags: List[str]
                                       Returns (None, 0.0) on failure.
     """
     try:
-        logger.info(f"the existing tags are: {existing_tags}")
+        logger.info(f"mofo Processing conversation {front_conversation_id}. Existing tags: {existing_tags}")
         client = get_openai_client()
-        rules = load_classification_rules()  # Load rules (cached)
+        rules = load_classification_rules() # Load rules (cached)
 
         # Fetch full conversation text from FrontApp using the ID
-        # !! IMPORTANT: Implement get_conversation_text in app/services/frontapp_service.py !!
-        # !! This function needs to be updated to return sender_info and message_times as well !!
         try:
-            # TODO: Update get_conversation_text to return a dict or tuple with text, sender_info, message_times
             conversation_data = get_conversation_text(front_conversation_id)
-            # Assuming get_conversation_text now returns a dictionary like:
-            # {'text': '...', 'sender': '...', 'times': '...'}
-            # Adjust extraction based on actual return type of updated get_conversation_text
             if not conversation_data or not isinstance(conversation_data, dict) or 'text' not in conversation_data:
                  logger.warning(f"Received incomplete or invalid conversation data for Front conversation ID: {front_conversation_id}. Cannot classify.")
                  return None, 0.0
 
             conversation_text = conversation_data.get('text', '')
-            # Placeholder - Replace with actual data extraction once get_conversation_text is updated
             raw_senders = conversation_data.get('senders', ['Unknown Sender'])
             raw_timestamps = conversation_data.get('timestamps', ['Unknown Timestamps'])
             
-            # Format sender and timestamp info for the prompt
             sender_info = ", ".join(map(str, raw_senders)) if raw_senders else "Unknown Sender"
-            # Convert timestamps (floats) to readable strings (e.g., ISO format) or keep as string list
-            # For simplicity, let's join them as strings for now. Consider datetime conversion later.
             message_times = ", ".join(map(str, raw_timestamps)) if raw_timestamps else "Unknown Timestamps"
 
             if not conversation_text:
@@ -153,8 +146,7 @@ def classify_email_category(front_conversation_id: str, existing_tags: List[str]
         except Exception as fetch_error:
             logger.error(f"Failed to fetch or process conversation data for Front conversation ID {front_conversation_id}: {fetch_error}", exc_info=True)
             return None, 0.0
-
-
+            
         # Create prompt using the rules and the full conversation text
         prompt = create_classification_prompt(rules, conversation_text, sender_info, message_times)
 
@@ -366,6 +358,83 @@ def _call_llm_for_classification(
         logger.error(f"Unexpected error during LLM call for hierarchical classification: {e}", exc_info=True)
         return None
 
+def _check_for_conflicting_top_level_topics(
+    client: OpenAI, 
+    conversation_text: str, 
+    sender_info: str, # Note: sender_info might not correspond perfectly to only the last 3 messages
+    message_times: str # Note: message_times might not correspond perfectly to only the last 3 messages
+) -> bool:
+    """
+    Uses the LLM to check if the last 3 messages of the conversation discuss topics from multiple top-level categories.
+
+    Args:
+        client: OpenAI client.
+        conversation_text: The full email text (chronological, cleaned).
+        sender_info: Sender information string (for the whole conversation).
+        message_times: Timestamp information string (for the whole conversation).
+
+    Returns:
+        True if conflicting topics are detected in the last 3 messages, False otherwise.
+    """
+    # --- Extract last 3 messages ---
+    messages = conversation_text.split('\n\n')
+    last_three_messages = messages[-3:] # Get last 3 elements (or fewer if less than 3 exist)
+    recent_text = "\n\n".join(last_three_messages)
+    logger.info(f"Extracted last {len(last_three_messages)} messages for conflict check.")
+    # -------------------------------
+
+    categories_list_str = "\n- ".join(_TOP_LEVEL_CATEGORIES)
+    prompt = (
+        f"Analyze ONLY the last {len(last_three_messages)} message(s) of the email conversation provided below. "
+        f"Does this recent part of the conversation *clearly* discuss topics related to MORE THAN ONE of the following main categories?\n"
+        f"- {categories_list_str}\n\n"
+        # f"Focus primarily on the most recent messages when making your determination. Earlier parts of the conversation are provided mainly for context.\n\n" # Removed older instruction
+        f"Respond with ONLY 'Yes' or 'No'.\n\n"
+        # Note: Sender/Time info is for the whole conversation, which might be slightly misleading here, but still useful context.
+        f"Sender Information (Full Conversation): {sender_info}\n"
+        f"Message Timestamps (Full Conversation): {message_times}\n"
+        f"Last {len(last_three_messages)} Message(s) Text:\n"
+        '""\n'
+        f"{recent_text[:4000]}...\n" # Use the extracted recent text, still truncated just in case
+        '""\n\n'
+        "Conflicts detected (Yes/No):"
+    )
+
+    try:
+        logger.info(f"Checking for conflicting top-level topics.")
+        
+        # Log the prompt being sent for conflict check
+        logger.info(f"=== START CONFLICT CHECK PROMPT ===")
+        logger.info(prompt) # Log the full prompt
+        logger.info(f"=== END CONFLICT CHECK PROMPT ===")
+
+        response = client.chat.completions.create(
+            model=settings.OPENAI_MODEL_VERSION, # Use gpt-4o
+            messages=[
+                {"role": "system", "content": f"Analyze the email content for topic overlap across these categories: {', '.join(_TOP_LEVEL_CATEGORIES)}. Respond ONLY with 'Yes' or 'No' if multiple categories are clearly discussed."}, 
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.0,
+            max_tokens=5 
+        )
+        
+        prediction = response.choices[0].message.content.strip().strip("'\"").lower()
+        logger.info(f"LLM conflict check response: '{prediction}'")
+
+        if prediction == 'yes':
+            return True
+        elif prediction == 'no':
+            return False
+        else:
+            logger.warning(f"LLM conflict check returned unexpected response: '{prediction}'. Assuming no conflict.")
+            return False # Default to no conflict if response is unclear
+            
+    except openai.APIError as e:
+        logger.error(f"OpenAI API error during conflict check: {e}", exc_info=True)
+        return False # Assume no conflict on API error
+    except Exception as e:
+        logger.error(f"Unexpected error during conflict check: {e}", exc_info=True)
+        return False # Assume no conflict on other errors
 
 def classify_email_tags_hierarchical(
     front_conversation_id: str, 
@@ -375,6 +444,7 @@ def classify_email_tags_hierarchical(
 ) -> List[str]:
     """
     Classifies an email conversation by traversing the EMAIL_CATEGORIES hierarchy.
+    Checks for conflicting top-level topics first.
 
     Args:
         front_conversation_id (str): The Front conversation ID (for logging).
@@ -384,10 +454,28 @@ def classify_email_tags_hierarchical(
 
     Returns:
         List[str]: A list of the final tag(s) determined by the classification. 
-                   Returns an empty list if classification fails at any step.
+                   Returns ["AI: Human review required"] if conflicting topics are detected upfront.
+                   Returns an empty list if classification fails at the first step or structure is invalid.
+                   Returns ["AI: Human review required"] if classification fails after succeeding at least once (ambiguous).
     """
-    logger.info(f"Starting hierarchical classification for conversation {front_conversation_id}")
+    logger.info(f"haraami Starting hierarchical classification process for conversation {front_conversation_id}")
     client = get_openai_client()
+
+    # --- BEGIN PRE-CHECK FOR CONFLICTING TOPICS ---    
+    try:
+        has_conflicts = _check_for_conflicting_top_level_topics(
+            client, conversation_text, sender_info, message_times
+        )
+        if has_conflicts:
+            logger.warning(f"Conflicting top-level topics detected by LLM for conversation {front_conversation_id}. Assigning 'AI: Human review required'.")
+            return ["AI: Human review required"]
+        else:
+            logger.info(f"No conflicting top-level topics detected. Proceeding with hierarchical classification for {front_conversation_id}.")
+    except Exception as conflict_check_error: # Catch errors during the check itself
+        logger.error(f"Error during conflict check for conversation {front_conversation_id}: {conflict_check_error}. Proceeding to hierarchical classification.", exc_info=True)
+        # Decide whether to proceed or require human review upon check failure
+        # For now, let's proceed, but this could be changed to return Human Review Required.
+    # --- END PRE-CHECK FOR CONFLICTING TOPICS ---    
     
     try:
         current_level_dict = settings.EMAIL_CATEGORIES
@@ -398,7 +486,8 @@ def classify_email_tags_hierarchical(
             options = list(current_level_dict.keys())
             if not options:
                 logger.warning(f"Reached an empty dictionary level in EMAIL_CATEGORIES at path: {classification_path}. Stopping classification.")
-                return [] # Cannot proceed
+                # Return human review if we got part way, empty list if structure was bad from start
+                return ["AI: Human review required"] if classification_path else []
 
             # Call LLM to choose from the current level's keys
             chosen_option = _call_llm_for_classification(
@@ -413,7 +502,8 @@ def classify_email_tags_hierarchical(
 
             if not chosen_option:
                 logger.warning(f"LLM failed to classify at level '{level_name}' with options {options} for conversation {front_conversation_id}. Path: {classification_path}")
-                return [] # Classification failed
+                # Return human review if we got part way, empty list if failed at first level
+                return ["AI: Human review required"] if classification_path else []
 
             logger.info(f"Classification level '{level_name}' chose: '{chosen_option}' for conversation {front_conversation_id}")
             classification_path.append(chosen_option)
@@ -426,31 +516,57 @@ def classify_email_tags_hierarchical(
                 current_level_dict = next_level
                 level_name = chosen_option # Use the chosen key as the next level name for prompts
             elif isinstance(next_level, list):
-                # Reached a list of final tags
-                final_tags = [tag for tag in next_level if isinstance(tag, str) and tag] # Filter out non-strings/empty
-                # *** MODIFIED: Return full path + final tags ***
-                tags_to_return = classification_path + final_tags
-                logger.info(f"Hierarchical classification complete for {front_conversation_id}. Path: {classification_path}. Final list tags: {final_tags}. Returning: {tags_to_return}")
-                return tags_to_return
+                # Reached a list. Need to ask the LLM to CHOOSE ONE tag from this list.
+                final_options = [tag for tag in next_level if isinstance(tag, str) and tag] # Filter out non-strings/empty
+                
+                if not final_options:
+                    logger.warning(f"Reached a list level, but it contains no valid string tags. Path: {classification_path}. Stopping classification.")
+                    # Treat as failure after partial success
+                    return ["AI: Human review required"]
+
+                # Call LLM to choose ONE from the final list
+                # Use the last chosen option name as the level name for clarity
+                final_level_name = classification_path[-1] if classification_path else "Final Tag"
+                chosen_final_tag = _call_llm_for_classification(
+                    client,
+                    conversation_text,
+                    sender_info,
+                    message_times,
+                    final_options, 
+                    final_level_name, # Ask it to choose a specific type of tag
+                    classification_path
+                )
+
+                if chosen_final_tag:
+                    tags_to_return = [chosen_final_tag]
+                    logger.info(f"Hierarchical classification complete for {front_conversation_id}. Path: {classification_path}. Final chosen tag from list: {chosen_final_tag}. Returning: {tags_to_return}")
+                    return tags_to_return
+                else:
+                    logger.warning(f"LLM failed to choose a final tag from the list {final_options} for conversation {front_conversation_id}. Path: {classification_path}")
+                    # Failed after reaching a list, needs review
+                    return ["AI: Human review required"]
+
             elif isinstance(next_level, str):
                 # Reached a single final tag string
                 final_tag = next_level
-                 # *** MODIFIED: Return full path + final tag ***
-                tags_to_return = classification_path + [final_tag]
+                
+                tags_to_return = [final_tag] # New way: Only leaf node
                 logger.info(f"Hierarchical classification complete for {front_conversation_id}. Path: {classification_path}. Final string tag: {final_tag}. Returning: {tags_to_return}")
                 return tags_to_return
             else:
                 # Unexpected structure
                 logger.error(f"Unexpected data type ({type(next_level)}) found in EMAIL_CATEGORIES at path {classification_path} for key '{chosen_option}'. Stopping classification.")
-                return []
+                # Return human review if we got part way, empty list if structure was bad from start
+                return ["AI: Human review required"] if classification_path else []
 
         # If the loop finishes because current_level_dict is no longer a dict (e.g., initial structure wasn't a dict)
         logger.error("EMAIL_CATEGORIES structure is not a dictionary at the top level or became invalid.")
-        return []
+        return [] # Structure issue, return empty list
         
     except Exception as e:
         logger.error(f"Unexpected error during hierarchical classification for conversation {front_conversation_id}: {e}", exc_info=True)
-        return []
+        # Unhandled exception, assume review needed if we made any progress
+        return ["AI: Human review required"] if classification_path else []
 
 def _get_all_defined_tags(hierarchy: Dict[str, Any]) -> set:
     """Recursively extracts all string values and keys (that map to lists/strings) 
@@ -509,7 +625,7 @@ def remove_conflicting_tags(
 
     try:
         all_defined_tags = _get_all_defined_tags(hierarchy)
-        logger.info(f"All tags defined in hierarchy: {all_defined_tags}")
+        # logger.info(f"All tags defined in hierarchy: {all_defined_tags}")
         
         # Convert lists to sets for efficient comparison
         existing_tags_set = set(existing_tags)

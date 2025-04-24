@@ -11,7 +11,7 @@ from app.crud.sync import email as email_crud_sync
 from app.crud.sync import tag as tag_crud_sync
 from app.db.session import SessionLocal
 from app.services.classification_service import classify_email_tags_hierarchical, remove_conflicting_tags
-from app.services.frontapp_service import add_conversation_tags, get_conversation_text, get_conversation_tags
+from app.services.frontapp_service import add_conversation_tags, get_conversation_text, get_conversation_tags, remove_conversation_tags
 from app.tasks.worker import celery_app
 
 logger = logging.getLogger(__name__)
@@ -123,8 +123,19 @@ def tag_email(email_id: str) -> Dict:
 
         logger.info(f"Email {email_id} classified with tags: {tags_to_apply}")
 
+        # --- Explicitly remove 'Human review required' tag if applying other tags --- 
+        human_review_tag = "AI: Human review required"
+        if tags_to_apply != [human_review_tag] and human_review_tag in existing_tags:
+             logger.info(f"Attempting to remove '{human_review_tag}' tag before applying new tags: {tags_to_apply}")
+             try:
+                 remove_conversation_tags(front_conversation_id, [human_review_tag])
+                 logger.info(f"Successfully removed '{human_review_tag}' tag for conversation {front_conversation_id}.")
+             except Exception as remove_hr_error:
+                 logger.error(f"Failed to remove '{human_review_tag}' tag for {front_conversation_id}: {remove_hr_error}. Proceeding anyway.")
+        # ------------------------------------------------------------------------
+
         # *** NEW: Remove conflicting tags before adding new ones ***
-        logger.info(f"Attempting to remove conflicting tags for {front_conversation_id} based on hierarchy.")
+        logger.info(f"Attempting to remove other conflicting tags for {front_conversation_id} based on hierarchy.")
         removal_success = remove_conflicting_tags(
             conversation_id=front_conversation_id,
             existing_tags=existing_tags, # Pass the original list fetched earlier

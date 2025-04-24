@@ -3,6 +3,7 @@
 import logging
 import httpx
 import json
+import re # Import the regex module
 from typing import List, Dict, Any
 from typing import Dict, List, Optional
 
@@ -382,16 +383,17 @@ def remove_conversation_tags(conversation_id: str, tag_names_to_remove: List[str
 
 
 def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
-    """Fetch all message bodies, sender info, and timestamps from a Front conversation.
+    """Fetch all message bodies, sender info, and timestamps from a Front conversation,
+       cleaned and in chronological order.
 
     Args:
         conversation_id (str): The Front conversation ID.
 
     Returns:
         Dict[str, Any]: A dictionary containing:
-            'text' (str): Concatenated text of all message bodies.
-            'senders' (List[str]): List of sender emails or usernames.
-            'timestamps' (List[str]): List of message creation timestamps in readable format.
+            'text' (str): Concatenated text of all message bodies (HTML removed, chronological).
+            'senders' (List[str]): List of sender emails or usernames (chronological).
+            'timestamps' (List[str]): List of message creation timestamps (chronological).
             Returns {'text': '', 'senders': [], 'timestamps': []} if conversation not found or has no messages.
 
     Raises:
@@ -411,7 +413,7 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
 
     all_messages_text: List[str] = []
     senders: List[str] = []
-    timestamps: List[str] = []  # Changed to store formatted datetime strings
+    timestamps: List[str] = []
 
     # TODO: Configure SSL verification properly
     with httpx.Client(verify=False) as client:
@@ -421,16 +423,24 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
             response.raise_for_status()
             
             data = response.json()
-            # logger.info(f"Raw message data: {data}")
             messages = data.get("_results", [])
             logger.info(f"Successfully fetched {len(messages)} messages for conversation {conversation_id}.")
 
+            # --- Reverse messages to get chronological order ---
+            messages.reverse()
+            logger.info(f"Reversed messages for chronological processing.")
+            # -------------------------------------------------
+
             for i, message in enumerate(messages):
-                body = message.get('body', '')
+                raw_body = message.get('body', '')
                 created_at = message.get('created_at')  # Unix timestamp
                 
-                if body:
-                    all_messages_text.append(body.strip())
+                # --- Clean HTML from body --- 
+                if raw_body:
+                    cleaned_body = re.sub('<[^>]*>', '', raw_body).strip() # Remove HTML tags
+                    if cleaned_body:
+                        all_messages_text.append(cleaned_body)
+                # --------------------------
 
                 # First try to get sender from author
                 sender_name = "Unknown Sender"
@@ -464,8 +474,9 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
                 else:
                     timestamps.append("Unknown Time")
 
-            # Join all message bodies into a single string
-            full_conversation = "\n\n---\n\n".join(all_messages_text)
+            # --- Join cleaned message bodies with newlines --- 
+            full_conversation = "\n\n".join(all_messages_text)
+            # ------------------------------------------------
             logger.info(f"Concatenated conversation length: {len(full_conversation)} chars")
             
             return {
