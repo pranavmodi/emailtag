@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, String, Table
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, String, Table, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -32,7 +32,20 @@ class Email(Base):
     content_text: Mapped[str] = mapped_column(String, nullable=True)
     content_html: Mapped[str] = mapped_column(String, nullable=True)
     raw_data: Mapped[dict] = mapped_column(JSON, nullable=False)
-    processed: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # Add status field
+    status: Mapped[str] = mapped_column(String, default="pending_initial", index=True) # e.g., pending_initial, pending_ocr, ocr_completed, processing, processed, error
+    
+    # Add OCR tracking fields
+    ocr_attachments_total: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    ocr_attachments_completed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # Add OCR result fields
+    ocr_patient_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    ocr_date_of_birth: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    ocr_date_of_incident: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    ocr_metadata: Mapped[Optional[str]] = mapped_column(String, nullable=True) # Store combined metadata if multiple attachments
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

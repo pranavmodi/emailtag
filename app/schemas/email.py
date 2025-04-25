@@ -22,19 +22,33 @@ class EmailCreate(EmailBase):
     """Schema for creating a new email."""
     
     raw_data: Dict[str, Any]
+    status: Optional[str] = "pending_initial"
+    ocr_attachments_total: Optional[int] = None
+    ocr_attachments_completed: Optional[int] = 0
 
 
 class EmailUpdate(BaseModel):
     """Schema for updating an email."""
     
-    processed: Optional[bool] = None
-    
+    status: Optional[str] = None
+    ocr_patient_id: Optional[str] = None
+    ocr_date_of_birth: Optional[str] = None
+    ocr_date_of_incident: Optional[str] = None
+    ocr_metadata: Optional[str] = None
+    ocr_attachments_completed: Optional[int] = None
+
 
 class EmailInDBBase(EmailBase):
     """Base schema for email in database."""
     
     id: UUID
-    processed: bool
+    status: str
+    ocr_attachments_total: Optional[int] = None
+    ocr_attachments_completed: Optional[int] = None
+    ocr_patient_id: Optional[str] = None
+    ocr_date_of_birth: Optional[str] = None
+    ocr_date_of_incident: Optional[str] = None
+    ocr_metadata: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     
@@ -112,5 +126,12 @@ class PreprocessingWebhook(BaseModel):
     """Schema for preprocessing service webhook payload."""
     
     email_id: UUID
+    ocr_text: Optional[str] = None
+    cleaned_text: Optional[str] = None
+    cleaned_html: Optional[str] = None
+    extracted_entities: Optional[List[Any]] = None
+    confidence_score: Optional[float] = None
+    processing_status: Optional[str] = None
+    error_message: Optional[str] = None
     # Add other fields expected from the preprocessing service if known
     # e.g., cleaned_text: str, entities: List[str], etc. 

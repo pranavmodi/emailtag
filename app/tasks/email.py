@@ -5,6 +5,10 @@ from typing import Dict, List
 from uuid import UUID
 
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from celery import Celery
+from celery.utils.log import get_task_logger
+import httpx
 
 from app.core.config import settings
 from app.crud.sync import email as email_crud_sync
@@ -13,8 +17,9 @@ from app.db.session import SessionLocal
 from app.services.classification_service import classify_email_tags_hierarchical, remove_conflicting_tags
 from app.services.frontapp_service import add_conversation_tags, get_conversation_text, get_conversation_tags, remove_conversation_tags
 from app.tasks.worker import celery_app
+from app.crud import email as email_crud
 
-logger = logging.getLogger(__name__)
+logger = get_task_logger(__name__)
 
 
 @celery_app.task(name="app.tasks.email.process_email")
@@ -191,3 +196,62 @@ def tag_email(email_id: str) -> Dict:
 
     finally:
         db.close() 
+
+# Define error status constant
+OCR_ERROR_STATUS = "ocr_error"
+
+def update_email_status_sync(email_uuid: UUID, status: str):
+    """Helper function to update email status synchronously."""
+    db = SessionLocal()
+    try:
+        success = email_crud_sync.update_status(db, email_id=email_uuid, status=status)
+        if success:
+            logger.info(f"Updated status synchronously for email {email_uuid} to {status}")
+        else:
+            logger.error(f"Failed to update status synchronously for email {email_uuid} to {status} (email not found?)")
+    except Exception as e:
+        logger.exception(f"Error updating status synchronously for email {email_uuid} to {status}: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+@celery_app.task(name="tasks.send_attachment_to_ocr")
+def send_attachment_to_ocr(email_id: str, attachment_url: str):
+    """Sends an attachment URL to the OCR service."""
+    logger.info(f"Sending attachment {attachment_url} for email {email_id} to OCR service.")
+    ocr_service_endpoint = str(settings.OCR_SERVICE_ENDPOINT) 
+    
+    try:
+        email_uuid = UUID(email_id) # Convert ID early for error handling
+    except ValueError:
+        logger.error(f"Invalid UUID format for email_id in send_attachment_to_ocr task: {email_id}")
+        return # Cannot proceed or update status without valid UUID
+
+    payload = {
+        "email_id": email_id,
+        "file_url": attachment_url
+    }
+    
+    try:
+        with httpx.Client() as client:
+            response = client.post(ocr_service_endpoint, json=payload, timeout=60.0) 
+            response.raise_for_status() 
+            logger.info(f"Successfully sent attachment to OCR service for email {email_id}. Response: {response.status_code}")
+    except httpx.RequestError as exc:
+        logger.error(f"Error sending attachment to OCR service for email {email_id}: {exc}. Updating status to {OCR_ERROR_STATUS}.")
+        # Update email status to 'ocr_error' using sync crud
+        update_email_status_sync(email_uuid, OCR_ERROR_STATUS)
+        # TODO: Implement retry logic if desired, potentially based on exception type
+    except Exception as e:
+        logger.exception(f"Unexpected error sending attachment to OCR for email {email_id}: {e}. Updating status to {OCR_ERROR_STATUS}.")
+        # Update email status to 'ocr_error' using sync crud
+        update_email_status_sync(email_uuid, OCR_ERROR_STATUS)
+
+# Helper function to update status (consider moving to crud)
+async def update_email_status(db: AsyncSession, email_id: str, status: str):
+    email = await email_crud.get(db, id=email_id)
+    if email:
+        update_data = {"status": status}
+        await email_crud.update(db, db_obj=email, obj_in=update_data)
+        logger.info(f"Updated status for email {email_id} to {status}") 

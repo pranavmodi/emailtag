@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, HttpUrl
 import json
 
 from pydantic import PostgresDsn, field_validator, model_validator, Json
@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     LLM_PROVIDER: Optional[str] = None
     OPENAI_MODEL_VERSION: Optional[str] = None
     AGENT_MODEL: Optional[str] = None
+
+    # New settings
+    MAX_CLASSIFICATION_RETRIES: int = 3
+    FRONTAPP_API_TOKEN: str
+    FRONTAPP_WEBHOOK_SECRET: str
+    
+    # Add OCR Service Endpoint
+    OCR_SERVICE_ENDPOINT: HttpUrl = "http://localhost:5000/ocr" # Default, override in .env
 
     @field_validator("ASYNC_DATABASE_URL", mode="before")
     def assemble_async_db_connection(cls, v: Optional[str], info) -> Any:
