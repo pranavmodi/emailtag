@@ -125,28 +125,38 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     
     # Replace with actual file paths for testing
-    test_file_path_1 = "/path/to/your/document.pdf" 
-    test_file_path_2 = "/path/to/your/image.png"
+    test_file_path_1 = "ocr_test_PRE100345.pdf" # Using the provided test file
+    # test_file_path_2 = "/path/to/your/image.png" # Optional: add another file path
 
-    if test_file_path_1 != "/path/to/your/document.pdf":
+    # Create a list of file paths to test
+    files_to_test = [test_file_path_1]
+    # if test_file_path_2 != "/path/to/your/image.png": 
+    #    files_to_test.append(test_file_path_2)
+
+    if files_to_test:
         try:
             print("Testing OCR service with file paths...")
-            # Pass a list of file paths
-            ocr_result = perform_ocr([test_file_path_1, test_file_path_2]) 
+            # Pass the list of file paths
+            ocr_result = perform_ocr(files_to_test)
             
             if ocr_result:
-                print("OCR Result Received:")
+                print("\n--- OCR Result Received ---")
                 import json
                 print(json.dumps(ocr_result, indent=4))
+                print("---------------------------")
                 
                 # Example: Accessing specific info
                 if ocr_result.get("data"):
-                    for item in ocr_result["data"]:
-                        print(f"  Document Info: {item.get('info')}")
+                    for i, item in enumerate(ocr_result["data"]):
+                        print(f"\n  Document {i+1} Info:")
+                        info = item.get('info', {})
+                        print(f"    Accession Nums: {info.get('accession_nums')}")
+                        print(f"    Patient ID:     {info.get('patient_id')}")
+                        print(f"    Study Type:     {info.get('study_type')}")
             else:
-                print("OCR call did not return data (likely skipped or failed).")
+                print("\nOCR call did not return data (likely skipped or failed).")
                 
         except Exception as e:
-            print(f"OCR test failed: {e}")
+            print(f"\nOCR test failed: {e}")
     else:
-         print("Please replace '/path/to/your/...' with actual file paths to run the OCR test.") 
+         print("\nNo valid file paths specified for the test.") 
