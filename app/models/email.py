@@ -2,10 +2,10 @@
 
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, String, Table, Integer, ARRAY
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -40,13 +40,10 @@ class Email(Base):
     ocr_attachments_total: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     ocr_attachments_completed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
-    # Add OCR result fields
-    ocr_patient_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    ocr_date_of_birth: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    ocr_date_of_incident: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    ocr_metadata: Mapped[Optional[str]] = mapped_column(String, nullable=True) # Store combined metadata if multiple attachments
-    ocr_accession_nums: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String), nullable=True)
-    ocr_study_type: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String), nullable=True)
+    # Store structured OCR results for potentially multiple attachments
+    # Each item in the list should be a dict representing one attachment's results
+    # e.g., [{"attachment_id": "att_123", "patient_id": "P1", "accession_nums": ["A1"], ...}, ...]
+    ocr_results: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

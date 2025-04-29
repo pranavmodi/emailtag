@@ -25,19 +25,22 @@ class EmailCreate(EmailBase):
     status: Optional[str] = "pending_initial"
     ocr_attachments_total: Optional[int] = None
     ocr_attachments_completed: Optional[int] = 0
+    # ocr_results is not typically set on creation, it's populated later
 
 
 class EmailUpdate(BaseModel):
     """Schema for updating an email."""
     
     status: Optional[str] = None
-    ocr_patient_id: Optional[str] = None
-    ocr_date_of_birth: Optional[str] = None
-    ocr_date_of_incident: Optional[str] = None
-    ocr_metadata: Optional[str] = None
+    # ocr_patient_id: Optional[str] = None # Removed
+    # ocr_date_of_birth: Optional[str] = None # Removed
+    # ocr_date_of_incident: Optional[str] = None # Removed
+    # ocr_metadata: Optional[str] = None # Removed
     ocr_attachments_completed: Optional[int] = None
-    ocr_accession_nums: Optional[List[str]] = None
-    ocr_study_type: Optional[List[str]] = None
+    # ocr_accession_nums: Optional[List[str]] = None # Removed
+    # ocr_study_type: Optional[List[str]] = None # Removed
+    ocr_results: Optional[List[Dict[str, Any]]] = None # Added JSONB field
+    raw_data: Optional[Dict[str, Any]] = None # Allow updating raw_data if needed
 
 
 class EmailInDBBase(EmailBase):
@@ -47,12 +50,13 @@ class EmailInDBBase(EmailBase):
     status: str
     ocr_attachments_total: Optional[int] = None
     ocr_attachments_completed: Optional[int] = None
-    ocr_patient_id: Optional[str] = None
-    ocr_date_of_birth: Optional[str] = None
-    ocr_date_of_incident: Optional[str] = None
-    ocr_metadata: Optional[str] = None
-    ocr_accession_nums: Optional[List[str]] = None
-    ocr_study_type: Optional[List[str]] = None
+    # ocr_patient_id: Optional[str] = None # Removed
+    # ocr_date_of_birth: Optional[str] = None # Removed
+    # ocr_date_of_incident: Optional[str] = None # Removed
+    # ocr_metadata: Optional[str] = None # Removed
+    # ocr_accession_nums: Optional[List[str]] = None # Removed
+    # ocr_study_type: Optional[List[str]] = None # Removed
+    ocr_results: Optional[List[Dict[str, Any]]] = None # Added JSONB field
     created_at: datetime
     updated_at: datetime
     
@@ -65,19 +69,22 @@ class EmailInDBBase(EmailBase):
 class Email(EmailInDBBase):
     """Schema for email data returned to the client."""
     
-    ocr_accession_nums: Optional[List[str]] = None
-    ocr_study_type: Optional[List[str]] = None
-    
+    # ocr_accession_nums: Optional[List[str]] = None # Removed
+    # ocr_study_type: Optional[List[str]] = None # Removed
+    # ocr_results is inherited from EmailInDBBase
     pass
 
 
 class EmailInDB(EmailInDBBase):
     """Schema for email data in the database."""
     
-    ocr_accession_nums: Optional[List[str]] = None
-    ocr_study_type: Optional[List[str]] = None
-    
+    # ocr_accession_nums: Optional[List[str]] = None # Removed
+    # ocr_study_type: Optional[List[str]] = None # Removed
+    # ocr_results is inherited from EmailInDBBase
     raw_data: Dict[str, Any]
+    
+    # Relationship loading (example, adjust as needed)
+    tags: List["Tag"] = []
 
 
 class TagBase(BaseModel):

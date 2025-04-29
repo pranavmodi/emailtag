@@ -345,71 +345,79 @@ def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
              logger.warning(f"Email {email_id} is not in pending_ocr or ocr_error state (current: {email_obj.status}). Skipping update.")
              return # Avoid race conditions or double processing
 
-        # Extract data safely
-        extracted_data = {}
+        # Prepare structured result for this attachment
+        attachment_ocr_data = {}
         try:
             # Assuming the structure: {"data": [{"info": {...}}], "message": "..."}
             ocr_info = ocr_result.get("data", [{}])[0].get("info", {})
             if not ocr_info:
                  logger.warning(f"OCR result for email {email_id} lacks 'info' field or is empty. Result: {ocr_result}")
-                 # Decide if this is an error or just no data found
-                 # update_email_status_sync(email_uuid, OCR_ERROR_STATUS) # Optionally mark as error
-                 # return 
-
-            extracted_data['patient_id'] = ocr_info.get("patient_id")
-            extracted_data['accession_nums'] = ocr_info.get("accession_nums", [])
-            extracted_data['study_type'] = ocr_info.get("study_type", [])
-            # Add any other fields from 'info' you need to store
+                 # Store basic info even if OCR info is empty, to mark as processed
+                 attachment_ocr_data = {
+                     "attachment_url": attachment_url, # Use URL as identifier
+                     "patient_id": None,
+                     "accession_nums": [],
+                     "study_type": [],
+                     "error": "OCR result format invalid or empty info field."
+                 }
+            else:
+                # Store the successfully extracted info
+                attachment_ocr_data = {
+                    "attachment_url": attachment_url,
+                    "patient_id": ocr_info.get("patient_id"),
+                    "accession_nums": ocr_info.get("accession_nums", []),
+                    "study_type": ocr_info.get("study_type", [])
+                    # Add any other fields from 'info' you need to store here
+                    # e.g., "dob": ocr_info.get("date_of_birth")
+                }
 
         except (AttributeError, IndexError, TypeError, KeyError) as parse_error:
             logger.error(f"Error parsing OCR result structure for email {email_id}: {parse_error}. Result: {ocr_result}")
-            update_email_status_sync(email_uuid, OCR_ERROR_STATUS)
-            return # Abort
+            # Store error information in the results
+            attachment_ocr_data = {
+                "attachment_url": attachment_url,
+                "error": f"Failed to parse OCR result: {parse_error}"
+            }
+            # Don't set global OCR_ERROR_STATUS here, let completion check handle it
 
-        # Prepare update data
+        # Prepare update payload for the Email record
         update_payload = {}
         
-        # Update Patient ID only if it's currently null and we have a new value
-        if not email_obj.ocr_patient_id and extracted_data.get('patient_id'):
-            update_payload['ocr_patient_id'] = extracted_data['patient_id']
-            logger.info(f"Setting Patient ID for email {email_id} based on OCR result.")
-        elif extracted_data.get('patient_id') and email_obj.ocr_patient_id != extracted_data.get('patient_id'):
-             logger.warning(f"OCR returned a different Patient ID for email {email_id}. Existing: {email_obj.ocr_patient_id}, New: {extracted_data['patient_id']}. Sticking with the existing one.")
-
-        # Append Accession Nums and Study Type (avoiding duplicates)
-        current_accession_nums = set(email_obj.ocr_accession_nums or [])
-        new_accession_nums = set(extracted_data.get('accession_nums', []))
-        combined_accession_nums = list(current_accession_nums.union(new_accession_nums))
-        if combined_accession_nums != (email_obj.ocr_accession_nums or []): # Update only if changed
-            update_payload['ocr_accession_nums'] = combined_accession_nums
-
-        current_study_types = set(email_obj.ocr_study_type or [])
-        new_study_types = set(extracted_data.get('study_type', []))
-        combined_study_types = list(current_study_types.union(new_study_types))
-        if combined_study_types != (email_obj.ocr_study_type or []): # Update only if changed
-            update_payload['ocr_study_type'] = combined_study_types
+        # Fetch current results, initialize if null
+        current_ocr_results = email_obj.ocr_results or []
+        
+        # Append the new result dictionary
+        # Consider adding logic to update if an entry for this attachment_url already exists (e.g., on retry)
+        current_ocr_results.append(attachment_ocr_data)
+        
+        # Set the updated list in the payload
+        update_payload['ocr_results'] = current_ocr_results
 
         # Increment completed count - crucial!
         completed_count = (email_obj.ocr_attachments_completed or 0) + 1
         update_payload['ocr_attachments_completed'] = completed_count
 
-        # Update the email record
+        # Update the email record using the sync CRUD helper
+        # This now updates ocr_results and ocr_attachments_completed
         updated_email = email_crud_sync.update(db, db_obj=email_obj, obj_in=update_payload)
-        # db.commit() # Commit is handled by update() now
-        # db.refresh(updated_email) # Refresh is handled by update() now
 
-        logger.info(f"Updated email {email_id} with OCR results. Completed {completed_count}/{updated_email.ocr_attachments_total} attachments.")
+        logger.info(f"Updated email {email_id} with OCR result for attachment {attachment_url}. Completed {completed_count}/{updated_email.ocr_attachments_total} attachments.")
 
         # Check if all attachments are processed
         if updated_email.ocr_attachments_total is not None and completed_count >= updated_email.ocr_attachments_total:
-            logger.info(f"All OCR processing complete for email {email_id}. Setting status to ocr_completed and queueing for final processing.")
+            # Check if any attachment processing resulted in an error
+            has_errors = any(result.get('error') for result in updated_email.ocr_results or [])
+            final_status = OCR_ERROR_STATUS if has_errors else "ocr_completed"
+            
+            logger.info(f"All OCR processing complete for email {email_id}. Setting status to {final_status} and queueing for final processing.")
             # Update status separately to ensure it happens after field updates
-            email_crud_sync.update_status(db, email_id=email_uuid, status="ocr_completed") 
-            # db.commit() # Commit handled by update_status
-            process_email.delay(str(email_uuid)) # Queue next step
-        # else:
-            # Commit the partial update if not all attachments are done (commit is handled by update() above)
-            # db.commit() 
+            email_crud_sync.update_status(db, email_id=email_uuid, status=final_status)
+            
+            # Only queue next step if there were no errors
+            if final_status == "ocr_completed":
+                process_email.delay(str(email_uuid))
+            else:
+                logger.warning(f"Skipping final processing for email {email_id} due to OCR errors.")
 
     except Exception as db_exc:
         logger.exception(f"Database error processing OCR result for email {email_id}: {db_exc}")
