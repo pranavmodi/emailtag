@@ -18,6 +18,7 @@ from app.crud.sync import tag as tag_crud_sync
 from app.db.session import SessionLocal
 from app.services.classification_service import classify_email_tags_hierarchical, remove_conflicting_tags
 from app.services.frontapp_service import add_conversation_tags, get_conversation_text, get_conversation_tags, remove_conversation_tags
+from app.services.ocr_service import process_ocr_content # Import the new function
 from app.tasks.worker import celery_app
 from app.crud import email as email_crud
 from app.models.email import Email # Added for type hinting
@@ -242,8 +243,7 @@ def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
     Downloads an attachment, sends it to the synchronous OCR service,
     and updates the email record directly.
     """
-    logger.info(f"Starting OCR for attachment {attachment_url} for email {email_id}")
-    ocr_service_endpoint = str(settings.OCR_SERVICE_ENDPOINT) 
+    logger.info(f"Starting OCR processing via service for attachment {attachment_url} for email {email_id}")
     
     try:
         email_uuid = UUID(email_id)
@@ -283,53 +283,43 @@ def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
         update_email_status_sync(email_uuid, OCR_ERROR_STATUS)
         return # Abort after updating status
 
-    # --- Encode Content ---
-    try:
-        encoded_content = base64.b64encode(attachment_content).decode('utf-8')
-        logger.debug(f"Base64 encoded attachment for email {email_id}. Encoded size: {len(encoded_content)}")
-    except Exception as exc:
-        logger.exception(f"Error Base64 encoding attachment for email {email_id}: {exc}")
-        update_email_status_sync(email_uuid, OCR_ERROR_STATUS)
-        return # Abort
-
     # --- Call OCR Service ---
-    payload = {
-        "data": [
-            {"encoded_string": encoded_content}
-        ]
-    }
-    
     try:
-        logger.info(f"Calling OCR service at {ocr_service_endpoint} for email {email_id}...")
-        # Consider adding custom headers if the OCR service requires them (e.g., API key)
-        headers = {'Content-Type': 'application/json'} 
-        with httpx.Client() as client:
-            response = client.post(ocr_service_endpoint, json=payload, headers=headers, timeout=300.0) # Increased timeout for OCR processing
-            response.raise_for_status() 
-            ocr_result = response.json()
-            logger.info(f"Successfully received OCR result for email {email_id}. Status: {response.status_code}")
-            logger.debug(f"OCR Result payload: {ocr_result}")
+        logger.info(f"Calling OCR service function for email {email_id}...")
+        ocr_result = process_ocr_content(attachment_content) # Call the service function
+
+        if ocr_result is None:
+            # Handle cases where process_ocr_content returns None (e.g., empty content)
+            logger.warning(f"OCR service function returned None for email {email_id}. Assuming no result.")
+            # Mark as error or handle as needed - for now, let DB update handle it as potentially empty
+            ocr_result = {} # Set to empty dict to avoid errors below, but DB update logic will handle empty info
+        else:
+             logger.info(f"Successfully received OCR result via service function for email {email_id}.")
+             logger.debug(f"OCR Result payload: {ocr_result}")
 
     except httpx.HTTPStatusError as exc:
-        logger.error(f"HTTP error calling OCR service for email {email_id}: {exc.response.status_code} - {exc.response.text}")
+        # Raised by process_ocr_content if API returns 4xx/5xx
+        logger.error(f"HTTP error from OCR service function for email {email_id}: {exc.response.status_code} - {exc.response.text}")
         update_email_status_sync(email_uuid, OCR_ERROR_STATUS)
         # Consider retry for transient server errors (e.g., 5xx)
         if 500 <= exc.response.status_code < 600:
             try:
                 self.retry(exc=exc)
             except Exception as retry_exc:
-                logger.error(f"Retry failed for OCR HTTP error: {retry_exc}")
+                logger.error(f"Retry failed for OCR service HTTP error: {retry_exc}")
         return # Abort after updating status
     except httpx.RequestError as exc:
-        logger.error(f"Request error calling OCR service for email {email_id}: {exc}")
+        # Raised by process_ocr_content for connection/timeout issues
+        logger.error(f"Request error from OCR service function for email {email_id}: {exc}")
         update_email_status_sync(email_uuid, OCR_ERROR_STATUS)
         try:
             self.retry(exc=exc) # Retry on general request errors
         except Exception as retry_exc:
-             logger.error(f"Retry failed for OCR request error: {retry_exc}")
+             logger.error(f"Retry failed for OCR service request error: {retry_exc}")
         return # Abort after updating status
     except Exception as exc:
-        logger.exception(f"Unexpected error calling OCR service or parsing result for email {email_id}: {exc}")
+        # Catch other exceptions from process_ocr_content (e.g., encoding, general exceptions)
+        logger.exception(f"Unexpected error calling OCR service function or processing its result for email {email_id}: {exc}")
         update_email_status_sync(email_uuid, OCR_ERROR_STATUS)
         return # Abort
 
