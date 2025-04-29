@@ -6,11 +6,9 @@ import json
 import logging
 from typing import Any, Dict, List
 from uuid import UUID
-import mailparser
 import asyncio
 import httpx
 import random
-from pydantic import BaseModel, Field, HttpUrl
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,21 +16,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.crud import email as email_crud
 from app.db.session import get_db
-from app.schemas.email import EmailCreate, FrontAppWebhook, PreprocessingWebhook, EmailUpdate
+from app.schemas.email import EmailCreate, FrontAppWebhook, PreprocessingWebhook, EmailUpdate, Email
 from app.tasks.email import process_email, send_attachment_to_ocr
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-# Define Pydantic model for OCR webhook data
-class OcrWebhookData(BaseModel):
-    email_id: UUID
-    patient_id: str
-    date_of_birth: str
-    date_of_incident: str
-    metadata: str
 
 
 def verify_webhook_signature(
@@ -309,132 +298,7 @@ async def preprocessing_webhook(
         )
 
 
-# Add the new OCR webhook endpoint here
-@router.post("/ocr", status_code=status.HTTP_202_ACCEPTED)
-async def ocr_webhook(
-    request: Request,
-    db: AsyncSession = Depends(get_db), # Uncomment if DB interaction is needed
-) -> Dict[str, Any]:
-    """
-    Webhook endpoint for OCR process outputs.
-    
-    Accepts patient ID, DOB, DOI, and metadata.
-    """
-    body = await request.body()
-    logger.info("Received OCR webhook request")
-    
-    try:
-        payload = json.loads(body)
-        ocr_data = OcrWebhookData(**payload)
-        logger.info(f"Received OCR data: Patient ID={ocr_data.patient_id}, DOB={ocr_data.date_of_birth}, DOI={ocr_data.date_of_incident}")
-        logger.debug(f"OCR Metadata (first 100 chars): {ocr_data.metadata[:100]}...")
+# The /ocr webhook endpoint has been removed as OCR processing is now handled synchronously within the Celery task.
 
-        # Fetch the email record
-        email = await email_crud.get(db, id=ocr_data.email_id)
-        if not email:
-            logger.error(f"Received OCR data for non-existent email ID: {ocr_data.email_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Email {ocr_data.email_id} not found",
-            )
-
-        if email.status != "pending_ocr":
-            logger.warning(f"Received OCR data for email {ocr_data.email_id} which is not in 'pending_ocr' status (current: {email.status}). Ignoring.")
-            # Return accepted to acknowledge receipt, but don't process further
-            return {"status": "accepted", "email_id": str(ocr_data.email_id), "info": "Email not awaiting OCR"}
-
-        # Combine metadata if multiple OCR results come in (append with separator)
-        existing_metadata = email.ocr_metadata or ""
-        new_metadata = f"{existing_metadata}\n---\nOCR Result:\n{ocr_data.metadata}".strip()
-
-        # Update email with OCR results and increment completion count
-        update_data = EmailUpdate(
-            ocr_patient_id=ocr_data.patient_id, # Assuming last OCR result is definitive for these fields
-            ocr_date_of_birth=ocr_data.date_of_birth,
-            ocr_date_of_incident=ocr_data.date_of_incident,
-            ocr_metadata=new_metadata,
-            ocr_attachments_completed=(email.ocr_attachments_completed or 0) + 1,
-        )
-        
-        updated_email = await email_crud.update(db, db_obj=email, obj_in=update_data)
-        logger.info(f"Updated email {updated_email.id} with OCR data. Completed {updated_email.ocr_attachments_completed}/{updated_email.ocr_attachments_total} attachments.")
-
-        # Check if all attachments are processed
-        if updated_email.ocr_attachments_completed >= updated_email.ocr_attachments_total:
-            logger.info(f"All OCR processing complete for email {updated_email.id}. Queueing for final processing.")
-            final_update_data = EmailUpdate(status="ocr_completed")
-            await email_crud.update(db, db_obj=updated_email, obj_in=final_update_data)
-            process_email.delay(str(updated_email.id))
-        else:
-            # Still waiting for more OCR results
-            await db.commit() # Commit the partial update
-
-        return {"status": "accepted", "patient_id": ocr_data.patient_id}
-
-    except json.JSONDecodeError:
-        logger.error("Error decoding JSON payload for OCR webhook")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid JSON format",
-        )
-    except Exception as e: # Catches validation errors from Pydantic as well
-        logger.error(f"Error processing OCR webhook payload: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid payload format: {str(e)}",
-        )
-
-
-# --- Dummy OCR Endpoint for Testing --- 
-
-class DummyOcrRequest(BaseModel):
-    """Schema for the dummy OCR request."""
-    email_id: UUID
-    file_url: str # We won't actually use the URL in the dummy
-
-@router.post("/dummy-ocr", status_code=status.HTTP_200_OK)
-async def dummy_ocr_endpoint(
-    request_data: DummyOcrRequest
-) -> Dict[str, Any]:
-    """
-    Dummy endpoint to simulate receiving a request from send_attachment_to_ocr
-    and calling back the /ocr webhook with dummy data.
-    """
-    logger.info(f"[DUMMY OCR] Received request for email_id: {request_data.email_id}, url: {request_data.file_url}")
-
-    # Simulate processing time
-    await asyncio.sleep(random.uniform(1, 3)) # Wait 1-3 seconds
-
-    # Construct dummy results
-    dummy_results = {
-        "email_id": str(request_data.email_id), # Convert UUID to string for JSON
-        "patient_id": f"PAT_{random.randint(1000, 9999)}",
-        "date_of_birth": f"19{random.randint(50,99)}-{random.randint(1,12):02d}-{random.randint(1,28):02d}",
-        "date_of_incident": f"2024-{random.randint(1,4):02d}-{random.randint(1,28):02d}",
-        "metadata": f"Dummy OCR text extracted from {request_data.file_url}. Processed successfully."
-    }
-
-    # Get the actual callback URL (internal call to our own webhook)
-    # Assuming the app runs on localhost with the configured port
-    callback_url = f"http://localhost:{settings.PORT}{settings.API_V1_PREFIX}/webhooks/ocr"
-
-    logger.info(f"[DUMMY OCR] Calling back actual /ocr webhook at {callback_url} for email {request_data.email_id}")
-
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(callback_url, json=dummy_results, timeout=10.0)
-            response.raise_for_status() # Check if the callback was accepted (e.g., 202)
-            logger.info(f"[DUMMY OCR] Callback to {callback_url} successful, status: {response.status_code}")
-            return {"status": "dummy_ocr_complete", "callback_status": response.status_code}
-    except httpx.RequestError as exc:
-        logger.error(f"[DUMMY OCR] Error calling back {callback_url}: {exc}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Dummy OCR failed to call back webhook: {exc}"
-        )
-    except Exception as e:
-        logger.exception(f"[DUMMY OCR] Unexpected error during callback to {callback_url}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Dummy OCR encountered an error: {e}"
-        ) 
+# --- Dummy OCR Endpoint for Testing (REMOVED) --- 
+# The dummy OCR endpoint is no longer needed as the synchronous OCR flow is implemented directly in the task. 

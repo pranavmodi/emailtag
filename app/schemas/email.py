@@ -36,6 +36,8 @@ class EmailUpdate(BaseModel):
     ocr_date_of_incident: Optional[str] = None
     ocr_metadata: Optional[str] = None
     ocr_attachments_completed: Optional[int] = None
+    ocr_accession_nums: Optional[List[str]] = None
+    ocr_study_type: Optional[List[str]] = None
 
 
 class EmailInDBBase(EmailBase):
@@ -49,6 +51,8 @@ class EmailInDBBase(EmailBase):
     ocr_date_of_birth: Optional[str] = None
     ocr_date_of_incident: Optional[str] = None
     ocr_metadata: Optional[str] = None
+    ocr_accession_nums: Optional[List[str]] = None
+    ocr_study_type: Optional[List[str]] = None
     created_at: datetime
     updated_at: datetime
     
@@ -61,11 +65,17 @@ class EmailInDBBase(EmailBase):
 class Email(EmailInDBBase):
     """Schema for email data returned to the client."""
     
+    ocr_accession_nums: Optional[List[str]] = None
+    ocr_study_type: Optional[List[str]] = None
+    
     pass
 
 
 class EmailInDB(EmailInDBBase):
     """Schema for email data in the database."""
+    
+    ocr_accession_nums: Optional[List[str]] = None
+    ocr_study_type: Optional[List[str]] = None
     
     raw_data: Dict[str, Any]
 

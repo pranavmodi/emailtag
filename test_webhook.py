@@ -175,7 +175,7 @@ import requests
 import sys
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 import dotenv
 
@@ -184,6 +184,7 @@ dotenv.load_dotenv()
 
 # Configuration
 DEFAULT_WEBHOOK_URL = "https://localhost:8444/api/v1/webhooks/frontapp"
+DEFAULT_WEBHOOK_URL_HTTP = "http://localhost:8000/api/v1/webhooks/frontapp"
 WEBHOOK_SECRET = os.getenv("FRONTAPP_WEBHOOK_SECRET", "testsecret")
 
 # Sample email templates for realistic testing
@@ -407,7 +408,8 @@ def generate_recipient() -> Dict[str, str]:
 
 def create_frontapp_payload(template: Dict[str, str], 
                           sender_email: Optional[str] = None,
-                          include_html: bool = True) -> Dict:
+                          include_html: bool = True,
+                          num_attachments: int = 0) -> Dict[str, Any]:
     """
     Create a realistic FrontApp webhook payload using a template.
     
@@ -415,13 +417,15 @@ def create_frontapp_payload(template: Dict[str, str],
         template: Email template with subject and text
         sender_email: Optional custom sender email
         include_html: Whether to include HTML content
+        num_attachments: Number of dummy attachments to include
         
     Returns:
-        Dict: FrontApp webhook payload
+        Dict[str, Any]: FrontApp webhook payload
     """
     # Generate a random conversation and message ID
-    conversation_id = str(uuid.uuid4())
-    message_id = str(uuid.uuid4())
+    conversation_id = f"cnv_{uuid.uuid4().hex[:10]}"
+    message_id = f"msg_{uuid.uuid4().hex[:10]}"
+    event_id = f"evt_{uuid.uuid4().hex[:10]}"
     
     # Generate sender info
     if not sender_email:
@@ -470,72 +474,108 @@ def create_frontapp_payload(template: Dict[str, str],
     })
     
     # Create timestamp
-    timestamp = datetime.utcnow().isoformat() + "Z"
+    emitted_at_dt = datetime.utcnow()
+    emitted_at_unix = emitted_at_dt.timestamp()
+    created_at_unix = emitted_at_unix - random.uniform(1, 5) # Message created slightly before event emitted
     
-    # Build the payload
-    payload = {
-        "_links": {
-            "self": f"https://api2.frontapp.com/events/{uuid.uuid4()}"
+    # Build the message data (goes into target.data)
+    message_data = {
+        "id": message_id,
+        "type": "email",
+        "is_inbound": True,
+        "created_at": created_at_unix, # Use Unix timestamp
+        "subject": template["subject"],
+        "body": html_content,
+        "text": template["text"],
+        "author": {
+            "email": sender_email,
+            "name": sender_name
         },
-        "id": str(uuid.uuid4()),
-        "type": "inbound",
-        "payload": {
-            "conversation": {
-                "id": conversation_id,
-                "subject": template["subject"],
-                "status": "unassigned",
-                "recipient": {
-                    "handle": "support@preciseimaging.com"
-                },
-                "tags": [],
-                "links": {
-                    "self": f"https://api2.frontapp.com/conversations/{conversation_id}"
-                }
-            },
-            "message": {
-                "id": message_id,
-                "type": "email",
-                "is_inbound": True,
-                "created_at": timestamp,
-                "subject": template["subject"],
-                "body": html_content,
-                "text": template["text"],
-                "author": {
-                    "email": sender_email,
-                    "name": sender_name
-                },
-                "recipients": recipients,
-                "metadata": {
-                    "thread_ref": f"thread_{conversation_id}",
-                    "headers": {
-                        "Message-ID": f"<{message_id}@mail.example.com>",
-                        "From": f"{sender_name} <{sender_email}>",
-                        "To": "support@preciseimaging.com",
-                        "Subject": template["subject"],
-                        "Date": timestamp,
-                        "MIME-Version": "1.0",
-                        "Content-Type": "multipart/alternative"
-                    }
-                }
+        "recipients": recipients,
+        "metadata": {
+            "thread_ref": f"thread_{conversation_id}",
+            "headers": {
+                "Message-ID": f"<{message_id}@mail.example.com>",
+                "From": f"{sender_name} <{sender_email}>",
+                "To": "support@preciseimaging.com",
+                "Subject": template["subject"],
+                "Date": emitted_at_dt.strftime("%a, %d %b %Y %H:%M:%S %z"), # Use formatted date
+                "MIME-Version": "1.0",
+                "Content-Type": "multipart/alternative" # Base content type
             }
-        }
+        },
+        # Initialize empty attachments list
+        "attachments": []
     }
-    
+
     # Add raw email if available in the template
     if "raw_email" in template:
         # Generate a dummy base64 attachment part (not real PDF, just for testing)
-        dummy_base64 = "".join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/", k=100))
+        dummy_base64 = "".join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=", k=100))
         
         # Format the raw email template with current values
-        raw_email = template["raw_email"].format(
-            date=datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S %z"),
+        raw_email_content = template["raw_email"].format(
+            date=emitted_at_dt.strftime("%a, %d %b %Y %H:%M:%S %z"),
             from_name=sender_name,
             from_email=sender_email,
             subject=template["subject"],
             dummy_base64=dummy_base64
         )
-        
-        payload["payload"]["message"]["raw_email"] = raw_email
+        message_data["raw_email"] = raw_email_content # Add raw_email to message_data
+
+    # Add dummy attachments if requested
+    if num_attachments > 0:
+        dummy_attachment_base_url = "http://example.com/download/"
+        for i in range(num_attachments):
+            attachment_uuid = uuid.uuid4().hex[:12]
+            filename = f"attachment_{i+1}_{attachment_uuid}.pdf"
+            message_data["attachments"].append({
+                "id": f"att_{attachment_uuid}",
+                "filename": filename,
+                "url": f"{dummy_attachment_base_url}{filename}",
+                "content_type": "application/pdf",
+                "size": random.randint(50000, 500000), # Random size in bytes
+                "metadata": {}
+            })
+        # Update headers if attachments were added
+        message_data["metadata"]["headers"]["Content-Type"] = "multipart/mixed" 
+
+    # Build the final webhook payload structure
+    payload = {
+        "_links": {
+            "self": f"https://api2.frontapp.com/events/{event_id}"
+        },
+        "id": event_id,
+        "type": "inbound",
+        "conversation": {
+            "id": conversation_id,
+            "subject": template["subject"],
+            "status": "unassigned",
+            "recipient": { # Simplified recipient for conversation level
+                "_links": None,
+                "handle": "support@preciseimaging.com", # Main inbound address
+                "role": "to"
+            },
+            "tags": [], # Existing tags on the conversation (start empty)
+            "links": {
+                "self": f"https://api2.frontapp.com/conversations/{conversation_id}",
+                "related": {}
+            }
+        },
+        "target": { # Message details go here
+            "_links": None,
+            "data": message_data
+        },
+        "source": { # Information about where the event originated (minimal example)
+             "_links": None,
+             "data": {}
+        },
+        "emitted_at": emitted_at_unix # Unix timestamp
+    }
+
+    # Note: 'raw_email' field was previously inside message, kept it there for compatibility
+    # with the `extract_email_parts` function, although Front's actual payload might differ.
+    # The primary mechanism for OCR triggering is now the `attachments` list in `target.data`.
     
     return payload
 
@@ -596,12 +636,14 @@ def send_webhook(url: str, payload: Dict, sign: bool = True, verify_ssl: bool = 
 def main():
     """Main function to send test webhooks."""
     parser = argparse.ArgumentParser(description='Send test emails to the FrontApp webhook endpoint')
-    parser.add_argument('--url', type=str, default=DEFAULT_WEBHOOK_URL,
-                        help=f'Webhook URL (default: {DEFAULT_WEBHOOK_URL})')
+    parser.add_argument('--url', type=str, default=DEFAULT_WEBHOOK_URL_HTTP,
+                        help=f'Webhook URL (default: {DEFAULT_WEBHOOK_URL_HTTP})')
     parser.add_argument('--template', type=int, 
                         help=f'Specify template index (0-{len(EMAIL_TEMPLATES)-1}) or omit for random')
     parser.add_argument('--sender', type=str,
                         help='Specify sender email (omit for random)')
+    parser.add_argument('--attachments', type=int, default=0,
+                        help='Number of dummy attachments to include (default: 0)')
     parser.add_argument('--no-sign', action='store_true',
                         help='Do not sign the payload')
     parser.add_argument('--no-html', action='store_true',
@@ -633,16 +675,18 @@ def main():
         payload = create_frontapp_payload(
             template=template,
             sender_email=args.sender,
-            include_html=not args.no_html
+            include_html=not args.no_html,
+            num_attachments=args.attachments
         )
         
         # Print email details
         print(f"Email {i+1}/{args.count}:")
         print(f"Subject: {template['subject']}")
-        print(f"From: {payload['payload']['message']['author']['email']}")
+        print(f"From: {payload['target']['data']['author']['email']}")
         print(f"Expected tags: {template['tags']}")
+        print(f"Number of attachments: {args.attachments}")
         
-        has_raw_email = "raw_email" in payload["payload"]["message"]
+        has_raw_email = "raw_email" in payload["target"]["data"]
         print(f"Contains raw email data: {'Yes' if has_raw_email else 'No'}")
         
         payload_size = len(json.dumps(payload))

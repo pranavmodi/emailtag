@@ -2,10 +2,10 @@
 
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional, HttpUrl
+from typing import Any, Dict, Optional
 import json
 
-from pydantic import PostgresDsn, field_validator, model_validator, Json
+from pydantic import PostgresDsn, field_validator, model_validator, Json, HttpUrl
 from pydantic_settings import BaseSettings
 
 # Project directory

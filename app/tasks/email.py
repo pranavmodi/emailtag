@@ -3,6 +3,8 @@
 import logging
 from typing import Dict, List
 from uuid import UUID
+import base64 # Added for encoding
+import io # Added for handling binary data
 
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +20,8 @@ from app.services.classification_service import classify_email_tags_hierarchical
 from app.services.frontapp_service import add_conversation_tags, get_conversation_text, get_conversation_tags, remove_conversation_tags
 from app.tasks.worker import celery_app
 from app.crud import email as email_crud
+from app.models.email import Email # Added for type hinting
+from app.schemas.email import EmailUpdate # Added for type hinting
 
 logger = get_task_logger(__name__)
 
@@ -200,53 +204,228 @@ def tag_email(email_id: str) -> Dict:
 # Define error status constant
 OCR_ERROR_STATUS = "ocr_error"
 
-def update_email_status_sync(email_uuid: UUID, status: str):
-    """Helper function to update email status synchronously."""
+def update_email_sync(email_uuid: UUID, update_data: dict):
+    """Helper function to update email fields synchronously."""
     db = SessionLocal()
     try:
-        success = email_crud_sync.update_status(db, email_id=email_uuid, status=status)
-        if success:
-            logger.info(f"Updated status synchronously for email {email_uuid} to {status}")
-        else:
-            logger.error(f"Failed to update status synchronously for email {email_uuid} to {status} (email not found?)")
+        email_obj = email_crud_sync.get(db, id=email_uuid)
+        if not email_obj:
+            logger.error(f"[update_email_sync] Email {email_uuid} not found for update.")
+            return None
+        
+        updated_email = email_crud_sync.update(db, db_obj=email_obj, obj_in=update_data)
+        # No need to commit here, update() handles it
+        # db.commit()
+        # db.refresh(updated_email) # Refresh is handled by update()
+        logger.info(f"[update_email_sync] Successfully updated email {email_uuid} with data: {update_data}")
+        return updated_email # Return the updated object
     except Exception as e:
-        logger.exception(f"Error updating status synchronously for email {email_uuid} to {status}: {e}")
+        logger.exception(f"[update_email_sync] Error updating email {email_uuid}: {e}")
         db.rollback()
+        return None # Indicate failure
     finally:
         db.close()
 
+def update_email_status_sync(email_uuid: UUID, status: str):
+    """Helper function to update email status synchronously."""
+    update_data = {"status": status}
+    updated_email = update_email_sync(email_uuid, update_data)
+    if updated_email:
+         logger.info(f"[update_email_status_sync] Updated status for email {email_uuid} to {status}")
+    else:
+         logger.error(f"[update_email_status_sync] Failed to update status for email {email_uuid} to {status}")
 
-@celery_app.task(name="tasks.send_attachment_to_ocr")
-def send_attachment_to_ocr(email_id: str, attachment_url: str):
-    """Sends an attachment URL to the OCR service."""
-    logger.info(f"Sending attachment {attachment_url} for email {email_id} to OCR service.")
+
+@celery_app.task(name="tasks.send_attachment_to_ocr", bind=True, max_retries=3, default_retry_delay=60)
+def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
+    """
+    Downloads an attachment, sends it to the synchronous OCR service,
+    and updates the email record directly.
+    """
+    logger.info(f"Starting OCR for attachment {attachment_url} for email {email_id}")
     ocr_service_endpoint = str(settings.OCR_SERVICE_ENDPOINT) 
     
     try:
-        email_uuid = UUID(email_id) # Convert ID early for error handling
+        email_uuid = UUID(email_id)
     except ValueError:
-        logger.error(f"Invalid UUID format for email_id in send_attachment_to_ocr task: {email_id}")
-        return # Cannot proceed or update status without valid UUID
+        logger.error(f"Invalid UUID format for email_id: {email_id}. Cannot proceed.")
+        return # Abort task
 
+    # --- Download Attachment ---
+    try:
+        headers = {"Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}"}
+        with httpx.Client(follow_redirects=True) as client: # Ensure redirects are followed
+            logger.info(f"Downloading attachment from {attachment_url}...")
+            response = client.get(attachment_url, headers=headers, timeout=120.0) # Increased timeout for download
+            response.raise_for_status()
+            attachment_content = response.content
+            logger.info(f"Successfully downloaded attachment for email {email_id}. Size: {len(attachment_content)} bytes.")
+    except httpx.HTTPStatusError as exc:
+        logger.error(f"HTTP error downloading attachment {attachment_url} for email {email_id}: {exc.response.status_code} - {exc.response.text}")
+        update_email_status_sync(email_uuid, OCR_ERROR_STATUS)
+        # Consider retry for transient server errors (e.g., 5xx)
+        if 500 <= exc.response.status_code < 600:
+            try:
+                self.retry(exc=exc)
+            except Exception as retry_exc:
+                logger.error(f"Retry failed for download error: {retry_exc}")
+        return # Abort after updating status
+    except httpx.RequestError as exc:
+        logger.error(f"Request error downloading attachment {attachment_url} for email {email_id}: {exc}")
+        update_email_status_sync(email_uuid, OCR_ERROR_STATUS)
+        try:
+            self.retry(exc=exc) # Retry on general request errors (network issues, etc.)
+        except Exception as retry_exc:
+             logger.error(f"Retry failed for download request error: {retry_exc}")
+        return # Abort after updating status
+    except Exception as exc:
+        logger.exception(f"Unexpected error downloading attachment {attachment_url} for email {email_id}: {exc}")
+        update_email_status_sync(email_uuid, OCR_ERROR_STATUS)
+        return # Abort after updating status
+
+    # --- Encode Content ---
+    try:
+        encoded_content = base64.b64encode(attachment_content).decode('utf-8')
+        logger.debug(f"Base64 encoded attachment for email {email_id}. Encoded size: {len(encoded_content)}")
+    except Exception as exc:
+        logger.exception(f"Error Base64 encoding attachment for email {email_id}: {exc}")
+        update_email_status_sync(email_uuid, OCR_ERROR_STATUS)
+        return # Abort
+
+    # --- Call OCR Service ---
     payload = {
-        "email_id": email_id,
-        "file_url": attachment_url
+        "data": [
+            {"encoded_string": encoded_content}
+        ]
     }
     
     try:
+        logger.info(f"Calling OCR service at {ocr_service_endpoint} for email {email_id}...")
+        # Consider adding custom headers if the OCR service requires them (e.g., API key)
+        headers = {'Content-Type': 'application/json'} 
         with httpx.Client() as client:
-            response = client.post(ocr_service_endpoint, json=payload, timeout=60.0) 
+            response = client.post(ocr_service_endpoint, json=payload, headers=headers, timeout=300.0) # Increased timeout for OCR processing
             response.raise_for_status() 
-            logger.info(f"Successfully sent attachment to OCR service for email {email_id}. Response: {response.status_code}")
+            ocr_result = response.json()
+            logger.info(f"Successfully received OCR result for email {email_id}. Status: {response.status_code}")
+            logger.debug(f"OCR Result payload: {ocr_result}")
+
+    except httpx.HTTPStatusError as exc:
+        logger.error(f"HTTP error calling OCR service for email {email_id}: {exc.response.status_code} - {exc.response.text}")
+        update_email_status_sync(email_uuid, OCR_ERROR_STATUS)
+        # Consider retry for transient server errors (e.g., 5xx)
+        if 500 <= exc.response.status_code < 600:
+            try:
+                self.retry(exc=exc)
+            except Exception as retry_exc:
+                logger.error(f"Retry failed for OCR HTTP error: {retry_exc}")
+        return # Abort after updating status
     except httpx.RequestError as exc:
-        logger.error(f"Error sending attachment to OCR service for email {email_id}: {exc}. Updating status to {OCR_ERROR_STATUS}.")
-        # Update email status to 'ocr_error' using sync crud
+        logger.error(f"Request error calling OCR service for email {email_id}: {exc}")
         update_email_status_sync(email_uuid, OCR_ERROR_STATUS)
-        # TODO: Implement retry logic if desired, potentially based on exception type
-    except Exception as e:
-        logger.exception(f"Unexpected error sending attachment to OCR for email {email_id}: {e}. Updating status to {OCR_ERROR_STATUS}.")
-        # Update email status to 'ocr_error' using sync crud
+        try:
+            self.retry(exc=exc) # Retry on general request errors
+        except Exception as retry_exc:
+             logger.error(f"Retry failed for OCR request error: {retry_exc}")
+        return # Abort after updating status
+    except Exception as exc:
+        logger.exception(f"Unexpected error calling OCR service or parsing result for email {email_id}: {exc}")
         update_email_status_sync(email_uuid, OCR_ERROR_STATUS)
+        return # Abort
+
+    # --- Process OCR Result and Update DB ---
+    db = SessionLocal()
+    try:
+        email_obj = email_crud_sync.get(db, id=email_uuid)
+        if not email_obj:
+            logger.error(f"Email {email_id} not found during OCR result processing.")
+            return # Cannot update non-existent email
+
+        if email_obj.status not in ["pending_ocr", OCR_ERROR_STATUS]: # Also allow reprocessing if previous attempt failed
+             logger.warning(f"Email {email_id} is not in pending_ocr or ocr_error state (current: {email_obj.status}). Skipping update.")
+             return # Avoid race conditions or double processing
+
+        # Extract data safely
+        extracted_data = {}
+        try:
+            # Assuming the structure: {"data": [{"info": {...}}], "message": "..."}
+            ocr_info = ocr_result.get("data", [{}])[0].get("info", {})
+            if not ocr_info:
+                 logger.warning(f"OCR result for email {email_id} lacks 'info' field or is empty. Result: {ocr_result}")
+                 # Decide if this is an error or just no data found
+                 # update_email_status_sync(email_uuid, OCR_ERROR_STATUS) # Optionally mark as error
+                 # return 
+
+            extracted_data['patient_id'] = ocr_info.get("patient_id")
+            extracted_data['accession_nums'] = ocr_info.get("accession_nums", [])
+            extracted_data['study_type'] = ocr_info.get("study_type", [])
+            # Add any other fields from 'info' you need to store
+
+        except (AttributeError, IndexError, TypeError, KeyError) as parse_error:
+            logger.error(f"Error parsing OCR result structure for email {email_id}: {parse_error}. Result: {ocr_result}")
+            update_email_status_sync(email_uuid, OCR_ERROR_STATUS)
+            return # Abort
+
+        # Prepare update data
+        update_payload = {}
+        
+        # Update Patient ID only if it's currently null and we have a new value
+        if not email_obj.ocr_patient_id and extracted_data.get('patient_id'):
+            update_payload['ocr_patient_id'] = extracted_data['patient_id']
+            logger.info(f"Setting Patient ID for email {email_id} based on OCR result.")
+        elif extracted_data.get('patient_id') and email_obj.ocr_patient_id != extracted_data.get('patient_id'):
+             logger.warning(f"OCR returned a different Patient ID for email {email_id}. Existing: {email_obj.ocr_patient_id}, New: {extracted_data['patient_id']}. Sticking with the existing one.")
+
+        # Append Accession Nums and Study Type (avoiding duplicates)
+        current_accession_nums = set(email_obj.ocr_accession_nums or [])
+        new_accession_nums = set(extracted_data.get('accession_nums', []))
+        combined_accession_nums = list(current_accession_nums.union(new_accession_nums))
+        if combined_accession_nums != (email_obj.ocr_accession_nums or []): # Update only if changed
+            update_payload['ocr_accession_nums'] = combined_accession_nums
+
+        current_study_types = set(email_obj.ocr_study_type or [])
+        new_study_types = set(extracted_data.get('study_type', []))
+        combined_study_types = list(current_study_types.union(new_study_types))
+        if combined_study_types != (email_obj.ocr_study_type or []): # Update only if changed
+            update_payload['ocr_study_type'] = combined_study_types
+
+        # Increment completed count - crucial!
+        completed_count = (email_obj.ocr_attachments_completed or 0) + 1
+        update_payload['ocr_attachments_completed'] = completed_count
+
+        # Update the email record
+        updated_email = email_crud_sync.update(db, db_obj=email_obj, obj_in=update_payload)
+        # db.commit() # Commit is handled by update() now
+        # db.refresh(updated_email) # Refresh is handled by update() now
+
+        logger.info(f"Updated email {email_id} with OCR results. Completed {completed_count}/{updated_email.ocr_attachments_total} attachments.")
+
+        # Check if all attachments are processed
+        if updated_email.ocr_attachments_total is not None and completed_count >= updated_email.ocr_attachments_total:
+            logger.info(f"All OCR processing complete for email {email_id}. Setting status to ocr_completed and queueing for final processing.")
+            # Update status separately to ensure it happens after field updates
+            email_crud_sync.update_status(db, email_id=email_uuid, status="ocr_completed") 
+            # db.commit() # Commit handled by update_status
+            process_email.delay(str(email_uuid)) # Queue next step
+        # else:
+            # Commit the partial update if not all attachments are done (commit is handled by update() above)
+            # db.commit() 
+
+    except Exception as db_exc:
+        logger.exception(f"Database error processing OCR result for email {email_id}: {db_exc}")
+        db.rollback()
+        # Don't necessarily set to OCR_ERROR_STATUS here, could be transient DB issue
+        # Consider retry?
+        try:
+            self.retry(exc=db_exc)
+        except Exception as retry_exc:
+             logger.error(f"Retry failed for DB error: {retry_exc}")
+    finally:
+        db.close()
+
+# Removed old async update_email_status function as we use sync updates now
+# async def update_email_status(db: AsyncSession, email_id: str, status: str):
+#    ...
 
 # Helper function to update status (consider moving to crud)
 async def update_email_status(db: AsyncSession, email_id: str, status: str):

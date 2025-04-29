@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, String, Table, Integer
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, String, Table, Integer, ARRAY
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -45,6 +45,8 @@ class Email(Base):
     ocr_date_of_birth: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     ocr_date_of_incident: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     ocr_metadata: Mapped[Optional[str]] = mapped_column(String, nullable=True) # Store combined metadata if multiple attachments
+    ocr_accession_nums: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String), nullable=True)
+    ocr_study_type: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
