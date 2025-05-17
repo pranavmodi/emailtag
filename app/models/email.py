@@ -2,13 +2,16 @@
 
 import uuid
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, TYPE_CHECKING
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, String, Table, Integer, ARRAY
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.patient_conversation_data import PatientConversationData # Forward reference
 
 # Many-to-many relationship between emails and tags
 email_tag_association = Table(
@@ -53,6 +56,12 @@ class Email(Base):
     # Relationships
     tags: Mapped[List["Tag"]] = relationship(
         "Tag", secondary=email_tag_association, back_populates="emails"
+    )
+    
+    # Relationship to PatientConversationData
+    # An email might be the source for multiple patient data entries if it contains multiple patient IDs
+    related_patient_data: Mapped[List["PatientConversationData"]] = relationship(
+        "PatientConversationData", back_populates="source_email"
     )
 
 
