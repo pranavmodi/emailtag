@@ -23,6 +23,29 @@ class CRUDEmail(CRUDBase[Email, EmailCreate, EmailUpdate]):
         )
         return result.scalars().first()
 
+    async def get_conversation_content(
+        self, db: AsyncSession, *, front_conversation_id: str
+    ) -> str:
+        """
+        Retrieve all email content for a given conversation ID,
+        formatted as a single string, in chronological order.
+        """
+        result = await db.execute(
+            select(self.model)
+            .filter(self.model.front_conversation_id == front_conversation_id)
+            .order_by(self.model.created_at.asc())
+        )
+        emails = result.scalars().all()
+        
+        conversation_thread = []
+        for email_obj in emails:
+            # We can customize this part further, e.g., add sender, timestamp
+            header = f"--- Email from: {email_obj.sender} at {email_obj.created_at.strftime('%Y-%m-%d %H:%M:%S UTC')} ---"
+            content = email_obj.content_text or "" # Default to empty string if content_text is None
+            conversation_thread.append(f"{header}\n{content}")
+            
+        return "\n\n".join(conversation_thread)
+
     async def get_unprocessed(
         self, db: AsyncSession, *, skip: int = 0, limit: int = 100
     ) -> List[Email]:

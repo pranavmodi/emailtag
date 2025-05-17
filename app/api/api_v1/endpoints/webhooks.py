@@ -9,6 +9,7 @@ from uuid import UUID
 import asyncio
 import httpx
 import random
+import re
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,10 +19,32 @@ from app.crud import email as email_crud
 from app.db.session import get_db
 from app.schemas.email import EmailCreate, FrontAppWebhook, PreprocessingWebhook, EmailUpdate, Email
 from app.tasks.email import process_email, send_attachment_to_ocr
+from app.services.patient import fetch_patient_by_id
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# Helper function to extract and log patient info
+async def _extract_and_log_patient_info(content_text: str, conversation_id: str, parent_logger: logging.Logger) -> None:
+    try:
+        # Find all unique patient IDs (PREXXXXXX) in the text content
+        found_patient_ids = set(re.findall(r"PRE\d{6}", content_text, re.IGNORECASE))
+        
+        if found_patient_ids:
+            parent_logger.info(f"Found potential patient IDs: {found_patient_ids} in conversation {conversation_id}")
+            for p_id in found_patient_ids:
+                parent_logger.info(f"Fetching information for patient ID: {p_id}")
+                try:
+                    patient_data = await fetch_patient_by_id(patient_id=p_id, conversation_id=conversation_id)
+                    parent_logger.info(f"Patient data for {p_id}: {json.dumps(patient_data, indent=2)}")
+                except Exception as e_patient:
+                    parent_logger.error(f"Error fetching patient data for {p_id}: {str(e_patient)}")
+        else:
+            parent_logger.info(f"No patient IDs found in email content for conversation {conversation_id}.")
+    except Exception as e_extract_patient:
+        parent_logger.error(f"Error during patient ID extraction/processing for conversation {conversation_id}: {str(e_extract_patient)}")
 
 
 def verify_webhook_signature(
@@ -176,7 +199,10 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         # Log the content for debugging
         logger.debug(f"Extracted email data - Subject: {subject}, Sender: {sender}, Recipients: {recipients}")
         logger.debug(f"Text content length: {len(content_text)}, HTML content length: {len(content_html)}")
-        
+
+        # Extract and process patient IDs using the helper function
+        await _extract_and_log_patient_info(content_text, conversation_id, logger)
+
         # Create email record
         email_create_data = {
             "front_conversation_id": conversation_id,
@@ -196,6 +222,13 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         # Save to database
         db_email = await email_crud.create(db, obj_in=email_data)
         
+        # Log the entire conversation thread
+        try:
+            conversation_thread_string = await email_crud.get_conversation_content(db, front_conversation_id=conversation_id)
+            logger.info(f"Current conversation thread for {conversation_id}:\n{conversation_thread_string}")
+        except Exception as e_conv_log:
+            logger.error(f"Error logging conversation thread for {conversation_id}: {str(e_conv_log)}")
+
         # If attachments exist, queue OCR tasks, otherwise queue standard processing
         if attachments:
             logger.info(f"Email {db_email.id} has {len(attachments)} attachments. Queuing for OCR.")
