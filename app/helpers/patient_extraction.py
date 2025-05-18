@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud import patient_conversation_data as pcd_crud
 from app.schemas.patient_conversation_data import PatientConversationDataCreate
-from app.services.patient import fetch_patient_by_id
+from app.services.patient import fetch_patient_by_id, _fetch_patient_study_data
 
 
 async def extract_and_log_patient_info(
@@ -57,11 +57,11 @@ async def extract_and_log_patient_info(
                         patient_info=patient_data_dict,
                         appointment_info=study_data_dict if study_data_dict.get("success") else None
                     )
-                    created_pcd = await pcd_crud.patient_conversation_data.upsert(db=db, obj_in=pcd_create)
+                    created_pcd = await pcd_crud.upsert(db=db, obj_in=pcd_create)
                     parent_logger.info(f"Upserted PatientConversationData for {p_id} in conversation {conversation_id}, record ID: {created_pcd.id}")
 
                     # Log the final database contents for this patient
-                    stored_data = await pcd_crud.patient_conversation_data.get_by_conversation_and_patient_id(
+                    stored_data = await pcd_crud.get_by_conversation_and_patient_id(
                         db=db,
                         front_conversation_id=conversation_id,
                         patient_id=p_id
