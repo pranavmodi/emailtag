@@ -495,6 +495,121 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
             logger.error(f"Error fetching messages for conversation {conversation_id}: {str(e)}")
             raise
 
+def send_conversation_reply(conversation_id: str, text: str) -> bool:
+    """
+    Send a reply to a Front conversation.
+    
+    Args:
+        conversation_id: The Front conversation ID
+        text: The reply text to send
+        
+    Returns:
+        bool: True if the reply was sent successfully, False otherwise
+    """
+    try:
+        headers = {
+            "Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "body": text,
+            "channel_id": settings.FRONT_CHANNEL_ID,  # The channel to send from
+            "author_id": settings.FRONT_BOT_TEAMMATE_ID  # The teammate sending the message
+        }
+        
+        # Use the configured API base URL
+        url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/messages"
+        
+        logger.info(f"Sending reply to conversation {conversation_id}")
+        logger.info(f"URL: {url}")
+        logger.info(f"Channel ID: {settings.FRONT_CHANNEL_ID}")
+        logger.info(f"Author ID: {settings.FRONT_BOT_TEAMMATE_ID}")
+        logger.debug(f"Request payload: {data}")
+        
+        with httpx.Client(verify=False) as client:
+            response = client.post(
+                url,
+                headers=headers,
+                json=data
+            )
+            response.raise_for_status()
+            
+            # Log the response details
+            logger.info(f"Response status: {response.status_code}")
+            logger.info(f"Response headers: {response.headers}")
+            try:
+                response_data = response.json()
+                logger.info(f"Response body: {response_data}")
+            except Exception as e:
+                logger.info(f"Response body (raw): {response.text}")
+            
+            # Check if the response indicates a draft was created
+            if response_data.get('is_draft') is True:
+                logger.error(f"Reply to {conversation_id} was created as a DRAFT. Ensure FRONT_BOT_TEAMMATE_ID is correct and has send permissions.")
+                logger.info("Attempting to list teammates for debugging...")
+                try:
+                    teammates_list = list_teammates()
+                    logger.info(f"list_teammates() executed. Result: {teammates_list}")
+                    if not teammates_list:
+                        logger.warning("list_teammates() returned an empty list or None.")
+                except Exception as e_list_teammates:
+                    logger.error(f"Error calling list_teammates(): {e_list_teammates}", exc_info=True)
+                logger.info("Returning False because message was a draft.")
+                return False # Explicitly mark as failed if it's a draft
+                
+            logger.info(f"Successfully sent reply to conversation {conversation_id} (is_draft was not True or not present).")
+            return True
+            
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error sending reply to conversation {conversation_id}: {e.response.status_code} - {e.response.text}")
+        return False
+    except httpx.RequestError as e:
+        logger.error(f"Request error sending reply to conversation {conversation_id}: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error sending reply to conversation {conversation_id}: {e}")
+        return False
+
+def list_teammates() -> List[Dict[str, Any]]:
+    """List all teammates in the company.
+
+    Returns:
+        List[Dict[str, Any]]: A list of teammate objects from Front.
+
+    Raises:
+        ValueError: If required Front configuration is missing.
+        httpx.HTTPStatusError: If the request to Front fails.
+    """
+    if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
+        logger.error("Missing required Front configuration for listing teammates (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
+        raise ValueError("Missing required Front configuration")
+
+    auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
+    url = f"{settings.FRONT_API_BASE_URL}/teammates"
+    headers = {
+        "Authorization": auth_header,
+        "Accept": "application/json",
+    }
+
+    with httpx.Client(verify=False) as client: # Assuming verify=False based on other calls
+        try:
+            logger.info(f"Fetching teammates from Front API: {url}")
+            response = client.get(url, headers=headers)
+            response.raise_for_status()  # Raise exception for 4xx/5xx status codes
+            
+            data = response.json()
+            teammates = data.get("_results", [])
+            logger.info(f"Successfully fetched {len(teammates)} teammates from Front.")
+            # Add pagination handling if necessary in a real scenario
+            return teammates
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error fetching Front teammates: {e.response.status_code} - {e.response.text}")
+            raise
+        except Exception as e:
+            logger.error(f"Error fetching Front teammates: {str(e)}")
+            raise
+
 # Example usage (for testing purposes)
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

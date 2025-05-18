@@ -51,11 +51,23 @@ class Settings(BaseSettings):
 
     # New settings
     MAX_CLASSIFICATION_RETRIES: int = 3
-    FRONTAPP_API_TOKEN: str
-    FRONTAPP_WEBHOOK_SECRET: str
     
     # Add OCR Service Endpoint
     OCR_SERVICE_ENDPOINT: HttpUrl = "http://localhost:5000/ocr" # Default, override in .env
+
+    # FrontApp settings
+    FRONT_API_BASE_URL: str = "https://api2.frontapp.com"  # Default Front API base URL
+    FRONT_AUTH_TOKEN: str  # Front authentication token
+    FRONT_CHANNEL_ID: str  # The ID of the channel to send auto-responses from
+    FRONT_APP_WEBHOOK: str  # Front webhook URL for incoming messages
+    FRONT_BOT_TEAMMATE_ID: str # ID of the teammate/bot sending replies
+
+    # Auto-response settings
+    DEFAULT_LOCATION: str = "Precise Imaging Center"  # Default location for auto-responses
+    CONTACT_NUMBER: str = "(555) 123-4567"  # Default contact number for auto-responses
+
+    # Logging
+    LOG_LEVEL: str = "INFO"
 
     @field_validator("ASYNC_DATABASE_URL", mode="before")
     def assemble_async_db_connection(cls, v: Optional[str], info) -> Any:
@@ -116,13 +128,6 @@ class Settings(BaseSettings):
 
     # Classification Rules
     CLASSIFICATION_RULES_PATH: str = str(ROOT / "app" / "prompts" / "classification_rules.txt")
-
-    # FrontApp
-    FRONT_AUTH_TOKEN: str # Use Bearer token for API calls
-    FRONT_API_BASE_URL: str = "https://api2.frontapp.com" # Default Front API base URL
-
-    # Logging
-    LOG_LEVEL: str = "INFO"
 
     class Config:
         """Pydantic settings config."""

@@ -19,6 +19,7 @@ from app.db.session import SessionLocal
 from app.services.classification_service import classify_email_tags_hierarchical, remove_conflicting_tags
 from app.services.frontapp_service import add_conversation_tags, get_conversation_text, get_conversation_tags, remove_conversation_tags
 from app.services.ocr_service import process_ocr_content # Import the new function
+from app.services.autorespond_service import process_autorespond  # Add this import
 from app.tasks.worker import celery_app
 from app.crud import email as email_crud
 from app.models.email import Email # Added for type hinting
@@ -109,56 +110,59 @@ def tag_email(email_id: str) -> Dict:
             existing_tags = []
             logger.warning(f"Could not retrieve existing tags for {front_conversation_id} or none exist.")
 
-        # *** NEW: Hierarchical Classification ***
+        # Perform classification
         tags_to_apply = classify_email_tags_hierarchical(
             front_conversation_id=front_conversation_id,
             conversation_text=conversation_text,
             sender_info=sender_info,
             message_times=message_times
         )
-        # *** END NEW ***
+
+        # Process auto-response if needed
+        try:
+            autorespond_sent = process_autorespond(front_conversation_id, conversation_text)
+            if autorespond_sent:
+                logger.info(f"Auto-response sent for conversation {front_conversation_id}")
+                # Add auto-response tag to the list
+                tags_to_apply.append("AI: Auto-responded")
+        except Exception as e:
+            logger.error(f"Error processing auto-response: {e}")
 
         # Ensure tags are unique before proceeding
         if tags_to_apply:
-             unique_tags_to_apply = list(dict.fromkeys(tags_to_apply)) # Preserve order while deduplicating
-             if len(unique_tags_to_apply) != len(tags_to_apply):
-                 logger.info(f"Removed duplicate tags. Original: {tags_to_apply}, Unique: {unique_tags_to_apply}")
-                 tags_to_apply = unique_tags_to_apply
+            unique_tags_to_apply = list(dict.fromkeys(tags_to_apply))  # Preserve order while deduplicating
+            if len(unique_tags_to_apply) != len(tags_to_apply):
+                logger.info(f"Removed duplicate tags. Original: {tags_to_apply}, Unique: {unique_tags_to_apply}")
+                tags_to_apply = unique_tags_to_apply
 
         if not tags_to_apply:
-             logger.error(f"Hierarchical classification failed for email {email_id}. No tags determined.")
-             # Optionally mark as processed even if tagging failed, or leave for retry?
-             # email_crud_sync.mark_as_processed(db, email_id=email_uuid) 
-             return {"status": "error", "message": "Hierarchical classification failed to determine tags"}
+            logger.error(f"Classification failed for email {email_id}. No tags determined.")
+            return {"status": "error", "message": "Classification failed to determine tags"}
 
         logger.info(f"Email {email_id} classified with tags: {tags_to_apply}")
 
         # --- Explicitly remove 'Human review required' tag if applying other tags --- 
         human_review_tag = "AI: Human review required"
         if tags_to_apply != [human_review_tag] and human_review_tag in existing_tags:
-             logger.info(f"Attempting to remove '{human_review_tag}' tag before applying new tags: {tags_to_apply}")
-             try:
-                 remove_conversation_tags(front_conversation_id, [human_review_tag])
-                 logger.info(f"Successfully removed '{human_review_tag}' tag for conversation {front_conversation_id}.")
-             except Exception as remove_hr_error:
-                 logger.error(f"Failed to remove '{human_review_tag}' tag for {front_conversation_id}: {remove_hr_error}. Proceeding anyway.")
-        # ------------------------------------------------------------------------
+            logger.info(f"Attempting to remove '{human_review_tag}' tag before applying new tags: {tags_to_apply}")
+            try:
+                remove_conversation_tags(front_conversation_id, [human_review_tag])
+                logger.info(f"Successfully removed '{human_review_tag}' tag for conversation {front_conversation_id}.")
+            except Exception as remove_hr_error:
+                logger.error(f"Failed to remove '{human_review_tag}' tag for {front_conversation_id}: {remove_hr_error}. Proceeding anyway.")
 
-        # *** NEW: Remove conflicting tags before adding new ones ***
+        # Remove conflicting tags before adding new ones
         logger.info(f"Attempting to remove other conflicting tags for {front_conversation_id} based on hierarchy.")
         removal_success = remove_conflicting_tags(
             conversation_id=front_conversation_id,
-            existing_tags=existing_tags, # Pass the original list fetched earlier
-            new_tags=tags_to_apply, # Pass the unique list determined by classification
-            hierarchy=settings.EMAIL_CATEGORIES # Pass the hierarchy from settings
+            existing_tags=existing_tags,
+            new_tags=tags_to_apply,
+            hierarchy=settings.EMAIL_CATEGORIES
         )
         if not removal_success:
             logger.warning(f"Failed to remove conflicting tags for conversation {front_conversation_id}. Proceeding to add new tags anyway.")
-            # Decide if you want to stop processing here or continue.
-            # Continuing might leave conflicting tags, but ensures new tags are applied.
         else:
             logger.info(f"Successfully processed conflicting tag removal for {front_conversation_id}.")
-        # *** END NEW ***
 
         # Create and associate tags in database
         db_tags = []
@@ -173,7 +177,6 @@ def tag_email(email_id: str) -> Dict:
         # Update tags in FrontApp
         if email_obj.front_conversation_id:
             try:
-                # Use the tags determined by the new function
                 add_conversation_tags(
                     email_obj.front_conversation_id,
                     tags_to_apply
@@ -185,13 +188,10 @@ def tag_email(email_id: str) -> Dict:
         # Mark email as processed
         email_crud_sync.mark_as_processed(db, email_id=email_uuid)
 
-        # Update return value - maybe just return the tags?
         return {
             "status": "success",
             "email_id": email_id,
-            "applied_tags": tags_to_apply 
-            # "category": predicted_category, # Removed old category/subcategory
-            # "subcategory": predicted_subcategory
+            "applied_tags": tags_to_apply
         }
 
     except Exception as e:
@@ -200,7 +200,7 @@ def tag_email(email_id: str) -> Dict:
         return {"status": "error", "message": str(e)}
 
     finally:
-        db.close() 
+        db.close()
 
 # Define error status constant
 OCR_ERROR_STATUS = "ocr_error"

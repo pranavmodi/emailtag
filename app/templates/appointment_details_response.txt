@@ -1,0 +1,21 @@
+Dear {sender_name},
+
+Thank you for your inquiry about your appointment details. Here is the information we have on file:
+
+Appointment Date: {appointment_date}
+Appointment Time: {appointment_time}
+Study Type: {study_type}
+Patient ID: {patient_id}
+Accession Number: {accession_number}
+
+Please arrive 15 minutes before your scheduled appointment time. If you need to reschedule or have any questions, please contact us at {contact_number}.
+
+Important Reminders:
+- Please bring a valid photo ID
+- Wear comfortable clothing
+- Follow any specific preparation instructions provided by your doctor
+
+If you have any other questions, please don't hesitate to contact us.
+
+Best regards,
+Precise Imaging Team 
