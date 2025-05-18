@@ -550,4 +550,165 @@ async def get_patient_studies(patient_id: str, conversation_id: str) -> Dict[str
     Returns:
         Dict[str, Any]: Study information and status
     """
-    return await fetch_study_details(patient_id, conversation_id) 
+    return await fetch_study_details(patient_id, conversation_id)
+
+async def _fetch_patient_study_data(patient_id: str, conversation_id: str) -> Dict[str, Any]:
+    """
+    Fetch patient study data from the API.
+    
+    Args:
+        patient_id (str): Patient ID to fetch studies for
+        conversation_id (str): The conversation ID for tracking
+        
+    Returns:
+        Dict[str, Any]: API response with patient study data
+    """
+    try:
+        logger.info(f"Fetching patient study data for ID: {patient_id}, conversation_id: {conversation_id}")
+        
+        payload = {
+            "patientId": patient_id,
+            "phone": "",
+            "firstName": "",
+            "lastName": "",
+            "birthDate": "",
+            "doi": "",
+            "accessionNumber": "",
+            "requiredField": "Study Details"
+        }
+        
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+        
+        logger.debug(f"Making API request to {RADFLOW_API_URL} with payload: {json.dumps(payload)}")
+        
+        async with httpx.AsyncClient(verify=False) as client:
+            logger.debug("Created httpx client")
+            
+            try:
+                response = await client.post(
+                    RADFLOW_API_URL,
+                    json=payload,
+                    headers=headers,
+                    timeout=30.0
+                )
+                logger.debug(f"Received API response with status code: {response.status_code}")
+                
+                if response.status_code != 200:
+                    logger.error(f"API request failed with status {response.status_code}: {response.text}")
+                    return {
+                        "success": False,
+                        "error": f"API request failed with status {response.status_code}"
+                    }
+                
+                try:
+                    data = response.json()
+                    logger.debug("Successfully parsed JSON response")
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse JSON response: {e}\nResponse text: {response.text[:500]}")
+                    return {
+                        "success": False,
+                        "error": "Invalid JSON response from API"
+                    }
+                
+                # Check response status
+                if data.get("responseStatus") != "Success":
+                    error_msg = data.get("exception") or "Failed to fetch study details"
+                    return {
+                        "success": False,
+                        "error": error_msg
+                    }
+
+                # Extract studies from nested result
+                result = data.get("result", {})
+                
+                raw_studies = []
+                if isinstance(result.get("result"), str):
+                    try:
+                        raw_studies = json.loads(result["result"])
+                    except json.JSONDecodeError:
+                        return {
+                            "success": False,
+                            "error": "Failed to parse study data"
+                        }
+                elif isinstance(result.get("result"), list):
+                    raw_studies = result["result"]
+                
+                if not raw_studies:
+                    return {
+                        "success": False,
+                        "error": "No studies found"
+                    }
+                
+                # Transform studies to match our schema
+                transformed_studies = []
+                for study in raw_studies:
+                    # Get the latest status from AppointmentStatuses if available
+                    latest_status = "Unknown"
+                    scheduled_time = ""
+                    if study.get("AppointmentStatuses"):
+                        for status in study["AppointmentStatuses"]:
+                            if status.get("Status"):
+                                latest_status = status["Status"]
+                            if status.get("ScheduledFor") and status["ScheduledFor"] != "Not Yet Scheduled":
+                                scheduled_time = status["ScheduledFor"]
+                    
+                    # Get facility info from FacilityUsed if available
+                    facility_name = ""
+                    facility_address = ""
+                    if study.get("FacilityUsed") and len(study["FacilityUsed"]) > 0:
+                        facility = study["FacilityUsed"][0]  # Take first facility
+                        facility_name = facility.get("FacilityName", "")
+                        facility_address = facility.get("Address", "")
+
+                    transformed_study = {
+                        "appointment_time": scheduled_time,
+                        "pre_arrival_minutes": 30,  # Default value
+                        "facility": {
+                            "facility_name": facility_name,
+                            "address": facility_address
+                        },
+                        "study_description": study.get("StudyDescription", ""),
+                        "status": latest_status,
+                        "modality": study.get("Modality", ""),
+                        "referring_physician": study.get("SchedulerName", "").strip(),
+                        "insurance": "",  # Not provided in API
+                        "authorization_number": study.get("AccessionNumber", "")
+                    }
+                    transformed_studies.append(transformed_study)
+                
+                result = {
+                    "success": True,
+                    "message": f"Successfully retrieved {len(transformed_studies)} studies for patient {patient_id}",
+                    "studies": transformed_studies
+                }
+                
+                if result["success"]:
+                    logger.info(f"Successfully retrieved patient study data: {result['message']}")
+                else:
+                    logger.error(f"Failed to process patient study data: {result.get('error', 'Unknown error')}")
+                
+                return result
+                
+            except httpx.TimeoutException:
+                logger.error(f"API request timed out after 30 seconds")
+                return {
+                    "success": False,
+                    "error": "API request timed out after 30 seconds"
+                }
+            except httpx.ConnectError as e:
+                logger.error(f"Connection error while fetching patient study data: {str(e)}")
+                return {
+                    "success": False,
+                    "error": f"Connection error: {str(e)}"
+                }
+                
+    except Exception as e:
+        logger.error(f"Unexpected error in _fetch_patient_study_data: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return {
+            "success": False,
+            "error": f"Failed to fetch patient study data: {str(e)}"
+        } 
