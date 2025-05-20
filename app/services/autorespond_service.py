@@ -9,9 +9,11 @@ from openai import APIError, RateLimitError, APIConnectionError, APITimeoutError
 import time
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import httpx
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.services.frontapp_service import send_conversation_reply
+from app.services.frontapp_service import send_conversation_reply, get_conversation_text
+from app.crud import patient_conversation_data as pcd_crud
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,10 @@ def _call_openai_api(prompt: str) -> Dict:
             model = "gpt-4o"
             
         logger.info(f"Making OpenAI request with model: {model}")
+        logger.info("Request messages:")
+        for msg in messages:
+            logger.info(f"Role: {msg['role']}")
+            logger.info(f"Content: {msg['content'][:500]}...")  # Log first 500 chars of content
         
         # Make the API call
         response = client.chat.completions.create(
@@ -65,15 +71,35 @@ def _call_openai_api(prompt: str) -> Dict:
             max_tokens=500
         )
         
+        # Log the response
+        logger.info("OpenAI Response:")
+        logger.info(f"Model used: {response.model}")
+        logger.info(f"Response content: {response.choices[0].message.content[:500]}...")  # Log first 500 chars
+        
         # Parse the response
         content = response.choices[0].message.content
         if not content:
             raise ValueError("Empty response from OpenAI")
             
+        # Clean up the response content
+        content = content.strip()
+        # Remove markdown code block markers if present
+        if content.startswith("```json"):
+            content = content[7:]  # Remove ```json
+        if content.startswith("```"):
+            content = content[3:]  # Remove ```
+        if content.endswith("```"):
+            content = content[:-3]  # Remove ```
+        content = content.strip()
+            
         return json.loads(content)
         
     except RateLimitError as e:
         logger.warning(f"OpenAI rate limit hit: {str(e)}")
+        raise
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse OpenAI response as JSON: {str(e)}")
+        logger.error(f"Raw content: {content}")
         raise
     except Exception as e:
         logger.error(f"OpenAI API error: {str(e)}")
@@ -91,8 +117,14 @@ def detect_appointment_inquiry(text: str) -> Tuple[bool, Dict]:
     """
     try:
         # Create prompt for OpenAI
-        prompt = f"""Analyze this email to determine if it's requesting appointment details or information.
-Also extract any mentioned dates, times, study types, or other relevant appointment information.
+        prompt = f"""Analyze this email to determine if it's explicitly requesting appointment details or information.
+The email must contain clear evidence of an appointment inquiry, such as:
+- Questions about appointment times, dates, or scheduling
+- Requests to confirm or check appointment details
+- Inquiries about rescheduling or canceling appointments
+- Questions about specific exam or procedure scheduling
+
+If the email is vague, short, or doesn't explicitly mention appointments, it should NOT be classified as an appointment inquiry.
 
 Email content:
 {text}
@@ -101,6 +133,7 @@ Respond in JSON format with the following structure:
 {{
     "is_appointment_inquiry": boolean,
     "confidence": float (0.0 to 1.0),
+    "reasoning": string (explain why this is or isn't an appointment inquiry),
     "extracted_info": {{
         "dates": [list of mentioned dates],
         "times": [list of mentioned times],
@@ -116,11 +149,16 @@ Respond in JSON format with the following structure:
         # Extract the results
         is_appointment_inquiry = result.get("is_appointment_inquiry", False)
         confidence = result.get("confidence", 0.0)
+        reasoning = result.get("reasoning", "")
         extracted_info = result.get("extracted_info", {})
+        
+        # Log the reasoning for debugging
+        logger.info(f"Appointment inquiry detection reasoning: {reasoning}")
         
         return is_appointment_inquiry, {
             "is_appointment_inquiry": is_appointment_inquiry,
             "confidence": confidence,
+            "reasoning": reasoning,
             "extracted_info": extracted_info
         }
         
@@ -209,17 +247,49 @@ def generate_appointment_response(
         logger.error(f"Missing template variable: {e}")
         return ""
 
-def process_autorespond(conversation_id: str, conversation_text: str) -> bool:
+async def process_autorespond(db: AsyncSession, conversation_id: str, conversation_text: str) -> bool:
     """
     Process an email for potential auto-response.
     
     Args:
+        db: Database session
         conversation_id: Front conversation ID
         conversation_text: The email text content
         
     Returns:
         bool: True if an auto-response was sent, False otherwise
     """
+    # Get conversation data to check sender
+    try:
+        conversation_data = get_conversation_text(conversation_id)
+        if not conversation_data or not isinstance(conversation_data, dict):
+            logger.warning(f"Could not get conversation data for {conversation_id}, skipping auto-response")
+            return False
+            
+        # Get the last sender (most recent message)
+        senders = conversation_data.get('senders', [])
+        if not senders:
+            logger.warning(f"No sender information found for conversation {conversation_id}, skipping auto-response")
+            return False
+            
+        last_sender = senders[-1]  # Get the most recent sender
+        
+        # Skip if the sender is the precise imaging bot
+        if "precise imaging bot" in last_sender.lower():
+            logger.info(f"Skipping auto-response for conversation {conversation_id} as sender is the precise imaging bot")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error getting conversation data for {conversation_id}: {e}")
+        return False
+    
+    # First check if this conversation has any associated patient IDs
+    patient_data_records = await pcd_crud.get_all_for_conversation(db, front_conversation_id=conversation_id)
+    
+    if not patient_data_records:
+        logger.info(f"No patient data found for conversation {conversation_id}, skipping auto-response")
+        return False
+        
     # Detect if this is an appointment inquiry
     is_appointment_inquiry, inquiry_info = detect_appointment_inquiry(conversation_text)
     
@@ -230,13 +300,15 @@ def process_autorespond(conversation_id: str, conversation_text: str) -> bool:
         # Use extracted info if available
         extracted_info = inquiry_info.get("extracted_info", {})
         
-        # TODO: In the future, integrate with appointment system to get real appointment data
-        # For now, use extracted info or placeholder data
+        # Get the first patient record (we'll use this for the response)
+        patient_record = patient_data_records[0]
+        
+        # Use patient info from the database record
         appointment_info = {
             "date": extracted_info.get("dates", ["To be confirmed"])[0] if extracted_info.get("dates") else "To be confirmed",
             "time": extracted_info.get("times", ["To be confirmed"])[0] if extracted_info.get("times") else "To be confirmed",
             "study_type": extracted_info.get("study_types", ["To be determined"])[0] if extracted_info.get("study_types") else "To be determined",
-            "patient_id": extracted_info.get("patient_id", "To be retrieved"),
+            "patient_id": patient_record.patient_id,
             "accession_number": extracted_info.get("accession_number", "To be retrieved")
         }
         

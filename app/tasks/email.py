@@ -120,7 +120,7 @@ def tag_email(email_id: str) -> Dict:
 
         # Process auto-response if needed
         try:
-            autorespond_sent = process_autorespond(front_conversation_id, conversation_text)
+            autorespond_sent = process_autorespond(db, front_conversation_id, conversation_text)
             if autorespond_sent:
                 logger.info(f"Auto-response sent for conversation {front_conversation_id}")
                 # Add auto-response tag to the list
