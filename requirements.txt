@@ -22,6 +22,7 @@ pydantic-settings==2.7.1
 
 # AI/ML
 openai==1.59.3
+tenacity==8.2.3  # For retry logic in API calls
 
 # Email parsing
 # email-parser>=0.1.11  # This package doesn't exist in PyPI

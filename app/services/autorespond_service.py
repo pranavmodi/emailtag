@@ -1,31 +1,83 @@
 """Service for handling automatic email responses."""
 
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List, Any
 from pathlib import Path
 import json
 from openai import OpenAI
+from openai import APIError, RateLimitError, APIConnectionError, APITimeoutError
+import time
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+import httpx
 
 from app.core.config import settings
 from app.services.frontapp_service import send_conversation_reply
 
 logger = logging.getLogger(__name__)
 
-# Initialize OpenAI client
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
+# Initialize OpenAI client with custom httpx client
+client = OpenAI(
+    api_key=settings.OPENAI_API_KEY,
+    http_client=httpx.Client(verify=False)  # Disable SSL verification for service account
+)
 
 # Load response templates
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 
-def load_template(template_name: str) -> str:
-    """Load a response template from file."""
-    template_path = TEMPLATES_DIR / f"{template_name}.txt"
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=4, max=10),
+    retry=retry_if_exception_type((APIConnectionError, APITimeoutError, RateLimitError)),
+    reraise=True
+)
+def _call_openai_api(prompt: str) -> Dict:
+    """
+    Make a call to OpenAI API with retry logic.
+    
+    Args:
+        prompt: The prompt to send to OpenAI
+        
+    Returns:
+        Dict: The parsed JSON response from OpenAI
+        
+    Raises:
+        Exception: If all retries fail
+    """
     try:
-        with open(template_path, "r") as f:
-            return f.read()
-    except FileNotFoundError:
-        logger.error(f"Template file not found: {template_path}")
-        return ""
+        # Create the messages array
+        messages = [
+            {"role": "system", "content": "You are an expert at analyzing medical appointment inquiries. Respond with valid JSON only."},
+            {"role": "user", "content": prompt}
+        ]
+        
+        # Get model version from settings
+        model = settings.OPENAI_MODEL_VERSION
+        if model == "gpt-4":
+            model = "gpt-4o"
+            
+        logger.info(f"Making OpenAI request with model: {model}")
+        
+        # Make the API call
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.0,
+            max_tokens=500
+        )
+        
+        # Parse the response
+        content = response.choices[0].message.content
+        if not content:
+            raise ValueError("Empty response from OpenAI")
+            
+        return json.loads(content)
+        
+    except RateLimitError as e:
+        logger.warning(f"OpenAI rate limit hit: {str(e)}")
+        raise
+    except Exception as e:
+        logger.error(f"OpenAI API error: {str(e)}")
+        raise
 
 def detect_appointment_inquiry(text: str) -> Tuple[bool, Dict]:
     """
@@ -58,19 +110,8 @@ Respond in JSON format with the following structure:
     }}
 }}"""
 
-        # Call OpenAI API
-        response = client.chat.completions.create(
-            model=settings.OPENAI_MODEL_VERSION,
-            messages=[
-                {"role": "system", "content": "You are an expert at analyzing medical appointment inquiries. Respond with valid JSON only."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.0,
-            max_tokens=500
-        )
-        
-        # Parse the response
-        result = json.loads(response.choices[0].message.content.strip())
+        # Call OpenAI API with retry logic
+        result = _call_openai_api(prompt)
         
         # Extract the results
         is_appointment_inquiry = result.get("is_appointment_inquiry", False)
@@ -85,11 +126,46 @@ Respond in JSON format with the following structure:
         
     except Exception as e:
         logger.error(f"Error detecting appointment inquiry: {str(e)}")
-        return False, {
-            "is_appointment_inquiry": False,
-            "confidence": 0.0,
-            "extracted_info": {}
-        }
+        # Fall back to keyword-based detection if OpenAI fails
+        return _fallback_detection(text)
+
+def _fallback_detection(text: str) -> Tuple[bool, Dict]:
+    """
+    Fallback method using keyword detection when OpenAI fails.
+    
+    Args:
+        text: The email text content
+        
+    Returns:
+        Tuple[bool, Dict]: (is_appointment_inquiry, extracted_info)
+    """
+    # Keywords that indicate appointment inquiry
+    appointment_keywords = [
+        "appointment", "schedule", "scheduled", "when is my", "what time",
+        "details", "information", "confirm", "confirmation"
+    ]
+    
+    # Convert text to lowercase for case-insensitive matching
+    text_lower = text.lower()
+    
+    # Check if any appointment-related keywords are present
+    is_appointment_inquiry = any(keyword in text_lower for keyword in appointment_keywords)
+    
+    return is_appointment_inquiry, {
+        "is_appointment_inquiry": is_appointment_inquiry,
+        "confidence": 0.8 if is_appointment_inquiry else 0.0,  # Simple confidence score
+        "extracted_info": {}  # No extraction in fallback mode
+    }
+
+def load_template(template_name: str) -> str:
+    """Load a response template from file."""
+    template_path = TEMPLATES_DIR / f"{template_name}.txt"
+    try:
+        with open(template_path, "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        logger.error(f"Template file not found: {template_path}")
+        return ""
 
 def generate_appointment_response(
     template_name: str,
