@@ -4,11 +4,15 @@ import logging
 from typing import Dict, Optional, Tuple
 from pathlib import Path
 import json
+from openai import OpenAI
 
 from app.core.config import settings
 from app.services.frontapp_service import send_conversation_reply
 
 logger = logging.getLogger(__name__)
+
+# Initialize OpenAI client
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 # Load response templates
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
@@ -25,7 +29,7 @@ def load_template(template_name: str) -> str:
 
 def detect_appointment_inquiry(text: str) -> Tuple[bool, Dict]:
     """
-    Detect if an email is requesting appointment details.
+    Detect if an email is requesting appointment details using OpenAI.
     
     Args:
         text: The email text content
@@ -33,25 +37,59 @@ def detect_appointment_inquiry(text: str) -> Tuple[bool, Dict]:
     Returns:
         Tuple[bool, Dict]: (is_appointment_inquiry, extracted_info)
     """
-    # Keywords that indicate appointment inquiry
-    appointment_keywords = [
-        "appointment", "schedule", "scheduled", "when is my", "what time",
-        "details", "information", "confirm", "confirmation"
-    ]
-    
-    # Convert text to lowercase for case-insensitive matching
-    text_lower = text.lower()
-    
-    # Check if any appointment-related keywords are present
-    is_appointment_inquiry = any(keyword in text_lower for keyword in appointment_keywords)
-    
-    # Extract any mentioned dates, times, or other relevant information
-    extracted_info = {
-        "is_appointment_inquiry": is_appointment_inquiry,
-        "confidence": 0.8 if is_appointment_inquiry else 0.0  # Simple confidence score
-    }
-    
-    return is_appointment_inquiry, extracted_info
+    try:
+        # Create prompt for OpenAI
+        prompt = f"""Analyze this email to determine if it's requesting appointment details or information.
+Also extract any mentioned dates, times, study types, or other relevant appointment information.
+
+Email content:
+{text}
+
+Respond in JSON format with the following structure:
+{{
+    "is_appointment_inquiry": boolean,
+    "confidence": float (0.0 to 1.0),
+    "extracted_info": {{
+        "dates": [list of mentioned dates],
+        "times": [list of mentioned times],
+        "study_types": [list of mentioned study types],
+        "patient_id": string or null,
+        "accession_number": string or null
+    }}
+}}"""
+
+        # Call OpenAI API
+        response = client.chat.completions.create(
+            model=settings.OPENAI_MODEL_VERSION,
+            messages=[
+                {"role": "system", "content": "You are an expert at analyzing medical appointment inquiries. Respond with valid JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.0,
+            max_tokens=500
+        )
+        
+        # Parse the response
+        result = json.loads(response.choices[0].message.content.strip())
+        
+        # Extract the results
+        is_appointment_inquiry = result.get("is_appointment_inquiry", False)
+        confidence = result.get("confidence", 0.0)
+        extracted_info = result.get("extracted_info", {})
+        
+        return is_appointment_inquiry, {
+            "is_appointment_inquiry": is_appointment_inquiry,
+            "confidence": confidence,
+            "extracted_info": extracted_info
+        }
+        
+    except Exception as e:
+        logger.error(f"Error detecting appointment inquiry: {str(e)}")
+        return False, {
+            "is_appointment_inquiry": False,
+            "confidence": 0.0,
+            "extracted_info": {}
+        }
 
 def generate_appointment_response(
     template_name: str,
