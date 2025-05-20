@@ -12,7 +12,7 @@ import pytz  # Add this import at the top
 
 from app.core.config import settings
 
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 
 def get_headers() -> Dict[str, str]:
@@ -40,7 +40,7 @@ def list_front_tags() -> List[Dict[str, Any]]:
         List[Dict[str, Any]]: A list of tag objects from Front.
     """
     if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
-        logger.error("Missing required Front configuration in environment variables (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
+        # logger.error("Missing required Front configuration in environment variables (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
         raise ValueError("Missing required Front configuration")
 
     auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
@@ -53,20 +53,20 @@ def list_front_tags() -> List[Dict[str, Any]]:
     # TODO: Configure SSL verification properly
     with httpx.Client(verify=False) as client:
         try:
-            logger.info(f"Fetching tags from Front API: {url}")
+            # logger.info(f"Fetching tags from Front API: {url}")
             response = client.get(url, headers=headers)
             response.raise_for_status()  # Raise exception for 4xx/5xx status codes
             
             data = response.json()
             tags = data.get("_results", [])
-            logger.info(f"Successfully fetched {len(tags)} tags from Front.")
+            # logger.info(f"Successfully fetched {len(tags)} tags from Front.")
             # Add pagination handling if necessary in a real scenario
             return tags
         except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error fetching Front tags: {e.response.status_code} - {e.response.text}")
+            # logger.error(f"HTTP error fetching Front tags: {e.response.status_code} - {e.response.text}")
             raise
         except Exception as e:
-            logger.error(f"Error fetching Front tags: {str(e)}")
+            # logger.error(f"Error fetching Front tags: {str(e)}")
             raise
 
 def get_conversation(conversation_id: str) -> Optional[Dict]:
@@ -84,7 +84,7 @@ def get_conversation(conversation_id: str) -> Optional[Dict]:
         httpx.HTTPStatusError: If the request to Front fails with an HTTP error status.
     """
     if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
-        logger.error("Missing required Front configuration for getting conversation (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
+        # logger.error("Missing required Front configuration for getting conversation (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
         raise ValueError("Missing required Front configuration")
 
     auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
@@ -97,28 +97,28 @@ def get_conversation(conversation_id: str) -> Optional[Dict]:
     # TODO: Configure SSL verification properly
     with httpx.Client(verify=False) as client:
         try:
-            logger.info(f"Fetching conversation {conversation_id} from Front API: {url}")
+            # logger.info(f"Fetching conversation {conversation_id} from Front API: {url}")
             response = client.get(url, headers=headers)
 
             # Check for 404 explicitly first
             if response.status_code == 404:
-                logger.warning(f"Conversation {conversation_id} not found in Front (404).")
+                # logger.warning(f"Conversation {conversation_id} not found in Front (404).")
                 return None
 
             # Raise exceptions for other 4xx/5xx errors
             response.raise_for_status()
             
             conversation_data = response.json()
-            logger.info(f"Successfully fetched conversation {conversation_id}.")
+            # logger.info(f"Successfully fetched conversation {conversation_id}.")
             return conversation_data
             
         except httpx.HTTPStatusError as e:
             # Log the specific HTTP error (other than 404, which is handled above)
-            logger.error(f"HTTP error getting conversation {conversation_id}: {e.response.status_code} - {e.response.text}")
+            # logger.error(f"HTTP error getting conversation {conversation_id}: {e.response.status_code} - {e.response.text}")
             raise # Re-raise the original error for handling upstream if necessary
         except Exception as e:
             # Catch other potential errors (network issues, JSON decoding errors, etc.)
-            logger.error(f"Unexpected error getting conversation {conversation_id}: {str(e)}")
+            # logger.error(f"Unexpected error getting conversation {conversation_id}: {str(e)}")
             # Depending on desired behavior, you might return None or re-raise
             return None # Return None for general errors similar to the original logic
 
@@ -137,7 +137,7 @@ def get_conversation_tags(conversation_id: str) -> Optional[List[Dict]]:
     
     if conversation_data:
         tags = conversation_data.get("tags", [])
-        logger.info(f"Retrieved {len(tags)} tags for conversation {conversation_id}")
+        # logger.info(f"Retrieved {len(tags)} tags for conversation {conversation_id}")
         return tags
     else:
         # Error getting conversation logged in get_conversation
@@ -158,7 +158,7 @@ def create_front_tag(tag_name: str) -> Dict[str, Any]:
         httpx.HTTPStatusError: If the request to Front fails.
     """
     if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
-        logger.error("Missing required Front configuration for creating tag.")
+        # logger.error("Missing required Front configuration for creating tag.")
         raise ValueError("Missing required Front configuration")
 
     auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
@@ -173,7 +173,7 @@ def create_front_tag(tag_name: str) -> Dict[str, Any]:
     # TODO: Configure SSL verification properly
     with httpx.Client(verify=False) as client:
         try:
-            logger.info(f"Attempting to create tag '{tag_name}' in Front: POST {url}")
+            # logger.info(f"Attempting to create tag '{tag_name}' in Front: POST {url}")
             response = client.post(url, headers=headers, json=payload)
             
             # Check for conflict (tag might already exist - race condition?) handled by caller
@@ -181,14 +181,14 @@ def create_front_tag(tag_name: str) -> Dict[str, Any]:
             response.raise_for_status()
             
             new_tag = response.json()
-            logger.info(f"Successfully created tag '{tag_name}' with ID: {new_tag.get('id')}")
+            # logger.info(f"Successfully created tag '{tag_name}' with ID: {new_tag.get('id')}")
             return new_tag
         except httpx.HTTPStatusError as e:
             # Handle common errors specifically if needed (e.g., 409 Conflict)
-            logger.error(f"HTTP error creating Front tag '{tag_name}': {e.response.status_code} - {e.response.text}")
+            # logger.error(f"HTTP error creating Front tag '{tag_name}': {e.response.status_code} - {e.response.text}")
             raise
         except Exception as e:
-            logger.error(f"Unexpected error creating Front tag '{tag_name}': {str(e)}")
+            # logger.error(f"Unexpected error creating Front tag '{tag_name}': {str(e)}")
             raise
 
 
@@ -204,11 +204,11 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> None:
         httpx.HTTPStatusError: If the request to Front fails.
     """
     if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
-        logger.error("Missing required Front configuration in environment variables (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
+        # logger.error("Missing required Front configuration in environment variables (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
         raise ValueError("Missing required Front configuration")
     
     if not tag_names:
-        logger.info(f"No tag names provided for conversation {conversation_id}. Skipping.")
+        # logger.info(f"No tag names provided for conversation {conversation_id}. Skipping.")
         return
 
     # Get all available tags from Front
@@ -225,7 +225,7 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> None:
                 tag_ids_to_add.append(tag_id)
             else:
                 # Tag not found, try to create it
-                logger.info(f"Tag '{name}' not found for conversation {conversation_id}. Attempting to create.")
+                # logger.info(f"Tag '{name}' not found for conversation {conversation_id}. Attempting to create.")
                 try:
                     new_tag = create_front_tag(name)
                     new_tag_id = new_tag.get('id')
@@ -234,18 +234,19 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> None:
                         # Add to map for potential use in the same run (if tag appears multiple times)
                         tag_name_to_id_map[name] = new_tag_id 
                     else:
-                         logger.error(f"Created tag '{name}' but did not receive an ID. Skipping.")
-                         not_found_tags.append(name) # Treat as not found if creation failed to return ID
+                        # logger.error(f"Created tag '{name}' but did not receive an ID. Skipping.")
+                        not_found_tags.append(name) # Treat as not found if creation failed to return ID
                 except Exception as create_error:
-                    logger.error(f"Failed to create tag '{name}' in Front: {create_error}. Skipping tag.")
+                    # logger.error(f"Failed to create tag '{name}' in Front: {create_error}. Skipping tag.")
                     not_found_tags.append(name)
         
         if not_found_tags:
             # Log only once after attempting creation
-            logger.warning(f"Tags not found in Front for conversation {conversation_id}: {', '.join(not_found_tags)}. Skipping these tags.")
+            # logger.warning(f"Tags not found in Front for conversation {conversation_id}: {', '.join(not_found_tags)}. Skipping these tags.")
+            pass # Added pass
             
         if not tag_ids_to_add:
-            logger.warning(f"No valid tags found to add for conversation {conversation_id} after checking Front.")
+            # logger.warning(f"No valid tags found to add for conversation {conversation_id} after checking Front.")
             return
             
         # Create auth header
@@ -262,28 +263,28 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> None:
                 "Content-Type": "application/json"
             }
             
-            logger.info(f"Sending tag request to Front API for conversation {conversation_id}")
-            logger.info(f"URL: {url}")
-            logger.info(f"Payload: {payload}")
+            # logger.info(f"Sending tag request to Front API for conversation {conversation_id}")
+            # logger.info(f"URL: {url}")
+            # logger.info(f"Payload: {payload}")
             
             response = client.post(url, headers=headers, json=payload)
             
-            logger.info(f"Front API tag response status for {conversation_id}: {response.status_code}")
+            # logger.info(f"Front API tag response status for {conversation_id}: {response.status_code}")
             
             if response.status_code >= 400:
-                logger.error(f"Front API error response ({response.status_code}) for {conversation_id}: {response.text}")
+                # logger.error(f"Front API error response ({response.status_code}) for {conversation_id}: {response.text}")
                 response.raise_for_status() # Raise HTTPStatusError
                 
             added_tag_names = [name for name, tag_id in tag_name_to_id_map.items() if tag_id in tag_ids_to_add] # Get names for logging
-            logger.info(f"Successfully added tags '{', '.join(added_tag_names)}' (IDs: {tag_ids_to_add}) to conversation {conversation_id}")
+            # logger.info(f"Successfully added tags {', '.join(added_tag_names)}' (IDs: {tag_ids_to_add}) to conversation {conversation_id}")
             
     except httpx.HTTPStatusError as e:
         raise # Re-raise the specific HTTP error
     except ValueError as e:
-        logger.error(f"Configuration or Value Error adding tags to {conversation_id}: {str(e)}")
+        # logger.error(f"Configuration or Value Error adding tags to {conversation_id}: {str(e)}")
         raise
     except Exception as e:
-        logger.exception(f"Unexpected error adding tags to conversation {conversation_id}: {str(e)}")
+        # logger.exception(f"Unexpected error adding tags to conversation {conversation_id}: {str(e)}")
         raise # Re-raise unexpected errors 
 
 
@@ -303,11 +304,11 @@ def remove_conversation_tags(conversation_id: str, tag_names_to_remove: List[str
         httpx.HTTPStatusError: If the API request to Front fails.
     """
     if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
-        logger.error("Missing required Front configuration for removing tags (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
+        # logger.error("Missing required Front configuration for removing tags (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
         raise ValueError("Missing required Front configuration")
 
     if not tag_names_to_remove:
-        logger.info(f"No tag names provided for removal on conversation {conversation_id}. Skipping.")
+        # logger.info(f"No tag names provided for removal on conversation {conversation_id}. Skipping.")
         return True
 
     try:
@@ -325,10 +326,11 @@ def remove_conversation_tags(conversation_id: str, tag_names_to_remove: List[str
                 not_found_tags.append(name)
 
         if not_found_tags:
-            logger.warning(f"Cannot remove tags for conversation {conversation_id} as they were not found in Front: {', '.join(not_found_tags)}. Proceeding with found tags.")
+            # logger.warning(f"Cannot remove tags for conversation {conversation_id} as they were not found in Front: {', '.join(not_found_tags)}. Proceeding with found tags.")
+            pass # Added pass
 
         if not tag_ids_to_remove:
-            logger.info(f"No valid tag IDs found to remove for conversation {conversation_id} based on names: {tag_names_to_remove}.")
+            # logger.info(f"No valid tag IDs found to remove for conversation {conversation_id} based on names: {tag_names_to_remove}.")
             return True # Nothing to remove
 
         # Prepare for DELETE request
@@ -343,9 +345,9 @@ def remove_conversation_tags(conversation_id: str, tag_names_to_remove: List[str
 
         # TODO: Configure SSL verification properly
         with httpx.Client(verify=False) as client:
-            logger.info(f"Attempting to remove tags from Front conversation {conversation_id}")
-            logger.info(f"URL: DELETE {url}")
-            logger.info(f"Payload (tag_ids): {payload}")
+            # logger.info(f"Attempting to remove tags from Front conversation {conversation_id}")
+            # logger.info(f"URL: DELETE {url}")
+            # logger.info(f"Payload (tag_ids): {payload}")
 
             # Use client.request for DELETE with body
             response = client.request(
@@ -355,16 +357,16 @@ def remove_conversation_tags(conversation_id: str, tag_names_to_remove: List[str
                 content=json.dumps(payload) # Encode dict to JSON string for content
             )
 
-            logger.info(f"Front API tag removal response status for {conversation_id}: {response.status_code}")
+            # logger.info(f"Front API tag removal response status for {conversation_id}: {response.status_code}")
 
             # Front API often returns 204 No Content on successful DELETE
             if response.status_code == 204:
                 removed_tag_names = [name for name, tag_id in tag_name_to_id_map.items() if tag_id in tag_ids_to_remove] 
-                logger.info(f"Successfully removed tags '{', '.join(removed_tag_names)}' (IDs: {tag_ids_to_remove}) from conversation {conversation_id}")
+                # logger.info(f"Successfully removed tags {', '.join(removed_tag_names)}' (IDs: {tag_ids_to_remove}) from conversation {conversation_id}")
                 return True
             else:
                 # Log error for unexpected success codes or actual errors
-                logger.error(f"Front API error/unexpected status during tag removal ({response.status_code}) for {conversation_id}: {response.text}")
+                # logger.error(f"Front API error/unexpected status during tag removal ({response.status_code}) for {conversation_id}: {response.text}")
                 try:
                     response.raise_for_status() # Raise HTTPStatusError for non-2xx codes
                 except httpx.HTTPStatusError as http_err:
@@ -378,7 +380,7 @@ def remove_conversation_tags(conversation_id: str, tag_names_to_remove: List[str
         # Logged above or in list_front_tags
         raise
     except Exception as e:
-        logger.exception(f"Unexpected error removing tags from conversation {conversation_id}: {str(e)}")
+        # logger.exception(f"Unexpected error removing tags from conversation {conversation_id}: {str(e)}")
         raise # Re-raise unexpected errors
 
 
@@ -401,7 +403,7 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
         httpx.HTTPStatusError: If the request to Front fails.
     """
     if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
-        logger.error("Missing required Front configuration for fetching conversation messages.")
+        # logger.error("Missing required Front configuration for fetching conversation messages.")
         raise ValueError("Missing required Front configuration")
 
     auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
@@ -418,17 +420,17 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
     # TODO: Configure SSL verification properly
     with httpx.Client(verify=False) as client:
         try:
-            logger.info(f"Fetching messages for Front conversation {conversation_id} from {url}")
+            # logger.info(f"Fetching messages for Front conversation {conversation_id} from {url}")
             response = client.get(url, headers=headers)
             response.raise_for_status()
             
             data = response.json()
             messages = data.get("_results", [])
-            logger.info(f"Successfully fetched {len(messages)} messages for conversation {conversation_id}.")
+            # logger.info(f"Successfully fetched {len(messages)} messages for conversation {conversation_id}.")
 
             # --- Reverse messages to get chronological order ---
             messages.reverse()
-            logger.info(f"Reversed messages for chronological processing.")
+            # logger.info(f"Reversed messages for chronological processing.")
             # -------------------------------------------------
 
             for i, message in enumerate(messages):
@@ -469,7 +471,7 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
                         formatted_time = dt.strftime('%Y-%m-%d %H:%M:%S %Z')
                         timestamps.append(formatted_time)
                     except (ValueError, TypeError) as e:
-                        logger.warning(f"Could not parse timestamp '{created_at}' for message in conversation {conversation_id}: {e}")
+                        # logger.warning(f"Could not parse timestamp '{created_at}' for message in conversation {conversation_id}: {e}")
                         timestamps.append("Unknown Time")
                 else:
                     timestamps.append("Unknown Time")
@@ -477,7 +479,7 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
             # --- Join cleaned message bodies with newlines --- 
             full_conversation = "\n\n".join(all_messages_text)
             # ------------------------------------------------
-            logger.info(f"Concatenated conversation length: {len(full_conversation)} chars")
+            # logger.info(f"Concatenated conversation length: {len(full_conversation)} chars")
             
             return {
                 'text': full_conversation,
@@ -487,12 +489,12 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
-                logger.warning(f"Conversation {conversation_id} not found in Front.")
+                # logger.warning(f"Conversation {conversation_id} not found in Front.")
                 return {'text': '', 'senders': [], 'timestamps': []}
-            logger.error(f"HTTP error fetching messages for {conversation_id}: {e.response.status_code} - {e.response.text}")
+            # logger.error(f"HTTP error fetching messages for {conversation_id}: {e.response.status_code} - {e.response.text}")
             raise
         except Exception as e:
-            logger.error(f"Error fetching messages for conversation {conversation_id}: {str(e)}")
+            # logger.error(f"Error fetching messages for conversation {conversation_id}: {str(e)}")
             raise
 
 def send_conversation_reply(conversation_id: str, text: str) -> bool:
@@ -521,11 +523,11 @@ def send_conversation_reply(conversation_id: str, text: str) -> bool:
         # Use the configured API base URL
         url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/messages"
         
-        logger.info(f"Sending reply to conversation {conversation_id}")
-        logger.info(f"URL: {url}")
-        logger.info(f"Channel ID: {settings.FRONT_CHANNEL_ID}")
-        logger.info(f"Author ID: {settings.FRONT_BOT_TEAMMATE_ID}")
-        logger.debug(f"Request payload: {data}")
+        # logger.info(f"Sending reply to conversation {conversation_id}")
+        # logger.info(f"URL: {url}")
+        # logger.info(f"Channel ID: {settings.FRONT_CHANNEL_ID}")
+        # logger.info(f"Author ID: {settings.FRONT_BOT_TEAMMATE_ID}")
+        # logger.debug(f"Request payload: {data}")
         
         with httpx.Client(verify=False) as client:
             response = client.post(
@@ -536,39 +538,43 @@ def send_conversation_reply(conversation_id: str, text: str) -> bool:
             response.raise_for_status()
             
             # Log the response details
-            logger.info(f"Response status: {response.status_code}")
-            logger.info(f"Response headers: {response.headers}")
+            # logger.info(f"Response status: {response.status_code}")
+            # logger.info(f"Response headers: {response.headers}")
             try:
                 response_data = response.json()
-                logger.info(f"Response body: {response_data}")
+                # logger.info(f"Response body: {response_data}")
+                pass # Defensively adding pass here
             except Exception as e:
-                logger.info(f"Response body (raw): {response.text}")
+                # logger.info(f"Response body (raw): {response.text}")
+                pass # This pass should already be there from previous edit
             
             # Check if the response indicates a draft was created
             if response_data.get('is_draft') is True:
-                logger.error(f"Reply to {conversation_id} was created as a DRAFT. Ensure FRONT_BOT_TEAMMATE_ID is correct and has send permissions.")
-                logger.info("Attempting to list teammates for debugging...")
+                # logger.error(f"Reply to {conversation_id} was created as a DRAFT. Ensure FRONT_BOT_TEAMMATE_ID is correct and has send permissions.")
+                # logger.info("Attempting to list teammates for debugging...")
                 try:
                     teammates_list = list_teammates()
-                    logger.info(f"list_teammates() executed. Result: {teammates_list}")
+                    # logger.info(f"list_teammates() executed. Result: {teammates_list}")
                     if not teammates_list:
-                        logger.warning("list_teammates() returned an empty list or None.")
+                        # logger.warning("list_teammates() returned an empty list or None.")
+                        pass # Added pass
                 except Exception as e_list_teammates:
-                    logger.error(f"Error calling list_teammates(): {e_list_teammates}", exc_info=True)
-                logger.info("Returning False because message was a draft.")
+                    # logger.error(f"Error calling list_teammates(): {e_list_teammates}", exc_info=True)
+                    pass # Added pass
+                # logger.info("Returning False because message was a draft.")
                 return False # Explicitly mark as failed if it's a draft
                 
-            logger.info(f"Successfully sent reply to conversation {conversation_id} (is_draft was not True or not present).")
+            # logger.info(f"Successfully sent reply to conversation {conversation_id} (is_draft was not True or not present).")
             return True
             
     except httpx.HTTPStatusError as e:
-        logger.error(f"HTTP error sending reply to conversation {conversation_id}: {e.response.status_code} - {e.response.text}")
+        # logger.error(f"HTTP error sending reply to conversation {conversation_id}: {e.response.status_code} - {e.response.text}")
         return False
     except httpx.RequestError as e:
-        logger.error(f"Request error sending reply to conversation {conversation_id}: {e}")
+        # logger.error(f"Request error sending reply to conversation {conversation_id}: {e}")
         return False
     except Exception as e:
-        logger.error(f"Unexpected error sending reply to conversation {conversation_id}: {e}")
+        # logger.error(f"Unexpected error sending reply to conversation {conversation_id}: {e}")
         return False
 
 def list_teammates() -> List[Dict[str, Any]]:
@@ -582,7 +588,7 @@ def list_teammates() -> List[Dict[str, Any]]:
         httpx.HTTPStatusError: If the request to Front fails.
     """
     if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
-        logger.error("Missing required Front configuration for listing teammates (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
+        # logger.error("Missing required Front configuration for listing teammates (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
         raise ValueError("Missing required Front configuration")
 
     auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
@@ -594,34 +600,34 @@ def list_teammates() -> List[Dict[str, Any]]:
 
     with httpx.Client(verify=False) as client: # Assuming verify=False based on other calls
         try:
-            logger.info(f"Fetching teammates from Front API: {url}")
+            # logger.info(f"Fetching teammates from Front API: {url}")
             response = client.get(url, headers=headers)
             response.raise_for_status()  # Raise exception for 4xx/5xx status codes
             
             data = response.json()
             teammates = data.get("_results", [])
-            logger.info(f"Successfully fetched {len(teammates)} teammates from Front.")
+            # logger.info(f"Successfully fetched {len(teammates)} teammates from Front.")
             # Add pagination handling if necessary in a real scenario
             return teammates
         except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error fetching Front teammates: {e.response.status_code} - {e.response.text}")
+            # logger.error(f"HTTP error fetching Front teammates: {e.response.status_code} - {e.response.text}")
             raise
         except Exception as e:
-            logger.error(f"Error fetching Front teammates: {str(e)}")
+            # logger.error(f"Error fetching Front teammates: {str(e)}")
             raise
 
 # Example usage (for testing purposes)
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    # logging.basicConfig(level=logging.INFO) # Commented out logger
     test_conversation_id = "conv_xxx"  # Replace with a real ID for testing
     if test_conversation_id != "conv_xxx":
         try:
-            print(f"Testing get_conversation_text for {test_conversation_id}...")
+            # print(f"Testing get_conversation_text for {test_conversation_id}...")
             conversation_data = get_conversation_text(test_conversation_id)
-            print("Conversation Data Received:")
-            print(f"  Text Length: {len(conversation_data.get('text', ''))}")
-            print(f"  Senders: {conversation_data.get('senders')}")
-            print(f"  Timestamps: {conversation_data.get('timestamps')}")
+            # print("Conversation Data Received:")
+            # print(f"  Text Length: {len(conversation_data.get('text', ''))}")
+            # print(f"  Senders: {conversation_data.get('senders')}")
+            # print(f"  Timestamps: {conversation_data.get('timestamps')}")
             # print(f"  Full Text:\n{conversation_data.get('text')[:500]}...")
         except (ValueError, httpx.HTTPStatusError) as e:
             print(f"Test failed: {e}")
