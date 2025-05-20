@@ -273,6 +273,7 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
             return False
             
         last_sender = senders[-1]  # Get the most recent sender
+        logger.info(f"Last sender for conversation {conversation_id}: {last_sender}")
         
         # Skip if the sender is the precise imaging bot
         if "precise imaging bot" in last_sender.lower():

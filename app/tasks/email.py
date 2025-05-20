@@ -25,7 +25,7 @@ from app.crud import email as email_crud
 from app.models.email import Email # Added for type hinting
 from app.schemas.email import EmailUpdate # Added for type hinting
 
-# logger = get_task_logger(__name__)
+logger = get_task_logger(__name__)
 
 
 @celery_app.task(name="app.tasks.email.process_email")
@@ -79,6 +79,7 @@ def tag_email(email_id: str) -> Dict:
     db = SessionLocal()
     try:
         # Get email from database using synchronous CRUD
+        # logger.info("motherfucker sisterfucker")
         email_obj = email_crud_sync.get(db, id=email_uuid)
         if not email_obj:
             # logger.error(f"Email {email_id} not found for classification")
@@ -120,6 +121,7 @@ def tag_email(email_id: str) -> Dict:
 
         # Process auto-response if needed
         try:
+            logger.info('gonna try to process autorespond')
             autorespond_sent = process_autorespond(db, front_conversation_id, conversation_text)
             if autorespond_sent:
                 # logger.info(f"Auto-response sent for conversation {front_conversation_id}")
