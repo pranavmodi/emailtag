@@ -5,6 +5,7 @@ from typing import Dict, List
 from uuid import UUID
 import base64 # Added for encoding
 import io # Added for handling binary data
+import asyncio # Add asyncio import
 
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,7 @@ from app.core.config import settings
 from app.crud.sync import email as email_crud_sync
 from app.crud.sync import tag as tag_crud_sync
 from app.db.session import SessionLocal
+from app.db.session import AsyncSessionLocal # Add AsyncSessionLocal import
 from app.services.classification_service import classify_email_tags_hierarchical, remove_conflicting_tags
 from app.services.frontapp_service import add_conversation_tags, get_conversation_text, get_conversation_tags, remove_conversation_tags
 from app.services.ocr_service import process_ocr_content # Import the new function
@@ -122,7 +124,17 @@ def tag_email(email_id: str) -> Dict:
         # Process auto-response if needed
         try:
             logger.info('gonna try to process autorespond')
-            autorespond_sent = process_autorespond(db, front_conversation_id, conversation_text)
+
+            async def _run_autorespond_async():
+                async_session = AsyncSessionLocal()
+                try:
+                    # Note: process_autorespond expects an AsyncSession.
+                    # The original 'db' in tag_email is a synchronous session.
+                    return await process_autorespond(async_session, front_conversation_id, conversation_text)
+                finally:
+                    await async_session.close()
+            
+            autorespond_sent = asyncio.run(_run_autorespond_async())
             if autorespond_sent:
                 # logger.info(f"Auto-response sent for conversation {front_conversation_id}")
                 # Add auto-response tag to the list
