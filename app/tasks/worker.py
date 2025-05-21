@@ -2,10 +2,20 @@
 
 import logging
 from celery import Celery
+from celery.signals import after_setup_logger
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Define a handler for the after_setup_logger signal
+@after_setup_logger.connect
+def setup_celery_logging(logger, **kwargs):
+    """Configure Celery worker logging levels."""
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("openai").setLevel(logging.WARNING)
+    # You can add other loggers here if needed
+    # logger.info("Celery worker logging configured: httpx and openai set to WARNING.")
 
 celery_app = Celery(
     "worker",

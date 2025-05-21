@@ -6,13 +6,14 @@ import json
 import re # Import the regex module
 from typing import List, Dict, Any
 from typing import Dict, List, Optional
+import os # Import os module
 
 from datetime import datetime
 import pytz  # Add this import at the top
 
 from app.core.config import settings
 
-# logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def get_headers() -> Dict[str, str]:
@@ -550,7 +551,7 @@ def send_conversation_reply(conversation_id: str, text: str) -> bool:
             
             # Check if the response indicates a draft was created
             if response_data.get('is_draft') is True:
-                # logger.error(f"Reply to {conversation_id} was created as a DRAFT. Ensure FRONT_BOT_TEAMMATE_ID is correct and has send permissions.")
+                logger.error(f"Reply to {conversation_id} was created as a DRAFT. is_draft: {response_data.get('is_draft')}. Ensure FRONT_BOT_TEAMMATE_ID is correct and has send permissions.") # Enhanced logging
                 # logger.info("Attempting to list teammates for debugging...")
                 try:
                     teammates_list = list_teammates()
@@ -564,7 +565,7 @@ def send_conversation_reply(conversation_id: str, text: str) -> bool:
                 # logger.info("Returning False because message was a draft.")
                 return False # Explicitly mark as failed if it's a draft
                 
-            # logger.info(f"Successfully sent reply to conversation {conversation_id} (is_draft was not True or not present).")
+            logger.info(f"Successfully sent reply to conversation {conversation_id} (is_draft was not True or not present).")
             return True
             
     except httpx.HTTPStatusError as e:
@@ -615,6 +616,98 @@ def list_teammates() -> List[Dict[str, Any]]:
         except Exception as e:
             # logger.error(f"Error fetching Front teammates: {str(e)}")
             raise
+
+def send_inbound_reply_via_custom_channel(conversation_id: str, text: str) -> bool:
+    """
+    Send a reply to a Front conversation via a custom channel, appearing as an inbound message from the bot.
+    Reads configuration directly from environment variables.
+
+    Args:
+        conversation_id: The Front conversation ID (used for threading and context).
+        text: The reply text to send.
+
+    Returns:
+        bool: True if the message was sent successfully (accepted by the webhook), False otherwise.
+    """
+    webhook_url = os.getenv("FRONT_APP_WEBHOOK")
+    auth_token = os.getenv("FRONT_AUTH_TOKEN")
+    bot_handle_env = "pranav@twinpeaks.com" # Hardcoded bot handle
+
+    if not all([webhook_url, auth_token]): # Removed bot_handle_env from this check
+        logger.error("Missing required Front custom channel configuration from environment variables: "
+                     "FRONT_APP_WEBHOOK or FRONT_AUTH_TOKEN.") # Updated error message
+        return False
+
+    bot_name = os.getenv("CUSTOM_CHANNEL_BOT_NAME_ENV", "Email Bot")
+
+    original_subject = f"Re: Conversation {conversation_id}" # Default subject
+    try:
+        conversation_data = get_conversation(conversation_id)
+        if conversation_data and conversation_data.get('subject'):
+            original_subject = conversation_data['subject']
+        elif conversation_data:
+            logger.warning(f"Conversation {conversation_id} found but has no subject. Using default.")
+        else:
+            logger.warning(f"Could not fetch original conversation {conversation_id} for subject. Using default.")
+    except Exception as e:
+        logger.error(f"Error fetching conversation {conversation_id} for subject: {e}. Using default subject.")
+
+    headers = {
+        "Authorization": f"Bearer {auth_token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+    payload = {
+        "sender": {
+            "handle": bot_handle_env,
+            "name": bot_name
+        },
+        "subject": original_subject,
+        "body": text,
+        "metadata": {
+            "thread_ref": conversation_id, 
+            "is_bot_reply": True,
+            "original_conversation_id": conversation_id 
+        },
+    }
+
+    try:
+        logger.info(f"Sending inbound message reply to custom channel for conversation {conversation_id} via {webhook_url}")
+        logger.debug(f"Payload for custom channel: {json.dumps(payload)}")
+
+        with httpx.Client(verify=False) as client:
+            response = client.post(
+                webhook_url,
+                headers=headers,
+                json=payload,
+                timeout=30.0 
+            )
+
+        logger.info(f"Custom channel response status for conversation {conversation_id}: {response.status_code}")
+        
+        if 200 <= response.status_code < 300: 
+            logger.info(f"Successfully sent inbound reply for conversation {conversation_id} via custom channel.")
+            try:
+                logger.debug(f"Custom channel response body: {response.json()}")
+            except json.JSONDecodeError:
+                logger.debug(f"Custom channel response body (raw): {response.text}")
+            return True
+        else:
+            logger.error(f"Error sending inbound reply via custom channel for {conversation_id}: "
+                         f"Status={response.status_code}, Response={response.text}")
+            response.raise_for_status() 
+            return False
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTPStatusError sending inbound reply for {conversation_id}: {e.response.status_code} - {e.response.text}")
+        return False
+    except httpx.RequestError as e:
+        logger.error(f"RequestError sending inbound reply for {conversation_id}: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error sending inbound reply for {conversation_id}: {e}", exc_info=True)
+        return False
 
 # Example usage (for testing purposes)
 if __name__ == "__main__":

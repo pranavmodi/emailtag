@@ -12,7 +12,7 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.services.frontapp_service import send_conversation_reply, get_conversation_text
+from app.services.frontapp_service import send_conversation_reply, get_conversation_text, send_inbound_reply_via_custom_channel
 from app.crud import patient_conversation_data as pcd_crud
 
 logger = logging.getLogger(__name__)
@@ -285,14 +285,20 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
         return False
     
     # First check if this conversation has any associated patient IDs
+    logger.info(f"Checking for patient data for conversation {conversation_id}")
     patient_data_records = await pcd_crud.get_all_for_conversation(db, front_conversation_id=conversation_id)
-    
+    logger.info(f"Patient data records: {patient_data_records}")
+
     if not patient_data_records:
         logger.info(f"No patient data found for conversation {conversation_id}, skipping auto-response")
         return False
-        
+    else:
+        logger.info(f"Patient data found for conversation {conversation_id}")
+        logger.info(f"Patient data: {patient_data_records}")
+
     # Detect if this is an appointment inquiry
     is_appointment_inquiry, inquiry_info = detect_appointment_inquiry(conversation_text)
+    logger.info(f"is_appointment_inquiry: {is_appointment_inquiry}")
     
     # Only proceed if confidence is high enough
     if is_appointment_inquiry and inquiry_info.get("confidence", 0.0) >= 0.7:
@@ -326,9 +332,9 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
             logger.info(f"Generated response text: {response_text}")
             try:
                 # Send the response through Front
-                success = send_conversation_reply(conversation_id, response_text)
+                success = send_inbound_reply_via_custom_channel(conversation_id, response_text)
                 if success:
-                    logger.info(f"Sent auto-response for appointment inquiry in conversation {conversation_id}")
+                    logger.info(f"Sent auto-response for appointment inquiry in conversation {conversation_id} using custom channel.")
                 else:
                     logger.error(f"Failed to send auto-response for conversation {conversation_id}")
                 return success
