@@ -1,5 +1,8 @@
 """Email processing tasks."""
 
+import nest_asyncio # Import nest_asyncio
+nest_asyncio.apply() # Apply the patch
+
 import logging
 from typing import Dict, List
 from uuid import UUID
@@ -142,7 +145,7 @@ def tag_email(email_id: str) -> Dict:
             else:
                 pass
         except Exception as e:
-            # logger.error(f"Error processing auto-response: {e}")
+            logger.error(f"Error processing auto-response for {front_conversation_id}: {e}", exc_info=True)
             pass
 
         # Ensure tags are unique before proceeding
