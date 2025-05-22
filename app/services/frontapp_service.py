@@ -397,7 +397,8 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
             'text' (str): Concatenated text of all message bodies (HTML removed, chronological).
             'senders' (List[str]): List of sender emails or usernames (chronological).
             'timestamps' (List[str]): List of message creation timestamps (chronological).
-            Returns {'text': '', 'senders': [], 'timestamps': []} if conversation not found or has no messages.
+            'last_message_details': Details for the author of the last message.
+            Returns {'text': '', 'senders': [], 'timestamps': [], 'last_message_details': {}} if conversation not found or has no messages.
 
     Raises:
         ValueError: If required Front configuration is missing.
@@ -417,6 +418,11 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
     all_messages_text: List[str] = []
     senders: List[str] = []
     timestamps: List[str] = []
+
+    # Details for the author of the last message
+    last_message_author_email: Optional[str] = None
+    last_message_author_handle: Optional[str] = None
+    last_message_author_name: str = "Unknown Sender"
 
     # TODO: Configure SSL verification properly
     with httpx.Client(verify=False) as client:
@@ -445,23 +451,74 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
                         all_messages_text.append(cleaned_body)
                 # --------------------------
 
-                # First try to get sender from author
-                sender_name = "Unknown Sender"
+                # --- Extract sender details for current message ---
+                msg_author_email: Optional[str] = None
+                msg_author_handle: Optional[str] = None
+                msg_author_name: str = "Unknown Sender"
+                
                 author = message.get('author')
                 if author:
-                    sender_name = author.get('email', author.get('username', 
-                        f"{author.get('first_name', '')} {author.get('last_name', '')}".strip()))
+                    msg_author_email = author.get('email')
+                    msg_author_handle = author.get('handle')
+                    first_name = author.get('first_name', '')
+                    last_name = author.get('last_name', '')
+                    username = author.get('username')
+
+                    if first_name or last_name:
+                        msg_author_name = f"{first_name} {last_name}".strip()
+                    elif username:
+                        msg_author_name = username
+                    
+                    if not msg_author_name or msg_author_name == "Unknown Sender":
+                        if msg_author_email:
+                            msg_author_name = msg_author_email
+                        elif msg_author_handle:
+                            msg_author_name = msg_author_handle
                 
-                # If no author or no valid author info, try recipients
-                if not sender_name or sender_name == "Unknown Sender":
+                # Determine the primary identifier for the 'senders' list
+                sender_name_for_list = "Unknown Sender"
+                if msg_author_email:
+                    sender_name_for_list = msg_author_email
+                elif msg_author_handle:
+                    sender_name_for_list = msg_author_handle
+                elif msg_author_name and msg_author_name != "Unknown Sender":
+                    sender_name_for_list = msg_author_name
+                
+                # Fallback to 'from' recipient if author info was insufficient
+                if not sender_name_for_list or sender_name_for_list == "Unknown Sender":
                     recipients = message.get('recipients', [])
                     for recipient in recipients:
                         if recipient.get('role') == 'from':
-                            # Prefer name over handle if available
-                            sender_name = recipient.get('name') or recipient.get('handle', "Unknown Sender")
-                            break
+                            rcpt_handle = recipient.get('handle') # Often the email
+                            rcpt_name = recipient.get('name')   # Display name
 
-                senders.append(sender_name)
+                            # Update msg_author_email/handle if they are still None and rcpt_handle is informative
+                            if not msg_author_email and rcpt_handle and "@" in rcpt_handle:
+                                msg_author_email = rcpt_handle
+                            if not msg_author_handle and rcpt_handle:
+                                msg_author_handle = rcpt_handle
+                            
+                            # Determine sender_name_for_list and update msg_author_name if it's better
+                            if rcpt_handle:
+                                sender_name_for_list = rcpt_handle
+                                if not msg_author_name or msg_author_name == "Unknown Sender":
+                                     msg_author_name = rcpt_name or rcpt_handle
+                            elif rcpt_name:
+                                sender_name_for_list = rcpt_name
+                                if not msg_author_name or msg_author_name == "Unknown Sender":
+                                     msg_author_name = rcpt_name
+                            break # Found 'from' recipient
+                
+                if not sender_name_for_list or sender_name_for_list == "Unknown Sender": # Ultimate fallback for list
+                    sender_name_for_list = "Unknown Sender"
+
+                senders.append(sender_name_for_list)
+                # --- End sender details extraction ---
+                
+                # Update details for the last message (will be overwritten until the actual last message)
+                last_message_author_email = msg_author_email
+                last_message_author_handle = msg_author_handle
+                last_message_author_name = msg_author_name if (msg_author_name and msg_author_name != "Unknown Sender") else sender_name_for_list
                 
                 # Convert Unix timestamp to readable format
                 if created_at is not None:
@@ -485,13 +542,18 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
             return {
                 'text': full_conversation,
                 'senders': senders,
-                'timestamps': timestamps
+                'timestamps': timestamps,
+                'last_message_details': {
+                    'email': last_message_author_email,
+                    'handle': last_message_author_handle,
+                    'name': last_message_author_name
+                }
             }
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 # logger.warning(f"Conversation {conversation_id} not found in Front.")
-                return {'text': '', 'senders': [], 'timestamps': []}
+                return {'text': '', 'senders': [], 'timestamps': [], 'last_message_details': {}}
             # logger.error(f"HTTP error fetching messages for {conversation_id}: {e.response.status_code} - {e.response.text}")
             raise
         except Exception as e:

@@ -113,6 +113,19 @@ if __name__ == "__main__":
             ),
             "sender_email": "apatient.pre248509@example.com",
             "sender_name": "A. Patient (Autoresponse Test)"
+        },
+        "3": {
+            "description": "Autoresponse Scenario without Patient ID",
+            "subject": "Inquiry about upcoming appointment",
+            "body": (
+                "<p>Hello,</p>"
+                "<p>I am writing to confirm my upcoming appointment.</p>"
+                "<p>Could you please let me know the scheduled time?</p>"
+                "<p>Thank you,</p>"
+                "<p>J. Doe</p>"
+            ),
+            "sender_email": "j.doe.no.id@example.com",
+            "sender_name": "J. Doe (No ID Test)"
         }
         # Add more scenarios here if needed
     }

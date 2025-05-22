@@ -4,106 +4,20 @@ import logging
 from typing import Dict, Optional, Tuple, List, Any
 from pathlib import Path
 import json
-from openai import OpenAI
-from openai import APIError, RateLimitError, APIConnectionError, APITimeoutError
-import time
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.services.frontapp_service import send_conversation_reply, get_conversation_text, send_inbound_reply_via_custom_channel
 from app.crud import patient_conversation_data as pcd_crud
+from app.services.ai_helpers.response_generator import (
+    generate_openai_appointment_response, 
+    _call_openai_api as _call_openai_api_from_helper
+)
 
 logger = logging.getLogger(__name__)
 
-# Initialize OpenAI client with custom httpx client
-client = OpenAI(
-    api_key=settings.OPENAI_API_KEY,
-    http_client=httpx.Client(verify=False)  # Disable SSL verification for service account
-)
-
 # Load response templates
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
-
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=4, max=10),
-    retry=retry_if_exception_type((APIConnectionError, APITimeoutError, RateLimitError)),
-    reraise=True
-)
-def _call_openai_api(prompt: str) -> Dict:
-    """
-    Make a call to OpenAI API with retry logic.
-    
-    Args:
-        prompt: The prompt to send to OpenAI
-        
-    Returns:
-        Dict: The parsed JSON response from OpenAI
-        
-    Raises:
-        Exception: If all retries fail
-    """
-    try:
-        # Create the messages array
-        messages = [
-            {"role": "system", "content": "You are an expert at analyzing medical appointment inquiries. Respond with valid JSON only."},
-            {"role": "user", "content": prompt}
-        ]
-        
-        # Get model version from settings
-        model = settings.OPENAI_MODEL_VERSION
-        if model == "gpt-4":
-            model = "gpt-4o"
-            
-        logger.info(f"Making OpenAI request with model: {model}")
-        logger.info("Request messages:")
-        for msg in messages:
-            logger.info(f"Role: {msg['role']}")
-            logger.info(f"Content: {msg['content'][:500]}...")  # Log first 500 chars of content
-        
-        # Make the API call
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0.0,
-            max_tokens=500
-        )
-        
-        # Log the response
-        logger.info("OpenAI Response:")
-        logger.info(f"Model used: {response.model}")
-        logger.info(f"Response content: {response.choices[0].message.content[:500]}...")  # Log first 500 chars
-        
-        # Parse the response
-        content = response.choices[0].message.content
-        if not content:
-            raise ValueError("Empty response from OpenAI")
-            
-        # Clean up the response content
-        content = content.strip()
-        # Remove markdown code block markers if present
-        if content.startswith("```json"):
-            content = content[7:]  # Remove ```json
-        if content.startswith("```"):
-            content = content[3:]  # Remove ```
-        if content.endswith("```"):
-            content = content[:-3]  # Remove ```
-        content = content.strip()
-            
-        return json.loads(content)
-        
-    except RateLimitError as e:
-        logger.warning(f"OpenAI rate limit hit: {str(e)}")
-        raise
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse OpenAI response as JSON: {str(e)}")
-        logger.error(f"Raw content: {content}")
-        raise
-    except Exception as e:
-        logger.error(f"OpenAI API error: {str(e)}")
-        raise
 
 def detect_appointment_inquiry(text: str) -> Tuple[bool, Dict]:
     """
@@ -116,7 +30,6 @@ def detect_appointment_inquiry(text: str) -> Tuple[bool, Dict]:
         Tuple[bool, Dict]: (is_appointment_inquiry, extracted_info)
     """
     try:
-        # Create prompt for OpenAI
         prompt = f"""Analyze this email to determine if it's explicitly requesting appointment details or information.
 The email must contain clear evidence of an appointment inquiry, such as:
 - Questions about appointment times, dates, or scheduling
@@ -141,18 +54,36 @@ Respond in JSON format with the following structure:
         "patient_id": string or null,
         "accession_number": string or null
     }}
-}}"""
+}}
+"""
 
-        # Call OpenAI API with retry logic
-        result = _call_openai_api(prompt)
+        # Call OpenAI API using the imported helper version
+        # _call_openai_api_from_helper now returns a string, which should be JSON for this prompt.
+        response_str = _call_openai_api_from_helper(prompt)
         
-        # Extract the results
+        # Clean up the response string from markdown code block markers if present
+        cleaned_response_str = response_str.strip()
+        if cleaned_response_str.startswith("```json"):
+            cleaned_response_str = cleaned_response_str[7:]
+        if cleaned_response_str.endswith("```"):
+            cleaned_response_str = cleaned_response_str[:-3]
+        cleaned_response_str = cleaned_response_str.strip()
+
+        # Parse the JSON string response
+        try:
+            result = json.loads(cleaned_response_str)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse OpenAI response for inquiry detection as JSON: {str(e)}")
+            logger.error(f"Cleaned response string that failed: {cleaned_response_str}")
+            logger.error(f"Original raw response string: {response_str}")
+            # Fallback if JSON parsing fails
+            return _fallback_detection(text)
+
         is_appointment_inquiry = result.get("is_appointment_inquiry", False)
         confidence = result.get("confidence", 0.0)
         reasoning = result.get("reasoning", "")
         extracted_info = result.get("extracted_info", {})
         
-        # Log the reasoning for debugging
         logger.info(f"Appointment inquiry detection reasoning: {reasoning}")
         
         return is_appointment_inquiry, {
@@ -163,8 +94,7 @@ Respond in JSON format with the following structure:
         }
         
     except Exception as e:
-        logger.error(f"Error detecting appointment inquiry: {str(e)}")
-        # Fall back to keyword-based detection if OpenAI fails
+        logger.error(f"Error detecting appointment inquiry: {str(e)}", exc_info=True)
         return _fallback_detection(text)
 
 def _fallback_detection(text: str) -> Tuple[bool, Dict]:
@@ -212,34 +142,24 @@ def generate_appointment_response(
 ) -> str:
     """
     Generate an appointment details response using the template.
-    
-    Args:
-        template_name: Name of the template to use
-        conversation_data: Data about the conversation
-        appointment_info: Optional appointment information
-        
-    Returns:
-        str: Generated response text
+    (This is the old simple template filler, kept for now)
     """
     template = load_template(template_name)
     if not template:
         return ""
     
-    # Extract sender name from conversation data
     sender_name = conversation_data.get("sender_name", "Valued Patient")
     
-    # Default values for template variables
     template_vars = {
         "sender_name": sender_name,
-        "appointment_date": appointment_info.get("date", "Not available"),
-        "appointment_time": appointment_info.get("time", "Not available"),
-        "study_type": appointment_info.get("study_type", "Not specified"),
-        "patient_id": appointment_info.get("patient_id", "Not available"),
-        "accession_number": appointment_info.get("accession_number", "Not available"),
+        "appointment_date": appointment_info.get("date", "Not available") if appointment_info else "Not available",
+        "appointment_time": appointment_info.get("time", "Not available") if appointment_info else "Not available",
+        "study_type": appointment_info.get("study_type", "Not specified") if appointment_info else "Not specified",
+        "patient_id": appointment_info.get("patient_id", "Not available") if appointment_info else "Not available",
+        "accession_number": appointment_info.get("accession_number", "Not available") if appointment_info else "Not available",
         "contact_number": settings.CONTACT_NUMBER
     }
     
-    # Fill in the template
     try:
         response = template.format(**template_vars)
         return response
@@ -250,68 +170,100 @@ def generate_appointment_response(
 async def process_autorespond(db: AsyncSession, conversation_id: str, conversation_text: str) -> bool:
     """
     Process an email for potential auto-response.
-    
-    Args:
-        db: Database session
-        conversation_id: Front conversation ID
-        conversation_text: The email text content
-        
-    Returns:
-        bool: True if an auto-response was sent, False otherwise
     """
-    # Get conversation data to check sender
     try:
         conversation_data = get_conversation_text(conversation_id)
         if not conversation_data or not isinstance(conversation_data, dict):
             logger.warning(f"Could not get conversation data for {conversation_id}, skipping auto-response")
             return False
-            
-        # Get the last sender (most recent message)
-        senders = conversation_data.get('senders', [])
-        if not senders:
-            logger.warning(f"No sender information found for conversation {conversation_id}, skipping auto-response")
-            return False
-            
-        last_sender = senders[-1]  # Get the most recent sender
-        logger.info(f"Last sender for conversation {conversation_id}: {last_sender}")
+
+        last_message_details = conversation_data.get('last_message_details', {})
+        logger.info(f"Details for the last message author: {last_message_details}")
         
-        # Skip if the sender is the precise imaging bot
-        if "precise imaging bot" in last_sender.lower():
-            logger.info(f"Skipping auto-response for conversation {conversation_id} as sender is the precise imaging bot")
+        sender_email = last_message_details.get('email') or last_message_details.get('handle')
+        sender_name = last_message_details.get('name', "Valued Patient")
+
+        senders_list = conversation_data.get('senders', [])
+        last_sender_identifier = ""
+        if sender_email:
+            last_sender_identifier = sender_email
+        elif senders_list:
+            last_sender_identifier = senders_list[-1]
+        
+        logger.info(f"Identifier for bot check: {last_sender_identifier} for conversation {conversation_id}. Sender name: {sender_name}")
+        
+        if not last_sender_identifier:
+            logger.warning(f"No sender identifier found for conversation {conversation_id}. Skipping auto-response.")
+            return False
+
+        # Enhanced bot detection: check identifier, name, and signature
+        is_bot_in_identifier = "bot" in last_sender_identifier.lower()
+        is_bot_in_name = "bot" in sender_name.lower()
+        # Check for BOT_EMAIL_SIGNATURE, ensuring it's not None before calling .lower()
+        is_bot_signature_match = False
+        if settings.BOT_EMAIL_SIGNATURE: # Ensure it exists and is not None/empty
+            is_bot_signature_match = settings.BOT_EMAIL_SIGNATURE.lower() in last_sender_identifier.lower()
+
+        if is_bot_in_identifier or is_bot_in_name or is_bot_signature_match:
+            logger.info(f"Skipping auto-response for conversation {conversation_id} due to bot detection. "
+                        f"Identifier: '{last_sender_identifier}' (match: {is_bot_in_identifier}), "
+                        f"Name: '{sender_name}' (match: {is_bot_in_name}), "
+                        f"Signature match: {is_bot_signature_match}")
             return False
             
     except Exception as e:
-        logger.error(f"Error getting conversation data for {conversation_id}: {e}")
+        logger.error(f"Error during initial data retrieval or bot check for {conversation_id}: {e}", exc_info=True)
         return False
     
-    # First check if this conversation has any associated patient IDs
     logger.info(f"Checking for patient data for conversation {conversation_id}")
     patient_data_records = await pcd_crud.get_all_for_conversation(db, front_conversation_id=conversation_id)
     logger.info(f"Patient data records: {patient_data_records}")
 
     if not patient_data_records:
-        logger.info(f"No patient data found for conversation {conversation_id}, skipping auto-response")
+        logger.info(f"No patient data found for conversation {conversation_id}, skipping auto-response based on patient data linkage.")
         return False
     else:
-        logger.info(f"Patient data found for conversation {conversation_id}")
-        logger.info(f"Patient data: {patient_data_records}")
+        logger.info(f"Patient data found for conversation {conversation_id}. Count: {len(patient_data_records)}")
 
-    # Detect if this is an appointment inquiry
     is_appointment_inquiry, inquiry_info = detect_appointment_inquiry(conversation_text)
-    logger.info(f"is_appointment_inquiry: {is_appointment_inquiry}")
+    logger.info(f"is_appointment_inquiry: {is_appointment_inquiry}, confidence: {inquiry_info.get('confidence')}")
     
-    # Only proceed if confidence is high enough
-    if is_appointment_inquiry and inquiry_info.get("confidence", 0.0) >= 0.7:
+    # Using hardcoded confidence threshold of 0.75
+    if is_appointment_inquiry and inquiry_info.get("confidence", 0.0) >= 0.75:
         logger.info(f"Detected appointment inquiry in conversation {conversation_id} with confidence {inquiry_info['confidence']}")
         
-        # Use extracted info if available
         extracted_info = inquiry_info.get("extracted_info", {})
-        
-        # Get the first patient record (we'll use this for the response)
         patient_record = patient_data_records[0]
+
+        # Determine patient name for greeting
+        patient_name_for_greeting = None
+        db_patient_name_found = False
+        patient_info_from_db = patient_record.patient_info # This is a dict
+
+        if (isinstance(patient_info_from_db, dict) and
+            "patients" in patient_info_from_db and
+            isinstance(patient_info_from_db.get("patients"), list) and # Added .get() for safety
+            patient_info_from_db["patients"] and # Check if list is not empty
+            isinstance(patient_info_from_db["patients"][0], dict)): # Check if first item is dict
+            
+            actual_patient_data = patient_info_from_db["patients"][0]
+            # No need to check instance of actual_patient_data again, done above
+            first_name = actual_patient_data.get("first_name")
+            last_name = actual_patient_data.get("last_name")
+            if first_name and last_name:
+                patient_name_for_greeting = f"{str(first_name).strip()} {str(last_name).strip()}" # Added str() for safety
+                db_patient_name_found = True
+                logger.info(f"Using patient name from DB record: {patient_name_for_greeting}")
+            elif actual_patient_data.get("full_name"): 
+                patient_name_for_greeting = str(actual_patient_data.get("full_name")).strip() # Added str()
+                db_patient_name_found = True
+                logger.info(f"Using patient full_name from DB record: {patient_name_for_greeting}")
+
+        if not db_patient_name_found:
+            patient_name_for_greeting = sender_name 
+            logger.info(f"Patient name not found or incomplete in DB patient_info. Using sender name from email: {patient_name_for_greeting}")
         
-        # Use patient info from the database record
-        appointment_info = {
+        appointment_info_for_ai = {
             "date": extracted_info.get("dates", ["To be confirmed"])[0] if extracted_info.get("dates") else "To be confirmed",
             "time": extracted_info.get("times", ["To be confirmed"])[0] if extracted_info.get("times") else "To be confirmed",
             "study_type": extracted_info.get("study_types", ["To be determined"])[0] if extracted_info.get("study_types") else "To be determined",
@@ -319,30 +271,36 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
             "accession_number": extracted_info.get("accession_number", "To be retrieved")
         }
         
-        logger.info(f"Generated appointment info: {appointment_info}")
+        logger.info(f"Data prepared for AI response generation: {appointment_info_for_ai}")
         
-        # Generate response
-        response_text = generate_appointment_response(
-            "appointment_details_response",
-            {"sender_name": "Valued Patient"},  # TODO: Get actual sender name
-            appointment_info
+        template_content = load_template("appointment_details_response")
+        if not template_content:
+            logger.error(f"Failed to load 'appointment_details_response' template for {conversation_id}. Cannot generate AI response.")
+            return False
+
+        response_text = generate_openai_appointment_response( # This is now imported
+            base_template_content=template_content,
+            sender_name=patient_name_for_greeting, # Use the determined name for greeting
+            appointment_details=appointment_info_for_ai,
+            contact_number=settings.CONTACT_NUMBER
         )
         
         if response_text:
-            logger.info(f"Generated response text: {response_text}")
+            logger.info(f"Generated AI response text for {conversation_id}. Length: {len(response_text)}")
+            logger.debug(f"AI Response for {conversation_id}:\n{response_text}")
             try:
-                # Send the response through Front
                 success = send_inbound_reply_via_custom_channel(conversation_id, response_text)
                 if success:
-                    logger.info(f"Sent auto-response for appointment inquiry in conversation {conversation_id} using custom channel.")
+                    logger.info(f"Sent auto-response for inquiry in {conversation_id} using custom channel.")
                 else:
-                    logger.error(f"Failed to send auto-response for conversation {conversation_id}")
+                    logger.error(f"Failed to send auto-response for {conversation_id}")
                 return success
             except Exception as e:
-                logger.error(f"Failed to send auto-response: {e}")
+                logger.error(f"Failed to send auto-response for {conversation_id}: {e}", exc_info=True)
                 return False
         else:
-            logger.error(f"Failed to generate response text for conversation {conversation_id}")
+            logger.error(f"Failed to generate AI response text for {conversation_id}") # Should be caught by fallback in generator
             return False
     
+    logger.info(f"Auto-response not triggered for {conversation_id} (inquiry: {is_appointment_inquiry}, confidence: {inquiry_info.get('confidence')}")
     return False 

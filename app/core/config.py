@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     # Auto-response settings
     DEFAULT_LOCATION: str = "Precise Imaging Center"  # Default location for auto-responses
     CONTACT_NUMBER: str = "(555) 123-4567"  # Default contact number for auto-responses
+    BOT_EMAIL_SIGNATURE: Optional[str] = None # Signature to identify bot emails
 
     # Logging
     LOG_LEVEL: str = "INFO"
