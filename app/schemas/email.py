@@ -151,4 +151,18 @@ class PreprocessingWebhook(BaseModel):
     processing_status: Optional[str] = None
     error_message: Optional[str] = None
     # Add other fields expected from the preprocessing service if known
-    # e.g., cleaned_text: str, entities: List[str], etc. 
+    # e.g., cleaned_text: str, entities: List[str], etc.
+
+
+class FrontOutboundMessageWebhook(BaseModel):
+    """
+    Schema for FrontApp outbound message webhook payload.
+    This is a generic placeholder and should be updated with the actual
+    expected structure once known.
+    """
+    # Using a more flexible approach to capture the whole payload
+    # as we don't know the exact structure Front will send for outbound events.
+    # Pydantic will capture all top-level fields into this model directly.
+
+    class Config:
+        extra = "allow" # Allow any fields to be passed 

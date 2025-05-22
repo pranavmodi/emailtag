@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.crud import email as email_crud
 from app.crud import patient_conversation_data as pcd_crud
 from app.db.session import get_db
-from app.schemas.email import EmailCreate, FrontAppWebhook, PreprocessingWebhook, EmailUpdate, Email
+from app.schemas.email import EmailCreate, FrontAppWebhook, PreprocessingWebhook, EmailUpdate, Email, FrontOutboundMessageWebhook
 from app.schemas.patient_conversation_data import PatientConversationDataCreate
 from app.tasks.email import process_email, send_attachment_to_ocr
 from app.services.patient import fetch_patient_by_id
@@ -295,3 +295,44 @@ async def preprocessing_webhook(
 
 # --- Dummy OCR Endpoint for Testing (REMOVED) --- 
 # The dummy OCR endpoint is no longer needed as the synchronous OCR flow is implemented directly in the task. 
+
+@router.post("/frontapp/outbound", status_code=status.HTTP_202_ACCEPTED)
+async def frontapp_outbound_webhook(
+    request: Request,
+    # db: AsyncSession = Depends(get_db) # Database not strictly needed for just logging yet
+) -> Dict[str, Any]:
+    """
+    Webhook endpoint for outbound messages from FrontApp.
+    For now, it just logs the request details.
+    """
+    logger.info("Received FrontApp outbound webhook request.")
+
+    # Log headers
+    headers = dict(request.headers)
+    logger.info(f"Outbound Webhook Headers: {json.dumps(headers, indent=2)}")
+
+    # Get the raw request body
+    body = await request.body()
+    
+    # Attempt to parse and log the payload using the generic schema
+    try:
+        payload_dict = json.loads(body.decode())
+        # Validate with Pydantic model - this will capture all fields due to extra = "allow"
+        webhook_data = FrontOutboundMessageWebhook(**payload_dict) 
+        logger.info(f"Parsed Outbound Webhook Payload: {webhook_data.model_dump_json(indent=2)}")
+        
+        # You can add more specific logging here if you identify key fields, e.n.
+        # event_type = payload_dict.get("type")
+        # if event_type:
+        #     logger.info(f"Outbound event type: {event_type}")
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Error decoding JSON from outbound webhook: {str(e)}")
+        logger.info(f"Raw Outbound Webhook Body (on JSON error): {body.decode()}")
+        # Still return 202, as we don't want Front to retry endlessly for a logging endpoint
+    except Exception as e:
+        logger.error(f"Error processing outbound webhook payload: {str(e)}", exc_info=True)
+        logger.info(f"Raw Outbound Webhook Body (on general error): {body.decode()}")
+        # Still return 202
+
+    return {"status": "outbound_payload_logged"} 

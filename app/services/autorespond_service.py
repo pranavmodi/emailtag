@@ -289,14 +289,15 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
             logger.info(f"Generated AI response text for {conversation_id}. Length: {len(response_text)}")
             logger.debug(f"AI Response for {conversation_id}:\n{response_text}")
             try:
-                success = send_inbound_reply_via_custom_channel(conversation_id, response_text)
+                # Using send_conversation_reply to send as a teammate
+                success = send_conversation_reply(conversation_id, response_text)
                 if success:
-                    logger.info(f"Sent auto-response for inquiry in {conversation_id} using custom channel.")
+                    logger.info(f"Sent auto-response as teammate for inquiry in {conversation_id}.")
                 else:
-                    logger.error(f"Failed to send auto-response for {conversation_id}")
+                    logger.error(f"Failed to send auto-response as teammate for {conversation_id}. Check Front logs and FRONT_BOT_TEAMMATE_ID permissions.")
                 return success
             except Exception as e:
-                logger.error(f"Failed to send auto-response for {conversation_id}: {e}", exc_info=True)
+                logger.error(f"Exception sending auto-response as teammate for {conversation_id}: {e}", exc_info=True)
                 return False
         else:
             logger.error(f"Failed to generate AI response text for {conversation_id}") # Should be caught by fallback in generator

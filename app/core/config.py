@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     FRONT_CHANNEL_ID: str  # The ID of the channel to send auto-responses from
     FRONT_APP_WEBHOOK: str  # Front webhook URL for incoming messages
     FRONT_BOT_TEAMMATE_ID: str # ID of the teammate/bot sending replies
+    FRONTAPP_WEBHOOK_SECRET: Optional[str] = None # Secret for verifying Front webhook signatures
 
     # Auto-response settings
     DEFAULT_LOCATION: str = "Precise Imaging Center"  # Default location for auto-responses
