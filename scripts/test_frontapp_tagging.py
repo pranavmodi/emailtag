@@ -131,17 +131,47 @@ if __name__ == "__main__":
             "sender_name": "J. Doe (No ID Test)"
         },
         "4": {
-            "description": "Resolved Conversation for Archiving Test",
-            "subject": "RE: Question about service - All Clear!",
-            "body": (
-                "<p><b>User:</b> Hello, I had a question about the service hours on holidays. Are you open on Thanksgiving?</p>"
-                "<br>"
-                "<p><b>Agent:</b> Hi there! Thanks for reaching out. No, we are closed on Thanksgiving Day.</p>"
-                "<br>"
-                "<p><b>User:</b> Ok, great, thank you for confirming!</p>"
-            ),
-            "sender_email": "user.resolved@example.com",
-            "sender_name": "User (Resolved)"
+            "description": "Resolved Conversation for Archiving Test (Multi-Message)",
+            "messages": [
+                {
+                    "subject": "Question about service hours on holidays",
+                    "body": (
+                        "<p>Hello Team,</p>"
+                        "<p>I had a question about the service hours on holidays. Are you open on Thanksgiving?</p>"
+                        "<p>Thanks,<br>"
+                        "Chris P. Bacon</p>"
+                    ),
+                    "sender_email": "chris.p.bacon@example.com",
+                    "sender_name": "Chris P. Bacon"
+                },
+                {
+                    # This message would simulate an agent reply.
+                    # For the test script, we send it as if it's from an external user,
+                    # but the content indicates it's an agent.
+                    # The archiving logic should see this as a resolved thread.
+                    "subject": "RE: Question about service hours on holidays",
+                    "body": (
+                        "<p>Hi Chris,</p>"
+                        "<p>Thanks for reaching out! No, we are closed on Thanksgiving Day.</p>"
+                        "<p>Let us know if you have any other questions!</p>"
+                        "<p>Best,<br>"
+                        "Support Agent Alice</p>"
+                    ),
+                    "sender_email": "support.agent.alice@example.com", # Simulating an agent reply via an external email for test purposes
+                    "sender_name": "Support Agent Alice"
+                },
+                {
+                    "subject": "RE: Question about service hours on holidays",
+                    "body": (
+                        "<p>Hi Alice,</p>"
+                        "<p>Ok, great, thank you for confirming! That's all I needed.</p>"
+                        "<p>Have a good day,</p>"
+                        "<p>Chris P. Bacon</p>"
+                    ),
+                    "sender_email": "chris.p.bacon@example.com",
+                    "sender_name": "Chris P. Bacon"
+                }
+            ]
         },
         "5": {
             "description": "Multi-turn Conversation (Question then Resolution)",

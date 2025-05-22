@@ -116,8 +116,10 @@ def tag_email(email_id: str) -> Dict:
                 # Assuming the current email_obj corresponds to the *last* message in structured_messages_for_analysis.
                 # If structured_messages_for_analysis *only* contains history prior to email_obj, adjust logic.
                 # For now, assume it *includes* the current message as the last item.
-                
+                logger.debug(f"[SPLIT_DEBUG] Raw structured_messages_for_analysis for {front_conversation_id}: {structured_messages_for_analysis}")
+
                 history_for_prompt = structured_messages_for_analysis[:-1] # All but the last message
+                logger.debug(f"[SPLIT_DEBUG] history_for_prompt for {front_conversation_id}: {history_for_prompt}")
                 # current_message_from_structured = structured_messages_for_analysis[-1] # The current message, for reference
 
                 transformed_history_for_analysis = []
@@ -126,20 +128,28 @@ def tag_email(email_id: str) -> Dict:
                         "sender_type": msg.get("author_role", "user"), # 'user' or 'agent'
                         "body": msg.get("body", "") # Cleaned text body
                     })
+                logger.debug(f"[SPLIT_DEBUG] transformed_history_for_analysis for {front_conversation_id}: {transformed_history_for_analysis}")
                 
                 # The new message triggering this task is represented by email_obj
                 new_message_text_for_analysis = email_obj.content_text # Changed from email_obj.body
                 new_message_sender_role_for_analysis = "User" # Current inbound is always from a 'User' perspective
+                logger.debug(f"[SPLIT_DEBUG] new_message_text_for_analysis for {front_conversation_id}: {new_message_text_for_analysis}")
+                logger.debug(f"[SPLIT_DEBUG] new_message_sender_role_for_analysis for {front_conversation_id}: {new_message_sender_role_for_analysis}")
 
                 # Wrap the async call with asyncio.run()
+                split_decision = False # Default to false
                 async def _run_topic_analysis_async():
-                    return await is_new_unresolved_topic_present(
+                    nonlocal split_decision # Allow modification of outer scope variable
+                    split_decision = await is_new_unresolved_topic_present(
                         conversation_messages=transformed_history_for_analysis,
                         new_message_text=new_message_text_for_analysis,
                         new_message_sender_role=new_message_sender_role_for_analysis
                     )
                 
-                if asyncio.run(_run_topic_analysis_async()):
+                asyncio.run(_run_topic_analysis_async())
+                logger.debug(f"[SPLIT_DEBUG] AI decision for {front_conversation_id} (is_new_unresolved_topic_present result): {split_decision}")
+                
+                if split_decision:
                     is_potential_split = True
                     logger.info(f"AI detected new unresolved topic for email {email_id} in conversation {front_conversation_id}.")
                 else:
