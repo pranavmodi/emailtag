@@ -246,6 +246,60 @@ def get_conversation_tags(conversation_id: str) -> Optional[List[Dict]]:
         return None
 
 
+def archive_conversation_in_front(conversation_id: str) -> bool:
+    """
+    Archives a conversation in Front.
+
+    Args:
+        conversation_id: The ID of the conversation to archive.
+
+    Returns:
+        bool: True if archiving was successful, False otherwise.
+    """
+    if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
+        logger.error("Missing required Front configuration for archiving conversation.")
+        return False
+
+    auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
+    url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}"
+    headers = {
+        "Authorization": auth_header,
+        "Accept": "application/json",
+        "Content-Type": "application/json" # Ensure content type is set for PATCH
+    }
+    payload = {"status": "archived"}
+
+    # TODO: Configure SSL verification properly
+    with httpx.Client(verify=False) as client:
+        try:
+            logger.info(f"Archiving conversation {conversation_id} in Front via API: {url}")
+            response = client.patch(url, headers=headers, json=payload) # Use PATCH and send json payload
+
+            if response.status_code == 204: # Front API returns 204 No Content on successful status update
+                logger.info(f"Successfully archived conversation {conversation_id}. Status: {response.status_code}")
+                return True
+            else:
+                # Attempt to parse error for better logging
+                try:
+                    error_details = response.json()
+                except json.JSONDecodeError:
+                    error_details = response.text
+                logger.error(f"Failed to archive conversation {conversation_id}. Status: {response.status_code}, Details: {error_details}")
+                # Trigger diagnostic logging on failure
+                _log_front_permission_diagnostics(conversation_id, f"archive_conversation_in_front failure (status {response.status_code})")
+
+                response.raise_for_status() # This will raise an exception for 4xx/5xx if not 204
+                return False # Should not be reached if raise_for_status() works
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error archiving conversation {conversation_id}: {e.response.status_code} - {e.response.text}")
+            # Diagnostic logging already triggered above if status code was not 204
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error archiving conversation {conversation_id}: {str(e)}", exc_info=True)
+            _log_front_permission_diagnostics(conversation_id, f"archive_conversation_in_front exception: {str(e)}")
+            return False
+
+
 def create_front_tag(tag_name: str) -> Dict[str, Any]:
     """Create a new tag in Front using the legacy endpoint.
 
@@ -758,7 +812,7 @@ def list_teammates() -> List[Dict[str, Any]]:
             raise
 
 def send_inbound_reply_via_custom_channel(conversation_id: str, text: str) -> bool:
-    """
+    """ 
     Send a reply to a Front conversation via a custom channel, appearing as an inbound message from the bot.
     Reads configuration directly from environment variables.
 

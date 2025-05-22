@@ -29,6 +29,7 @@ from app.tasks.worker import celery_app
 from app.crud import email as email_crud
 from app.models.email import Email # Added for type hinting
 from app.schemas.email import EmailUpdate # Added for type hinting
+from app.services.archiving_service import check_and_archive_conversation # Import the new archiving service
 
 logger = get_task_logger(__name__)
 
@@ -96,6 +97,28 @@ def tag_email(email_id: str) -> Dict:
             # logger.error(f"Email {email_id} does not have a Front conversation ID. Cannot classify.")
             email_crud_sync.mark_as_processed(db, email_id=email_uuid)
             return {"status": "error", "message": "Missing Front conversation ID"}
+
+        # --- Check for archiving before proceeding --- 
+        try:
+            logger.info(f"Checking if conversation {front_conversation_id} can be archived before tagging.")
+            # Note: check_and_archive_conversation is an async function
+            # We need to run it in an event loop if called from a sync celery task
+            async def _run_archive_check_async():
+                return await check_and_archive_conversation(front_conversation_id)
+            
+            was_archived = asyncio.run(_run_archive_check_async())
+
+            if was_archived:
+                logger.info(f"Conversation {front_conversation_id} was archived. Skipping auto-response and tagging.")
+                # Mark email as processed since archiving is a final state for this workflow path
+                email_crud_sync.mark_as_processed(db, email_id=email_uuid) 
+                return {"status": "success", "email_id": email_id, "message": "Conversation archived, no further action needed."}
+            else:
+                logger.info(f"Conversation {front_conversation_id} not archived or archive check failed, proceeding with tagging/auto-response.")
+        except Exception as archive_exc:
+            logger.error(f"Error during archiving check for {front_conversation_id}: {archive_exc}", exc_info=True)
+            # Decide if you want to halt or proceed if archiving check fails. For now, proceeding.
+            logger.warning("Proceeding with tagging/auto-response despite archiving check error.")
 
         # Get conversation data
         conversation_data = get_conversation_text(front_conversation_id)

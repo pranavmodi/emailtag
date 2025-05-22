@@ -126,6 +126,19 @@ if __name__ == "__main__":
             ),
             "sender_email": "j.doe.no.id@example.com",
             "sender_name": "J. Doe (No ID Test)"
+        },
+        "4": {
+            "description": "Resolved Conversation for Archiving Test",
+            "subject": "RE: Question about service - All Clear!",
+            "body": (
+                "<p><b>User:</b> Hello, I had a question about the service hours on holidays. Are you open on Thanksgiving?</p>"
+                "<br>"
+                "<p><b>Agent:</b> Hi there! Thanks for reaching out. No, we are closed on Thanksgiving Day.</p>"
+                "<br>"
+                "<p><b>User:</b> Ok, great, thank you for confirming!</p>"
+            ),
+            "sender_email": "user.resolved@example.com",
+            "sender_name": "User (Resolved)"
         }
         # Add more scenarios here if needed
     }
