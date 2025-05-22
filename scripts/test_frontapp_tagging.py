@@ -4,6 +4,8 @@ import json
 from dotenv import load_dotenv
 import uuid
 import sys
+import datetime # Import datetime
+import time # Import time
 
 # Load environment variables from .env file
 load_dotenv()
@@ -15,7 +17,7 @@ FRONT_CHANNEL_ID = os.getenv("FRONT_CHANNEL_ID")
 FRONT_BOT_TEAMMATE_ID = os.getenv("FRONT_BOT_TEAMMATE_ID")
 FRONT_AUTH_TOKEN = os.getenv("FRONT_AUTH_TOKEN")
 
-def send_email_to_front(subject, body, sender_email, sender_name, to_email):
+def send_email_to_front(subject, body, sender_email, sender_name, to_email, thread_ref=None):
     """
     Sends an email to the FrontApp webhook.
     """
@@ -48,12 +50,13 @@ def send_email_to_front(subject, body, sender_email, sender_name, to_email):
             "archive": False # Set to True if you want to archive the conversation upon import
         },
         "metadata": {
-            "thread_ref": f"test-thread-{uuid.uuid4()}", # Unique reference for threading
+            "thread_ref": thread_ref if thread_ref else f"test-thread-{uuid.uuid4()}", # Unique reference for threading
             "is_inbound": True, # Mark as an inbound message
             # "headers": { # Optional: Include email headers if needed
             #     "message-id": f"<{uuid.uuid4()}@example.com>"
             # }
-        }
+        },
+        "emitted_at": datetime.datetime.utcnow().isoformat() + "Z" # Add emitted_at timestamp
     }
 
     print(f"Sending email to Front webhook: {FRONT_APP_WEBHOOK}")
@@ -139,13 +142,74 @@ if __name__ == "__main__":
             ),
             "sender_email": "user.resolved@example.com",
             "sender_name": "User (Resolved)"
+        },
+        "5": {
+            "description": "Multi-turn Conversation (Question then Resolution)",
+            "messages": [
+                {
+                    "subject": "Question about service hours",
+                    "body": (
+                        "<p>Hello Team,</p>"
+                        "<p>I have a quick question: what are your service hours on Saturdays?</p>"
+                        "<p>Thanks,<br>"
+                        "Sarah Miller</p>"
+                    ),
+                    "sender_email": "sarah.miller123@example.com",
+                    "sender_name": "Sarah Miller"
+                },
+                {
+                    "subject": "RE: Question about service hours",
+                    "body": (
+                        "<p>Hi again,</p>"
+                        "<p>Actually, I found the information on your website! No need to reply, thanks!</p>"
+                        "<p>Best,<br>"
+                        "Sarah Miller</p>"
+                    ),
+                    "sender_email": "sarah.miller123@example.com", # Same sender
+                    "sender_name": "Sarah Miller" # Same sender
+                }
+            ]
+        },
+        "6": {
+            "description": "Multi-topic Conversation (Billing then Scheduling)",
+            "messages": [
+                {
+                    "subject": "Question about my recent invoice",
+                    "body": (
+                        "<p>Hello Billing Team,</p>"
+                        "<p>I have a question regarding invoice #INV-2023-789. Can someone please clarify a charge on it?</p>"
+                        "<p>Thanks,<br>"
+                        "Michael Chen</p>"
+                    ),
+                    "sender_email": "michael.chen@example.com",
+                    "sender_name": "Michael Chen"
+                },
+                {
+                    "subject": "Follow-up: Appointment Request",
+                    "body": (
+                        "<p>Hi Team,</p>"
+                        "<p>Also, while I have you, I'd like to schedule a follow-up appointment for next week. Is Dr. Lee available on Wednesday afternoon?</p>"
+                        "<p>Thanks again,<br>"
+                        "Michael Chen</p>"
+                    ),
+                    "sender_email": "michael.chen@example.com", # Same sender
+                    "sender_name": "Michael Chen" # Same sender
+                }
+            ]
         }
         # Add more scenarios here if needed
     }
 
     print("\nAvailable email scenarios to send:")
     for key, scenario in email_scenarios.items():
-        print(f"  {key}: {scenario['description']} (Subject: {scenario['subject']})")
+        subject_to_display = ""
+        if "subject" in scenario:
+            subject_to_display = scenario['subject']
+        elif "messages" in scenario and scenario["messages"]: # Check if messages list exists and is not empty
+            subject_to_display = scenario["messages"][0]['subject'] # Use subject of the first message
+        else:
+            subject_to_display = "N/A" # Fallback if no subject found
+        print(f"  {key}: {scenario['description']} (Subject: {subject_to_display})")
 
     choice = input("Enter the number of the scenario to send: ")
 
@@ -158,13 +222,29 @@ if __name__ == "__main__":
             print(f"Warning: FRONT_APP_WEBHOOK ({FRONT_APP_WEBHOOK}) does not seem to match the pattern for FRONT_CHANNEL_ID ({FRONT_CHANNEL_ID}).")
             print("The webhook URL should typically be in the format: https://<your-front-instance>.api.frontapp.com/channels/<channel_id>/incoming_messages")
 
-        send_email_to_front(
-            subject=selected_scenario['subject'],
-            body=selected_scenario['body'],
-            sender_email=selected_scenario['sender_email'],
-            sender_name=selected_scenario['sender_name'],
-            to_email=test_to_email
-        )
+        if "messages" in selected_scenario: # Handle multi-message scenarios
+            shared_thread_ref = f"test-thread-{uuid.uuid4()}"
+            for i, message_data in enumerate(selected_scenario['messages']):
+                print(f"Sending message {i+1}/{len(selected_scenario['messages'])} for scenario '{selected_scenario['description']}'...")
+                send_email_to_front(
+                    subject=message_data['subject'],
+                    body=message_data['body'],
+                    sender_email=message_data['sender_email'],
+                    sender_name=message_data['sender_name'],
+                    to_email=test_to_email,
+                    thread_ref=shared_thread_ref
+                )
+                if i < len(selected_scenario['messages']) - 1:
+                    print("Waiting a moment before sending the next message in the thread...")
+                    # time.sleep(2) # Optional: add a small delay
+        else:
+            send_email_to_front(
+                subject=selected_scenario['subject'],
+                body=selected_scenario['body'],
+                sender_email=selected_scenario['sender_email'],
+                sender_name=selected_scenario['sender_name'],
+                to_email=test_to_email
+            )
     else:
         print("Invalid choice. Exiting.")
 

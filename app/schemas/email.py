@@ -136,7 +136,8 @@ class FrontAppWebhook(BaseModel):
     conversation: Dict[str, Any] = Field(default_factory=dict)
     target: Dict[str, Any] = Field(default_factory=dict)
     source: Dict[str, Any] = Field(default_factory=dict)
-    emitted_at: float
+    emitted_at: Optional[float] = None
+    # status: Optional[str] = None # Example of another optional field
 
 
 class PreprocessingWebhook(BaseModel):

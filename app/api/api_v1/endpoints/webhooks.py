@@ -119,7 +119,7 @@ async def frontapp_webhook(
         )
     
     # Process based on event type
-    if webhook_data.type == "inbound":
+    if webhook_data.type in ["inbound", "custom"]:
         await process_inbound_message(db, webhook_data)
     else:
         logger.info(f"Ignoring webhook event of type: {webhook_data.type}")
