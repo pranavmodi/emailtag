@@ -2,10 +2,11 @@
 
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 import json
+import logging
 
-from pydantic import PostgresDsn, field_validator, model_validator, Json, HttpUrl
+from pydantic import PostgresDsn, field_validator, model_validator, Json, HttpUrl, Field
 from pydantic_settings import BaseSettings
 
 # Project directory
@@ -62,6 +63,7 @@ class Settings(BaseSettings):
     FRONT_APP_WEBHOOK: str  # Front webhook URL for incoming messages
     FRONT_BOT_TEAMMATE_ID: str # ID of the teammate/bot sending replies
     FRONTAPP_WEBHOOK_SECRET: Optional[str] = None # Secret for verifying Front webhook signatures
+    FRONT_CHANNEL_PRIMARY_EMAIL: str # The primary email address of your Front channel (for split conversations)
 
     # Auto-response settings
     DEFAULT_LOCATION: str = "Precise Imaging Center"  # Default location for auto-responses
@@ -70,6 +72,13 @@ class Settings(BaseSettings):
 
     # Logging
     LOG_LEVEL: str = "INFO"
+
+    # Topic Splitting Settings
+    TOPIC_SPLIT_MESSAGE_HISTORY_COUNT: int = 3 # Number of past messages to consider for topic splitting
+    INTERNAL_EMAIL_DOMAINS: List[str] = ["precisemri.com"] # Hardcoded for now
+
+    # Classification Rules
+    CLASSIFICATION_RULES_PATH: str = str(ROOT / "app" / "prompts" / "classification_rules.txt")
 
     @field_validator("ASYNC_DATABASE_URL", mode="before")
     def assemble_async_db_connection(cls, v: Optional[str], info) -> Any:
@@ -127,9 +136,6 @@ class Settings(BaseSettings):
 
     # OpenAI
     OPENAI_API_KEY: str
-
-    # Classification Rules
-    CLASSIFICATION_RULES_PATH: str = str(ROOT / "app" / "prompts" / "classification_rules.txt")
 
     class Config:
         """Pydantic settings config."""

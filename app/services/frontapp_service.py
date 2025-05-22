@@ -542,7 +542,8 @@ def remove_conversation_tags(conversation_id: str, tag_names_to_remove: List[str
 
 def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
     """Fetch all message bodies, sender info, and timestamps from a Front conversation,
-       cleaned and in chronological order.
+       cleaned and in chronological order. Also includes a structured list of messages
+       for advanced analysis.
 
     Args:
         conversation_id (str): The Front conversation ID.
@@ -553,7 +554,10 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
             'senders' (List[str]): List of sender emails or usernames (chronological).
             'timestamps' (List[str]): List of message creation timestamps (chronological).
             'last_message_details': Details for the author of the last message.
-            Returns {'text': '', 'senders': [], 'timestamps': [], 'last_message_details': {}} if conversation not found or has no messages.
+            '_structured_messages' (List[Dict[str, Any]]): A list of dicts, each representing a message
+                with fields like 'id', 'body', 'created_at', 'author_id', 'author_email',
+                'author_name', 'author_role' (e.g., 'user' or 'agent').
+            Returns empty/default values if conversation not found or has no messages.
 
     Raises:
         ValueError: If required Front configuration is missing.
@@ -573,6 +577,7 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
     all_messages_text: List[str] = []
     senders: List[str] = []
     timestamps: List[str] = []
+    structured_messages: List[Dict[str, Any]] = [] # New list for structured messages
 
     # Details for the author of the last message
     last_message_author_email: Optional[str] = None
@@ -587,32 +592,35 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
             response.raise_for_status()
             
             data = response.json()
-            messages = data.get("_results", [])
-            # logger.info(f"Successfully fetched {len(messages)} messages for conversation {conversation_id}.")
+            messages_from_api = data.get("_results", []) # Renamed from 'messages' to avoid conflict
+            # logger.info(f"Successfully fetched {len(messages_from_api)} messages for conversation {conversation_id}.")
 
             # --- Reverse messages to get chronological order ---
-            messages.reverse()
+            messages_from_api.reverse()
             # logger.info(f"Reversed messages for chronological processing.")
             # -------------------------------------------------
 
-            for i, message in enumerate(messages):
-                raw_body = message.get('body', '')
-                created_at = message.get('created_at')  # Unix timestamp
+            for i, message_data in enumerate(messages_from_api):
+                raw_body = message_data.get('body', '')
+                created_at_ts = message_data.get('created_at')  # Unix timestamp
+                message_id = message_data.get('id')
                 
-                # --- Clean HTML from body --- 
+                cleaned_body = ""
                 if raw_body:
                     cleaned_body = re.sub('<[^>]*>', '', raw_body).strip() # Remove HTML tags
                     if cleaned_body:
                         all_messages_text.append(cleaned_body)
-                # --------------------------
-
+                
                 # --- Extract sender details for current message ---
+                msg_author_id: Optional[str] = None
                 msg_author_email: Optional[str] = None
                 msg_author_handle: Optional[str] = None
                 msg_author_name: str = "Unknown Sender"
+                author_role: str = "user" # Default to user
                 
-                author = message.get('author')
+                author = message_data.get('author')
                 if author:
+                    msg_author_id = author.get('id')
                     msg_author_email = author.get('email')
                     msg_author_handle = author.get('handle')
                     first_name = author.get('first_name', '')
@@ -629,8 +637,15 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
                             msg_author_name = msg_author_email
                         elif msg_author_handle:
                             msg_author_name = msg_author_handle
+                    
+                    # Determine author_role (user vs agent)
+                    if msg_author_id and msg_author_id == settings.FRONT_BOT_TEAMMATE_ID:
+                        author_role = "agent" # Bot is an agent
+                    elif msg_author_email and settings.INTERNAL_EMAIL_DOMAINS:
+                        if any(domain in msg_author_email for domain in settings.INTERNAL_EMAIL_DOMAINS):
+                            author_role = "agent"
+                    # Add more conditions if teammates are identified by other means (e.g., specific handles)
                 
-                # Determine the primary identifier for the 'senders' list
                 sender_name_for_list = "Unknown Sender"
                 if msg_author_email:
                     sender_name_for_list = msg_author_email
@@ -641,7 +656,7 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
                 
                 # Fallback to 'from' recipient if author info was insufficient
                 if not sender_name_for_list or sender_name_for_list == "Unknown Sender":
-                    recipients = message.get('recipients', [])
+                    recipients = message_data.get('recipients', [])
                     for recipient in recipients:
                         if recipient.get('role') == 'from':
                             rcpt_handle = recipient.get('handle') # Often the email
@@ -670,25 +685,36 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
                 senders.append(sender_name_for_list)
                 # --- End sender details extraction ---
                 
-                # Update details for the last message (will be overwritten until the actual last message)
-                last_message_author_email = msg_author_email
-                last_message_author_handle = msg_author_handle
-                last_message_author_name = msg_author_name if (msg_author_name and msg_author_name != "Unknown Sender") else sender_name_for_list
-                
-                # Convert Unix timestamp to readable format
-                if created_at is not None:
+                formatted_time_str = "Unknown Time"
+                if created_at_ts is not None:
                     try:
-                        # Convert Unix timestamp to datetime
-                        dt = datetime.fromtimestamp(float(created_at), tz=pytz.UTC)
-                        # Format as readable string (adjust format as needed)
-                        formatted_time = dt.strftime('%Y-%m-%d %H:%M:%S %Z')
-                        timestamps.append(formatted_time)
+                        dt = datetime.fromtimestamp(float(created_at_ts), tz=pytz.UTC)
+                        formatted_time_str = dt.strftime('%Y-%m-%d %H:%M:%S %Z')
+                        timestamps.append(formatted_time_str)
                     except (ValueError, TypeError) as e:
-                        # logger.warning(f"Could not parse timestamp '{created_at}' for message in conversation {conversation_id}: {e}")
                         timestamps.append("Unknown Time")
                 else:
                     timestamps.append("Unknown Time")
 
+                # Append to structured messages list
+                structured_messages.append({
+                    "id": message_id,
+                    "body": cleaned_body,
+                    "created_at": formatted_time_str, # Store the formatted time string
+                    "original_created_at_ts": created_at_ts, # Store original timestamp if needed elsewhere
+                    "author_id": msg_author_id,
+                    "author_email": msg_author_email,
+                    "author_handle": msg_author_handle,
+                    "author_name": msg_author_name,
+                    "author_role": author_role # 'user' or 'agent'
+                })
+                
+                # Update details for the last message (will be overwritten until the actual last message)
+                if i == len(messages_from_api) - 1: # Check if it is the actual last message
+                    last_message_author_email = msg_author_email
+                    last_message_author_handle = msg_author_handle
+                    last_message_author_name = msg_author_name if (msg_author_name and msg_author_name != "Unknown Sender") else sender_name_for_list
+            
             # --- Join cleaned message bodies with newlines --- 
             full_conversation = "\n\n".join(all_messages_text)
             # ------------------------------------------------
@@ -702,18 +728,33 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
                     'email': last_message_author_email,
                     'handle': last_message_author_handle,
                     'name': last_message_author_name
-                }
+                },
+                '_structured_messages': structured_messages # Add the new structured list
             }
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 # logger.warning(f"Conversation {conversation_id} not found in Front.")
-                return {'text': '', 'senders': [], 'timestamps': [], 'last_message_details': {}}
+                return {
+                    'text': '', 
+                    'senders': [], 
+                    'timestamps': [], 
+                    'last_message_details': {},
+                    '_structured_messages': []
+                }
             # logger.error(f"HTTP error fetching messages for {conversation_id}: {e.response.status_code} - {e.response.text}")
             raise
         except Exception as e:
             # logger.error(f"Error fetching messages for conversation {conversation_id}: {str(e)}")
-            raise
+            # Ensure default structure is returned on other errors too
+            return {
+                'text': '', 
+                'senders': [], 
+                'timestamps': [], 
+                'last_message_details': {},
+                '_structured_messages': []
+            }
+            # raise # Optionally re-raise after returning default
 
 def send_conversation_reply(conversation_id: str, text: str) -> bool:
     """
@@ -921,4 +962,131 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"An unexpected error occurred during test: {e}")
     else:
-        print("Please replace 'conv_xxx' with a valid Front conversation ID to run the test.") 
+        print("Please replace 'conv_xxx' with a valid Front conversation ID to run the test.")
+
+def create_new_conversation_for_split(
+    channel_id: str,
+    sender_handle: str,
+    sender_name: str,
+    to_handle: str, # The handle the original message was sent "to" by the sender
+    subject: str,
+    body: str,
+    body_format: str = "html",
+    metadata: Optional[Dict[str, Any]] = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Creates a new conversation in Front by sending a message to a specific channel's
+    incoming messages endpoint. This is used to "split" a message into a new thread.
+
+    Args:
+        channel_id: The Front Channel ID to which the new message should be posted.
+        sender_handle: The handle of the original sender (e.g., email address).
+        sender_name: The name of the original sender.
+        to_handle: The handle the original message was addressed to (e.g., your support email).
+        subject: The subject for the new conversation.
+        body: The body content of the message.
+        body_format: The format of the body (e.g., "html", "markdown", "text"). Defaults to "html".
+        metadata: Optional metadata for the new message, including thread_ref.
+
+    Returns:
+        Optional[Dict[str, Any]]: The JSON response from Front if successful, None otherwise.
+                                   The response typically includes the new conversation_reference.
+    """
+    if not all([
+        settings.FRONT_API_BASE_URL, # Changed from FRONT_APP_WEBHOOK_BASE_URL_FOR_SPLIT
+        settings.FRONT_AUTH_TOKEN,
+        channel_id,
+        sender_handle,
+        to_handle, # 'to' is crucial for incoming messages
+        subject,
+        body
+    ]):
+        logger.error(
+            "create_new_conversation_for_split: Missing one or more required environment variables or arguments. "
+            f"FRONT_API_BASE_URL: {settings.FRONT_API_BASE_URL}, "
+            f"FRONT_AUTH_TOKEN: {'Set' if settings.FRONT_AUTH_TOKEN else 'Not Set'}, "
+            f"channel_id: {channel_id}, sender_handle: {sender_handle}, to_handle: {to_handle}"
+        )
+        # Consider raising ValueError for critical missing settings like base URL or auth token
+        if not settings.FRONT_API_BASE_URL or not settings.FRONT_AUTH_TOKEN: # Changed here too
+            raise ValueError("Missing critical Front API configuration for creating new conversation (FRONT_API_BASE_URL).")
+        return None
+
+    # Ensure the target webhook URL is correctly formed for the specific channel
+    # This matches the pattern: /channels/{channel_id}/incoming_messages
+    webhook_url = f"{settings.FRONT_API_BASE_URL.strip('/')}/channels/{channel_id}/incoming_messages" # Changed here
+
+    headers = {
+        "Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+    # Construct the payload based on Front API documentation for custom channels
+    # (https://dev.frontapp.com/reference/receive-custom-messages)
+    payload = {
+        "sender": {
+            "handle": sender_handle,
+            "name": sender_name
+        },
+        "to": [{"handle": to_handle}], # This is the recipient the original sender sent to
+        "subject": subject,
+        "body": body,
+        "body_format": body_format,
+        "options": {
+            "archive": False # Usually, new conversations should not be archived immediately
+        },
+        # Ensure metadata has a unique thread_ref and is_inbound
+        "metadata": metadata or {
+            "thread_ref": f"split-thread-{os.urandom(16).hex()}", # Ensure a unique thread_ref
+            "is_inbound": True
+        },
+        "emitted_at": datetime.utcnow().isoformat() + "Z" # Recommended by Front
+    }
+
+    # Ensure is_inbound is True if custom metadata is provided
+    if "metadata" in payload and "is_inbound" not in payload["metadata"]:
+        payload["metadata"]["is_inbound"] = True
+    elif "metadata" not in payload: # Should not happen due to above default, but defensive
+         payload["metadata"] = {"is_inbound": True, "thread_ref": f"split-thread-{os.urandom(16).hex()}"}
+
+
+    logger.info(f"Attempting to create new conversation (split) via POST to: {webhook_url}")
+    logger.debug(f"Payload for new conversation: {json.dumps(payload, indent=2)}")
+
+    try:
+        with httpx.Client(verify=False) as client: # Assuming verify=False based on other calls
+            response = client.post(webhook_url, headers=headers, json=payload, timeout=30.0)
+        
+        logger.info(f"Front API response status for new conversation creation: {response.status_code}")
+
+        if 200 <= response.status_code < 300: # Typically 202 Accepted for incoming messages
+            response_data = response.json()
+            logger.info("Successfully created new conversation (split) in Front.")
+            logger.debug(f"Front API response: {response_data}")
+            # The response should contain "conversation_reference" or similar
+            return response_data
+        else:
+            logger.error(
+                f"Failed to create new conversation (split) in Front. Status: {response.status_code}, "
+                f"Response: {response.text}"
+            )
+            # You might want to raise an exception here or handle it more gracefully depending on requirements
+            response.raise_for_status() # Will raise for 4xx/5xx
+            return None # Should be unreachable if raise_for_status() works
+
+    except httpx.HTTPStatusError as e:
+        logger.error(
+            f"HTTPStatusError creating new conversation (split): {e.response.status_code} - {e.response.text}"
+        )
+        raise # Re-raise for the task to potentially retry or handle
+    except httpx.RequestError as e:
+        logger.error(f"RequestError creating new conversation (split): {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error creating new conversation (split): {e}", exc_info=True)
+        raise
+
+# Make sure to add a new setting FRONT_APP_WEBHOOK_BASE_URL_FOR_SPLIT to your app.core.config.py
+# and your .env file. For example:
+# FRONT_APP_WEBHOOK_BASE_URL_FOR_SPLIT="https://api2.frontapp.com" 

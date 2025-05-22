@@ -47,6 +47,23 @@ class SyncCRUDEmail:
         db.refresh(email)
         return email
 
+    def update(
+        self, db: Session, *, db_obj: Email, obj_in: Union[EmailUpdate, Dict[str, Any]]
+    ) -> Email:
+        """Update an existing email record."""
+        if isinstance(obj_in, dict):
+            update_data = obj_in
+        else:
+            update_data = obj_in.model_dump(exclude_unset=True)
+        
+        for field, value in update_data.items():
+            setattr(db_obj, field, value)
+        
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+
 
 class SyncCRUDTag:
     """Synchronous CRUD operations for tags."""

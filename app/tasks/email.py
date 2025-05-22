@@ -22,9 +22,10 @@ from app.crud.sync import tag as tag_crud_sync
 from app.db.session import SessionLocal
 from app.db.session import AsyncSessionLocal # Add AsyncSessionLocal import
 from app.services.classification_service import classify_email_tags_hierarchical, remove_conflicting_tags
-from app.services.frontapp_service import add_conversation_tags, get_conversation_text, get_conversation_tags, remove_conversation_tags
+from app.services.frontapp_service import add_conversation_tags, get_conversation_text, get_conversation_tags, remove_conversation_tags, create_new_conversation_for_split # Added create_new_conversation_for_split
 from app.services.ocr_service import process_ocr_content # Import the new function
 from app.services.autorespond_service import process_autorespond  # Add this import
+from app.services.topic_analysis_service import is_new_unresolved_topic_present # Added topic analysis service
 from app.tasks.worker import celery_app
 from app.crud import email as email_crud
 from app.models.email import Email # Added for type hinting
@@ -98,12 +99,137 @@ def tag_email(email_id: str) -> Dict:
             email_crud_sync.mark_as_processed(db, email_id=email_uuid)
             return {"status": "error", "message": "Missing Front conversation ID"}
 
-        # --- Check for archiving before proceeding --- 
+        # --- TOPIC SPLIT DETECTION ---
+        is_potential_split = False
+        try:
+            # Get conversation history for topic analysis
+            conversation_data_for_split = get_conversation_text(front_conversation_id) # Fetches all messages including _structured_messages
+            
+            structured_messages_for_analysis = conversation_data_for_split.get('_structured_messages', [])
+
+            if not structured_messages_for_analysis:
+                logger.warning(f"Could not retrieve structured message history from get_conversation_text for {front_conversation_id} to attempt topic split. Proceeding without split check.")
+            elif len(structured_messages_for_analysis) <= 1: # If only one message (the current one) or no messages, no history to compare.
+                logger.info(f"Conversation {front_conversation_id} has only one or no messages in structured history. No split check needed.")
+            else:
+                # The history is all messages *before* the current one (which is usually the last one in structured_messages_for_analysis if it includes the current incoming).
+                # Assuming the current email_obj corresponds to the *last* message in structured_messages_for_analysis.
+                # If structured_messages_for_analysis *only* contains history prior to email_obj, adjust logic.
+                # For now, assume it *includes* the current message as the last item.
+                
+                history_for_prompt = structured_messages_for_analysis[:-1] # All but the last message
+                # current_message_from_structured = structured_messages_for_analysis[-1] # The current message, for reference
+
+                transformed_history_for_analysis = []
+                for msg in history_for_prompt:
+                    transformed_history_for_analysis.append({
+                        "sender_type": msg.get("author_role", "user"), # 'user' or 'agent'
+                        "body": msg.get("body", "") # Cleaned text body
+                    })
+                
+                # The new message triggering this task is represented by email_obj
+                new_message_text_for_analysis = email_obj.content_text # Changed from email_obj.body
+                new_message_sender_role_for_analysis = "User" # Current inbound is always from a 'User' perspective
+
+                # Wrap the async call with asyncio.run()
+                async def _run_topic_analysis_async():
+                    return await is_new_unresolved_topic_present(
+                        conversation_messages=transformed_history_for_analysis,
+                        new_message_text=new_message_text_for_analysis,
+                        new_message_sender_role=new_message_sender_role_for_analysis
+                    )
+                
+                if asyncio.run(_run_topic_analysis_async()):
+                    is_potential_split = True
+                    logger.info(f"AI detected new unresolved topic for email {email_id} in conversation {front_conversation_id}.")
+                else:
+                    logger.info(f"AI analysis: No new unresolved topic detected for email {email_id}. Proceeding normally.")
+
+        except Exception as e_topic_detect:
+            logger.error(f"Error during topic split detection for {front_conversation_id}: {e_topic_detect}", exc_info=True)
+            # Fallback: do not split if detection fails
+            is_potential_split = False
+
+        if is_potential_split:
+            try:
+                logger.info(f"Attempting to split message from email {email_id} (conversation {front_conversation_id}).")
+                
+                # Details for the new conversation
+                # The 'to_handle' should be the address of your Front channel
+                # This information might not be directly on email_obj if it's just storing sender/body.
+                # We'll use the configured FRONT_CHANNEL_ID to form a presumed "to" handle.
+                # This might need adjustment based on how you want the "to" field of the new message to look.
+                # For an incoming message to a channel, the "to" is usually the channel's address.
+                if not settings.FRONT_CHANNEL_PRIMARY_EMAIL: # New setting: e.g., support@yourcompany.com
+                    logger.error("FRONT_CHANNEL_PRIMARY_EMAIL setting is not configured. Cannot determine 'to_handle' for split.")
+                    raise ValueError("FRONT_CHANNEL_PRIMARY_EMAIL not configured.")
+
+                new_conv_subject = f"Split: {email_obj.subject.replace('[SPLIT]', '').strip() if email_obj.subject else 'Split Conversation'}"
+                new_conv_body = email_obj.content_text if email_obj.content_text else email_obj.content_html # Prefer text, fallback to HTML
+                new_conv_sender_handle = email_obj.sender # Changed from sender_address
+                # email_obj.sender_name is not a direct attribute of the Email model.
+                # We should use the sender handle as name, or potentially retrieve it differently if crucial.
+                # For now, using the handle (email address typically) as the name for simplicity.
+                new_conv_sender_name = email_obj.sender # Using sender handle as name
+                
+                # The channel ID for the NEW message will be your primary channel
+                target_channel_id_for_new_conv = settings.FRONT_CHANNEL_ID
+
+                # Metadata for the new conversation
+                new_conv_metadata = {
+                    "thread_ref": f"split-from-{front_conversation_id}-{email_obj.id.hex[:8]}", # Unique thread ref
+                    "is_inbound": True,
+                    "source_conversation_id": front_conversation_id,
+                    "source_email_db_id": str(email_obj.id)
+                }
+
+                split_response = create_new_conversation_for_split(
+                    channel_id=target_channel_id_for_new_conv,
+                    sender_handle=new_conv_sender_handle,
+                    sender_name=new_conv_sender_name,
+                    to_handle=settings.FRONT_CHANNEL_PRIMARY_EMAIL, # The address of *your* channel
+                    subject=new_conv_subject,
+                    body=new_conv_body,
+                    body_format="html", # Assuming HTML, adjust if needed from email_obj
+                    metadata=new_conv_metadata
+                )
+
+                if split_response and split_response.get("conversation_reference"):
+                    new_front_conv_ref = split_response.get("conversation_reference")
+                    logger.info(f"Successfully created new Front conversation ({new_front_conv_ref}) for split message from email {email_id}.")
+                    
+                    # Tag original conversation
+                    try:
+                        add_conversation_tags(front_conversation_id, ["System: Split - New Topic"])
+                        logger.info(f"Tagged original conversation {front_conversation_id} for split.")
+                    except Exception as tag_err:
+                        logger.error(f"Failed to tag original conversation {front_conversation_id} after split: {tag_err}")
+                    
+                    # Update status of the original email_obj that was split off
+                    email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="split_off", is_processed=True))
+                    logger.info(f"Marked email {email_id} as 'split_off' and processed.")
+                    
+                    # The new conversation created will be picked up by the webhook as a new inbound message
+                    # and will go through the process_email -> tag_email flow independently.
+                    return {"status": "success_split", "original_email_id": email_id, "new_conversation_reference": new_front_conv_ref}
+                else:
+                    logger.error(f"Failed to create new conversation for split (email {email_id}). API response: {split_response}")
+                    # Fall through to regular processing if split failed critically
+
+            except Exception as e_split:
+                logger.error(f"Error during split attempt for email {email_id}: {e_split}", exc_info=True)
+                # Fall through to process the email in the original conversation if split fails
+        
+        # --- END TOPIC SPLIT DETECTION ---
+
+        # --- Check for archiving before proceeding (if not split) --- 
         try:
             logger.info(f"Checking if conversation {front_conversation_id} can be archived before tagging.")
             # Note: check_and_archive_conversation is an async function
             # We need to run it in an event loop if called from a sync celery task
             async def _run_archive_check_async():
+                # Ensure AsyncSessionLocal is used if check_and_archive_conversation needs a db session
+                # For now, assuming it handles its own session or doesn't need one directly passed here.
                 return await check_and_archive_conversation(front_conversation_id)
             
             was_archived = asyncio.run(_run_archive_check_async())
@@ -233,7 +359,8 @@ def tag_email(email_id: str) -> Dict:
                 pass
 
         # Mark email as processed
-        email_crud_sync.mark_as_processed(db, email_id=email_uuid)
+        if email_obj.status != "split_off": # Only mark as processed if not already split off
+            email_crud_sync.mark_as_processed(db, email_id=email_uuid)
 
         return {
             "status": "success",
@@ -454,7 +581,7 @@ def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
             
             # logger.info(f"All OCR processing complete for email {email_id}. Setting status to {final_status} and queueing for final processing.")
             # Update status separately to ensure it happens after field updates
-            email_crud_sync.update_status(db, email_id=email_uuid, status=final_status)
+            email_crud_sync.update(db, db_obj=updated_email, obj_in=EmailUpdate(status=final_status))
             
             # Only queue next step if there were no errors
             if final_status == "ocr_completed":

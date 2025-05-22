@@ -237,6 +237,9 @@ if __name__ == "__main__":
                 if i < len(selected_scenario['messages']) - 1:
                     print("Waiting a moment before sending the next message in the thread...")
                     # time.sleep(2) # Optional: add a small delay
+                    # ADDED: Conditional input for scenario 6 before the second message
+                    if choice == "6" and i == 0: # If it's scenario 6 and the first message was just sent (i=0)
+                        input("  ==> SCENARIO 6: First message sent. Press Enter to send the second message (scheduling)... ")
         else:
             send_email_to_front(
                 subject=selected_scenario['subject'],
