@@ -58,17 +58,17 @@ def _log_front_permission_diagnostics(conversation_id: str, error_context: str):
         logger.info(f"   - Send As (Address): {channel_details.get('send_as')}")
         inbox_id_from_channel_direct_attr = channel_details.get('inbox_id') 
         logger.info(f"   - Associated Inbox ID (from channel.inbox_id direct attribute if available): {inbox_id_from_channel_direct_attr}")
-        # Log inboxes the channel is part of
-        channel_associated_inboxes = list_channel_inboxes(channel_id_to_check)
-        if channel_associated_inboxes is not None:
-            logger.info(f"   - Inboxes this channel ({channel_id_to_check}) is part of (via /channels/{{id}}/inboxes):")
-            if channel_associated_inboxes:
-                for inbox in channel_associated_inboxes:
-                    logger.info(f"     - Name: {inbox.get('name')}, ID: {inbox.get('id')}")
-            else:
-                logger.info("     - This channel is not explicitly listed as part of any inboxes via this endpoint.")
-        else:
-            logger.warning(f"   - Could not retrieve inbox list for channel {channel_id_to_check} via /channels/{{id}}/inboxes.")
+        # Log inboxes the channel is part of - REMOVED DUE TO API 404 ON THIS ENDPOINT FOR CUSTOM CHANNELS
+        # channel_associated_inboxes = list_channel_inboxes(channel_id_to_check)
+        # if channel_associated_inboxes is not None:
+        #     logger.info(f"   - Inboxes this channel ({channel_id_to_check}) is part of (via /channels/{{id}}/inboxes):")
+        #     if channel_associated_inboxes:
+        #         for inbox in channel_associated_inboxes:
+        #             logger.info(f"     - Name: {inbox.get('name')}, ID: {inbox.get('id')}")
+        #     else:
+        #         logger.info("     - This channel is not explicitly listed as part of any inboxes via this endpoint.")
+        # else:
+        #     logger.warning(f"   - Could not retrieve inbox list for channel {channel_id_to_check} via /channels/{{id}}/inboxes.")
     else:
         logger.warning(f"   - Could not fetch details for channel ID: {channel_id_to_check}")
     
