@@ -131,6 +131,46 @@ def get_headers() -> Dict[str, str]:
     }
 
 
+def list_all_channels() -> List[Dict[str, Any]]:
+    """List all channels in Front.
+
+    Raises:
+        ValueError: If required Front configuration is missing.
+        httpx.HTTPStatusError: If the request to Front fails.
+
+    Returns:
+        List[Dict[str, Any]]: A list of channel objects from Front.
+    """
+    if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
+        logger.error("Missing required Front configuration for listing channels (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
+        raise ValueError("Missing required Front configuration")
+
+    auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
+    url = f"{settings.FRONT_API_BASE_URL}/channels"
+    headers = {
+        "Authorization": auth_header,
+        "Accept": "application/json",
+    }
+
+    with httpx.Client(verify=False) as client:
+        try:
+            logger.info(f"Fetching all channels from Front API: {url}")
+            response = client.get(url, headers=headers)
+            response.raise_for_status()  # Raise exception for 4xx/5xx status codes
+            
+            data = response.json()
+            channels = data.get("_results", [])
+            logger.info(f"Successfully fetched {len(channels)} channels from Front.")
+            # Add pagination handling if necessary in a real scenario
+            return channels
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error fetching Front channels: {e.response.status_code} - {e.response.text}")
+            raise
+        except Exception as e:
+            logger.error(f"Error fetching Front channels: {str(e)}")
+            raise
+
+
 def list_front_tags() -> List[Dict[str, Any]]:
     """List all tags available in Front.
 

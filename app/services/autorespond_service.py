@@ -7,7 +7,7 @@ import json
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.services.frontapp_service import send_conversation_reply, get_conversation_text, send_inbound_reply_via_custom_channel
+from app.services.frontapp_service import send_conversation_reply, get_conversation_text, send_inbound_reply_via_custom_channel, list_all_channels
 from app.crud import patient_conversation_data as pcd_crud
 from app.services.ai_helpers.response_generator import (
     generate_openai_appointment_response, 
@@ -172,6 +172,19 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
     Process an email for potential auto-response.
     """
     try:
+        # Log all channels for debugging
+        try:
+            all_channels = list_all_channels()
+            logger.info("Attempting to list all Front channels for debugging purposes.")
+            if all_channels:
+                logger.info(f"Found {len(all_channels)} channels:")
+                for channel in all_channels:
+                    logger.info(f"  Channel ID: {channel.get('id')}, Name: {channel.get('name')}, Type: {channel.get('type')}, Address: {channel.get('address')}")
+            else:
+                logger.info("No channels returned or an error occurred while listing channels.")
+        except Exception as e_channels:
+            logger.error(f"Error listing Front channels: {e_channels}", exc_info=True)
+
         conversation_data = get_conversation_text(conversation_id)
         if not conversation_data or not isinstance(conversation_data, dict):
             logger.warning(f"Could not get conversation data for {conversation_id}, skipping auto-response")
