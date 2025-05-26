@@ -1,10 +1,14 @@
-Rules for classifying items under Liens into one of its children: Missing Lien Request, PSL, ASL.
+Sub-Classification Rules for Accounts Receivable - Liens Category
+===============================================================
+**Sub-Categories:** Missing Lien Request, PSL, ASL.
+
+Please use the following rules to sub-classify the provided email content, already identified as 'Accounts Receivable - Liens', into one of the above sub-categories.
 
 --- START Liens Sub-Classification RULES ---
 
-1. For emails categorized under Liens, determine the type or status:
-   - If a required lien document has not been received or is being requested, consider 'Missing Lien Request'.
-   - If related to a Prescription Service Lien, consider 'PSL'.
-   - If related to an Attorney Service Lien, consider 'ASL'.
+1. **Lien Type or Status**: Based on the email content, determine the specific type or status of the lien and classify as follows:
+   - If the email indicates that a **required lien document has not been received or is being explicitly requested**, classify as 'Missing Lien Request'.
+   - If the email pertains to a **Prescription Service Lien (PSL)**, classify as 'PSL'.
+   - If the email pertains to an **Attorney Service Lien (ASL)**, classify as 'ASL'.
 
 --- END Liens Sub-Classification RULES --- 

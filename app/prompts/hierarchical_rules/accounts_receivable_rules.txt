@@ -1,12 +1,16 @@
-Rules for classifying items under Accounts Receivable into one of its children: Billing, Liens, Negotiations, Case Updates, Collections.
+Sub-Classification Rules for Accounts Receivable Category
+=========================================================
+**Sub-Categories:** Billing, Liens, Negotiations, Case Updates, Collections.
+
+Please use the following rules to sub-classify the provided email content, already identified as 'Accounts Receivable', into one of the above sub-categories.
 
 --- START Accounts Receivable Sub-Classification RULES ---
 
-1. To classify within Accounts Receivable, identify the primary financial topic:
-   - If related to invoices, payments, balances, or general billing inquiries, consider 'Billing'.
-   - If discussing legal claims on property for debt (medical liens, attorney liens), consider 'Liens'.
-   - If about discussing or proposing changes to payment terms or amounts, consider 'Negotiations'.
-   - If providing updates on the status of a financial case or account, consider 'Case Updates'.
-   - If related to overdue accounts being sent or considered for third-party collection agencies, consider 'Collections'.
+1. **Primary Financial Topic**: Based on the email content, determine the primary financial topic discussed and classify as follows:
+   - If the email primarily concerns **invoices, payments due, account balances, W-9 requests, or general billing inquiries**, classify as 'Billing'.
+   - If the email primarily discusses **legal claims on property to secure debt payment (e.g., medical liens, attorney liens)**, including requests, submissions, or modifications of liens, classify as 'Liens'.
+   - If the email is primarily about **discussing, proposing, or agreeing to changes in payment terms, settlement amounts, or bill reductions**, classify as 'Negotiations'.
+   - If the email primarily provides **updates on the status of a financial case, account history, or payment tracking**, classify as 'Case Updates'.
+   - If the email primarily relates to **overdue accounts, warnings about collections, or communication regarding accounts sent to or being considered for third-party collection agencies**, classify as 'Collections'.
 
 --- END Accounts Receivable Sub-Classification RULES --- 

@@ -1,16 +1,20 @@
-Rules for classifying items under Medical Records & Images into one of its children: Release of Records, Image Request, CD Requests, Reports Request, US Tech Sheet, Portal Requests, Referral pad request, Incorrect patient info, Incorrect study info.
+Sub-Classification Rules for Medical Records & Images Category
+============================================================
+**Sub-Categories:** Release of Records, Image Request, CD Requests, Reports Request, US Tech Sheet, Portal Requests, Referral pad request, Incorrect patient info, Incorrect study info.
+
+Please use the following rules to sub-classify the provided email content, already identified as 'Medical Records & Images', into one of the above sub-categories.
 
 --- START Medical Records & Images Sub-Classification RULES ---
 
-1. For emails concerning Medical Records & Images, identify the specific action or item:
-   - If an authorization or request to share patient records, consider 'Release of Records'.
-   - If explicitly asking for medical images (MRI, CT, X-Ray), consider 'Image Request'.
-   - If requesting images or reports on a compact disc, consider 'CD Requests'.
-   - If asking for medical reports (radiology reports, summaries), consider 'Reports Request'.
-   - If related to an Ultrasound Technologist sheet or form, consider 'US Tech Sheet'.
-   - If pertaining to patient portal access, issues, or information, consider 'Portal Requests'.
-   - If requesting physical referral pads for a doctor's office, consider 'Referral pad request'.
-   - If highlighting errors in patient demographic or identification, consider 'Incorrect patient info'.
-   - If pointing out discrepancies or issues with the study performed, consider 'Incorrect study info'.
+1. **Specific Action or Item**: Based on the email content, determine the specific action being requested or the item being discussed related to medical records and images, and classify as follows:
+   - If the email involves an **authorization to share patient records or a direct request to release/send patient records**, classify as 'Release of Records'.
+   - If the email **explicitly asks for medical images** (e.g., MRI, CT, X-Ray files, DICOMs), classify as 'Image Request'.
+   - If the email specifically requests that **images or reports be provided on a compact disc (CD)**, classify as 'CD Requests'.
+   - If the email is a request for **medical reports** (e.g., radiology reports, diagnostic summaries, interpretations), classify as 'Reports Request'.
+   - If the email relates to an **Ultrasound Technologist worksheet, form, or similar document**, classify as 'US Tech Sheet'.
+   - If the email pertains to **patient portal access (e.g., login issues, requests for access, information about using the portal for records/images)**, classify as 'Portal Requests'.
+   - If the email is a request from a doctor's office or facility for **physical referral pads**, classify as 'Referral pad request'.
+   - If the email highlights **errors in patient demographic information or identification details** (e.g., misspelled name, wrong DOB), classify as 'Incorrect patient info'.
+   - If the email points out **discrepancies, errors, or issues with the medical study performed or documented** (e.g., wrong body part imaged, incorrect study type listed), classify as 'Incorrect study info'.
 
 --- END Medical Records & Images Sub-Classification RULES --- 

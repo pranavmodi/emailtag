@@ -1,12 +1,16 @@
-Rules for classifying items under Scheduling into one of its children: RX, Cancelled, Reschedule Request, Schedule Request, Will contact patient.
+Sub-Classification Rules for Scheduling Category
+================================================
+**Sub-Categories:** RX, Cancelled, Reschedule Request, Schedule Request, Will contact patient.
+
+Please use the following rules to sub-classify the provided email content, already identified as 'Scheduling', into one of the above sub-categories.
 
 --- START Scheduling Sub-Classification RULES ---
 
-1. To classify within Scheduling, analyze the primary intent:
-   - If related to prescriptions, medication, or pharmacy, consider 'RX'.
-   - If indicating an appointment is no longer happening, consider 'Cancelled'.
-   - If requesting a change to an existing appointment, consider 'Reschedule Request'.
-   - If asking to make a new appointment, consider 'Schedule Request'.
-   - If stating an intention to reach out to the patient, consider 'Will contact patient'.
+1. **Primary Scheduling Intent**: Based on the email content, determine the primary intent related to scheduling and classify as follows:
+   - If the email primarily concerns **prescriptions (RX), medication, referrals related to prescriptions, or pharmacy communications**, classify as 'RX'.
+   - If the email clearly indicates that an **appointment is no longer happening or has been voided**, classify as 'Cancelled'.
+   - If the email expresses a **request to change the date or time of an existing appointment**, classify as 'Reschedule Request'.
+   - If the email is a **request to make a new appointment or book a new scan/procedure**, classify as 'Schedule Request'.
+   - If the email states an **intention from the sender (or their office) to reach out to the patient directly** regarding scheduling, classify as 'Will contact patient'.
 
 --- END Scheduling Sub-Classification RULES --- 
