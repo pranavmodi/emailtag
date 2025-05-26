@@ -1,8 +1,16 @@
 Rules for classifying items under Medical Records & Images into one of its children: Release of Records, Image Request, CD Requests, Reports Request, US Tech Sheet, Portal Requests, Referral pad request, Incorrect patient info, Incorrect study info.
-(To be defined by user).
 
 --- START Medical Records & Images Sub-Classification RULES ---
 
-1. Placeholder rule for Medical Records & Images sub-classification. Consider keywords, phrases, or intents related to record releases, image requests, CD requests, report requests, tech sheets, portal interactions, referral pads, or corrections to patient/study info.
+1. For emails concerning Medical Records & Images, identify the specific action or item:
+   - If an authorization or request to share patient records, consider 'Release of Records'.
+   - If explicitly asking for medical images (MRI, CT, X-Ray), consider 'Image Request'.
+   - If requesting images or reports on a compact disc, consider 'CD Requests'.
+   - If asking for medical reports (radiology reports, summaries), consider 'Reports Request'.
+   - If related to an Ultrasound Technologist sheet or form, consider 'US Tech Sheet'.
+   - If pertaining to patient portal access, issues, or information, consider 'Portal Requests'.
+   - If requesting physical referral pads for a doctor's office, consider 'Referral pad request'.
+   - If highlighting errors in patient demographic or identification, consider 'Incorrect patient info'.
+   - If pointing out discrepancies or issues with the study performed, consider 'Incorrect study info'.
 
 --- END Medical Records & Images Sub-Classification RULES --- 

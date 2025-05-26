@@ -1,8 +1,11 @@
 Rules for classifying items under Negotiations into one of its children: Bill Offer, Pending Approval, Offer Approved, Counter Offer Sent.
-(To be defined by user).
 
 --- START Negotiations Sub-Classification RULES ---
 
-1. Placeholder rule for Negotiations sub-classification. Consider keywords, phrases, or intents related to bill offers, items pending approval, approved offers, or counter offers sent.
+1. For emails concerning Negotiations, identify the negotiation stage:
+   - If an initial offer on a bill is being made, consider 'Bill Offer'.
+   - If an offer or proposal is awaiting a decision, consider 'Pending Approval'.
+   - If an offer has been accepted, consider 'Offer Approved'.
+   - If a revised offer has been sent back in response to a previous offer, consider 'Counter Offer Sent'.
 
 --- END Negotiations Sub-Classification RULES --- 

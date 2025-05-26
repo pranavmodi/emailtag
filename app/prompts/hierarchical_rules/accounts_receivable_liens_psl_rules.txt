@@ -1,8 +1,10 @@
 Rules for classifying items under PSL into one of its children: Rad Lien, Tech Lien, Lien Modified.
-(To be defined by user).
 
 --- START PSL Sub-Classification RULES ---
 
-1. Placeholder rule for PSL sub-classification. Consider keywords, phrases, or intents related to radiology liens, technician liens, or modified liens under PSL.
+1. For emails under PSL (Prescription Service Lien), specify the lien type:
+   - If the lien is for radiology services, consider 'Rad Lien'.
+   - If the lien is for technologist services, consider 'Tech Lien'.
+   - If an existing PSL has been changed or updated, consider 'Lien Modified'.
 
 --- END PSL Sub-Classification RULES --- 

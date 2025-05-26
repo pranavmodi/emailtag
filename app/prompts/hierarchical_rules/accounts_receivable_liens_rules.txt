@@ -1,8 +1,10 @@
 Rules for classifying items under Liens into one of its children: Missing Lien Request, PSL, ASL.
-(To be defined by user).
 
 --- START Liens Sub-Classification RULES ---
 
-1. Placeholder rule for Liens sub-classification. Consider keywords, phrases, or intents related to missing lien requests, PSL (Prescription Service Lien), or ASL (Attorney Service Lien).
+1. For emails categorized under Liens, determine the type or status:
+   - If a required lien document has not been received or is being requested, consider 'Missing Lien Request'.
+   - If related to a Prescription Service Lien, consider 'PSL'.
+   - If related to an Attorney Service Lien, consider 'ASL'.
 
 --- END Liens Sub-Classification RULES --- 

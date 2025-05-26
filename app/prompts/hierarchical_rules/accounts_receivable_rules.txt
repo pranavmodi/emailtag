@@ -1,8 +1,12 @@
 Rules for classifying items under Accounts Receivable into one of its children: Billing, Liens, Negotiations, Case Updates, Collections.
-(To be defined by user).
 
 --- START Accounts Receivable Sub-Classification RULES ---
 
-1. Placeholder rule for Accounts Receivable sub-classification. Consider keywords, phrases, or intents related to billing, liens, negotiations, case updates, or collections.
+1. To classify within Accounts Receivable, identify the primary financial topic:
+   - If related to invoices, payments, balances, or general billing inquiries, consider 'Billing'.
+   - If discussing legal claims on property for debt (medical liens, attorney liens), consider 'Liens'.
+   - If about discussing or proposing changes to payment terms or amounts, consider 'Negotiations'.
+   - If providing updates on the status of a financial case or account, consider 'Case Updates'.
+   - If related to overdue accounts being sent or considered for third-party collection agencies, consider 'Collections'.
 
 --- END Accounts Receivable Sub-Classification RULES --- 

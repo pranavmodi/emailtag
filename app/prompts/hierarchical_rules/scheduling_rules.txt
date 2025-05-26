@@ -1,8 +1,12 @@
 Rules for classifying items under Scheduling into one of its children: RX, Cancelled, Reschedule Request, Schedule Request, Will contact patient.
-(To be defined by user).
 
 --- START Scheduling Sub-Classification RULES ---
 
-1. Placeholder rule for Scheduling sub-classification. Consider keywords, phrases, or intents related to RX, cancellations, reschedule requests, new schedule requests, or notifications about contacting the patient.
+1. To classify within Scheduling, analyze the primary intent:
+   - If related to prescriptions, medication, or pharmacy, consider 'RX'.
+   - If indicating an appointment is no longer happening, consider 'Cancelled'.
+   - If requesting a change to an existing appointment, consider 'Reschedule Request'.
+   - If asking to make a new appointment, consider 'Schedule Request'.
+   - If stating an intention to reach out to the patient, consider 'Will contact patient'.
 
 --- END Scheduling Sub-Classification RULES --- 

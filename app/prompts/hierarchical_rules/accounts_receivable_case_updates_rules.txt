@@ -1,8 +1,16 @@
 Rules for classifying items under Case Updates into one of its children: New Attorney, Drop Letter, Drop Pending, Promise to send payment, Waiting to clear liability, Waiting on settlement check, Sent payment but not received, Refund Request, Payment on way.
-(To be defined by user).
 
 --- START Case Updates Sub-Classification RULES ---
 
-1. Placeholder rule for Case Updates sub-classification. Consider keywords, phrases, or intents related to new attorneys, drop letters, pending drops, payment promises, liability clearance, settlement checks, payment status, or refund requests.
+1. For emails providing Case Updates, determine the nature of the update:
+   - If a new legal representative is involved, consider 'New Attorney'.
+   - If a formal notice to drop a case/patient is sent, consider 'Drop Letter'.
+   - If a case/patient drop is initiated but not yet finalized, consider 'Drop Pending'.
+   - If there is a commitment to send payment soon, consider 'Promise to send payment'.
+   - If waiting for liability to be resolved before payment, consider 'Waiting to clear liability'.
+   - If anticipating a payment from a settlement, consider 'Waiting on settlement check'.
+   - If payment was sent but not yet received/confirmed, consider 'Sent payment but not received'.
+   - If requesting money to be returned, consider 'Refund Request'.
+   - If a payment is en route, consider 'Payment on way'.
 
 --- END Case Updates Sub-Classification RULES --- 
