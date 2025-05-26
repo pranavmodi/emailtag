@@ -1,0 +1,8 @@
+Rules for classifying items under RX into one of its children: Order Pending, Order Entered, Incomplete, RX Request, Apt Status Req, No Show, Cash Patient.
+(To be defined by user).
+
+--- START RX Sub-Classification RULES ---
+
+1. Placeholder rule for RX sub-classification. Consider keywords, phrases, or intents related to pending orders, entered orders, incomplete information, specific RX requests, appointment status, no-shows, or cash patient status.
+
+--- END RX Sub-Classification RULES --- 

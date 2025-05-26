@@ -3,6 +3,10 @@ import logging
 import os
 import sys
 import json
+from dotenv import load_dotenv # Added for .env loading
+
+# Load environment variables from .env file before other imports that might need them
+load_dotenv()
 
 # Add the project root to the Python path to allow importing app modules
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -19,6 +23,11 @@ logger = logging.getLogger(__name__)
 
 PRIMARY_RULE_NAME = "PRIMARY_CLASSIFICATION_RULES"
 ROOT_CATEGORY_NAME = "ROOT" # Special category for the primary rule
+HIERARCHICAL_RULES_BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "app", "prompts", "hierarchical_rules"))
+
+def sanitize_name_for_path_component(name: str) -> str:
+    """Sanitizes a category/node name for use as a component in a filename or path."""
+    return name.lower().replace(" & ", "_and_").replace("&", "_and_").replace(" ", "_").replace("/", "_")
 
 async def create_or_update_rule(
     rules_service: ClassificationRulesService,
@@ -79,49 +88,62 @@ async def create_or_update_rule(
 async def populate_hierarchical_rules(
     rules_service: ClassificationRulesService,
     email_categories_dict: dict,
-    parent_category_name: str
+    parent_db_category_name: str, # This is the 'category' field in DB (i.e., parent's 'name')
+    current_path_components: list[str] = None # For building filenames
 ):
-    """Recursively populates rules based on the EMAIL_CATEGORIES structure."""
-    added_count = 0
-    updated_count = 0
+    """Recursively populates rules based on the EMAIL_CATEGORIES structure, loading from files."""
+    if current_path_components is None:
+        current_path_components = []
 
-    for child_name, sub_children in email_categories_dict.items():
-        current_rule_content = ""
-        is_parent_node = isinstance(sub_children, dict) or (isinstance(sub_children, list) and sub_children)
+    for original_child_name, sub_children_structure in email_categories_dict.items():
+        # original_child_name is the key from EMAIL_CATEGORIES (e.g., "RX", "Medical Records & Images")
+        
+        # Determine if this node itself is a parent (i.e., needs a rule set file)
+        is_parent_node_for_rules = isinstance(sub_children_structure, dict) or \
+                                   (isinstance(sub_children_structure, list) and sub_children_structure)
 
-        if is_parent_node:
-            if isinstance(sub_children, dict):
-                children_names = list(sub_children.keys())
-            else: # It's a list of strings
-                children_names = sub_children
-            current_rule_content = f"Rules to classify among: {', '.join(children_names)}. (To be defined by user)."
-            
-            rule = await create_or_update_rule(
+        if is_parent_node_for_rules:
+            # This node (original_child_name) will have its own rule record in the DB.
+            # Its DB 'name' field will be original_child_name.
+            # Its DB 'category' field will be parent_db_category_name.
+
+            # Construct filename for this node's rules
+            new_path_components = current_path_components + [sanitize_name_for_path_component(original_child_name)]
+            rule_filename = "_".join(new_path_components) + "_rules.txt"
+            rule_filepath = os.path.join(HIERARCHICAL_RULES_BASE_DIR, rule_filename)
+
+            rule_content_for_db = ""
+            try:
+                rule_content_for_db = parse_default_rules(rule_filepath) # Reusing parser to read file
+                logger.info(f"Successfully loaded rules for '{original_child_name}' from {rule_filepath}")
+            except FileNotFoundError:
+                logger.warning(f"Rule file not found for '{original_child_name}' at {rule_filepath}. Using placeholder content.")
+                # Generate placeholder content if file not found
+                if isinstance(sub_children_structure, dict):
+                    children_names_for_placeholder = list(sub_children_structure.keys())
+                else: # It's a list of strings
+                    children_names_for_placeholder = sub_children_structure
+                rule_content_for_db = f"Rules to classify among: {', '.join(children_names_for_placeholder)}. (To be defined by user. File not found at {rule_filepath})"
+            except Exception as e:
+                logger.error(f"Error reading rule file {rule_filepath} for '{original_child_name}': {e}. Using placeholder.")
+                if isinstance(sub_children_structure, dict):
+                    children_names_for_placeholder = list(sub_children_structure.keys())
+                else: # It's a list of strings
+                    children_names_for_placeholder = sub_children_structure
+                rule_content_for_db = f"Rules to classify among: {', '.join(children_names_for_placeholder)}. (Error reading file {rule_filepath}: {e}. To be defined by user)."
+
+            await create_or_update_rule(
                 rules_service,
-                name=child_name,
-                category=parent_category_name,
-                content=current_rule_content
+                name=original_child_name, # The 'name' in DB is the original key from EMAIL_CATEGORIES
+                category=parent_db_category_name, # The 'category' in DB is the parent's original name
+                content=rule_content_for_db
             )
-            if rule: # Check if rule was actually created or updated
-                # Check if it was a create or update based on presence of existing rules (done inside create_or_update_rule logic)
-                # This part is tricky because create_or_update_rule handles both.
-                # We'll rely on logs from create_or_update_rule for specific create/update counts.
-                pass
 
-
-            # Recursive call for nested dictionaries (which represent further parent nodes)
-            if isinstance(sub_children, dict):
-                # The 'parent_category_name' for the next level is 'child_name'
-                sub_added, sub_updated = await populate_hierarchical_rules(rules_service, sub_children, child_name)
-                added_count += sub_added
-                updated_count += sub_updated
-        # else:
-            # Leaf nodes (simple strings or empty lists) do not get their own rule *set*
-            # They are the outcomes of their parent's rule set.
-            # logger.debug(f"Leaf node '{child_name}' under '{parent_category_name}' will not have its own rule set record.")
-
-    return added_count, updated_count # These counts are not accurately reflecting due to create_or_update internal logic
-
+            # Recursive call if this node has further nested children (which must be a dict)
+            if isinstance(sub_children_structure, dict):
+                # For the next level, the current original_child_name becomes the parent_db_category_name
+                await populate_hierarchical_rules(rules_service, sub_children_structure, original_child_name, new_path_components)
+    return
 
 async def main():
     logger.info("Starting default classification rules population script.")
@@ -139,6 +161,8 @@ async def main():
 
     try:
         rules_service = ClassificationRulesService(db)
+        logger.info(f"Ensuring hierarchical rules directory exists: {HIERARCHICAL_RULES_BASE_DIR}")
+        os.makedirs(HIERARCHICAL_RULES_BASE_DIR, exist_ok=True)
 
         # 1. Populate the Primary Classification Rule
         logger.info(f"Parsing primary rules from: {DEFAULT_RULES_FILE_PATH}")
@@ -155,25 +179,27 @@ async def main():
             content=primary_rules_content
         )
         
-        # 2. Populate Hierarchical Rules from EMAIL_CATEGORIES (Temporarily Commented Out)
-        # logger.info("Skipping hierarchical rule population for this run.")
-        # email_categories_json = os.getenv("EMAIL_CATEGORIES")
-        # if not email_categories_json:
-        #     logger.error("EMAIL_CATEGORIES environment variable not set. Cannot populate hierarchical rules.")
-        # else:
-        #     try:
-        #         email_categories_dict = json.loads(email_categories_json)
-        #         logger.info("Successfully parsed EMAIL_CATEGORIES JSON.")
-        #         
-        #         await populate_hierarchical_rules(rules_service, email_categories_dict, PRIMARY_RULE_NAME)
+        # 2. Populate Hierarchical Rules from EMAIL_CATEGORIES 
+        logger.info("Starting hierarchical rule population from files.")
+        email_categories_json = os.getenv("EMAIL_CATEGORIES")
+        if not email_categories_json:
+            logger.error("EMAIL_CATEGORIES environment variable not set. Cannot populate hierarchical rules.")
+        else:
+            try:
+                email_categories_dict = json.loads(email_categories_json)
+                logger.info("Successfully parsed EMAIL_CATEGORIES JSON.")
+                
+                # Initial call for top-level categories in EMAIL_CATEGORIES
+                # Their parent in the DB is PRIMARY_RULE_NAME
+                await populate_hierarchical_rules(rules_service, email_categories_dict, PRIMARY_RULE_NAME, [])
 
-        #     except json.JSONDecodeError as e:
-        #         logger.error(f"Failed to parse EMAIL_CATEGORIES JSON: {e}")
-        #     except Exception as e:
-        #         logger.error(f"An unexpected error occurred during hierarchical rule population: {e}", exc_info=True)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse EMAIL_CATEGORIES JSON: {e}")
+            except Exception as e:
+                logger.error(f"An unexpected error occurred during hierarchical rule population: {e}", exc_info=True)
 
         await db.commit()
-        logger.info("Database commit successful for primary rule population.")
+        logger.info("Database commit successful for all rule populations.")
     except Exception as e:
         logger.error(f"An error occurred during the population script: {e}", exc_info=True)
         await db.rollback()
@@ -183,4 +209,12 @@ async def main():
         logger.info("Database session closed.")
 
 if __name__ == "__main__":
+    # Ensure the hierarchical rules directory is created if it doesn't exist, before script runs
+    # This is also done in main() but good to have here for direct script execution clarity
+    if not os.path.exists(HIERARCHICAL_RULES_BASE_DIR):
+        os.makedirs(HIERARCHICAL_RULES_BASE_DIR)
+        logger.info(f"Created missing directory for hierarchical rules: {HIERARCHICAL_RULES_BASE_DIR}")
+    
+    # Restore the commented out section for hierarchical population
+    # This is done by simply ensuring the script runs as is.
     asyncio.run(main()) 

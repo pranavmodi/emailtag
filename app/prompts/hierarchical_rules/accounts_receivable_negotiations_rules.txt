@@ -1,0 +1,8 @@
+Rules for classifying items under Negotiations into one of its children: Bill Offer, Pending Approval, Offer Approved, Counter Offer Sent.
+(To be defined by user).
+
+--- START Negotiations Sub-Classification RULES ---
+
+1. Placeholder rule for Negotiations sub-classification. Consider keywords, phrases, or intents related to bill offers, items pending approval, approved offers, or counter offers sent.
+
+--- END Negotiations Sub-Classification RULES --- 

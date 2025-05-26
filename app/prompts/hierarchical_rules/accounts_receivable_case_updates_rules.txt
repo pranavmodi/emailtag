@@ -1,0 +1,8 @@
+Rules for classifying items under Case Updates into one of its children: New Attorney, Drop Letter, Drop Pending, Promise to send payment, Waiting to clear liability, Waiting on settlement check, Sent payment but not received, Refund Request, Payment on way.
+(To be defined by user).
+
+--- START Case Updates Sub-Classification RULES ---
+
+1. Placeholder rule for Case Updates sub-classification. Consider keywords, phrases, or intents related to new attorneys, drop letters, pending drops, payment promises, liability clearance, settlement checks, payment status, or refund requests.
+
+--- END Case Updates Sub-Classification RULES --- 

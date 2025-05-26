@@ -1,0 +1,8 @@
+Rules for classifying items under Liens into one of its children: Missing Lien Request, PSL, ASL.
+(To be defined by user).
+
+--- START Liens Sub-Classification RULES ---
+
+1. Placeholder rule for Liens sub-classification. Consider keywords, phrases, or intents related to missing lien requests, PSL (Prescription Service Lien), or ASL (Attorney Service Lien).
+
+--- END Liens Sub-Classification RULES --- 

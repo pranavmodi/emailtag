@@ -1,0 +1,8 @@
+Rules for classifying items under Collections into one of its children: To send to collections, Sent to Collections, Attorney Non-Payment, To Review.
+(To be defined by user).
+
+--- START Collections Sub-Classification RULES ---
+
+1. Placeholder rule for Collections sub-classification. Consider keywords, phrases, or intents related to sending accounts to collections, accounts already sent, non-payment by attorneys, or items needing review.
+
+--- END Collections Sub-Classification RULES --- 

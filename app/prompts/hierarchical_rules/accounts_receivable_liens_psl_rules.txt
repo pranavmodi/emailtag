@@ -1,0 +1,8 @@
+Rules for classifying items under PSL into one of its children: Rad Lien, Tech Lien, Lien Modified.
+(To be defined by user).
+
+--- START PSL Sub-Classification RULES ---
+
+1. Placeholder rule for PSL sub-classification. Consider keywords, phrases, or intents related to radiology liens, technician liens, or modified liens under PSL.
+
+--- END PSL Sub-Classification RULES --- 

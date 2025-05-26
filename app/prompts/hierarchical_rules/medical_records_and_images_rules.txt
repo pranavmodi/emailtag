@@ -1,0 +1,8 @@
+Rules for classifying items under Medical Records & Images into one of its children: Release of Records, Image Request, CD Requests, Reports Request, US Tech Sheet, Portal Requests, Referral pad request, Incorrect patient info, Incorrect study info.
+(To be defined by user).
+
+--- START Medical Records & Images Sub-Classification RULES ---
+
+1. Placeholder rule for Medical Records & Images sub-classification. Consider keywords, phrases, or intents related to record releases, image requests, CD requests, report requests, tech sheets, portal interactions, referral pads, or corrections to patient/study info.
+
+--- END Medical Records & Images Sub-Classification RULES --- 
