@@ -7,7 +7,8 @@ import asyncio # Added for to_thread
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session # Keep Session for type hinting if used elsewhere, or remove if not
+from sqlalchemy.ext.asyncio import AsyncSession # Corrected import
 
 from app.db.session import get_db
 from app.services.classification_rules_service import (
@@ -16,6 +17,12 @@ from app.services.classification_rules_service import (
 )
 from app.models.classification_rule import ClassificationRule as ClassificationRuleModel
 from app.services.classification_rule_parser import parse_default_rules, DEFAULT_RULES_FILE_PATH
+from scripts.populate_default_rules import (
+    PRIMARY_RULE_NAME, 
+    ROOT_CATEGORY_NAME, 
+    create_or_update_rule,
+    populate_hierarchical_rules
+)
 
 logger = logging.getLogger(__name__)
 
@@ -148,54 +155,95 @@ async def edit_rule_ui(
 @router.post("/rules/revert_default", name="revert_to_default_rules")
 async def revert_to_default_rules_endpoint(
     request: Request,
-    rules_service: ClassificationRulesService = Depends(get_classification_rules_service)
+    db: AsyncSession = Depends(get_db) 
 ):
-    """Reverts all classification rules to the default set from classification_rules.txt."""
+    """Reverts all classification rules to the default set defined by classification_rules.txt and EMAIL_CATEGORIES."""
+    logger.info("Attempting to revert to default classification rules structure.")
+    
+    from scripts.populate_default_rules import (
+        PRIMARY_RULE_NAME, 
+        ROOT_CATEGORY_NAME, 
+        create_or_update_rule,
+        populate_hierarchical_rules
+    )
+    from app.services.classification_rule_parser import parse_default_rules, DEFAULT_RULES_FILE_PATH
+    from app.services.classification_rules_service import ClassificationRulesService
+    import json 
+    import os
+
+    rules_service = ClassificationRulesService(db)
+
     try:
-        logger.info("Attempting to revert to default classification rules.")
-        # 1. Deactivate all existing rules
-        all_existing_rules = await rules_service.get_all_rules(include_inactive=True)
+        # 0. Deactivate all existing rules first
+        logger.info("Deactivating all existing rules before revert.")
+        all_db_rules = await rules_service.get_all_rules(include_inactive=True)
         deactivated_count = 0
-        for rule in all_existing_rules:
+        for rule in all_db_rules:
             if rule.is_active:
-                await rules_service.deactivate_rule(rule.id, updated_by="system_revert_to_default")
+                # Use the service method for deactivation if it handles versioning/updated_by correctly
+                # or update directly if simpler and service method is too complex for this bulk op.
+                # For now, direct update for simplicity in bulk:
+                rule.is_active = False
+                rule.updated_by = "system_revert_to_default_deactivation"
+                # rule.version += 1 # If direct, manage version
+                db.add(rule) # Re-add to session if making direct changes
                 deactivated_count += 1
-        logger.info(f"Deactivated {deactivated_count} active existing rules.")
-
-        # 2. Parse default rules from the file using the new parser
-        # Run the synchronous parser in a separate thread to avoid blocking the event loop
-        default_rules_to_add = await asyncio.to_thread(parse_default_rules, DEFAULT_RULES_FILE_PATH)
         
-        if not default_rules_to_add:
-            logger.warning("No default rules found or parsed from file. No new rules will be added.")
-            # It's important to inform the user if the file was empty or unparseable
-            # Consider adding a flash message or similar if your frontend supports it.
-            return RedirectResponse(url=router.url_path_for("view_classification_rules_ui"), status_code=303)
+        if deactivated_count > 0:
+            await db.commit() # Commit deactivations
+            logger.info(f"Deactivated {deactivated_count} rules.")
+        else:
+            logger.info("No active rules found to deactivate.")
+            # Important: if commit was not called, rollback previous (if any) uncommitted changes from session
+            # or ensure session is clean. For safety, a rollback here if no commit happened.
+            await db.rollback()
 
-        # 3. Add new rules from the default set
-        added_count = 0
-        for rule_data in default_rules_to_add:
+
+        # 1. Populate the Primary Classification Rule
+        logger.info(f"Parsing primary rules from: {DEFAULT_RULES_FILE_PATH}")
+        try:
+            primary_rules_content = await asyncio.to_thread(parse_default_rules, DEFAULT_RULES_FILE_PATH)
+        except Exception as e:
+            logger.error(f"Failed to parse primary rules file during revert: {e}")
+            back_url = request.url_for("view_classification_rules_ui")
+            return HTMLResponse(content=f"<html><body><h1>Error parsing default rules file: {e}</h1><a href='{back_url}'>Back to rules</a></body></html>", status_code=500)
+
+        await create_or_update_rule(
+            rules_service,
+            name=PRIMARY_RULE_NAME,
+            category=ROOT_CATEGORY_NAME,
+            content=primary_rules_content,
+            created_by="system_revert_to_default"
+        )
+        
+        # 2. Populate Hierarchical Rules from EMAIL_CATEGORIES
+        email_categories_json = os.getenv("EMAIL_CATEGORIES")
+        if not email_categories_json:
+            logger.error("EMAIL_CATEGORIES environment variable not set. Cannot populate hierarchical rules during revert.")
+            back_url = request.url_for("view_classification_rules_ui")
+            return HTMLResponse(content=f"<html><body><h1>EMAIL_CATEGORIES not set. Hierarchical rules not populated.</h1><a href='{back_url}'>Back to rules</a></body></html>", status_code=500)
+        else:
             try:
-                # Check if a rule with the same category and name already exists (even if inactive)
-                # This is a simple check; your service might have more robust ways to handle this.
-                existing = await rules_service.get_rules_by_category_and_name(rule_data["category"], rule_data["name"])
-                if not existing: # Only create if it doesn't exist by this exact name/category
-                    await rules_service.create_rule(
-                        category=rule_data["category"],
-                        name=rule_data["name"],
-                        content=rule_data["content"],
-                        created_by=rule_data["created_by"]
-                    )
-                    added_count += 1
-                else:
-                    logger.info(f"Default rule '{rule_data['name']}' for category '{rule_data['category']}' already exists. Skipping creation.")
+                email_categories_dict = json.loads(email_categories_json)
+                logger.info("Successfully parsed EMAIL_CATEGORIES JSON during revert.")
+                
+                await populate_hierarchical_rules(rules_service, email_categories_dict, PRIMARY_RULE_NAME)
 
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse EMAIL_CATEGORIES JSON during revert: {e}")
+                back_url = request.url_for("view_classification_rules_ui")
+                return HTMLResponse(content=f"<html><body><h1>Error parsing EMAIL_CATEGORIES: {e}</h1><a href='{back_url}'>Back to rules</a></body></html>", status_code=500)
             except Exception as e:
-                logger.error(f"Error creating default rule '{rule_data.get('name')}' for category '{rule_data.get('category')}': {e}", exc_info=True)
-        
-        logger.info(f"Added {added_count} new default rules.")
-        # Redirect to the rules UI page
-        return RedirectResponse(url=router.url_path_for("view_classification_rules_ui"), status_code=303)
+                logger.error(f"An unexpected error occurred during hierarchical rule population in revert: {e}", exc_info=True)
+                back_url = request.url_for("view_classification_rules_ui")
+                return HTMLResponse(content=f"<html><body><h1>Unexpected error during rule population: {e}</h1><a href='{back_url}'>Back to rules</a></body></html>", status_code=500)
+
+        await db.commit()
+        logger.info("Successfully reverted to default rules structure.")
+        return RedirectResponse(url=request.url_for("view_classification_rules_ui"), status_code=303)
+
     except Exception as e:
         logger.error(f"Error reverting to default rules: {e}", exc_info=True)
-        return HTMLResponse(content=f"<html><body><h1>Error reverting to default rules: {e}</h1><a href='{router.url_path_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", status_code=500) 
+        await db.rollback()
+        back_url = request.url_for("view_classification_rules_ui")
+        return HTMLResponse(content=f"<html><body><h1>Error reverting to default rules: {e}</h1><a href='{back_url}'>Back to rules</a></body></html>", status_code=500) 

@@ -46,6 +46,8 @@
             <button type="submit" class="button" onclick="return confirm('Are you sure you want to revert to default rules? This will replace current rules.');">Revert to Default Rules</button>
         </form>
 
+        <!-- Commenting out the Add New Rule form for now -->
+        <!--
         <div class="form-section">
             <h2>Add New Rule</h2>
             <form action="{{ url_for('add_classification_rule') }}" method="post">
@@ -72,6 +74,7 @@
                 <button type="submit">Add Rule</button>
             </form>
         </div>
+        -->
 
         <h2>Existing Rules</h2>
         {% if rules %}
