@@ -95,11 +95,6 @@
                         <td><div class="rule-content">{{ rule.content }}</div></td>
                         <td class="action-buttons">
                             <a href="{{ url_for('edit_classification_rule_ui', rule_id=rule.id) }}" class="button">Edit</a>
-                            {% if rule.is_active %}
-                            <form action="{{ url_for('deactivate_classification_rule', rule_id=rule.id) }}" method="post" onsubmit="return confirm('Are you sure you want to deactivate this rule?');">
-                                <button type="submit">Deactivate</button>
-                            </form>
-                            {% endif %}
                             <!-- Add Activate button here if needed -->
                         </td>
                     </tr>
