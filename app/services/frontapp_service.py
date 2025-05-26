@@ -796,6 +796,28 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
             }
             # raise # Optionally re-raise after returning default
 
+def _plain_text_to_html(plain_text: str) -> str:
+    """Converts plain text to simple HTML with paragraphs and line breaks."""
+    if not plain_text:
+        return ""
+    # Normalize line endings to \n first
+    normalized_text = plain_text.replace('\r\n', '\n').replace('\r', '\n')
+    # Split into paragraphs based on double newlines
+    paragraphs = normalized_text.split('\n\n')
+    html_paragraphs = []
+    for para_text in paragraphs:
+        para_text_stripped = para_text.strip()
+        if para_text_stripped: # Avoid empty paragraphs
+            # Replace single newlines within a paragraph with <br>
+            lines = para_text_stripped.split('\n')
+            # Escape HTML special characters in each line before joining
+            # For simplicity, we're not adding full HTML escaping here,
+            # assuming AI-generated text is generally safe.
+            # If HTML injection is a concern, proper escaping (e.g., html.escape) is needed.
+            html_lines = '<br>'.join(lines)
+            html_paragraphs.append(f"<p>{html_lines}</p>")
+    return "".join(html_paragraphs)
+
 def send_conversation_reply(conversation_id: str, text: str) -> bool:
     """
     Send a reply to a Front conversation.
@@ -805,10 +827,14 @@ def send_conversation_reply(conversation_id: str, text: str) -> bool:
             "Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}",
             "Content-Type": "application/json"
         }
+
+        html_body = _plain_text_to_html(text)
+
         data = {
-            "body": text,
+            "body": html_body, # Use the HTML formatted body
             "channel_id": settings.FRONT_CHANNEL_ID,
-            "author_id": settings.FRONT_BOT_TEAMMATE_ID
+            "author_id": settings.FRONT_BOT_TEAMMATE_ID,
+            "body_format": "html"  # Specify that the body is HTML
         }
         url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/messages"
         
