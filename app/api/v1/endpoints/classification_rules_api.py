@@ -208,11 +208,14 @@ async def revert_to_default_rules_endpoint(
             back_url = request.url_for("view_classification_rules_ui")
             return HTMLResponse(content=f"<html><body><h1>Error parsing default rules file: {e}</h1><a href='{back_url}'>Back to rules</a></body></html>", status_code=500)
 
+        primary_rule_description = "Primary rules for classifying an incoming email into one of the top-level categories: Scheduling, Medical Records & Images, or Accounts Receivable. This is the first stage of classification."
+
         await create_or_update_rule(
             rules_service,
             name=PRIMARY_RULE_NAME,
             category=ROOT_CATEGORY_NAME,
             content=primary_rules_content,
+            description=primary_rule_description,
             created_by="system_revert_to_default"
         )
         

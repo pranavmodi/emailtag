@@ -34,6 +34,7 @@ async def create_or_update_rule(
     name: str,
     category: str,
     content: str,
+    description: str,
     created_by: str = "system_populate_script"
 ) -> ClassificationRule:
     """Helper to create or update a classification rule. Ensures the rule is active."""
@@ -43,34 +44,24 @@ async def create_or_update_rule(
         rule_to_update = existing_rules[0]
         
         needs_content_update = rule_to_update.content != content
-        # Check if name needs update (in case the rule was found by category but name casing differs, etc.)
+        needs_description_update = rule_to_update.description != description
         needs_name_update = rule_to_update.name != name 
         is_currently_inactive = not rule_to_update.is_active
 
-        if needs_content_update or needs_name_update or is_currently_inactive:
+        if needs_content_update or needs_description_update or needs_name_update or is_currently_inactive:
             logger.info(f"Updating existing rule: Category='{category}', Name='{name}'")
-            # Call the service's update_rule. It handles content, name, updated_by, version, and its own commit.
             updated_rule = await rules_service.update_rule(
                 rule_id=rule_to_update.id,
-                name=name,  # Pass the target name
+                name=name,
                 content=content,
+                description=description,
                 updated_by=created_by
-                # No is_active here, as the service method doesn't take it.
             )
             
-            # If the rule was inactive, and update_rule succeeded, we now ensure it's marked active.
-            # The updated_rule object is the one refreshed from the DB after the service's commit.
             if is_currently_inactive and updated_rule and not updated_rule.is_active:
                 logger.info(f"Activating rule that was updated/previously inactive: {updated_rule.name}")
                 updated_rule.is_active = True
-                # This change to updated_rule.is_active will be part of the session
-                # and will be committed by the calling function's (e.g., main script's) final db.commit().
-                # Note: The service's update_rule already committed other changes.
-                # If relying on an outer commit, ensure the object is in the session correctly.
-                # Re-adding to session explicitly if there's any doubt, though refresh should keep it managed.
-                # rules_service.db.add(updated_rule) # Usually not needed if object came from session and was refreshed.
-
-            return updated_rule # This is the rule object, potentially with is_active modified in memory
+            return updated_rule
         else:
             logger.info(f"Rule Category='{category}', Name='{name}' is unchanged and already active. Skipping update.")
             return rule_to_update
@@ -82,6 +73,7 @@ async def create_or_update_rule(
             name=name,
             category=category,
             content=content,
+            description=description,
             created_by=created_by
         )
 
@@ -113,30 +105,48 @@ async def populate_hierarchical_rules(
             rule_filepath = os.path.join(HIERARCHICAL_RULES_BASE_DIR, rule_filename)
 
             rule_content_for_db = ""
+            rule_description_for_db = ""
+
+            children_names_for_description = []
+            if isinstance(sub_children_structure, dict):
+                children_names_for_description = list(sub_children_structure.keys())
+            elif isinstance(sub_children_structure, list): # It's a list of strings (leaf nodes)
+                children_names_for_description = sub_children_structure
+            
+            if children_names_for_description:
+                rule_description_for_db = f"Rules for classifying items under '{original_child_name}' (itself under '{parent_db_category_name}') into one of its children: {', '.join(children_names_for_description)}."
+            else:
+                # This case should ideally not happen if is_parent_node_for_rules is true,
+                # but as a fallback:
+                rule_description_for_db = f"Rules for classifying items under '{original_child_name}' (itself under '{parent_db_category_name}'). Child categories are not explicitly defined in structure."
+
             try:
-                rule_content_for_db = parse_default_rules(rule_filepath) # Reusing parser to read file
+                rule_content_for_db = parse_default_rules(rule_filepath)
                 logger.info(f"Successfully loaded rules for '{original_child_name}' from {rule_filepath}")
             except FileNotFoundError:
                 logger.warning(f"Rule file not found for '{original_child_name}' at {rule_filepath}. Using placeholder content.")
-                # Generate placeholder content if file not found
-                if isinstance(sub_children_structure, dict):
-                    children_names_for_placeholder = list(sub_children_structure.keys())
-                else: # It's a list of strings
-                    children_names_for_placeholder = sub_children_structure
-                rule_content_for_db = f"Rules to classify among: {', '.join(children_names_for_placeholder)}. (To be defined by user. File not found at {rule_filepath})"
+                children_names_for_placeholder = children_names_for_description
+                placeholder_suffix = f"(To be defined by user. File not found at {rule_filepath})"
+                if children_names_for_placeholder:
+                    rule_content_for_db = f"Rules to classify among: {', '.join(children_names_for_placeholder)}. {placeholder_suffix}"
+                else:
+                    rule_content_for_db = f"Rules for '{original_child_name}'. {placeholder_suffix}"
+
             except Exception as e:
                 logger.error(f"Error reading rule file {rule_filepath} for '{original_child_name}': {e}. Using placeholder.")
-                if isinstance(sub_children_structure, dict):
-                    children_names_for_placeholder = list(sub_children_structure.keys())
-                else: # It's a list of strings
-                    children_names_for_placeholder = sub_children_structure
-                rule_content_for_db = f"Rules to classify among: {', '.join(children_names_for_placeholder)}. (Error reading file {rule_filepath}: {e}. To be defined by user)."
+                children_names_for_placeholder = children_names_for_description
+                placeholder_suffix = f"(Error reading file {rule_filepath}: {e}. To be defined by user)."
+                if children_names_for_placeholder:
+                    rule_content_for_db = f"Rules to classify among: {', '.join(children_names_for_placeholder)}. {placeholder_suffix}"
+                else:
+                    rule_content_for_db = f"Rules for '{original_child_name}'. {placeholder_suffix}"
 
             await create_or_update_rule(
                 rules_service,
-                name=original_child_name, # The 'name' in DB is the original key from EMAIL_CATEGORIES
-                category=parent_db_category_name, # The 'category' in DB is the parent's original name
-                content=rule_content_for_db
+                name=original_child_name,
+                category=parent_db_category_name,
+                content=rule_content_for_db,
+                description=rule_description_for_db
             )
 
             # Recursive call if this node has further nested children (which must be a dict)
@@ -172,11 +182,14 @@ async def main():
             logger.error(f"Failed to parse primary rules file: {e}. Aborting script.")
             return
 
+        primary_rule_description = "Primary rules for classifying an incoming email into one of the top-level categories: Scheduling, Medical Records & Images, or Accounts Receivable. This is the first stage of classification."
+        
         await create_or_update_rule(
             rules_service,
             name=PRIMARY_RULE_NAME,
             category=ROOT_CATEGORY_NAME,
-            content=primary_rules_content
+            content=primary_rules_content,
+            description=primary_rule_description
         )
         
         # 2. Populate Hierarchical Rules from EMAIL_CATEGORIES 

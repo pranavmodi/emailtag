@@ -81,26 +81,18 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Category</th>
                         <th>Name</th>
+                        <th>Description</th>
                         <th>Content</th>
-                        <th>Active</th>
-                        <th>Version</th>
-                        <th>Created At</th>
-                        <th>Updated At</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for rule in rules %}
                     <tr>
-                        <td>{{ rule.category }}</td>
                         <td>{{ rule.name }}</td>
+                        <td>{{ rule.description if rule.description is not none else 'N/A' }}</td>
                         <td><div class="rule-content">{{ rule.content }}</div></td>
-                        <td>{{ "Yes" if rule.is_active else "No" }}</td>
-                        <td>{{ rule.version }}</td>
-                        <td>{{ rule.created_at.strftime('%Y-%m-%d %H:%M') if rule.created_at else '' }}</td>
-                        <td>{{ rule.updated_at.strftime('%Y-%m-%d %H:%M') if rule.updated_at else '' }}</td>
                         <td class="action-buttons">
                             <a href="{{ url_for('edit_classification_rule_ui', rule_id=rule.id) }}" class="button">Edit</a>
                             {% if rule.is_active %}

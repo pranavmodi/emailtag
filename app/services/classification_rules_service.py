@@ -62,6 +62,7 @@ class ClassificationRulesService:
         category: str, 
         name: str, 
         content: str, 
+        description: Optional[str] = None,
         created_by: Optional[str] = None
     ) -> ClassificationRule:
         """Create a new classification rule."""
@@ -69,6 +70,7 @@ class ClassificationRulesService:
             category=category,
             name=name,
             content=content,
+            description=description,
             created_by=created_by,
             updated_by=created_by
         )
@@ -85,6 +87,7 @@ class ClassificationRulesService:
         rule_id: str, 
         name: Optional[str] = None, 
         content: Optional[str] = None,
+        description: Optional[str] = None,
         updated_by: Optional[str] = None
     ) -> Optional[ClassificationRule]:
         """Update an existing classification rule."""
@@ -99,6 +102,8 @@ class ClassificationRulesService:
             rule.name = name
         if content is not None:
             rule.content = content
+        if description is not None:
+            rule.description = description
         if updated_by is not None:
             rule.updated_by = updated_by
             
