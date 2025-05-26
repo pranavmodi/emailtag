@@ -15,6 +15,8 @@ import logging
 from app.core.config import settings
 from app.services.frontapp_service import get_conversation_text
 from app.services.frontapp_service import remove_conversation_tags
+from app.services.classification_rules_service import get_classification_rules_service # New import
+from app.db.session import SessionLocal # New import for DB session
 
 # Load environment variables if needed (though settings should handle this)
 load_dotenv()
@@ -41,31 +43,39 @@ def get_openai_client() -> OpenAI:
     return _openai_client
 
 @functools.lru_cache(maxsize=1)
-def load_classification_rules() -> str:
+def load_classification_rules() -> str: # Keep for now, but it will fetch for ALL categories
     """
-    Load the classification rules from the file specified in settings.
+    Load all active classification rules from the database for all top-level categories.
+    This is a placeholder and should ideally fetch rules for a specific category when needed.
 
     Returns:
-        str: The content of the classification rules file.
+        str: The combined content of all active classification rules.
     """
-    # Define the path relative to the app directory or use an absolute path from settings
-    rules_file_path = settings.CLASSIFICATION_RULES_PATH # Ensure this is set in your config
-    if not rules_file_path:
-         # logger.error("CLASSIFICATION_RULES_PATH not set in settings.")
-         raise ValueError("CLASSIFICATION_RULES_PATH not configured")
-
-    if not os.path.exists(rules_file_path):
-        # logger.error(f"Classification rules file not found at: {rules_file_path}")
-        raise FileNotFoundError(f"Classification rules file not found at: {rules_file_path}")
-
+    db = SessionLocal()
     try:
-        with open(rules_file_path, 'r') as f:
-            rules_content = f.read()
-        # logger.info(f"Successfully loaded classification rules from {rules_file_path}")
-        return rules_content
+        rules_service = get_classification_rules_service(db)
+        # For now, get rules for all known top-level categories and combine them.
+        # This behavior mimics the old file-based approach but uses the DB.
+        # Ideally, this function would accept a category and fetch rules for that specific category.
+        combined_rules_content = []
+        for category_name in _TOP_LEVEL_CATEGORIES:
+            category_rules = rules_service.get_combined_rules_content(category_name)
+            if category_rules: # Add if there are rules for this category
+                combined_rules_content.append(f"--- RULES FOR CATEGORY: {category_name} ---")
+                combined_rules_content.append(category_rules)
+        
+        if not combined_rules_content:
+            # logger.warning("No active classification rules found in the database for any top-level category.")
+            # Fallback to file if DB is empty, or raise error. For now, raise error.
+            raise ValueError("No classification rules found in DB for any top-level category.")
+
+        # logger.info("Successfully loaded classification rules from database.")
+        return "\n\n".join(combined_rules_content)
     except Exception as e:
-        # logger.exception(f"Error loading classification rules from {rules_file_path}: {e}")
+        # logger.exception(f"Error loading classification rules from database: {e}")
         raise
+    finally:
+        db.close()
 
 
 def create_classification_prompt(rules: str, conversation_text: str, sender_info: str, message_times: str) -> str:

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Classification Rules</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        h1, h2 { color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+        th { background-color: #e8e8e8; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        label { display: block; margin-bottom: 8px; font-weight: bold; }
+        input[type="text"], textarea, select {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea { min-height: 100px; }
+        button, .button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            text-decoration: none; /* For <a> tags styled as buttons */
+            display: inline-block; /* For <a> tags styled as buttons */
+        }
+        button:hover, .button:hover { background-color: #0056b3; }
+        .action-buttons form { display: inline-block; margin-right: 5px;}
+        .form-section { margin-bottom: 30px; padding: 20px; background-color: #f9f9f9; border-radius: 5px; }
+        .rule-content { white-space: pre-wrap; font-family: monospace; background-color: #eee; padding: 10px; border-radius: 4px; max-height: 200px; overflow-y: auto;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Manage Classification Rules</h1>
+        <form action="{{ url_for('revert_to_default_rules') }}" method="post" style="display: inline-block; margin-bottom: 20px; margin-left: 10px;">
+            <button type="submit" class="button" onclick="return confirm('Are you sure you want to revert to default rules? This will replace current rules.');">Revert to Default Rules</button>
+        </form>
+
+        <div class="form-section">
+            <h2>Add New Rule</h2>
+            <form action="{{ url_for('add_classification_rule') }}" method="post">
+                <div>
+                    <label for="category">Category:</label>
+                    <select id="category" name="category" required>
+                        {% for cat in top_level_categories %}
+                            <option value="{{ cat }}">{{ cat }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="name">Rule Name:</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                <div>
+                    <label for="content">Rule Content:</label>
+                    <textarea id="content" name="content" required></textarea>
+                </div>
+                <div>
+                    <label for="created_by">Created By (Optional):</label>
+                    <input type="text" id="created_by" name="created_by">
+                </div>
+                <button type="submit">Add Rule</button>
+            </form>
+        </div>
+
+        <h2>Existing Rules</h2>
+        {% if rules %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Name</th>
+                        <th>Content</th>
+                        <th>Active</th>
+                        <th>Version</th>
+                        <th>Created At</th>
+                        <th>Updated At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rule in rules %}
+                    <tr>
+                        <td>{{ rule.category }}</td>
+                        <td>{{ rule.name }}</td>
+                        <td><div class="rule-content">{{ rule.content }}</div></td>
+                        <td>{{ "Yes" if rule.is_active else "No" }}</td>
+                        <td>{{ rule.version }}</td>
+                        <td>{{ rule.created_at.strftime('%Y-%m-%d %H:%M') if rule.created_at else '' }}</td>
+                        <td>{{ rule.updated_at.strftime('%Y-%m-%d %H:%M') if rule.updated_at else '' }}</td>
+                        <td class="action-buttons">
+                            <a href="{{ url_for('edit_classification_rule_ui', rule_id=rule.id) }}" class="button">Edit</a>
+                            {% if rule.is_active %}
+                            <form action="{{ url_for('deactivate_classification_rule', rule_id=rule.id) }}" method="post" onsubmit="return confirm('Are you sure you want to deactivate this rule?');">
+                                <button type="submit">Deactivate</button>
+                            </form>
+                            {% endif %}
+                            <!-- Add Activate button here if needed -->
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>No classification rules found.</p>
+        {% endif %}
+    </div>
+</body>
+</html> 

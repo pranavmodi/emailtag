@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Classification Rule</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        h1 { color: #333; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); max-width: 600px; margin: auto; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; }
+        input[type="text"], textarea {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea { min-height: 150px; }
+        button, .button-link {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            text-decoration: none; /* For <a> tag */
+            display: inline-block; /* For <a> tag */
+            margin-right: 10px;
+        }
+        button:hover, .button-link:hover { background-color: #0056b3; }
+        .button-secondary {
+            background-color: #6c757d;
+        }
+        .button-secondary:hover {
+            background-color: #545b62;
+        }
+        .form-actions { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Edit Rule: {{ rule.name }}</h1>
+
+        <form action="{{ url_for('update_classification_rule', rule_id=rule.id) }}" method="post">
+            <div>
+                <label for="category">Category:</label>
+                <input type="text" id="category" name="category" value="{{ rule.category }}" readonly disabled>
+            </div>
+            <div>
+                <label for="name">Rule Name:</label>
+                <input type="text" id="name" name="name" value="{{ rule.name }}" required>
+            </div>
+            <div>
+                <label for="content">Rule Content:</label>
+                <textarea id="content" name="content" required>{{ rule.content }}</textarea>
+            </div>
+            <div>
+                <label for="updated_by">Updated By (Optional):</label>
+                <input type="text" id="updated_by" name="updated_by">
+            </div>
+            <div class="form-actions">
+                <button type="submit">Save Changes</button>
+                <a href="{{ url_for('view_classification_rules_ui') }}" class="button-link button-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</body>
+</html> 
