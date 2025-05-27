@@ -6,6 +6,9 @@ import uuid
 import sys
 import datetime # Import datetime
 import time # Import time
+import smtplib # For sending emails via SMTP
+from email.mime.text import MIMEText # For creating email messages
+from email.mime.multipart import MIMEMultipart # For HTML emails
 
 # Load environment variables from .env file
 load_dotenv()
@@ -16,6 +19,12 @@ FRONT_APP_WEBHOOK = os.getenv("FRONT_APP_WEBHOOK")
 FRONT_CHANNEL_ID = os.getenv("FRONT_CHANNEL_ID")
 FRONT_BOT_TEAMMATE_ID = os.getenv("FRONT_BOT_TEAMMATE_ID")
 FRONT_AUTH_TOKEN = os.getenv("FRONT_AUTH_TOKEN")
+
+# SMTP Environment Variables
+SMTP_HOST = os.getenv("SMTP_HOST")
+SMTP_PORT = os.getenv("SMTP_PORT")
+SENDER_EMAIL = os.getenv("SENDER_EMAIL")
+SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
 
 def send_email_to_front(subject, body, sender_email, sender_name, to_email, thread_ref=None):
     """
@@ -78,11 +87,17 @@ if __name__ == "__main__":
     print("Starting test script for FrontApp tagging...")
 
     # ADDED BLOCK - Check if essential variables are loaded *before* any use that might cause an error
-    if not FRONT_APP_WEBHOOK or not FRONT_CHANNEL_ID or not FRONT_AUTH_TOKEN:
+    essential_front_vars = {
+        "FRONT_APP_WEBHOOK": FRONT_APP_WEBHOOK,
+        "FRONT_CHANNEL_ID": FRONT_CHANNEL_ID,
+        "FRONT_AUTH_TOKEN": FRONT_AUTH_TOKEN
+    }
+    missing_front_vars = [key for key, value in essential_front_vars.items() if not value]
+
+    if missing_front_vars:
         print("Critical Error: One or more FrontApp environment variables are not loaded correctly from .env.")
-        print(f"  Loaded FRONT_APP_WEBHOOK: {FRONT_APP_WEBHOOK}")
-        print(f"  Loaded FRONT_CHANNEL_ID: {FRONT_CHANNEL_ID}")
-        print(f"  Loaded FRONT_AUTH_TOKEN: {'Set' if FRONT_AUTH_TOKEN else 'Not Set'}")
+        for var_name in missing_front_vars:
+            print(f"  Missing or empty: {var_name}")
         print("Please ensure your .env file is in the project root and variables are correctly defined.")
         sys.exit(1) # Exit script if essential vars are missing
 
@@ -226,6 +241,22 @@ if __name__ == "__main__":
                     "sender_name": "Michael Chen" # Same sender
                 }
             ]
+        },
+        "7": {
+            "description": "ACTUAL EMAIL (SMTP) to ai.benchd@gmail.com via Zoho - BILLING INQUIRY",
+            "subject": "Urgent: Question about my recent invoice #INV-2024-00123",
+            "body_html": (
+                "<p>Dear Billing Department,</p>"
+                "<p>I am writing to inquire about a charge on my recent invoice, #INV-2024-00123, dated July 15, 2024.</p>"
+                "<p>Specifically, I would like clarification on the line item described as 'Service Adjustment Fee' for $25.00.</p>"
+                "<p>Could you please provide more details about this charge at your earliest convenience?</p>"
+                "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}.</p>"
+                "<p>Thank you for your assistance.</p>"
+                "<p>Sincerely,<br>"
+                "Concerned Customer (via Test Script)</p>"
+            ),
+            "recipient_email": "ai.benchd@gmail.com" # Target recipient for SMTP
+            # Sender email and password will be taken from .env
         }
         # Add more scenarios here if needed
     }
@@ -247,175 +278,94 @@ if __name__ == "__main__":
 
     if selected_scenario:
         print(f"\n--- Sending: {selected_scenario['description']} ---")
-        test_to_email = f"channel-{FRONT_CHANNEL_ID}@example.com"
-        if FRONT_APP_WEBHOOK and not FRONT_APP_WEBHOOK.endswith(f"/channels/{FRONT_CHANNEL_ID}/incoming_messages"):
-            print(f"Warning: FRONT_APP_WEBHOOK ({FRONT_APP_WEBHOOK}) does not seem to match the pattern for FRONT_CHANNEL_ID ({FRONT_CHANNEL_ID}).")
-            print("The webhook URL should typically be in the format: https://<your-front-instance>.api.frontapp.com/channels/<channel_id>/incoming_messages")
+        
+        if choice == "7":
+            # Scenario 7: Send an actual email via SMTP
+            if not all([SMTP_HOST, SMTP_PORT, SENDER_EMAIL, SENDER_PASSWORD]):
+                print("Critical Error: SMTP environment variables (SMTP_HOST, SMTP_PORT, SENDER_EMAIL, SENDER_PASSWORD) are not all set in .env.")
+                sys.exit(1)
+            
+            try:
+                smtp_port_int = int(SMTP_PORT) # Ensure port is an integer
+            except ValueError:
+                print(f"Critical Error: SMTP_PORT ('{SMTP_PORT}') is not a valid integer.")
+                sys.exit(1)
 
-        if "messages" in selected_scenario: # Handle multi-message scenarios
+            subject = selected_scenario['subject']
+            # Replace placeholder in body with actual sender email for clarity
+            body_html = selected_scenario['body_html'].replace("{SENDER_EMAIL_PLACEHOLDER}", SENDER_EMAIL)
+            recipient_email = selected_scenario['recipient_email']
+
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = subject
+            msg['From'] = SENDER_EMAIL
+            msg['To'] = recipient_email
+            msg.attach(MIMEText(body_html, 'html'))
+
+            try:
+                if smtp_port_int == 465:
+                    print(f"Attempting to send email via SMTP_SSL to {recipient_email} from {SENDER_EMAIL} using host {SMTP_HOST}:{smtp_port_int}...")
+                    with smtplib.SMTP_SSL(SMTP_HOST, smtp_port_int) as server:
+                        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+                        server.sendmail(SENDER_EMAIL, recipient_email, msg.as_string())
+                elif smtp_port_int == 587:
+                    print(f"Attempting to send email via SMTP (with STARTTLS) to {recipient_email} from {SENDER_EMAIL} using host {SMTP_HOST}:{smtp_port_int}...")
+                    with smtplib.SMTP(SMTP_HOST, smtp_port_int) as server:
+                        # server.set_debuglevel(1) # Uncomment for detailed SMTP logs if issues persist
+                        server.ehlo() # Greet the server
+                        server.starttls() # Secure the connection
+                        server.ehlo() # Re-greet after TLS
+                        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+                        server.sendmail(SENDER_EMAIL, recipient_email, msg.as_string())
+                else:
+                    print(f"Warning: SMTP port {smtp_port_int} is not standard for SSL/TLS. Attempting SMTP with STARTTLS (may fail).")
+                    with smtplib.SMTP(SMTP_HOST, smtp_port_int) as server:
+                        server.starttls()
+                        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+                        server.sendmail(SENDER_EMAIL, recipient_email, msg.as_string())
+                print(f"Email successfully sent via SMTP to {recipient_email}.")
+            except smtplib.SMTPNotSupportedError as e:
+                print(f"SMTP Not Supported Error: {e}. This might indicate an issue with STARTTLS or another feature.")
+            except smtplib.SMTPAuthenticationError as e:
+                print(f"SMTP Authentication Error: Failed to login. Check SENDER_EMAIL and SENDER_PASSWORD. ({e})")
+            except smtplib.SMTPConnectError as e:
+                print(f"SMTP Connect Error: Failed to connect to SMTP server {SMTP_HOST}:{smtp_port_int}. ({e})")
+            except smtplib.SMTPServerDisconnected as e:
+                print(f"SMTP Server Disconnected: The server unexpectedly disconnected. ({e})")
+            except Exception as e:
+                print(f"An unexpected error occurred while sending email via SMTP: {e}")
+
+        elif "messages" in selected_scenario: # Handle multi-message scenarios (Front Webhook)
+            test_to_email = f"channel-{FRONT_CHANNEL_ID}@example.com" # Default for webhook
             shared_thread_ref = f"test-thread-{uuid.uuid4()}"
             for i, message_data in enumerate(selected_scenario['messages']):
-                print(f"Sending message {i+1}/{len(selected_scenario['messages'])} for scenario '{selected_scenario['description']}'...")
+                print(f"Sending message {i+1}/{len(selected_scenario['messages'])} for scenario '{selected_scenario['description']}' to Front webhook...")
                 send_email_to_front(
                     subject=message_data['subject'],
                     body=message_data['body'],
                     sender_email=message_data['sender_email'],
                     sender_name=message_data['sender_name'],
-                    to_email=test_to_email,
+                    to_email=test_to_email, # Webhook messages go to the channel representation
                     thread_ref=shared_thread_ref
                 )
                 if i < len(selected_scenario['messages']) - 1:
                     print("Waiting a moment before sending the next message in the thread...")
                     # time.sleep(2) # Optional: add a small delay
-                    # ADDED: Conditional input for scenario 6 before the second message
-                    if choice == "6" and i == 0: # If it's scenario 6 and the first message was just sent (i=0)
+                    if choice == "6" and i == 0: 
                         input("  ==> SCENARIO 6: First message sent. Press Enter to send the second message (scheduling)... ")
         else:
+            # Single message scenarios (Front Webhook)
+            test_to_email = f"channel-{FRONT_CHANNEL_ID}@example.com" # Default for webhook
+            recipient_email = selected_scenario.get("custom_to_email", test_to_email)
+            print(f"Sending single message for scenario '{selected_scenario['description']}' to Front webhook (recipient: {recipient_email})...")
             send_email_to_front(
                 subject=selected_scenario['subject'],
                 body=selected_scenario['body'],
                 sender_email=selected_scenario['sender_email'],
                 sender_name=selected_scenario['sender_name'],
-                to_email=test_to_email
+                to_email=recipient_email # This is for the 'to' field in the Front payload
             )
     else:
         print("Invalid choice. Exiting.")
-
-    # Example email (OLD CODE - NOW PART OF SCENARIOS)
-    # test_subject = "Test Email for Tagging Analysis - Schedule Request"
-    # test_body = (
-    #     "<p>Hello Team,</p>"
-    #     "<p>I would like to request a new appointment for next Tuesday at 3 PM.</p>"
-    #     "<p>Patient Name: John Doe<br>"
-    #     "DOB: 01/01/1980<br>"
-    #     "Reason: Follow-up consultation</p>"
-    #     "<p>Please let me know if this time is available.</p>"
-    #     "<p>Thanks,<br>"
-    #     "Test User</p>"
-    # )
-    # The sender can be any email, Front will create a contact for it.
-    # test_sender_email = "test.user@example.com"
-    # test_sender_name = "Test User (SDK)"
-    # For custom channels, the 'to' field is often the channel itself, or a generic address
-    # that the channel is configured to listen to.
-    # We will use the channel_id as part of the recipient handle or a placeholder.
-    # According to Front docs, for custom channel messages, you might not need a traditional "to" email.
-    # The webhook URL itself (FRONT_APP_WEBHOOK) is tied to the channel.
-    # The payload example for "Receive custom messages" (https://dev.frontapp.com/reference/receive-custom-messages)
-    # shows "to": [{ "handle": "support@example.com", "name": "Customer Support" }],
-    # It seems like 'to' refers to the recipient that the *external* sender sent the message to.
-    # In our case, this is the email address associated with the custom channel in Front.
-    # Let's assume there's an email address that represents this channel or inbox.
-    # If FRONT_CHANNEL_ID is `cha_...`, it's an ID. We likely need an email address.
-    # Let's use a generic email for now, this might need adjustment based on how the channel is set up in Front.
-    # test_to_email = f"channel-{FRONT_CHANNEL_ID}@example.com" # Placeholder, might need to be the actual channel email address
-
-    # if not FRONT_APP_WEBHOOK.endswith(f"/channels/{FRONT_CHANNEL_ID}/incoming_messages"):
-    #      print(f"Warning: FRONT_APP_WEBHOOK ({FRONT_APP_WEBHOOK}) does not seem to match the pattern for FRONT_CHANNEL_ID ({FRONT_CHANNEL_ID}).")
-    #      print("The webhook URL should typically be in the format: https://<your-front-instance>.api.frontapp.com/channels/<channel_id>/incoming_messages")
-
-
-    # send_email_to_front(
-    #     subject=test_subject,
-    #     body=test_body,
-    #     sender_email=test_sender_email,
-    #     sender_name=test_sender_name,
-    #     to_email=test_to_email # This is the email address that represents the channel in Front
-    # )
-
-    # print("\n--- Testing Autoresponse Scenario ---")
-    # test_subject_autoresponse = "Urgent Inquiry - Status of my results - PRE248509"
-    # test_body_autoresponse = (
-    #     "<p>Hello,</p>"
-    #     "<p>I am writing to check the status of my recent test results. My Patient ID is PRE248509.</p>"
-    #     "<p>Can you please provide an update or let me know when I can expect them?</p>"
-    #     "<p>Thank you for your prompt attention to this matter.</p>"
-    #     "<p>Sincerely,<br>"
-    #     "A. Patient</p>"
-    # )
-    # test_sender_email_autoresponse = "apatient.pre248509@example.com"
-    # test_sender_name_autoresponse = "A. Patient (Autoresponse Test)"
-
-    # send_email_to_front(
-    #     subject=test_subject_autoresponse,
-    #     body=test_body_autoresponse,
-    #     sender_email=test_sender_email_autoresponse,
-    #     sender_name=test_sender_name_autoresponse,
-    #     to_email=test_to_email
-    # )
-
-    # print("\n--- Another Email Example: Medical Records Request ---")
-    # test_subject_2 = "Urgent: Medical Records Request for Jane Smith"
-    # test_body_2 = (
-    #     "Dear Medical Records Department,\n\n"
-    #     "I am requesting a copy of the medical records for patient Jane Smith, DOB 05/15/1975.\n"
-    #     "The records are needed for an upcoming specialist appointment.\n\n"
-    #     "Please process this request urgently.\n\n"
-    #     "Thank you,\n"
-    #     "Dr. Emily Carter"
-    # )
-    # test_sender_email_2 = "dremily.carter@clinic.example.com"
-    # test_sender_name_2 = "Dr. Emily Carter"
-    #
-    # send_email_to_front(
-    #     subject=test_subject_2,
-    #     body=test_body_2,
-    #     sender_email=test_sender_email_2,
-    #     sender_name=test_sender_name_2,
-    #     to_email=test_to_email
-    # )
-    #
-    # print("\n--- Email with attachment placeholder (actual attachment sending requires multipart/form-data) ---")
-    # # Note: Sending actual attachments usually requires `multipart/form-data`
-    # # and the `requests` library usage would be different.
-    # # The Front "Receive custom messages" endpoint payload has an `attachments` field which expects
-    # # an array of objects with `filename`, `url` (if hosted elsewhere), or `content` (base64 encoded).
-    # # For simplicity, this script will just mention an attachment in the body.
-    # # To send actual attachment content, you'd typically use the `files` parameter in `requests.post`
-    # # or embed base64 content. The Front API also allows specifying a URL.
-    # # This example is for the JSON payload structure as per https://dev.frontapp.com/reference/receive-custom-messages
-    # # which shows an `attachments` array. Let's simulate that metadata part.
-    #
-    # payload_with_attachment_metadata = {
-    #     "sender": {
-    #         "handle": "attachment.test@example.com",
-    #         "name": "Attachment Tester"
-    #     },
-    #     "to": [{"handle": test_to_email}],
-    #     "subject": "Test Email with Attachment Info",
-    #     "body": "Please find the report attached.",
-    #     "options": {"archive": False},
-    #     "metadata": {
-    #         "thread_ref": f"test-thread-{uuid.uuid4()}",
-    #         "is_inbound": True,
-    #     },
-    #     "attachments": [
-    #         {
-    #             "filename": "report.pdf",
-    #             "content_type": "application/pdf",
-    #             # To send actual content, you would add:
-    #             # "content": "BASE64_ENCODED_CONTENT_HERE",
-    #             # Or to link to an existing file:
-    #             # "url": "http://example.com/report.pdf"
-    #             "size": 102400 # Optional: size in bytes
-    #         }
-    #     ]
-    # }
-    #
-    # print(f"Simulating email with attachment metadata to Front webhook: {FRONT_APP_WEBHOOK}")
-    # # print(f"Payload: {json.dumps(payload_with_attachment_metadata, indent=2)}")
-    #
-    # # # Uncomment to send the email with attachment metadata
-    # # # try:
-    # # #     response = requests.post(FRONT_APP_WEBHOOK, headers=headers, json=payload_with_attachment_metadata)
-    # # #     response.raise_for_status()
-    # # #     print("Email with attachment metadata sent successfully to Front.")
-    # # #     print(f"Response Status: {response.status_code}")
-    # # #     print(f"Response Body: {response.json()}")
-    # # # except requests.exceptions.RequestException as e:
-    # # #     print(f"Error sending email with attachment metadata to Front: {e}")
-    # # #     if e.response is not None:
-    # # #         print(f"Response Status: {e.response.status_code}")
-    # # #         print(f"Response Body: {e.response.text}")
 
     print("\nTest script finished.") 
