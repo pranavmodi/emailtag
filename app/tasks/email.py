@@ -86,7 +86,7 @@ def tag_email(email_id: str) -> Dict:
     db = SessionLocal()
     try:
         # Get email from database using synchronous CRUD
-        # logger.info("motherfucker sisterfucker")
+        logger.info("motherfucker sisterfucker")
         email_obj = email_crud_sync.get(db, id=email_uuid)
         if not email_obj:
             # logger.error(f"Email {email_id} not found for classification")
@@ -234,7 +234,7 @@ def tag_email(email_id: str) -> Dict:
 
         # --- Check for archiving before proceeding (if not split) --- 
         try:
-            logger.info(f"Checking if conversation {front_conversation_id} can be archived before tagging.")
+            logger.info(f"Checking if mofo conversation {front_conversation_id} can be archived before tagging.")
             # Note: check_and_archive_conversation is an async function
             # We need to run it in an event loop if called from a sync celery task
             async def _run_archive_check_async():
@@ -258,6 +258,7 @@ def tag_email(email_id: str) -> Dict:
 
         # Get conversation data
         conversation_data = get_conversation_text(front_conversation_id)
+        logger.info(f"got the conv data")
         if not conversation_data or not isinstance(conversation_data, dict):
             # logger.error(f"Failed to get conversation data for {front_conversation_id}")
             return {"status": "error", "message": "Failed to get conversation data"}
@@ -270,12 +271,13 @@ def tag_email(email_id: str) -> Dict:
         existing_tags_data = get_conversation_tags(front_conversation_id)
         if existing_tags_data:
             existing_tags = [tag.get('name') for tag in existing_tags_data if tag.get('name')]
-            # logger.info(f"Found existing tags for {front_conversation_id}: {existing_tags}")
+            logger.info(f"Found existing tags for {front_conversation_id}: {existing_tags}")
         else:
             existing_tags = []
             # logger.warning(f"Could not retrieve existing tags for {front_conversation_id} or none exist.")
 
         # Perform classification
+        logger.info(f"Starting classification for {front_conversation_id}...")
         tags_to_apply = classify_email_tags_hierarchical(
             front_conversation_id=front_conversation_id,
             conversation_text=conversation_text,

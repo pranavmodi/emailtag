@@ -173,17 +173,17 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
     """
     try:
         # Log all channels for debugging
-        try:
-            all_channels = list_all_channels()
-            logger.info("Attempting to list all Front channels for debugging purposes.")
-            if all_channels:
-                logger.info(f"Found {len(all_channels)} channels:")
-                for channel in all_channels:
-                    logger.info(f"  Channel ID: {channel.get('id')}, Name: {channel.get('name')}, Type: {channel.get('type')}, Address: {channel.get('address')}")
-            else:
-                logger.info("No channels returned or an error occurred while listing channels.")
-        except Exception as e_channels:
-            logger.error(f"Error listing Front channels: {e_channels}", exc_info=True)
+        # try:
+        #     all_channels = list_all_channels()
+        #     logger.info("Attempting to list all Front channels for debugging purposes.")
+        #     if all_channels:
+        #         logger.info(f"Found {len(all_channels)} channels:")
+        #         for channel in all_channels:
+        #             logger.info(f"  Channel ID: {channel.get('id')}, Name: {channel.get('name')}, Type: {channel.get('type')}, Address: {channel.get('address')}")
+        #     else:
+        #         logger.info("No channels returned or an error occurred while listing channels.")
+        # except Exception as e_channels:
+        #     logger.error(f"Error listing Front channels: {e_channels}", exc_info=True)
 
         conversation_data = get_conversation_text(conversation_id)
         if not conversation_data or not isinstance(conversation_data, dict):
@@ -228,7 +228,7 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
         logger.error(f"Error during initial data retrieval or bot check for {conversation_id}: {e}", exc_info=True)
         return False
     
-    logger.info(f"Checking for patient data for conversation {conversation_id}")
+    logger.info(f"Checking for mofo patient data for conversation {conversation_id}")
     patient_data_records = await pcd_crud.get_all_for_conversation(db, front_conversation_id=conversation_id)
     logger.info(f"Patient data records: {patient_data_records}")
 

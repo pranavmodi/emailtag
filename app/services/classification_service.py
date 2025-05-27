@@ -27,6 +27,9 @@ _openai_client: Optional[OpenAI] = None
 # Define top-level categories explicitly for the conflict check
 _TOP_LEVEL_CATEGORIES = ["Scheduling", "Medical Records & Images", "Accounts Receivable"]
 
+logger = logging.getLogger(__name__)
+
+
 def get_openai_client() -> OpenAI:
     """Initializes and returns the OpenAI client."""
     global _openai_client
@@ -42,38 +45,63 @@ def get_openai_client() -> OpenAI:
             raise
     return _openai_client
 
-@functools.lru_cache(maxsize=1)
-def load_classification_rules() -> str: # Keep for now, but it will fetch for ALL categories
+@functools.lru_cache(maxsize=32) # Cache for multiple categories
+def get_classification_rules_for_category(category_name: str) -> str:
     """
-    Load all active classification rules from the database for all top-level categories.
-    This is a placeholder and should ideally fetch rules for a specific category when needed.
+    Load active classification rules from the database for a specific category.
+
+    Args:
+        category_name (str): The name of the category for which to fetch rules.
 
     Returns:
-        str: The combined content of all active classification rules.
+        str: The combined content of active classification rules for the category.
+             Returns an empty string if no rules are found or an error occurs.
     """
     db = SessionLocal()
     try:
         rules_service = get_classification_rules_service(db)
-        # For now, get rules for all known top-level categories and combine them.
-        # This behavior mimics the old file-based approach but uses the DB.
-        # Ideally, this function would accept a category and fetch rules for that specific category.
+        category_rules = rules_service.get_combined_rules_content(category_name)
+        if not category_rules:
+            logger.warning(f"No specific classification rules found in DB for category: {category_name}")
+            return ""
+        # logger.info(f"Successfully loaded classification rules for category '{category_name}' from database.")
+        return category_rules
+    except Exception as e:
+        logger.exception(f"Error loading classification rules for category '{category_name}' from database: {e}")
+        return "" # Return empty string on error to allow flow to continue
+    finally:
+        db.close()
+
+@functools.lru_cache(maxsize=1)
+def load_initial_classification_rules() -> str:
+    """
+    Load all active classification rules from the database for all top-level categories
+    and combines them. This is used for the initial broad classification step.
+
+    Returns:
+        str: The combined content of all active classification rules for top-level categories.
+             Returns an empty string if no rules are found or an error occurs.
+    """
+    db = SessionLocal()
+    try:
+        rules_service = get_classification_rules_service(db)
         combined_rules_content = []
         for category_name in _TOP_LEVEL_CATEGORIES:
-            category_rules = rules_service.get_combined_rules_content(category_name)
-            if category_rules: # Add if there are rules for this category
-                combined_rules_content.append(f"--- RULES FOR CATEGORY: {category_name} ---")
-                combined_rules_content.append(category_rules)
+            # Directly use the service method to get content for each top-level category
+            category_specific_rules = rules_service.get_combined_rules_content(category_name)
+            if category_specific_rules:
+                # combined_rules_content.append(f"--- RULES FOR CATEGORY: {category_name} ---") # Section headers might be too verbose for LLM
+                combined_rules_content.append(category_specific_rules)
         
         if not combined_rules_content:
-            # logger.warning("No active classification rules found in the database for any top-level category.")
-            # Fallback to file if DB is empty, or raise error. For now, raise error.
-            raise ValueError("No classification rules found in DB for any top-level category.")
+            logger.warning("No active classification rules found in the database for ANY top-level category (for initial set).")
+            return ""
 
-        # logger.info("Successfully loaded classification rules from database.")
-        return "\n\n".join(combined_rules_content)
+        # logger.info("Successfully loaded initial set of classification rules from database.")
+        return "\\n\\n".join(combined_rules_content)
     except Exception as e:
-        # logger.exception(f"Error loading classification rules from database: {e}")
-        raise
+        logger.exception(f"Error loading initial set of classification rules from database: {e}")
+        return "" # Return empty string on error
     finally:
         db.close()
 
@@ -131,7 +159,7 @@ def classify_email_category(front_conversation_id: str, existing_tags: List[str]
     try:
         # logger.info(f"mofo Processing conversation {front_conversation_id}. Existing tags: {existing_tags}")
         client = get_openai_client()
-        rules = load_classification_rules() # Load rules (cached)
+        rules = load_initial_classification_rules() # Use initial rules for this non-hierarchical version
 
         # Fetch full conversation text from FrontApp using the ID
         try:
@@ -305,7 +333,8 @@ def _call_llm_for_classification(
     message_times: str, 
     options: List[str], 
     classification_level_name: str,
-    current_path: List[str] # For logging/context
+    current_path: List[str], # For logging/context
+    rules_text: Optional[str] # New parameter for classification rules
 ) -> Optional[str]:
     """
     Helper function to call the LLM for classifying at a specific hierarchy level.
@@ -318,26 +347,49 @@ def _call_llm_for_classification(
         options: List of valid classification choices for this level.
         classification_level_name: Name of the level (e.g., "Category", "Subcategory").
         current_path: List of parent categories for context.
+        rules_text: Optional string containing classification rules.
 
     Returns:
         The chosen option string, or None if classification fails or is invalid.
     """
-    options_list_str = "\\n- ".join(options)
-    prompt = (
-        f"You are classifying an email conversation. Based on the path so far [{' -> '.join(current_path)}], "
-        f"choose ONE of the following {classification_level_name} options:\\n- {options_list_str}\\n\\n"
-        f"Analyze the conversation and respond with ONLY the chosen {classification_level_name} name.\\n\\n"
-        f"Sender Information: {sender_info}\\n"
-        f"Message Timestamps: {message_times}\\n"
-        "Full Conversation Text (truncated):\\n"
-        '"""\\n'
-        f"{conversation_text[:4000]}...\\n"
-        '"""\\n\\n'
+    rules_section = ""
+    if rules_text:
+        rules_section = (
+            "For context, here are the general classification rules that might be relevant. "
+            "Focus on the rules that apply to your current task and the options provided.\\n\\n"
+            "--- START GENERAL CLASSIFICATION RULES ---\\n"
+            f"{rules_text}\\n"
+            "--- END GENERAL CLASSIFICATION RULES ---\\n\\n"
+        )
+
+    options_list_str = "\\n- " + "\\n- ".join(options) # Construct with escaped newlines separately
+
+    prompt_lines = [
+        f"You are classifying an email conversation at the '{classification_level_name}' level. ",
+        f"The classification path so far is: [{' -> '.join(current_path) if current_path else 'Top Level'}].\\n",
+        rules_section,
+        f"Based on the conversation text and the context provided, ",
+        f"choose EXACTLY ONE of the following options for '{classification_level_name}':{options_list_str}\\n",
+        f"Respond with ONLY the chosen option name.\\n",
+        f"Sender Information: {sender_info}",
+        f"Message Timestamps: {message_times}",
+        "Full Conversation Text (truncated for brevity):",
+        '"""',
+        f"{conversation_text[:4000]}...",
+        '"""',
         f"Predicted {classification_level_name}:"
-    )
+    ]
+    prompt = "\\n".join(filter(None, prompt_lines)) # Join non-empty lines, handles empty rules_section
+
+    # Log the prompt before sending to OpenAI
+    logger.debug("LLM classification prompt for level '%s' with path [%s]:\\n%s",
+                 classification_level_name, 
+                 ' -> '.join(current_path),
+                 prompt)
 
     try:
         # logger.info(f"Requesting classification for level '{classification_level_name}' with options: {options}")
+        logger.info('here the value of prompt is: %s', prompt)
         response = client.chat.completions.create(
             model=settings.OPENAI_MODEL_VERSION, # Use gpt-4o
             messages=[
@@ -471,6 +523,7 @@ def classify_email_tags_hierarchical(
 
     # --- BEGIN PRE-CHECK FOR CONFLICTING TOPICS ---    
     try:
+        logger.info('inside the function called check_for_conflicting_top_level_topics')
         has_conflicts = _check_for_conflicting_top_level_topics(
             client, conversation_text, sender_info, message_times
         )
@@ -487,17 +540,46 @@ def classify_email_tags_hierarchical(
         pass # Added pass
     # --- END PRE-CHECK FOR CONFLICTING TOPICS ---    
     
+    # --- LOAD INITIAL CLASSIFICATION RULES (for the very first top-level decision) ---
+    initial_global_rules: str = ""
     try:
+        initial_global_rules = load_initial_classification_rules()
+        logger.info('here the value of initial_global_rules is: %s', initial_global_rules)
+        # logger.info("Successfully loaded initial global classification rules for hierarchical process.")
+    except Exception as e: # Catch other potential errors during rule loading
+        logger.error(f"Failed to load initial global classification rules for hierarchical process: {e}. Proceeding without them for the first step if necessary.", exc_info=True)
+        initial_global_rules = "" # Proceed without rules, or an empty string
+
+    try:
+        # logger.info('wtf inside the function called classify_email_tags_hierarchical')
         current_level_dict = settings.EMAIL_CATEGORIES
         classification_path = [] # To track the path taken, e.g., ['Accounts Receivable', 'Liens']
         level_name = "Category" # Start with top level
 
         while isinstance(current_level_dict, dict):
+            # logger.info('here the value of current_level_dict is: %s', current_level_dict)
             options = list(current_level_dict.keys())
+            logger.info('here the value of options is: %s', options)
             if not options:
                 # logger.warning(f"Reached an empty dictionary level in EMAIL_CATEGORIES at path: {classification_path}. Stopping classification.")
                 # Return human review if we got part way, empty list if structure was bad from start
                 return ["AI: Human review required"] if classification_path else []
+
+            rules_to_pass_to_llm: str
+            if not classification_path: # Deciding among top-level categories
+                rules_to_pass_to_llm = initial_global_rules
+                # logger.info(f"Using initial global rules for top-level classification. Length: {len(rules_to_pass_to_llm)}")
+            else: # Deciding among sub-categories
+                parent_category_for_rules = classification_path[-1]
+                try:
+                    # logger.info(f"Fetching specific rules for parent category: {parent_category_for_rules}")
+                    specific_rules = get_classification_rules_for_category(parent_category_for_rules)
+                    rules_to_pass_to_llm = specific_rules # Will be "" if no rules found or error
+                    # logger.info(f"Using specific rules for '{parent_category_for_rules}'. Length: {len(rules_to_pass_to_llm)}")
+                except Exception as e: # Should be caught by get_classification_rules_for_category, but as safeguard:
+                    logger.error(f"Unexpected error fetching specific rules for {parent_category_for_rules} in main loop: {e}. Proceeding with no rules for this step.", exc_info=True)
+                    rules_to_pass_to_llm = ""
+
 
             # Call LLM to choose from the current level's keys
             chosen_option = _call_llm_for_classification(
@@ -507,7 +589,8 @@ def classify_email_tags_hierarchical(
                 message_times, 
                 options,
                 level_name,
-                classification_path
+                classification_path,
+                rules_to_pass_to_llm # Pass determined rules
             )
 
             if not chosen_option:
@@ -537,14 +620,27 @@ def classify_email_tags_hierarchical(
                 # Call LLM to choose ONE from the final list
                 # Use the last chosen option name as the level name for clarity
                 final_level_name = classification_path[-1] if classification_path else "Final Tag"
+                
+                rules_for_final_list_choice: str = ""
+                parent_category_for_list = chosen_option # The category whose items are in final_options
+                try:
+                    # logger.info(f"Fetching specific rules for final list choice under parent: {parent_category_for_list}")
+                    specific_rules_for_list = get_classification_rules_for_category(parent_category_for_list)
+                    rules_for_final_list_choice = specific_rules_for_list
+                    # logger.info(f"Using specific rules for list choice under '{parent_category_for_list}'. Length: {len(rules_for_final_list_choice)}")
+                except Exception as e: # Safeguard
+                    logger.error(f"Unexpected error fetching specific rules for final list choice under {parent_category_for_list}: {e}. Proceeding with no rules.", exc_info=True)
+                    rules_for_final_list_choice = ""
+
                 chosen_final_tag = _call_llm_for_classification(
                     client,
                     conversation_text,
                     sender_info,
                     message_times,
                     final_options, 
-                    final_level_name, # Ask it to choose a specific type of tag
-                    classification_path
+                    final_level_name, 
+                    classification_path,
+                    rules_for_final_list_choice # Pass determined rules
                 )
 
                 if chosen_final_tag:

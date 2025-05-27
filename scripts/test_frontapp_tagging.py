@@ -9,6 +9,7 @@ import time # Import time
 import smtplib # For sending emails via SMTP
 from email.mime.text import MIMEText # For creating email messages
 from email.mime.multipart import MIMEMultipart # For HTML emails
+import random # Import random for generating random invoice numbers
 
 # Load environment variables from .env file
 load_dotenv()
@@ -257,6 +258,21 @@ if __name__ == "__main__":
             ),
             "recipient_email": "ai.benchd@gmail.com" # Target recipient for SMTP
             # Sender email and password will be taken from .env
+        },
+        "8": {
+            "description": "ACTUAL EMAIL (SMTP) to ai.benchd@gmail.com via Zoho - MRI SCHEDULING",
+            "subject": "Urgent: MRI Appointment Request",
+            "body_html": (
+                "<p>Dear Scheduling Department,</p>"
+                "<p>I would like to request an MRI appointment as per my doctor's referral.</p>"
+                "<p>Please let me know your availability for the earliest possible date.</p>"
+                "<p>My preferred contact number is [Your Phone Number Here], or you can reply to this email.</p>"
+                "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}.</p>"
+                "<p>Thank you for your prompt assistance.</p>"
+                "<p>Sincerely,<br>"
+                "Prospective Patient (via Test Script)</p>"
+            ),
+            "recipient_email": "ai.benchd@gmail.com" # Target recipient for SMTP
         }
         # Add more scenarios here if needed
     }
@@ -279,8 +295,8 @@ if __name__ == "__main__":
     if selected_scenario:
         print(f"\n--- Sending: {selected_scenario['description']} ---")
         
-        if choice == "7":
-            # Scenario 7: Send an actual email via SMTP
+        if choice == "7" or choice == "8":
+            # Scenario 7 & 8: Send an actual email via SMTP
             if not all([SMTP_HOST, SMTP_PORT, SENDER_EMAIL, SENDER_PASSWORD]):
                 print("Critical Error: SMTP environment variables (SMTP_HOST, SMTP_PORT, SENDER_EMAIL, SENDER_PASSWORD) are not all set in .env.")
                 sys.exit(1)
@@ -292,9 +308,17 @@ if __name__ == "__main__":
                 sys.exit(1)
 
             subject = selected_scenario['subject']
-            # Replace placeholder in body with actual sender email for clarity
-            body_html = selected_scenario['body_html'].replace("{SENDER_EMAIL_PLACEHOLDER}", SENDER_EMAIL)
+            body_html = selected_scenario['body_html']
             recipient_email = selected_scenario['recipient_email']
+
+            if choice == "7": # Randomize invoice number for scenario 7
+                random_invoice_suffix = random.randint(10000, 99999)
+                random_invoice_number = f"INV-2024-{random_invoice_suffix}"
+                subject = subject.replace("#INV-2024-00123", f"#{random_invoice_number}")
+                body_html = body_html.replace("#INV-2024-00123", f"#{random_invoice_number}")
+
+            # Replace placeholder in body with actual sender email for clarity
+            body_html = body_html.replace("{SENDER_EMAIL_PLACEHOLDER}", SENDER_EMAIL)
 
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject
