@@ -30,6 +30,7 @@ _openai_client: Optional[OpenAI] = None
 
 # Define top-level categories explicitly for the conflict check and initial rule loading
 _TOP_LEVEL_CATEGORIES = ["Scheduling", "Medical Records & Images", "Accounts Receivable"]
+_TOP_LEVEL_RULES_CATEGORY_NAME = "ROOT" # Changed to use ROOT which contains top-level differentiation rules
 
 logger = logging.getLogger(__name__)
 
@@ -75,37 +76,68 @@ async def get_classification_rules_for_category(category_name: str) -> str:
     finally:
         await async_db_session.close()
 
-async def load_initial_classification_rules() -> str:
+async def load_rules_for_top_level_decision() -> str:
     """
-    Load all active classification rules from the database for all top-level categories
-    and combines them. This is used for the initial broad classification step.
-
-    Returns:
-        str: The combined content of all active classification rules for top-level categories.
-             Returns an empty string if no rules are found or an error occurs.
+    Load classification rules specifically for differentiating the top-level categories.
+    These rules are identified by a special category name `_TOP_LEVEL_RULES_CATEGORY_NAME`.
     """
     async_db_session: AsyncSession = AsyncSessionLocal()
     try:
-        rules_service = ClassificationRulesService(async_db_session) # Initialize with AsyncSession
+        rules_service = ClassificationRulesService(async_db_session)
+        # Fetch rules using the special name for top-level differentiation
+        top_level_rules = await rules_service.get_combined_rules_content(_TOP_LEVEL_RULES_CATEGORY_NAME)
+        
+        if not top_level_rules:
+            logger.warning(f"No specific rules found for top-level category differentiation (expected rules for '{_TOP_LEVEL_RULES_CATEGORY_NAME}'). An empty string will be used.")
+            return ""
+            
+        logger.info(f"Successfully loaded rules for top-level category differentiation from '{_TOP_LEVEL_RULES_CATEGORY_NAME}'. Length: {len(top_level_rules)}")
+        return top_level_rules
+    except Exception as e:
+        logger.exception(f"Error loading rules for top-level category differentiation from '{_TOP_LEVEL_RULES_CATEGORY_NAME}': {e}")
+        return "" # Return empty string on error to allow flow to continue
+    finally:
+        await async_db_session.close()
+
+async def load_combined_rules_for_all_top_categories() -> str: # Renamed to reflect its specific purpose
+    """
+    Load all active classification rules from the database for all top-level categories
+    (_TOP_LEVEL_CATEGORIES) and combines them. This is used for a broad initial classification step,
+    typically by non-hierarchical classifiers.
+    """
+    async_db_session: AsyncSession = AsyncSessionLocal()
+    try:
+        rules_service = ClassificationRulesService(async_db_session)
         combined_rules_content = []
-        for category_name in _TOP_LEVEL_CATEGORIES:
-            # Directly use the service method to get content for each top-level category
+        for category_name in _TOP_LEVEL_CATEGORIES: # Iterate through the defined top-level categories
             category_specific_rules = await rules_service.get_combined_rules_content(category_name)
             if category_specific_rules:
-                # combined_rules_content.append(f"--- RULES FOR CATEGORY: {category_name} ---") # Section headers might be too verbose for LLM
                 combined_rules_content.append(category_specific_rules)
         
         if not combined_rules_content:
-            logger.warning("No active classification rules found in the database for ANY top-level category (for initial set).")
+            logger.warning("No active classification rules found in the database for ANY of the main top-level categories.")
             return ""
 
-        # logger.info("Successfully loaded initial set of classification rules from database.")
+        logger.info("Successfully loaded and combined initial set of classification rules from database for all top-level categories.")
         return "\\n\\n".join(combined_rules_content)
     except Exception as e:
-        logger.exception(f"Error loading initial set of classification rules from database: {e}")
+        logger.exception(f"Error loading and combining initial set of classification rules from database: {e}")
         return "" # Return empty string on error
     finally:
         await async_db_session.close()
+
+
+# This function is KEPT as load_initial_classification_rules for now if it's directly referenced elsewhere,
+# but it now calls the more descriptively named load_combined_rules_for_all_top_categories.
+# Ideally, direct usages would be updated.
+async def load_initial_classification_rules() -> str:
+    """
+    DEPRECATED in favor of more specific rule loading functions.
+    This function loads combined rules from ALL top-level categories.
+    Retained for compatibility if `classify_email_category` still uses it.
+    """
+    logger.warning("DEPRECATION WARNING: load_initial_classification_rules() is called. Consider updating to a more specific rule loader.")
+    return await load_combined_rules_for_all_top_categories()
 
 
 def create_classification_prompt(rules: str, conversation_text: str, sender_info: str, message_times: str) -> str:
@@ -159,7 +191,9 @@ async def classify_email_category(front_conversation_id: str, existing_tags: Lis
     try:
         # logger.info(f"mofo Processing conversation {front_conversation_id}. Existing tags: {existing_tags}")
         client = get_openai_client()
-        rules = await load_initial_classification_rules() # Use initial rules for this non-hierarchical version
+        # The non-hierarchical classifier might need a broad set of rules.
+        # If it's meant to use only top-level differentiation rules, this should be load_rules_for_top_level_decision()
+        rules = await load_combined_rules_for_all_top_categories() 
 
         # Fetch full conversation text from FrontApp using the ID
         try:
@@ -540,15 +574,21 @@ async def classify_email_tags_hierarchical(
         pass # Added pass
     # --- END PRE-CHECK FOR CONFLICTING TOPICS ---    
     
-    # --- LOAD INITIAL CLASSIFICATION RULES (for the very first top-level decision) ---
-    initial_global_rules: str = ""
+    # --- LOAD RULES FOR TOP-LEVEL DECISION ---
+    rules_for_first_step: str = ""
     try:
-        initial_global_rules = await load_initial_classification_rules()
-        logger.info('here the value of initial_global_rules is: %s', initial_global_rules)
-        # logger.info("Successfully loaded initial global classification rules for hierarchical process.")
-    except Exception as e: # Catch other potential errors during rule loading
-        logger.error(f"Failed to load initial global classification rules for hierarchical process: {e}. Proceeding without them for the first step if necessary.", exc_info=True)
-        initial_global_rules = "" # Proceed without rules, or an empty string
+        rules_for_first_step = await load_rules_for_top_level_decision() # Use the new function for top-level rules
+        logger.info('Rules for top-level decision loaded. Length: %s', len(rules_for_first_step))
+        # Log content safely
+        if rules_for_first_step:
+            log_content = rules_for_first_step if len(rules_for_first_step) < 1000 else rules_for_first_step[:997] + "..."
+            logger.info('Content of rules_for_first_step: %s', log_content)
+        else:
+            logger.info('Content of rules_for_first_step is empty.')
+            
+    except Exception as e: # Catch errors during the rule loading itself
+        logger.error(f"Failed to load rules for top-level decision for conversation {front_conversation_id}: {e}. Proceeding without them.", exc_info=True)
+        rules_for_first_step = "" # Ensure it's an empty string if loading fails
 
     try:
         # logger.info('wtf inside the function called classify_email_tags_hierarchical')
@@ -567,17 +607,22 @@ async def classify_email_tags_hierarchical(
 
             rules_to_pass_to_llm: str
             if not classification_path: # Deciding among top-level categories
-                rules_to_pass_to_llm = initial_global_rules
-                # logger.info(f"Using initial global rules for top-level classification. Length: {len(rules_to_pass_to_llm)}")
+                rules_to_pass_to_llm = rules_for_first_step
+                logger.info(f"Using pre-loaded rules for top-level classification. Length: {len(rules_to_pass_to_llm)}")
             else: # Deciding among sub-categories
                 parent_category_for_rules = classification_path[-1]
                 try:
-                    # logger.info(f"Fetching specific rules for parent category: {parent_category_for_rules}")
+                    logger.info(f"Fetching specific rules for parent category: {parent_category_for_rules}")
                     specific_rules = await get_classification_rules_for_category(parent_category_for_rules)
-                    rules_to_pass_to_llm = specific_rules # Will be "" if no rules found or error
-                    # logger.info(f"Using specific rules for '{parent_category_for_rules}'. Length: {len(rules_to_pass_to_llm)}")
-                except Exception as e: # Should be caught by get_classification_rules_for_category, but as safeguard:
-                    logger.error(f"Unexpected error fetching specific rules for {parent_category_for_rules} in main loop: {e}. Proceeding with no rules for this step.", exc_info=True)
+                    rules_to_pass_to_llm = specific_rules 
+                    logger.info(f"Using specific rules for '{parent_category_for_rules}'. Length: {len(rules_to_pass_to_llm)}")
+                    if specific_rules:
+                        log_content = specific_rules if len(specific_rules) < 1000 else specific_rules[:997] + "..."
+                        logger.info(f"Content of specific rules for '{parent_category_for_rules}': {log_content}")
+                    else:
+                        logger.info(f"Content of specific rules for '{parent_category_for_rules}' is empty.")
+                except Exception as e: 
+                    logger.error(f"Unexpected error fetching specific rules for {parent_category_for_rules} in main loop for {front_conversation_id}: {e}. Proceeding with no rules for this step.", exc_info=True)
                     rules_to_pass_to_llm = ""
 
 
@@ -648,7 +693,7 @@ async def classify_email_tags_hierarchical(
                     # logger.info(f"Hierarchical classification complete for {front_conversation_id}. Path: {classification_path}. Final chosen tag from list: {chosen_final_tag}. Returning: {tags_to_return}")
                     return tags_to_return
                 else:
-                    # logger.warning(f"LLM failed to choose a final tag from the list {final_options} for conversation {front_conversation_id}. Path: {classification_path}")
+                    logger.warning(f"LLM failed to choose a final tag from the list {final_options} for conversation {front_conversation_id} (path: {classification_path}). Assigning 'AI: Human review required'.") # Enhanced log
                     # Failed after reaching a list, needs review
                     return ["AI: Human review required"]
 
@@ -672,7 +717,13 @@ async def classify_email_tags_hierarchical(
     except Exception as e:
         # logger.error(f"Unexpected error during hierarchical classification for conversation {front_conversation_id}: {e}", exc_info=True)
         # Unhandled exception, assume review needed if we made any progress
-        return ["AI: Human review required"] if classification_path else []
+        # Check if classification_path was populated to determine if it's a partial success / later failure
+        review_tag = ["AI: Human review required"]
+        if 'classification_path' in locals() and classification_path: # Check if classification_path exists and is not empty
+            logger.error(f"Unexpected error during hierarchical classification for {front_conversation_id} after path {classification_path}: {e}. Assigning '{review_tag[0]}'.", exc_info=True)
+        else:
+            logger.error(f"Unexpected error during hierarchical classification for {front_conversation_id} at initial stage: {e}. Assigning '{review_tag[0]}'.", exc_info=True)
+        return review_tag
 
 def _get_all_defined_tags(hierarchy: Dict[str, Any]) -> set:
     """Recursively extracts all string values and keys (that map to lists/strings) 
