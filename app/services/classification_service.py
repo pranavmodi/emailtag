@@ -11,12 +11,16 @@ import openai
 from openai import OpenAI
 import httpx
 import logging
+from sqlalchemy.orm import Session # Keep for classify_email_category if it still uses sync SessionLocal
+from sqlalchemy.ext.asyncio import AsyncSession
+from celery import Celery # Should not be in classification_service.py
+from celery.utils.log import get_task_logger # Should not be in classification_service.py
 
 from app.core.config import settings
 from app.services.frontapp_service import get_conversation_text
 from app.services.frontapp_service import remove_conversation_tags
-from app.services.classification_rules_service import get_classification_rules_service # New import
-from app.db.session import SessionLocal # New import for DB session
+from app.services.classification_rules_service import ClassificationRulesService # Corrected import
+from app.db.session import SessionLocal, AsyncSessionLocal # Keep SessionLocal if used elsewhere
 
 # Load environment variables if needed (though settings should handle this)
 load_dotenv()
@@ -24,7 +28,7 @@ load_dotenv()
 # Global OpenAI client (consider dependency injection for better testing)
 _openai_client: Optional[OpenAI] = None
 
-# Define top-level categories explicitly for the conflict check
+# Define top-level categories explicitly for the conflict check and initial rule loading
 _TOP_LEVEL_CATEGORIES = ["Scheduling", "Medical Records & Images", "Accounts Receivable"]
 
 logger = logging.getLogger(__name__)
@@ -45,8 +49,7 @@ def get_openai_client() -> OpenAI:
             raise
     return _openai_client
 
-@functools.lru_cache(maxsize=32) # Cache for multiple categories
-def get_classification_rules_for_category(category_name: str) -> str:
+async def get_classification_rules_for_category(category_name: str) -> str:
     """
     Load active classification rules from the database for a specific category.
 
@@ -57,10 +60,10 @@ def get_classification_rules_for_category(category_name: str) -> str:
         str: The combined content of active classification rules for the category.
              Returns an empty string if no rules are found or an error occurs.
     """
-    db = SessionLocal()
+    async_db_session: AsyncSession = AsyncSessionLocal()
     try:
-        rules_service = get_classification_rules_service(db)
-        category_rules = rules_service.get_combined_rules_content(category_name)
+        rules_service = ClassificationRulesService(async_db_session) # Initialize with AsyncSession
+        category_rules = await rules_service.get_combined_rules_content(category_name)
         if not category_rules:
             logger.warning(f"No specific classification rules found in DB for category: {category_name}")
             return ""
@@ -70,10 +73,9 @@ def get_classification_rules_for_category(category_name: str) -> str:
         logger.exception(f"Error loading classification rules for category '{category_name}' from database: {e}")
         return "" # Return empty string on error to allow flow to continue
     finally:
-        db.close()
+        await async_db_session.close()
 
-@functools.lru_cache(maxsize=1)
-def load_initial_classification_rules() -> str:
+async def load_initial_classification_rules() -> str:
     """
     Load all active classification rules from the database for all top-level categories
     and combines them. This is used for the initial broad classification step.
@@ -82,13 +84,13 @@ def load_initial_classification_rules() -> str:
         str: The combined content of all active classification rules for top-level categories.
              Returns an empty string if no rules are found or an error occurs.
     """
-    db = SessionLocal()
+    async_db_session: AsyncSession = AsyncSessionLocal()
     try:
-        rules_service = get_classification_rules_service(db)
+        rules_service = ClassificationRulesService(async_db_session) # Initialize with AsyncSession
         combined_rules_content = []
         for category_name in _TOP_LEVEL_CATEGORIES:
             # Directly use the service method to get content for each top-level category
-            category_specific_rules = rules_service.get_combined_rules_content(category_name)
+            category_specific_rules = await rules_service.get_combined_rules_content(category_name)
             if category_specific_rules:
                 # combined_rules_content.append(f"--- RULES FOR CATEGORY: {category_name} ---") # Section headers might be too verbose for LLM
                 combined_rules_content.append(category_specific_rules)
@@ -103,7 +105,7 @@ def load_initial_classification_rules() -> str:
         logger.exception(f"Error loading initial set of classification rules from database: {e}")
         return "" # Return empty string on error
     finally:
-        db.close()
+        await async_db_session.close()
 
 
 def create_classification_prompt(rules: str, conversation_text: str, sender_info: str, message_times: str) -> str:
@@ -142,15 +144,13 @@ def create_classification_prompt(rules: str, conversation_text: str, sender_info
 
     return prompt
 
-def classify_email_category(front_conversation_id: str, existing_tags: List[str]) -> Tuple[Optional[str], float]:
+async def classify_email_category(front_conversation_id: str, existing_tags: List[str]) -> Tuple[Optional[str], float]:
     """
     Classify an email conversation's category using predefined rules with OpenAI, based on its Front ID.
 
     Args:
         front_conversation_id (str): The Front conversation ID.
         existing_tags (List[str]): Existing tags associated with the conversation (if any).
-        sender_info (str): Information about the sender(s). TODO: Fetch this.
-        message_times (str): Timestamps or timing information. TODO: Fetch this.
 
     Returns:
         Tuple[Optional[str], float]: Predicted category name and confidence score (currently default 1.0).
@@ -159,7 +159,7 @@ def classify_email_category(front_conversation_id: str, existing_tags: List[str]
     try:
         # logger.info(f"mofo Processing conversation {front_conversation_id}. Existing tags: {existing_tags}")
         client = get_openai_client()
-        rules = load_initial_classification_rules() # Use initial rules for this non-hierarchical version
+        rules = await load_initial_classification_rules() # Use initial rules for this non-hierarchical version
 
         # Fetch full conversation text from FrontApp using the ID
         try:
@@ -496,7 +496,7 @@ def _check_for_conflicting_top_level_topics(
         # logger.error(f"Unexpected error during conflict check: {e}", exc_info=True)
         return False # Assume no conflict on other errors
 
-def classify_email_tags_hierarchical(
+async def classify_email_tags_hierarchical(
     front_conversation_id: str, 
     conversation_text: str, 
     sender_info: str, 
@@ -543,7 +543,7 @@ def classify_email_tags_hierarchical(
     # --- LOAD INITIAL CLASSIFICATION RULES (for the very first top-level decision) ---
     initial_global_rules: str = ""
     try:
-        initial_global_rules = load_initial_classification_rules()
+        initial_global_rules = await load_initial_classification_rules()
         logger.info('here the value of initial_global_rules is: %s', initial_global_rules)
         # logger.info("Successfully loaded initial global classification rules for hierarchical process.")
     except Exception as e: # Catch other potential errors during rule loading
@@ -573,7 +573,7 @@ def classify_email_tags_hierarchical(
                 parent_category_for_rules = classification_path[-1]
                 try:
                     # logger.info(f"Fetching specific rules for parent category: {parent_category_for_rules}")
-                    specific_rules = get_classification_rules_for_category(parent_category_for_rules)
+                    specific_rules = await get_classification_rules_for_category(parent_category_for_rules)
                     rules_to_pass_to_llm = specific_rules # Will be "" if no rules found or error
                     # logger.info(f"Using specific rules for '{parent_category_for_rules}'. Length: {len(rules_to_pass_to_llm)}")
                 except Exception as e: # Should be caught by get_classification_rules_for_category, but as safeguard:
@@ -625,7 +625,7 @@ def classify_email_tags_hierarchical(
                 parent_category_for_list = chosen_option # The category whose items are in final_options
                 try:
                     # logger.info(f"Fetching specific rules for final list choice under parent: {parent_category_for_list}")
-                    specific_rules_for_list = get_classification_rules_for_category(parent_category_for_list)
+                    specific_rules_for_list = await get_classification_rules_for_category(parent_category_for_list)
                     rules_for_final_list_choice = specific_rules_for_list
                     # logger.info(f"Using specific rules for list choice under '{parent_category_for_list}'. Length: {len(rules_for_final_list_choice)}")
                 except Exception as e: # Safeguard
@@ -752,6 +752,8 @@ def remove_conflicting_tags(
         # logger.info(f"Identified conflicting tags to remove for conversation {conversation_id}: {tags_to_remove}")
         
         # Call the Front service to remove these tags
+        # If remove_conversation_tags is or becomes async, it should be awaited.
+        # For now, assuming it's synchronous as per current function signature.
         success = remove_conversation_tags(conversation_id, tags_to_remove)
         return success
 
@@ -766,14 +768,18 @@ def remove_conflicting_tags(
 if __name__ == "__main__":
     # This testing block needs to be updated to work with conversation IDs
     # and potentially mock the get_conversation_text function.
+    # It also needs to be run in an asyncio event loop if calling async functions.
     # logging.basicConfig(level=logging.INFO) # Commented out logger
     # print("Testing classification service (requires update for conversation ID based testing)...")
     # Example test requires a valid Front Conversation ID and implemented get_conversation_text
-    # test_conversation_id = "conv_xxxxxx"
-    # test_tags = ["Urgent", "Patient Inquiry"]
-    # category, confidence = classify_email_category(test_conversation_id, test_tags)
-    # if category:
-    #     print(f"Classification Result for {test_conversation_id}: {category} ({confidence:.2f})")
-    # else:
-    #     print(f"Classification failed for {test_conversation_id}.")
+    # async def main_test():
+    #     test_conversation_id = "conv_xxxxxx"
+    #     test_tags = ["Urgent", "Patient Inquiry"]
+    #     category, confidence = await classify_email_category(test_conversation_id, test_tags)
+    #     if category:
+    #         print(f"Classification Result for {test_conversation_id}: {category} ({confidence:.2f})")
+    #     else:
+    #         print(f"Classification failed for {test_conversation_id}.")
+    # import asyncio
+    # asyncio.run(main_test())
     pass # Placeholder to avoid syntax error 

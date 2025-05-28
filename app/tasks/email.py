@@ -247,138 +247,153 @@ def tag_email(email_id: str) -> Dict:
             if was_archived:
                 logger.info(f"Conversation {front_conversation_id} was archived. Skipping auto-response and tagging.")
                 # Mark email as processed since archiving is a final state for this workflow path
-                email_crud_sync.mark_as_processed(db, email_id=email_uuid) 
-                return {"status": "success", "email_id": email_id, "message": "Conversation archived, no further action needed."}
+                email_crud_sync.mark_as_processed(db, email_id=email_uuid)
+                return {"status": "success_archived", "email_id": email_id}
             else:
-                logger.info(f"Conversation {front_conversation_id} not archived or archive check failed, proceeding with tagging/auto-response.")
-        except Exception as archive_exc:
-            logger.error(f"Error during archiving check for {front_conversation_id}: {archive_exc}", exc_info=True)
-            # Decide if you want to halt or proceed if archiving check fails. For now, proceeding.
-            logger.warning("Proceeding with tagging/auto-response despite archiving check error.")
+                logger.info(f"Conversation {front_conversation_id} not archived. Proceeding with auto-response and tagging.")
+        except Exception as e_archive_check:
+            logger.error(f"Error during pre-tagging archive check for {front_conversation_id}: {e_archive_check}", exc_info=True)
+            # Proceed with tagging if archive check fails
 
-        # Get conversation data
+        # Fetch conversation text for classification and auto-response (moved earlier)
         conversation_data = get_conversation_text(front_conversation_id)
-        logger.info(f"got the conv data")
-        if not conversation_data or not isinstance(conversation_data, dict):
-            # logger.error(f"Failed to get conversation data for {front_conversation_id}")
-            return {"status": "error", "message": "Failed to get conversation data"}
+        if not conversation_data or 'text' not in conversation_data:
+            logger.error(f"Could not retrieve conversation text for {front_conversation_id}. Cannot classify or auto-respond.")
+            email_crud_sync.mark_as_processed(db, email_id=email_uuid)
+            return {"status": "error", "message": "Failed to get conversation text"}
 
         conversation_text = conversation_data.get('text', '')
-        sender_info = ", ".join(map(str, conversation_data.get('senders', ['Unknown Sender'])))
-        message_times = ", ".join(map(str, conversation_data.get('timestamps', ['Unknown Timestamps'])))
+        raw_senders = conversation_data.get('senders', ['Unknown Sender'])
+        raw_timestamps = conversation_data.get('timestamps', ['Unknown Timestamps'])
+        
+        sender_info = ", ".join(map(str, raw_senders)) if raw_senders else "Unknown Sender"
+        message_times = ", ".join(map(str, raw_timestamps)) if raw_timestamps else "Unknown Timestamps"
 
-        # Get existing tags
-        existing_tags_data = get_conversation_tags(front_conversation_id)
-        if existing_tags_data:
-            existing_tags = [tag.get('name') for tag in existing_tags_data if tag.get('name')]
-            logger.info(f"Found existing tags for {front_conversation_id}: {existing_tags}")
-        else:
-            existing_tags = []
-            # logger.warning(f"Could not retrieve existing tags for {front_conversation_id} or none exist.")
+        if not conversation_text: # Check specifically for empty text after extraction
+            logger.warning(f"Received empty conversation text for Front conversation ID: {front_conversation_id}. Cannot classify or auto-respond meaningfully.")
+            # Decide if to proceed or mark as error. For now, let it proceed but it might lead to poor results.
+            # email_crud_sync.mark_as_processed(db, email_id=email_uuid)
+            # return {"status": "error", "message": "Empty conversation text"}
 
-        # Perform classification
-        logger.info(f"Starting classification for {front_conversation_id}...")
-        tags_to_apply = classify_email_tags_hierarchical(
-            front_conversation_id=front_conversation_id,
-            conversation_text=conversation_text,
-            sender_info=sender_info,
-            message_times=message_times
-        )
-
-        # Process auto-response if needed
+        # --- AUTO-RESPONSE CHECK BEFORE TAGGING ---
+        auto_response_processed = False
         try:
-            logger.info('gonna try to process autorespond')
+            logger.info(f"Checking for auto-response for conversation {front_conversation_id} before hierarchical tagging.")
 
             async def _run_autorespond_async():
-                async_session = AsyncSessionLocal()
+                nonlocal conversation_text # Make conversation_text available from outer scope
+                # process_autorespond is async and needs an async DB session
+                async_db_session = AsyncSessionLocal()
                 try:
-                    # Note: process_autorespond expects an AsyncSession.
-                    # The original 'db' in tag_email is a synchronous session.
-                    return await process_autorespond(async_session, front_conversation_id, conversation_text)
+                    return await process_autorespond(front_conversation_id, async_db_session, conversation_text) # Pass conversation_text
                 finally:
-                    await async_session.close()
+                    await async_db_session.close()
             
-            autorespond_sent = asyncio.run(_run_autorespond_async())
-            if autorespond_sent:
-                # logger.info(f"Auto-response sent for conversation {front_conversation_id}")
-                # Add auto-response tag to the list
-                tags_to_apply.append("AI: Auto-responded")
-            else:
-                pass
-        except Exception as e:
-            logger.error(f"Error processing auto-response for {front_conversation_id}: {e}", exc_info=True)
-            pass
+            auto_response_result = asyncio.run(_run_autorespond_async())
 
-        # Ensure tags are unique before proceeding
-        if tags_to_apply:
-            unique_tags_to_apply = list(dict.fromkeys(tags_to_apply))  # Preserve order while deduplicating
-            if len(unique_tags_to_apply) != len(tags_to_apply):
-                # logger.info(f"Removed duplicate tags. Original: {tags_to_apply}, Unique: {unique_tags_to_apply}")
-                tags_to_apply = unique_tags_to_apply
+            if auto_response_result and auto_response_result.get("status") == "auto_response_sent":
+                logger.info(f"Auto-response sent for conversation {front_conversation_id}. Auto-response details: {auto_response_result.get('details')}")
+                auto_response_processed = True # Indicates an auto-response was handled
 
-        if not tags_to_apply:
-            # logger.error(f"Classification failed for email {email_id}. No tags determined.")
-            return {"status": "error", "message": "Classification failed to determine tags"}
+                # Decide if further tagging should be skipped
+                # For now, assume if an auto-response is sent, we might still want to tag.
+                # If specific auto-responses should halt tagging, that logic would go here.
+                # For example, if auto_response_result['action'] == 'halt_processing':
+                # email_crud_sync.mark_as_processed(db, email_id=email_uuid)
+                # return {"status": "success_autoresponded_halted", "email_id": email_id, "details": auto_response_result.get('details')}
+                
+            elif auto_response_result and auto_response_result.get("status") == "no_auto_response_needed":
+                logger.info(f"No auto-response needed for conversation {front_conversation_id} based on rules.")
+            else: # Includes errors or unexpected status from auto-response
+                logger.warning(f"Auto-response processing for {front_conversation_id} did not result in a sent message or explicit 'no_auto_response_needed'. Result: {auto_response_result}")
 
-        # logger.info(f"Email {email_id} classified with tags: {tags_to_apply}")
+        except Exception as e_auto_respond:
+            logger.error(f"Error during auto-response check for {front_conversation_id}: {e_auto_respond}", exc_info=True)
+            # Proceed with tagging even if auto-response check fails
 
-        # --- Explicitly remove 'Human review required' tag if applying other tags --- 
-        human_review_tag = "AI: Human review required"
-        if tags_to_apply != [human_review_tag] and human_review_tag in existing_tags:
-            # logger.info(f"Attempting to remove '{human_review_tag}' tag before applying new tags: {tags_to_apply}")
-            try:
-                remove_conversation_tags(front_conversation_id, [human_review_tag])
-                # logger.info(f"Successfully removed '{human_review_tag}' tag for conversation {front_conversation_id}.")
-            except Exception as remove_hr_error:
-                # logger.error(f"Failed to remove '{human_review_tag}' tag for {front_conversation_id}: {remove_hr_error}. Proceeding anyway.")
-                pass
+        # Get current tags from Front (important for conflict resolution)
+        current_front_tags = get_conversation_tags(front_conversation_id)
+        if current_front_tags is None: # Indicates an API error
+            logger.warning(f"Failed to retrieve current tags for {front_conversation_id}. Proceeding without them for conflict check, but this is risky.")
+            current_front_tags = [] # Default to empty list to avoid crashing
 
-        # Remove conflicting tags before adding new ones
-        # logger.info(f"Attempting to remove other conflicting tags for {front_conversation_id} based on hierarchy.")
-        removal_success = remove_conflicting_tags(
-            conversation_id=front_conversation_id,
-            existing_tags=existing_tags,
-            new_tags=tags_to_apply,
-            hierarchy=settings.EMAIL_CATEGORIES
-        )
-        if not removal_success:
-            # logger.warning(f"Failed to remove conflicting tags for conversation {front_conversation_id}. Proceeding to add new tags anyway.")
-            pass
+        # Classify using the hierarchical service
+        # new_tags: List[str] = classify_email_tags_hierarchical(
+        #     front_conversation_id=front_conversation_id,
+        #     conversation_text=conversation_text,
+        #     sender_info=sender_info,
+        #     message_times=message_times
+        # )
+
+        new_tags: List[str] = [] # Initialize new_tags
+
+        async def _run_hierarchical_classification_async():
+            nonlocal new_tags # Allow modification of outer scope variable
+            new_tags = await classify_email_tags_hierarchical(
+                front_conversation_id=front_conversation_id,
+                conversation_text=conversation_text,
+                sender_info=sender_info,
+                message_times=message_times
+            )
+        
+        asyncio.run(_run_hierarchical_classification_async())
+
+
+        if not new_tags:
+            logger.warning(f"Hierarchical classification returned no tags for {front_conversation_id}. This might be an error or simply no classification found.")
+            # Potentially mark as processed or apply a default "needs review" tag if no tags are found.
+            # For now, just log and proceed (which means no tags will be applied if new_tags is empty).
+            # Consider if "AI: Human review required" should be applied by default if empty.
+            # Current behavior of classify_email_tags_hierarchical is to return it if ambiguous.
+            # If it's truly empty, it means a structural issue or failure at the very first step.
         else:
-            # logger.info(f"Successfully processed conflicting tag removal for {front_conversation_id}.")
-            pass
+            logger.info(f"Hierarchical classification for {front_conversation_id} resulted in tags: {new_tags}")
 
-        # Create and associate tags in database
-        db_tags = []
-        for tag_name in tags_to_apply:
-            db_tag = tag_crud_sync.get_or_create(db, name=tag_name)
-            db_tags.append(db_tag)
+            # Remove conflicting tags before applying new ones
+            # The EMAIL_CATEGORIES structure is needed for remove_conflicting_tags.
+            # It's part of settings, so can be accessed directly.
+            # Ensure settings are loaded where EMAIL_CATEGORIES is defined.
+            removed_conflicts = remove_conflicting_tags(
+                conversation_id=front_conversation_id,
+                existing_tags=current_front_tags,
+                new_tags=new_tags,
+                hierarchy=settings.EMAIL_CATEGORIES 
+            )
+            if not removed_conflicts:
+                logger.warning(f"Failed to remove conflicting tags for {front_conversation_id}. Proceeding to apply new tags anyway, but there might be redundant tags.")
 
-        # Associate tags with email
-        email_obj.tags = db_tags
-        db.commit()
+            # Apply new tags
+            apply_success = add_conversation_tags(front_conversation_id, new_tags)
+            if apply_success:
+                logger.info(f"Successfully applied tags {new_tags} to conversation {front_conversation_id}")
+                
+                # Store applied tags in the database
+                tag_objects = []
+                for tag_name in new_tags:
+                    tag_obj = tag_crud_sync.get_or_create_tag(db, name=tag_name)
+                    tag_objects.append(tag_obj)
+                
+                email_crud_sync.update_tags(db, db_obj=email_obj, tags=tag_objects)
+                logger.info(f"Updated tags in database for email {email_id}")
 
-        # Update tags in FrontApp
-        if email_obj.front_conversation_id:
-            try:
-                add_conversation_tags(
-                    email_obj.front_conversation_id,
-                    tags_to_apply
-                )
-                # logger.info(f"Successfully applied tags {tags_to_apply} to Front conversation {email_obj.front_conversation_id}")
-            except Exception as front_error:
-                # logger.error(f"Failed to update tags in Front for email {email_id}: {front_error}", exc_info=True)
-                pass
+            else:
+                logger.error(f"Failed to apply tags {new_tags} to conversation {front_conversation_id}")
+                # Update email status to reflect classification/tagging failure
+                email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="classification_failed", is_processed=True))
+                return {"status": "error", "message": "Failed to apply tags to Front conversation"}
 
-        # Mark email as processed
-        if email_obj.status != "split_off": # Only mark as processed if not already split off
-            email_crud_sync.mark_as_processed(db, email_id=email_uuid)
+        # Mark email as processed after attempting classification and tagging
+        final_status = "processed"
+        if auto_response_processed and new_tags:
+            final_status = "processed_autorespond_tagged"
+        elif auto_response_processed:
+            final_status = "processed_autorespond_only"
+        elif not new_tags: # No tags were determined or applied
+            final_status = "processed_no_tags_applied"
 
-        return {
-            "status": "success",
-            "email_id": email_id,
-            "applied_tags": tags_to_apply
-        }
+
+        email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_status, is_processed=True))
+        return {"status": "success", "email_id": email_id, "applied_tags": new_tags, "auto_response_status": auto_response_processed}
 
     except Exception as e:
         # logger.exception(f"Error classifying/tagging email {email_id}: {str(e)}")
