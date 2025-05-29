@@ -24,6 +24,12 @@ from scripts.populate_default_rules import (
     populate_hierarchical_rules
 )
 
+from app.services.hierarchical_rules_service import (
+    HierarchicalRulesService,
+    get_hierarchical_rules_service,
+)
+from app.models.hierarchical_classification_rule import HierarchicalClassificationRule # For type hinting if needed
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -52,25 +58,38 @@ templates = Jinja2Templates(directory="app/templates")
 @router.get("/rules", response_class=HTMLResponse, name="view_classification_rules_ui")
 async def view_rules_ui(
     request: Request, 
-    rules_service: ClassificationRulesService = Depends(get_classification_rules_service)
+    # Old service, comment out or remove if no longer used by this specific endpoint
+    # rules_service: ClassificationRulesService = Depends(get_classification_rules_service)
+    # New service for hierarchical rules
+    hierarchical_rules_service: HierarchicalRulesService = Depends(get_hierarchical_rules_service)
 ):
-    """Display the UI for managing classification rules."""
+    """Display the UI for managing classification rules. Now uses hierarchical rules."""
     try:
-        all_rules = await rules_service.get_all_rules(include_inactive=True)
-        all_categories = await rules_service.get_all_categories() # For a dropdown or similar
-        # logger.info(f"Fetched {len(all_rules)} rules for UI.")
+        # Fetch hierarchical rules. Decide if you want to include full rule content on the main page.
+        # For performance, if rules are very long, you might set include_rule_content=False
+        # and have a separate view/edit page that loads the full content.
+        # For now, let's assume we want it for the display.
+        all_hier_rules = await hierarchical_rules_service.get_all_hierarchical_rules(include_rule_content=True)
+        
+        # The concepts of 'all_categories' and 'top_level_categories' as previously fetched
+        # from the old ClassificationRulesService might need to be re-evaluated or removed
+        # if they don't directly apply or are sourced differently with the new table.
+        # For now, I will comment them out to avoid errors if they are not needed by the new template.
+        # all_categories = await rules_service.get_all_categories()
+        # top_level_categories = ["Scheduling", "Medical Records & Images", "Accounts Receivable"]
+
+        logger.info(f"Fetched {len(all_hier_rules)} hierarchical rules for UI.")
         return templates.TemplateResponse(
-            "classification_rules.html", 
+            "hierarchical_rules.html", # New template name
             {
                 "request": request, 
-                "rules": all_rules, 
-                "categories": all_categories,
-                "top_level_categories": ["Scheduling", "Medical Records & Images", "Accounts Receivable"] # Pass this for new rule creation
+                "rules": all_hier_rules, # Pass the new rules data
+                # "categories": all_categories, # Commented out
+                # "top_level_categories": top_level_categories # Commented out
             }
         )
     except Exception as e:
-        logger.error(f"Error fetching rules for UI: {e}", exc_info=True)
-        # You could return an error page or a simple HTML error
+        logger.error(f"Error fetching hierarchical rules for UI: {e}", exc_info=True)
         return HTMLResponse(content=f"<html><body><h1>Error loading rules: {e}</h1></body></html>", status_code=500)
 
 @router.post("/rules/add", name="add_classification_rule")
