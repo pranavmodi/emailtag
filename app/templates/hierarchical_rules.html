@@ -78,9 +78,7 @@
                         <td>{{ rule_item.created_at.strftime('%Y-%m-%d %H:%M:%S') if rule_item.created_at else 'N/A' }}</td>
                         <td>{{ rule_item.updated_at.strftime('%Y-%m-%d %H:%M:%S') if rule_item.updated_at else 'N/A' }}</td>
                         <td class="actions">
-                            <!-- Basic edit link - functionality needs to be implemented for hierarchical rules -->
-                            <!-- <a href="#">Edit</a> -->
-                            Edit (TBD)
+                            <a href="{{ url_for('edit_hierarchical_rule_ui', rule_id=rule_item.id) }}">Edit</a>
                         </td>
                     </tr>
                     {% endfor %}

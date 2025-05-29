@@ -4,11 +4,12 @@ import logging
 from typing import List
 import os # Added for path manipulation
 import asyncio # Added for to_thread
-from fastapi import APIRouter, Depends, HTTPException, Request, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, Path
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session # Keep Session for type hinting if used elsewhere, or remove if not
 from sqlalchemy.ext.asyncio import AsyncSession # Corrected import
+import uuid # For rule_id type conversion
 
 from app.db.session import get_db
 from app.services.classification_rules_service import (
@@ -269,3 +270,47 @@ async def revert_to_default_rules_endpoint(
         await db.rollback()
         back_url = request.url_for("view_classification_rules_ui")
         return HTMLResponse(content=f"<html><body><h1>Error reverting to default rules: {e}</h1><a href='{back_url}'>Back to rules</a></body></html>", status_code=500) 
+
+# --- Endpoints for Hierarchical Rules Edit --- 
+
+@router.get("/rules/edit_hierarchical/{rule_id}", response_class=HTMLResponse, name="edit_hierarchical_rule_ui")
+async def edit_hierarchical_rule_ui_form(
+    request: Request,
+    rule_id: uuid.UUID = Path(..., title="The ID of the hierarchical rule to edit"),
+    hierarchical_rules_service: HierarchicalRulesService = Depends(get_hierarchical_rules_service)
+):
+    """Display UI to edit a single hierarchical classification rule."""
+    rule = await hierarchical_rules_service.get_hierarchical_rule_by_id(rule_id)
+    if not rule:
+        raise HTTPException(status_code=404, detail=f"Hierarchical rule with ID {rule_id} not found")
+    return templates.TemplateResponse(
+        "edit_hierarchical_rule.html", 
+        {"request": request, "rule": rule}
+    )
+
+@router.post("/rules/update_hierarchical/{rule_id}", name="update_hierarchical_rule_form")
+async def handle_update_hierarchical_rule_form(
+    request: Request, 
+    rule_id: uuid.UUID = Path(..., title="The ID of the hierarchical rule to update"),
+    name: str = Form(...),
+    rule_content: str = Form(...),
+    hierarchical_rules_service: HierarchicalRulesService = Depends(get_hierarchical_rules_service)
+):
+    """Update an existing hierarchical rule via form submission."""
+    updated_rule = await hierarchical_rules_service.update_hierarchical_rule(
+        rule_id=rule_id, 
+        name=name, 
+        rule_content=rule_content
+    )
+    if not updated_rule:
+        # This could happen if the service returns None (e.g., rule not found during update attempt)
+        # Consider how the service signals this - raising an exception there might be cleaner.
+        # For now, assume service handles logging and we show a generic error or re-raise.
+        raise HTTPException(status_code=404, detail=f"Hierarchical rule with ID {rule_id} not found or failed to update.")
+    
+    # Redirect to the main rules UI page after updating
+    # The main rules UI is still named view_classification_rules_ui, which is fine.
+    return RedirectResponse(url=router.url_path_for("view_classification_rules_ui"), status_code=303)
+
+# These old endpoints still operate on the ClassificationRulesService and old table.
+# They would need to be refactored or removed if the old system is fully deprecated. 
