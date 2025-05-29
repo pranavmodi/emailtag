@@ -42,6 +42,70 @@ except ImportError as e:
     
     exit(1)
 
+async def show_all_rules_data():
+    """Fetches and prints all classification rules, excluding the 'content' field."""
+    print("\n" + "="*60)
+    print("FETCHING ALL RULE DATA (excluding content)")
+    print("="*60)
+    db_session: AsyncSession = AsyncSessionLocal()
+    try:
+        logger.info("Fetching all rules...")
+        from sqlalchemy import select
+        
+        # Select all columns explicitly, excluding 'content'
+        # This is more robust than selecting all and then deleting
+        # and also avoids loading the potentially large 'content' field into memory
+        stmt = select(
+            ClassificationRule.id,
+            ClassificationRule.category,
+            ClassificationRule.name,
+            ClassificationRule.description,
+            ClassificationRule.is_active,
+            ClassificationRule.version,
+            ClassificationRule.created_by,
+            ClassificationRule.updated_by,
+            ClassificationRule.created_at,
+            ClassificationRule.updated_at
+        )
+        result = await db_session.execute(stmt)
+        all_rules = result.all() # Fetches list of Row objects
+
+        if all_rules:
+            print(f"\nFound {len(all_rules)} rules. Displaying data (excluding content):")
+            print("-" * 80)
+            # Print headers based on the selected columns
+            headers = [
+                "ID", "Category", "Name", "Description", "Active", "Version", 
+                "Created By", "Updated By", "Created At", "Updated At"
+            ]
+            print(f"{headers[0]:<36} | {headers[1]:<25} | {headers[2]:<30} | {headers[3]:<40} | {headers[4]:<6} | {headers[5]:<7} | {headers[6]:<20} | {headers[7]:<20} | {headers[8]:<25} | {headers[9]:<25}")
+            print("-" * 250) # Adjust divider length
+
+            for rule_data in all_rules:
+                # Access by index as it's a Row object from a specific select
+                print(
+                    f"{str(rule_data[0]):<36} | "
+                    f"{rule_data[1]:<25} | "
+                    f"{rule_data[2]:<30} | "
+                    f"{str(rule_data[3] or 'N/A'):<40} | "
+                    f"{str(rule_data[4]):<6} | "
+                    f"{rule_data[5]:<7} | "
+                    f"{str(rule_data[6] or 'N/A'):<20} | "
+                    f"{str(rule_data[7] or 'N/A'):<20} | "
+                    f"{rule_data[8].strftime('%Y-%m-%d %H:%M:%S') if rule_data[8] else 'N/A':<25} | "
+                    f"{rule_data[9].strftime('%Y-%m-%d %H:%M:%S') if rule_data[9] else 'N/A':<25}"
+                )
+            print("-" * 250) # Adjust divider length
+        else:
+            print("\nNo rules found in the database.")
+
+    except Exception as e:
+        print(f"\n✗ An error occurred while fetching all rules data: {e}")
+        logger.exception("Full error details for show_all_rules_data:")
+    finally:
+        logger.info("Closing database session for show_all_rules_data...")
+        await db_session.close()
+
 async def show_rule_categories():
     print("\nInitializing database session...")
     db_session: AsyncSession = AsyncSessionLocal()
@@ -106,20 +170,53 @@ async def show_rule_categories():
         logger.info("Closing database session...")
         await db_session.close()
 
-if __name__ == "__main__":
+async def main_async():
+    """Main asynchronous function to run all script operations."""
     print("="*60)
     print("CLASSIFICATION RULES DATABASE INSPECTOR")
     print("="*60)
-    
-    try:
-        asyncio.run(show_rule_categories())
-    except RuntimeError as e:
-        if "cannot be called when another loop is running" in str(e):
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(show_rule_categories())
-        else:
-            raise
-    
+
+    await show_rule_categories()
+
+    # Separator for clarity in output
+    print("\n" + "="*60)
+    print("Transitioning to 'show_all_rules_data' function...")
+    # No need to print "Running 'show_all_rules_data' function..." here as the function itself prints a header
+
+    await show_all_rules_data()
+
     print("\n" + "="*60)
     print("Script completed.")
-    print("="*60) 
+    print("="*60)
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main_async())
+    except Exception as e:
+        # General exception handler for the main execution
+        # The RuntimeError for "cannot be called when another loop is running"
+        # should ideally not occur with a single asyncio.run(main_async())
+        # but keeping a general catch for other potential startup issues.
+        logger.error(f"An error occurred during script execution: {e}", exc_info=True)
+        # If specific handling for loop issues is still desired for some reason,
+        # it would need to be more carefully placed or re-evaluated.
+        # For now, a general catch is cleaner.
+        # if "cannot be called when another loop is running" in str(e):
+        #     # This block is less likely to be hit now
+        #     loop = asyncio.get_event_loop()
+        #     if loop.is_running():
+        #         # If a loop is running, schedule main_async
+        #         # This is a more complex scenario, usually means running inside another async context
+        #         logger.info("Detected a running event loop. Attempting to schedule main_async.")
+        #         # loop.create_task(main_async()) # This might not wait for completion
+        #         # Or, if this script is meant to be importable and run by another async manager:
+        #         # raise RuntimeError("Script designed to be run with asyncio.run(), but loop already running.")
+        #         pass # Deciding not to complexify, asyncio.run() should be the entry
+        #     else:
+        #         # If no loop is running but asyncio.run failed, this is unusual
+        #         loop.run_until_complete(main_async())
+        # else:
+        #     raise
+    
+# Removed the old __main__ block's separate try/excepts and print statements for completion,
+# as they are now handled within main_async or the single try/except here. 
