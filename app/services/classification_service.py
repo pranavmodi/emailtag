@@ -416,14 +416,14 @@ def _call_llm_for_classification(
     prompt = "\\n".join(filter(None, prompt_lines)) # Join non-empty lines, handles empty rules_section
 
     # Log the prompt before sending to OpenAI
-    logger.debug("LLM classification prompt for level '%s' with path [%s]:\\n%s",
-                 classification_level_name, 
-                 ' -> '.join(current_path),
-                 prompt)
+    # logger.debug("LLM classification prompt for level '%s' with path [%s]:\\n%s",
+    #              classification_level_name, 
+    #              ' -> '.join(current_path),
+    #              prompt)
 
     try:
-        # logger.info(f"Requesting classification for level '{classification_level_name}' with options: {options}")
-        logger.info('here the value of prompt is: %s', prompt)
+        # logger.info(f"Requesting LLM classification for level '{classification_level_name}' with {len(options)} options: {options}")
+        # logger.info('here the value of prompt is: %s', prompt)
         response = client.chat.completions.create(
             model=settings.OPENAI_MODEL_VERSION, # Use gpt-4o
             messages=[
@@ -435,21 +435,22 @@ def _call_llm_for_classification(
         )
         
         prediction = response.choices[0].message.content.strip().strip("'\"")
-        # logger.info(f"LLM prediction for {classification_level_name}: '{prediction}'")
+        logger.info(f"🤖 LLM PREDICTION for '{classification_level_name}' (path: [{' → '.join(current_path)}]): '{prediction}'")
 
         # Validate prediction against the provided options
         if prediction in options:
+            logger.info(f"✅ VALID prediction '{prediction}' accepted for level '{classification_level_name}'")
             return prediction
         else:
             # Attempt fuzzy matching or handle near misses? For now, strict match.
-            # logger.warning(f"LLM prediction '{prediction}' is not in the valid options: {options}. Classification failed at this level.")
+            logger.warning(f"❌ INVALID prediction '{prediction}' not in valid options {options} for level '{classification_level_name}'. Classification failed at this level.")
             return None
             
     except openai.APIError as e:
-        # logger.error(f"OpenAI API error during hierarchical classification: {e}", exc_info=True)
+        logger.error(f"OpenAI API error during hierarchical classification at level '{classification_level_name}': {e}", exc_info=True)
         return None
     except Exception as e:
-        # logger.error(f"Unexpected error during LLM call for hierarchical classification: {e}", exc_info=True)
+        logger.error(f"Unexpected error during LLM call for hierarchical classification at level '{classification_level_name}': {e}", exc_info=True)
         return None
 
 def _check_for_conflicting_top_level_topics(
@@ -495,7 +496,7 @@ def _check_for_conflicting_top_level_topics(
     )
 
     try:
-        # logger.info(f"Checking for conflicting top-level topics.")
+        logger.info(f"🔍 CONFLICT CHECK: Analyzing last {len(last_three_messages)} message(s) for conflicting top-level topics")
         
         # Log the prompt being sent for conflict check
         # logger.info(f"=== START CONFLICT CHECK PROMPT ===")
@@ -513,14 +514,16 @@ def _check_for_conflicting_top_level_topics(
         )
         
         prediction = response.choices[0].message.content.strip().strip("'\"").lower()
-        # logger.info(f"LLM conflict check response: '{prediction}'")
+        logger.info(f"🤖 CONFLICT CHECK PREDICTION: '{prediction}'")
 
         if prediction == 'yes':
+            # logger.info(f"✅ CONFLICT DETECTED: LLM identified conflicting top-level topics in recent messages")
             return True
         elif prediction == 'no':
+            # logger.info(f"✅ NO CONFLICT: LLM found no conflicting top-level topics in recent messages")
             return False
         else:
-            # logger.warning(f"LLM conflict check returned unexpected response: '{prediction}'. Assuming no conflict.")
+            logger.warning(f"❓ UNCLEAR CONFLICT RESPONSE: LLM returned unexpected response '{prediction}'. Assuming no conflict.")
             return False # Default to no conflict if response is unclear
             
     except openai.APIError as e:
@@ -529,6 +532,100 @@ def _check_for_conflicting_top_level_topics(
     except Exception as e:
         # logger.error(f"Unexpected error during conflict check: {e}", exc_info=True)
         return False # Assume no conflict on other errors
+
+async def get_rules_for_classification_step(
+    classification_path: List[str],
+    conversation_id: str
+) -> Tuple[str, str]:
+    """
+    Get the appropriate classification rules for the current step in the hierarchy.
+    
+    This function implements the core rule fetching logic:
+    - For top-level decisions (empty path): Uses ROOT category rules
+    - For intermediate decisions: Uses PRIMARY_CLASSIFICATION_RULES.{parent_category} rules
+    - Falls back to detailed rules if intermediate rules not found
+    
+    Args:
+        classification_path: List of parent categories chosen so far 
+                           - [] for top-level (choose between Scheduling, Medical Records, Accounts Receivable)
+                           - ["Accounts Receivable"] for intermediate (choose between Billing, Liens, etc.)
+                           - ["Accounts Receivable", "Liens"] for deeper levels
+        conversation_id: The conversation ID for logging purposes
+        
+    Returns:
+        Tuple[str, str]: (rules_content, rules_source_description)
+                        - rules_content: The actual rule text to pass to LLM
+                        - rules_source_description: Human-readable description of where rules came from
+                        
+    Examples:
+        >>> await get_rules_for_classification_step([], "conv_123")
+        ("Classification Rules for Email Categories...", "ROOT (top-level differentiation)")
+        
+        >>> await get_rules_for_classification_step(["Accounts Receivable"], "conv_123") 
+        ("Sub-Classification Rules for Accounts Receivable...", "PRIMARY_CLASSIFICATION_RULES.Accounts Receivable")
+    """
+    if not classification_path:
+        # Top-level decision: choose between main categories
+        try:
+            rules_content = await load_rules_for_top_level_decision()
+            if rules_content:
+                logger.info(f"✅ Using TOP-LEVEL rules (ROOT) for conversation {conversation_id}. Length: {len(rules_content)}")
+                return rules_content, "ROOT (top-level differentiation)"
+            else:
+                logger.warning(f"⚠️  No top-level rules found for conversation {conversation_id}")
+                return "", "none (no top-level rules found)"
+        except Exception as e:
+            logger.error(f"Error loading top-level rules for conversation {conversation_id}: {e}", exc_info=True)
+            return "", "error (top-level rules fetch failed)"
+    
+    else:
+        # Intermediate/sub-category decision: choose between sub-categories of the parent
+        parent_category = classification_path[-1]
+        # logger.info(f"Fetching intermediate-level rules for parent category: {parent_category}")
+        
+        try:
+            # Primary method: Get rules from PRIMARY_CLASSIFICATION_RULES category 
+            # with rule name matching the parent category
+            async_db_session: AsyncSession = AsyncSessionLocal()
+            try:
+                rules_service = ClassificationRulesService(async_db_session)
+                
+                # Get all rules from PRIMARY_CLASSIFICATION_RULES category
+                primary_rules = await rules_service.get_active_rules_by_category("PRIMARY_CLASSIFICATION_RULES")
+                
+                # Find the specific rule with name matching our parent category
+                matching_rule = None
+                for rule in primary_rules:
+                    if rule.name == parent_category:
+                        matching_rule = rule
+                        break
+                
+                if matching_rule:
+                    rules_content = f"# {matching_rule.name}\n{matching_rule.content}"
+                    rules_source = f"PRIMARY_CLASSIFICATION_RULES.{matching_rule.name}"
+                    logger.info(f"✅ Using INTERMEDIATE rules (PRIMARY_CLASSIFICATION_RULES.{matching_rule.name}) for conversation {conversation_id}. Length: {len(rules_content)}")
+                    return rules_content, rules_source
+                else:
+                    logger.warning(f"❌ No rule found in PRIMARY_CLASSIFICATION_RULES category with name '{parent_category}'")
+                    
+            finally:
+                await async_db_session.close()
+            
+            # Fallback method: Try direct category lookup
+            # logger.info(f"Falling back to direct category lookup for '{parent_category}'")
+            fallback_rules = await get_classification_rules_for_category(parent_category)
+            if fallback_rules:
+                logger.warning(f"⚠️  Using FALLBACK detailed rules from '{parent_category}' for conversation {conversation_id} - these may contain sub-sub-category rules")
+                return fallback_rules, f"fallback:{parent_category} (detailed rules)"
+            
+            # No rules found
+            logger.warning(f"⚠️  No rules found for '{parent_category}' using any method. Proceeding without rules.")
+            return "", "none (no intermediate rules found)"
+            
+        except Exception as e:
+            logger.error(f"Unexpected error fetching intermediate-level rules for {parent_category} in conversation {conversation_id}: {e}", exc_info=True)
+            return "", "error (intermediate rules fetch failed)"
+
 
 async def classify_email_tags_hierarchical(
     front_conversation_id: str, 
@@ -557,12 +654,12 @@ async def classify_email_tags_hierarchical(
 
     # --- BEGIN PRE-CHECK FOR CONFLICTING TOPICS ---    
     try:
-        logger.info('inside the function called check_for_conflicting_top_level_topics')
+        # logger.info('inside the function called check_for_conflicting_top_level_topics')
         has_conflicts = _check_for_conflicting_top_level_topics(
             client, conversation_text, sender_info, message_times
         )
         if has_conflicts:
-            # logger.warning(f"Conflicting top-level topics detected by LLM for conversation {front_conversation_id}. Assigning 'AI: Human review required'.")
+            logger.info(f"🚫 CONFLICT DETECTED: Multiple top-level topics found for conversation {front_conversation_id}. Assigning human review.")
             return ["AI: Human review required"]
         else:
             # logger.info(f"No conflicting top-level topics detected. Proceeding with hierarchical classification for {front_conversation_id}.")
@@ -573,22 +670,6 @@ async def classify_email_tags_hierarchical(
         # For now, let's proceed, but this could be changed to return Human Review Required.
         pass # Added pass
     # --- END PRE-CHECK FOR CONFLICTING TOPICS ---    
-    
-    # --- LOAD RULES FOR TOP-LEVEL DECISION ---
-    rules_for_first_step: str = ""
-    try:
-        rules_for_first_step = await load_rules_for_top_level_decision() # Use the new function for top-level rules
-        logger.info('Rules for top-level decision loaded. Length: %s', len(rules_for_first_step))
-        # Log content safely
-        if rules_for_first_step:
-            log_content = rules_for_first_step if len(rules_for_first_step) < 1000 else rules_for_first_step[:997] + "..."
-            logger.info('Content of rules_for_first_step: %s', log_content)
-        else:
-            logger.info('Content of rules_for_first_step is empty.')
-            
-    except Exception as e: # Catch errors during the rule loading itself
-        logger.error(f"Failed to load rules for top-level decision for conversation {front_conversation_id}: {e}. Proceeding without them.", exc_info=True)
-        rules_for_first_step = "" # Ensure it's an empty string if loading fails
 
     try:
         # logger.info('wtf inside the function called classify_email_tags_hierarchical')
@@ -599,32 +680,24 @@ async def classify_email_tags_hierarchical(
         while isinstance(current_level_dict, dict):
             # logger.info('here the value of current_level_dict is: %s', current_level_dict)
             options = list(current_level_dict.keys())
-            logger.info('here the value of options is: %s', options)
+            # logger.info('here the value of options is: %s', options)
             if not options:
                 # logger.warning(f"Reached an empty dictionary level in EMAIL_CATEGORIES at path: {classification_path}. Stopping classification.")
                 # Return human review if we got part way, empty list if structure was bad from start
                 return ["AI: Human review required"] if classification_path else []
 
-            rules_to_pass_to_llm: str
-            if not classification_path: # Deciding among top-level categories
-                rules_to_pass_to_llm = rules_for_first_step
-                logger.info(f"Using pre-loaded rules for top-level classification. Length: {len(rules_to_pass_to_llm)}")
-            else: # Deciding among sub-categories
-                parent_category_for_rules = classification_path[-1]
-                try:
-                    logger.info(f"Fetching specific rules for parent category: {parent_category_for_rules}")
-                    specific_rules = await get_classification_rules_for_category(parent_category_for_rules)
-                    rules_to_pass_to_llm = specific_rules 
-                    logger.info(f"Using specific rules for '{parent_category_for_rules}'. Length: {len(rules_to_pass_to_llm)}")
-                    if specific_rules:
-                        log_content = specific_rules if len(specific_rules) < 1000 else specific_rules[:997] + "..."
-                        logger.info(f"Content of specific rules for '{parent_category_for_rules}': {log_content}")
-                    else:
-                        logger.info(f"Content of specific rules for '{parent_category_for_rules}' is empty.")
-                except Exception as e: 
-                    logger.error(f"Unexpected error fetching specific rules for {parent_category_for_rules} in main loop for {front_conversation_id}: {e}. Proceeding with no rules for this step.", exc_info=True)
-                    rules_to_pass_to_llm = ""
-
+            # Get rules for this classification step
+            rules_to_pass_to_llm, rules_source = await get_rules_for_classification_step(
+                classification_path, 
+                front_conversation_id
+            )
+            
+            # Log rules information
+            # logger.info(f"Using rules from: {rules_source}")
+            if rules_to_pass_to_llm and not rules_source.startswith("fallback:"):
+                # log_content = rules_to_pass_to_llm if len(rules_to_pass_to_llm) < 500 else rules_to_pass_to_llm[:497] + "..."
+                # logger.info(f"Content preview: {log_content}")
+                pass
 
             # Call LLM to choose from the current level's keys
             chosen_option = _call_llm_for_classification(
@@ -639,11 +712,12 @@ async def classify_email_tags_hierarchical(
             )
 
             if not chosen_option:
-                # logger.warning(f"LLM failed to classify at level '{level_name}' with options {options} for conversation {front_conversation_id}. Path: {classification_path}")
+                logger.warning(f"LLM failed to classify at level '{level_name}' with options {options} for conversation {front_conversation_id}. Path: {classification_path}")
                 # Return human review if we got part way, empty list if failed at first level
                 return ["AI: Human review required"] if classification_path else []
 
-            # logger.info(f"Classification level '{level_name}' chose: '{chosen_option}' for conversation {front_conversation_id}")
+            logger.info(f"📍 CLASSIFICATION STEP: Level '{level_name}' chose '{chosen_option}' for conversation {front_conversation_id}")
+            # logger.info(f"🔄 CLASSIFICATION PATH UPDATE: {classification_path} → {classification_path + [chosen_option]}")
             classification_path.append(chosen_option)
             
             # Get the value associated with the chosen option to determine next step
@@ -651,14 +725,16 @@ async def classify_email_tags_hierarchical(
 
             if isinstance(next_level, dict):
                 # Drill down to the next level
+                # logger.info(f"📂 HIERARCHY: Drilling down into dict for '{chosen_option}' - found {len(next_level)} sub-options: {list(next_level.keys())}")
                 current_level_dict = next_level
                 level_name = chosen_option # Use the chosen key as the next level name for prompts
             elif isinstance(next_level, list):
                 # Reached a list. Need to ask the LLM to CHOOSE ONE tag from this list.
+                # logger.info(f"📋 HIERARCHY: Reached list level under '{chosen_option}' with {len(next_level)} options: {next_level}")
                 final_options = [tag for tag in next_level if isinstance(tag, str) and tag] # Filter out non-strings/empty
                 
                 if not final_options:
-                    # logger.warning(f"Reached a list level, but it contains no valid string tags. Path: {classification_path}. Stopping classification.")
+                    logger.warning(f"Reached a list level, but it contains no valid string tags. Path: {classification_path}. Stopping classification.")
                     # Treat as failure after partial success
                     return ["AI: Human review required"]
 
@@ -666,16 +742,13 @@ async def classify_email_tags_hierarchical(
                 # Use the last chosen option name as the level name for clarity
                 final_level_name = classification_path[-1] if classification_path else "Final Tag"
                 
-                rules_for_final_list_choice: str = ""
-                parent_category_for_list = chosen_option # The category whose items are in final_options
-                try:
-                    # logger.info(f"Fetching specific rules for final list choice under parent: {parent_category_for_list}")
-                    specific_rules_for_list = await get_classification_rules_for_category(parent_category_for_list)
-                    rules_for_final_list_choice = specific_rules_for_list
-                    # logger.info(f"Using specific rules for list choice under '{parent_category_for_list}'. Length: {len(rules_for_final_list_choice)}")
-                except Exception as e: # Safeguard
-                    logger.error(f"Unexpected error fetching specific rules for final list choice under {parent_category_for_list}: {e}. Proceeding with no rules.", exc_info=True)
-                    rules_for_final_list_choice = ""
+                # Get rules for the final list choice using the abstracted function
+                rules_for_final_list_choice, final_rules_source = await get_rules_for_classification_step(
+                    classification_path,  # This will use the current path to get rules for the chosen option
+                    front_conversation_id
+                )
+                
+                # logger.info(f"Using rules for final list choice from: {final_rules_source}")
 
                 chosen_final_tag = _call_llm_for_classification(
                     client,
@@ -690,7 +763,7 @@ async def classify_email_tags_hierarchical(
 
                 if chosen_final_tag:
                     tags_to_return = [chosen_final_tag]
-                    # logger.info(f"Hierarchical classification complete for {front_conversation_id}. Path: {classification_path}. Final chosen tag from list: {chosen_final_tag}. Returning: {tags_to_return}")
+                    logger.info(f"🎯 FINAL RESULT: Hierarchical classification complete for {front_conversation_id}. FULL PATH: {' → '.join(classification_path + [chosen_final_tag])}. RETURNING TAGS: {tags_to_return}")
                     return tags_to_return
                 else:
                     logger.warning(f"LLM failed to choose a final tag from the list {final_options} for conversation {front_conversation_id} (path: {classification_path}). Assigning 'AI: Human review required'.") # Enhanced log
@@ -702,7 +775,7 @@ async def classify_email_tags_hierarchical(
                 final_tag = next_level
                 
                 tags_to_return = [final_tag] # New way: Only leaf node
-                # logger.info(f"Hierarchical classification complete for {front_conversation_id}. Path: {classification_path}. Final string tag: {final_tag}. Returning: {tags_to_return}")
+                logger.info(f"🎯 FINAL RESULT: Hierarchical classification complete for {front_conversation_id}. FULL PATH: {' → '.join(classification_path + [final_tag])}. RETURNING TAGS: {tags_to_return}")
                 return tags_to_return
             else:
                 # Unexpected structure
