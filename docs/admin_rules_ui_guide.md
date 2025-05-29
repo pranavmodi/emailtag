@@ -10,7 +10,7 @@ The UI interacts with the `hierarchical_classification_rules` table in the datab
 
 The Admin Rules UI is accessible at the following URL:
 
-*   **`/rules`**
+*   **`/admin/rules`**
 
 ## 3. Understanding the Rules Table Display
 
