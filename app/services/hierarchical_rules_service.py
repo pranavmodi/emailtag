@@ -37,6 +37,17 @@ class HierarchicalRulesService:
         result = await self.db.execute(stmt)
         return result.scalars().first()
 
+    async def get_rule_by_hierarchical_category(self, category_key: str) -> Optional[HierarchicalClassificationRule]:
+        """Get a single hierarchical rule by its category key (e.g., "ROOT", "ROOT_SCHEDULING_RX")."""
+        stmt = select(HierarchicalClassificationRule).where(HierarchicalClassificationRule.category == category_key)
+        result = await self.db.execute(stmt)
+        rule = result.scalars().first()
+        if rule:
+            logger.debug(f"Found rule for category_key: {category_key}, Name: {rule.name}")
+        else:
+            logger.warning(f"No rule found for category_key: {category_key}")
+        return rule
+
     async def update_hierarchical_rule(
         self,
         rule_id: uuid.UUID,

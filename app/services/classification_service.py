@@ -22,6 +22,10 @@ from app.services.frontapp_service import remove_conversation_tags
 from app.services.classification_rules_service import ClassificationRulesService # Corrected import
 from app.db.session import SessionLocal, AsyncSessionLocal # Keep SessionLocal if used elsewhere
 
+# New service for hierarchical rules
+from app.services.hierarchical_rules_service import HierarchicalRulesService, get_hierarchical_rules_service
+from app.models.hierarchical_classification_rule import HierarchicalClassificationRule # For type hinting
+
 # Load environment variables if needed (though settings should handle this)
 load_dotenv()
 
@@ -76,208 +80,161 @@ async def get_classification_rules_for_category(category_name: str) -> str:
     finally:
         await async_db_session.close()
 
+async def get_hierarchical_rule_prompt_by_category(hierarchical_category_key: str) -> Optional[str]:
+    """
+    Load a specific hierarchical classification rule (LLM prompt) from the database.
+
+    Args:
+        hierarchical_category_key (str): The hierarchical category key (e.g., "ROOT", "ROOT_SCHEDULING").
+
+    Returns:
+        Optional[str]: The LLM prompt template, or None if not found.
+    """
+    async_db_session: AsyncSession = AsyncSessionLocal()
+    try:
+        rules_service = HierarchicalRulesService(async_db_session)
+        rule_obj = await rules_service.get_rule_by_hierarchical_category(hierarchical_category_key) # Assuming this method will be added to service
+        if not rule_obj:
+            logger.warning(f"No hierarchical rule found in DB for category key: {hierarchical_category_key}")
+            return None
+        logger.info(f"Successfully loaded hierarchical rule for category key '{hierarchical_category_key}'.")
+        return rule_obj.rule # This is the LLM prompt template
+    except Exception as e:
+        logger.exception(f"Error loading hierarchical rule for category key '{hierarchical_category_key}': {e}")
+        return None
+    finally:
+        await async_db_session.close()
+
 async def load_rules_for_top_level_decision() -> str:
     """
-    Load classification rules specifically for differentiating the top-level categories.
-    These rules are identified by a special category name `_TOP_LEVEL_RULES_CATEGORY_NAME`.
+    Load classification rule prompt for differentiating the top-level categories.
+    This corresponds to the "ROOT" category in the hierarchical_classification_rules table.
     """
-    async_db_session: AsyncSession = AsyncSessionLocal()
-    try:
-        rules_service = ClassificationRulesService(async_db_session)
-        # Fetch rules using the special name for top-level differentiation
-        top_level_rules = await rules_service.get_combined_rules_content(_TOP_LEVEL_RULES_CATEGORY_NAME)
-        
-        if not top_level_rules:
-            logger.warning(f"No specific rules found for top-level category differentiation (expected rules for '{_TOP_LEVEL_RULES_CATEGORY_NAME}'). An empty string will be used.")
-            return ""
-            
-        logger.info(f"Successfully loaded rules for top-level category differentiation from '{_TOP_LEVEL_RULES_CATEGORY_NAME}'. Length: {len(top_level_rules)}")
-        return top_level_rules
-    except Exception as e:
-        logger.exception(f"Error loading rules for top-level category differentiation from '{_TOP_LEVEL_RULES_CATEGORY_NAME}': {e}")
-        return "" # Return empty string on error to allow flow to continue
-    finally:
-        await async_db_session.close()
+    prompt_template = await get_hierarchical_rule_prompt_by_category("ROOT")
+    if prompt_template:
+        logger.info(f"Successfully loaded rule prompt for top-level category differentiation (ROOT). Length: {len(prompt_template)}")
+        return prompt_template
+    else:
+        logger.warning(f"No rule prompt found for top-level category differentiation (expected rule for category 'ROOT'). An empty string will be used.")
+        return ""
 
-async def load_combined_rules_for_all_top_categories() -> str: # Renamed to reflect its specific purpose
+# This function's purpose is now to fetch the ROOT rules, as it's used by the non-hierarchical classifier.
+async def load_combined_rules_for_all_top_categories() -> str:
     """
-    Load all active classification rules from the database for all top-level categories
-    (_TOP_LEVEL_CATEGORIES) and combines them. This is used for a broad initial classification step,
-    typically by non-hierarchical classifiers.
+    Loads the rule prompt from the 'ROOT' category, which is used for classifying
+    among the main top-level categories.
+    This is used by the classify_email_category function (non-hierarchical initial classification).
     """
-    async_db_session: AsyncSession = AsyncSessionLocal()
-    try:
-        rules_service = ClassificationRulesService(async_db_session)
-        combined_rules_content = []
-        for category_name in _TOP_LEVEL_CATEGORIES: # Iterate through the defined top-level categories
-            category_specific_rules = await rules_service.get_combined_rules_content(category_name)
-            if category_specific_rules:
-                combined_rules_content.append(category_specific_rules)
-        
-        if not combined_rules_content:
-            logger.warning("No active classification rules found in the database for ANY of the main top-level categories.")
-            return ""
-
-        logger.info("Successfully loaded and combined initial set of classification rules from database for all top-level categories.")
-        return "\\n\\n".join(combined_rules_content)
-    except Exception as e:
-        logger.exception(f"Error loading and combining initial set of classification rules from database: {e}")
-        return "" # Return empty string on error
-    finally:
-        await async_db_session.close()
+    logger.info("Attempting to load 'ROOT' rules for broad top-category classification.")
+    return await load_rules_for_top_level_decision()
 
 
-# This function is KEPT as load_initial_classification_rules for now if it's directly referenced elsewhere,
-# but it now calls the more descriptively named load_combined_rules_for_all_top_categories.
-# Ideally, direct usages would be updated.
-async def load_initial_classification_rules() -> str:
-    """
-    DEPRECATED in favor of more specific rule loading functions.
-    This function loads combined rules from ALL top-level categories.
-    Retained for compatibility if `classify_email_category` still uses it.
-    """
-    logger.warning("DEPRECATION WARNING: load_initial_classification_rules() is called. Consider updating to a more specific rule loader.")
-    return await load_combined_rules_for_all_top_categories()
+async def load_initial_classification_rules() -> str: 
+    """DEPRECATED. Use load_rules_for_top_level_decision() or specific hierarchical lookups."""
+    logger.warning("DEPRECATION WARNING: load_initial_classification_rules() is called. It now loads 'ROOT' rules.")
+    return await load_rules_for_top_level_decision()
 
 
 def create_classification_prompt(rules: str, conversation_text: str, sender_info: str, message_times: str) -> str:
-    """
-    Create a prompt instructing the LLM to classify using the provided rules.
+    # This function is now less relevant if 'rules' is the full prompt template.
+    # The classify_email_category (non-hierarchical) might still use it if 'rules' is just rule text.
+    # However, if load_combined_rules_for_all_top_categories returns a full prompt template, this needs adjustment.
+    # For now, let's assume the 'rules' passed to this specific function might still be older style text.
+    # If 'rules' becomes a prompt template, this function needs to inject content into it.
 
-    Args:
-        rules (str): The classification rules.
-        conversation_text (str): Full text content of the conversation.
-        sender_info (str): Information about the sender(s).
-        message_times (str): Timestamps or timing information for the messages.
+    # IF `rules` is a prompt template like the ones from hierarchical_classification_rules:
+    if "{{EMAIL_CONTENT_PLACEHOLDER}}" in rules:
+        prompt = rules.replace("{{EMAIL_CONTENT_PLACEHOLDER}}", conversation_text)
+        # Potentially add sender_info and message_times if placeholders exist or append them.
+        # For now, just basic replacement.
+        # This part needs careful review based on how `classify_email_category` uses it.
+        # logger.warning("create_classification_prompt received a prompt template. Performing basic injection.")
+        # A more robust solution would be to clearly define if `classify_email_category` uses templates or raw rules.
+        # Appending for now, but this is a bit of a hack if the template is self-contained.
+        additional_context = f"\n\nSender Information: {sender_info}\nMessage Timestamps: {message_times}\n"
+        # Find the "Chosen Option:" or a similar marker to append before it, or just append at the end.
+        # This is very brittle. Better to update `classify_email_category`'s prompting.
+        # For this pass, I'll keep original logic for `classify_email_category` and assume it gets different 'rules'.
+        pass # Reverting to original logic for now, will be addressed if classify_email_category is updated.
 
-    Returns:
-        str: Formatted prompt for the LLM.
-    """
-    # Ensure content doesn't break the prompt structure if it contains triple quotes
-    safe_content = conversation_text.replace('"""', '" \"" ') # Add space to break sequence
 
-    # Construct the prompt carefully to avoid syntax errors
+    # Original logic (assuming 'rules' is not a full template here):
+    safe_content = conversation_text.replace('"""', '""" ') # Add space to break sequence
     prompt = (
         "You are an expert email classifier. Your task is to classify the following email *conversation* "
         "into one of these categories: Scheduling, Medical Records & Images, Accounts Receivable.\n\n"
         "Use the following rules to make your classification. Respond with ONLY the category name.\n\n"
         "--- START CLASSIFICATION RULES ---\n"
-        f"{rules}\n"
+        f"{rules}\n" # This 'rules' is the issue if it's a full template.
         "--- END CLASSIFICATION RULES ---\n\n"
         "Now, classify this conversation:\n\n"
         f"Sender Information: {sender_info}\n"
         f"Message Timestamps: {message_times}\n"
         "Full Conversation Text (newest messages might be at the top or bottom depending on source):\n"
-        '"""\n' # Start of triple quotes for content
+        '"""'
         f"{safe_content[:4000]}...\n"
-        '"""\n\n' # End of triple quotes for content
-        "Predicted Category:"
+        '"""'
+        "\n\nPredicted Category:"
     )
-
     return prompt
 
 async def classify_email_category(front_conversation_id: str, existing_tags: List[str]) -> Tuple[Optional[str], float]:
     """
     Classify an email conversation's category using predefined rules with OpenAI, based on its Front ID.
-
-    Args:
-        front_conversation_id (str): The Front conversation ID.
-        existing_tags (List[str]): Existing tags associated with the conversation (if any).
-
-    Returns:
-        Tuple[Optional[str], float]: Predicted category name and confidence score (currently default 1.0).
-                                      Returns (None, 0.0) on failure.
+    This is the NON-HIERARCHICAL classifier. It now uses the 'ROOT' rule prompt.
     """
     try:
-        # logger.info(f"mofo Processing conversation {front_conversation_id}. Existing tags: {existing_tags}")
         client = get_openai_client()
-        # The non-hierarchical classifier might need a broad set of rules.
-        # If it's meant to use only top-level differentiation rules, this should be load_rules_for_top_level_decision()
-        rules = await load_combined_rules_for_all_top_categories() 
+        
+        # This now fetches the 'ROOT' prompt template from hierarchical_classification_rules
+        llm_prompt_template = await load_combined_rules_for_all_top_categories() 
 
-        # Fetch full conversation text from FrontApp using the ID
-        try:
-            conversation_data = get_conversation_text(front_conversation_id)
-            if not conversation_data or not isinstance(conversation_data, dict) or 'text' not in conversation_data:
-                 # logger.warning(f"Received incomplete or invalid conversation data for Front conversation ID: {front_conversation_id}. Cannot classify.")
-                 return None, 0.0
-
-            conversation_text = conversation_data.get('text', '')
-            raw_senders = conversation_data.get('senders', ['Unknown Sender'])
-            raw_timestamps = conversation_data.get('timestamps', ['Unknown Timestamps'])
-            
-            sender_info = ", ".join(map(str, raw_senders)) if raw_senders else "Unknown Sender"
-            message_times = ", ".join(map(str, raw_timestamps)) if raw_timestamps else "Unknown Timestamps"
-
-            if not conversation_text:
-                # logger.warning(f"Received empty conversation text for Front conversation ID: {front_conversation_id}. Cannot classify.")
-                return None, 0.0
-
-        except Exception as fetch_error:
-            # logger.error(f"Failed to fetch or process conversation data for Front conversation ID {front_conversation_id}: {fetch_error}", exc_info=True)
+        if not llm_prompt_template:
+            logger.error(f"Failed to load ROOT prompt template for non-hierarchical classification of {front_conversation_id}. Cannot classify.")
             return None, 0.0
-            
-        # Create prompt using the rules and the full conversation text
-        prompt = create_classification_prompt(rules, conversation_text, sender_info, message_times)
 
-        # Log the complete prompt for debugging
-        # logger.info(f"=== START CLASSIFICATION PROMPT (Conversation ID: {front_conversation_id}) ===")
-        # logger.info(f"Conversation Text Length: {len(conversation_text)} characters")
-        # # logger.info(f"Existing Tags: {existing_tags}") # Removed as per request
-        # logger.info(f"Sender Info: {sender_info}")
-        # logger.info(f"Message Times: {message_times}")
-        # Avoid logging potentially very long prompts fully, log snippet or just key info
-        # # logger.info("Prompt (truncated):")
-        # # logger.info(prompt[:500] + "...")
-        # Log the full prompt for debugging:
+        conversation_data = get_conversation_text(front_conversation_id)
+        if not conversation_data or not isinstance(conversation_data, dict) or 'text' not in conversation_data:
+             return None, 0.0
+        conversation_text = conversation_data.get('text', '')
+        raw_senders = conversation_data.get('senders', ['Unknown Sender'])
+        raw_timestamps = conversation_data.get('timestamps', ['Unknown Timestamps'])
+        sender_info = ", ".join(map(str, raw_senders)) if raw_senders else "Unknown Sender"
+        message_times = ", ".join(map(str, raw_timestamps)) if raw_timestamps else "Unknown Timestamps"
+        if not conversation_text:
+            return None, 0.0
 
-        # # logger.info("Full Prompt:")
-        # # logger.info(prompt)
-        # # logger.info(f"=== END CLASSIFICATION PROMPT (Conversation ID: {front_conversation_id}) ===")
+        # Inject content into the fetched 'ROOT' prompt template
+        # The ROOT template expects {{EMAIL_CONTENT_PLACEHOLDER}}
+        # It also implicitly lists the top-level categories as options.
+        final_llm_prompt = llm_prompt_template.replace("{{EMAIL_CONTENT_PLACEHOLDER}}", conversation_text)
+        # Note: The ROOT prompt template should already instruct to choose from top-level categories.
+        # Any additional context like sender_info, message_times would need placeholders in the DB prompt if desired.
 
-        # Get model version from environment or use default
         model_version = settings.OPENAI_MODEL_VERSION
-
-        # Get classification from OpenAI
-        # logger.info(f"Requesting classification from OpenAI model: {model_version} using predefined rules.")
         response = client.chat.completions.create(
             model=model_version,
             messages=[
-                {"role": "system", "content": "You are an expert email classifier following specific rules. Respond with ONLY the category name: Scheduling, Medical Records & Images, or Accounts Receivable."},
-                {"role": "user", "content": prompt}
+                # The system message can be simpler now as the main instructions are in the user prompt from DB
+                {"role": "system", "content": "You are an expert email classifier. Follow the instructions in the user message carefully."},
+                {"role": "user", "content": final_llm_prompt}
             ],
             temperature=0.0,
-            max_tokens=20
+            max_tokens=20 # Max_tokens might need adjustment based on category name length
         )
 
-        # Extract prediction and clean it up
-        prediction = response.choices[0].message.content.strip()
-        # Remove any surrounding quotes (single or double)
-        prediction = prediction.strip("'").strip('"')
-        # logger.info(f"Received classification from OpenAI: {prediction}")
-
-        # Basic validation: check if prediction is one of the expected categories
-        valid_categories = ["Scheduling", "Medical Records & Images", "Accounts Receivable"]
+        prediction = response.choices[0].message.content.strip().strip("'\"")
+        
+        valid_categories = _TOP_LEVEL_CATEGORIES # Defined at the top of the file
         if prediction not in valid_categories:
-            # logger.warning(f"OpenAI returned an unexpected or invalid category: '{prediction}'. It might be formatted incorrectly or be outside the expected set. Returning None.")
+            logger.warning(f"OpenAI returned an unexpected or invalid category: '{prediction}' during non-hierarchical classification. Expected one of {valid_categories}. It might be formatted incorrectly or be outside the expected set. Returning None.")
             return None, 0.0
 
-        # Confidence score (still default 1.0 as rules-based might not provide logprobs)
         confidence = 1.0
-
         return prediction, confidence
 
-    except FileNotFoundError as e:
-        # logger.error(f"Classification rules file error for conversation {front_conversation_id}: {e}")
-        return None, 0.0
-    except ValueError as e:  # Catch ValueError from load_classification_rules if path not set
-        # logger.error(f"Configuration error during classification for conversation {front_conversation_id}: {e}")
-        return None, 0.0
-    except openai.APIError as e:
-        # logger.error(f"OpenAI API error during classification for conversation {front_conversation_id}: {e}", exc_info=True)
-        return None, 0.0
     except Exception as e:
-        # logger.error(f"Unexpected error during email classification for conversation {front_conversation_id}: {e}", exc_info=True)
+        logger.error(f"Unexpected error during non-hierarchical email classification for {front_conversation_id}: {e}", exc_info=True)
         return None, 0.0
 
 def classify_email_subcategory(front_conversation_id: str, top_level_category: str, conversation_text: str, sender_info: str, message_times: str) -> Tuple[Optional[str], float]:
@@ -294,6 +251,7 @@ def classify_email_subcategory(front_conversation_id: str, top_level_category: s
     Returns:
         Tuple[Optional[str], float]: Predicted subcategory name and confidence score
     """
+    logger.warning("DEPRECATION WARNING: classify_email_subcategory is called. This function may not align with the new hierarchical rule system.")
     try:
         client = get_openai_client()
         
@@ -323,19 +281,12 @@ def classify_email_subcategory(front_conversation_id: str, top_level_category: s
             f"Sender Information: {sender_info}\n"
             f"Message Timestamps: {message_times}\n"
             "Full Conversation Text:\n"
-            '"""\n'
+            '"""'
             f"{conversation_text[:4000]}...\n"
-            '"""\n\n'
-            "Predicted Subcategory:"
+            '"""'
+            "\n\nPredicted Subcategory:"
         )
 
-        # logger.info(f"=== START SUBCATEGORY CLASSIFICATION PROMPT (Conversation ID: {front_conversation_id}) ===")
-        # logger.info(f"Top-level Category: {top_level_category}")
-        # # logger.info(f"Available Subcategories (Raw Map): {subcategory_map}") # Log raw map if needed
-        # logger.info(f"Subcategories presented to LLM: {subcategories_list_str}")
-        # logger.info("=== END SUBCATEGORY CLASSIFICATION PROMPT ===")
-
-        # Get classification from OpenAI
         response = client.chat.completions.create(
             model=settings.OPENAI_MODEL_VERSION,
             messages=[
@@ -343,108 +294,59 @@ def classify_email_subcategory(front_conversation_id: str, top_level_category: s
                 {"role": "user", "content": prompt}
             ],
             temperature=0.0,
-            max_tokens=20 # Keep max_tokens low for single word/phrase response
+            max_tokens=20 
         )
 
-        prediction = response.choices[0].message.content.strip()
-        prediction = prediction.strip("'").strip('"')
-        
-        # Validate prediction against the extracted list of valid subcategories
+        prediction = response.choices[0].message.content.strip().strip("'\"")
         if prediction not in valid_subcategories:
-            # logger.warning(f"Invalid or unexpected subcategory prediction '{prediction}' for category {top_level_category}. Expected one of: {valid_subcategories}")
             return None, 0.0
 
         return prediction, 1.0
 
     except Exception as e:
-        # logger.error(f"Error in subcategory classification for conversation {front_conversation_id}: {e}", exc_info=True)
+        logger.error(f"Error in subcategory classification for conversation {front_conversation_id}: {e}", exc_info=True)
         return None, 0.0
 
 def _call_llm_for_classification(
     client: OpenAI, 
     conversation_text: str, 
-    sender_info: str, 
-    message_times: str, 
-    options: List[str], 
-    classification_level_name: str,
-    current_path: List[str], # For logging/context
-    rules_text: Optional[str] # New parameter for classification rules
+    # sender_info, message_times are not directly used if prompt_template has placeholders for them
+    # and they are injected before this call, or if template doesn't use them.
+    # For now, the DB prompt template only has {{EMAIL_CONTENT_PLACEHOLDER}}
+    llm_prompt_template: str, # This is the full prompt template from the DB
+    classification_level_name: str, # For logging
+    current_path: List[str] # For logging
 ) -> Optional[str]:
     """
-    Helper function to call the LLM for classifying at a specific hierarchy level.
-
-    Args:
-        client: OpenAI client.
-        conversation_text: The email text.
-        sender_info: Sender information string.
-        message_times: Timestamp information string.
-        options: List of valid classification choices for this level.
-        classification_level_name: Name of the level (e.g., "Category", "Subcategory").
-        current_path: List of parent categories for context.
-        rules_text: Optional string containing classification rules.
-
-    Returns:
-        The chosen option string, or None if classification fails or is invalid.
+    Helper function to call the LLM using a pre-fetched and pre-formatted prompt template.
+    It injects the conversation text into the placeholder.
     """
-    rules_section = ""
-    if rules_text:
-        rules_section = (
-            "For context, here are the general classification rules that might be relevant. "
-            "Focus on the rules that apply to your current task and the options provided.\\n\\n"
-            "--- START GENERAL CLASSIFICATION RULES ---\\n"
-            f"{rules_text}\\n"
-            "--- END GENERAL CLASSIFICATION RULES ---\\n\\n"
-        )
-
-    options_list_str = "\\n- " + "\\n- ".join(options) # Construct with escaped newlines separately
-
-    prompt_lines = [
-        f"You are classifying an email conversation at the '{classification_level_name}' level. ",
-        f"The classification path so far is: [{' -> '.join(current_path) if current_path else 'Top Level'}].\\n",
-        rules_section,
-        f"Based on the conversation text and the context provided, ",
-        f"choose EXACTLY ONE of the following options for '{classification_level_name}':{options_list_str}\\n",
-        f"Respond with ONLY the chosen option name.\\n",
-        f"Sender Information: {sender_info}",
-        f"Message Timestamps: {message_times}",
-        "Full Conversation Text (truncated for brevity):",
-        '"""',
-        f"{conversation_text[:4000]}...",
-        '"""',
-        f"Predicted {classification_level_name}:"
-    ]
-    prompt = "\\n".join(filter(None, prompt_lines)) # Join non-empty lines, handles empty rules_section
-
-    # Log the prompt before sending to OpenAI
-    # logger.debug("LLM classification prompt for level '%s' with path [%s]:\\n%s",
-    #              classification_level_name, 
-    #              ' -> '.join(current_path),
-    #              prompt)
+    if "{{EMAIL_CONTENT_PLACEHOLDER}}" not in llm_prompt_template:
+        logger.error(f"Prompt template for level '{classification_level_name}' (Path: {current_path}) is missing EMAIL_CONTENT_PLACEHOLDER. Cannot proceed.")
+        return None
+    
+    final_llm_prompt = llm_prompt_template.replace("{{EMAIL_CONTENT_PLACEHOLDER}}", conversation_text)
 
     try:
-        # logger.info(f"Requesting LLM classification for level '{classification_level_name}' with {len(options)} options: {options}")
-        # logger.info('here the value of prompt is: %s', prompt)
+        # The system message can be very generic as instructions are in the user prompt.
         response = client.chat.completions.create(
-            model=settings.OPENAI_MODEL_VERSION, # Use gpt-4o
+            model=settings.OPENAI_MODEL_VERSION,
             messages=[
-                {"role": "system", "content": f"You are an expert email classifier. Respond with ONLY the single most appropriate option from the provided list for {classification_level_name}."},
-                {"role": "user", "content": prompt}
+                {"role": "system", "content": "You are an expert email classifier. Follow the instructions in the user message carefully and respond only with the chosen option name."},
+                {"role": "user", "content": final_llm_prompt}
             ],
             temperature=0.0,
-            max_tokens=50 # Allow slightly longer tokens for potentially longer tag names
+            max_tokens=50 
         )
         
         prediction = response.choices[0].message.content.strip().strip("'\"")
         logger.info(f"🤖 LLM PREDICTION for '{classification_level_name}' (path: [{' → '.join(current_path)}]): '{prediction}'")
 
-        # Validate prediction against the provided options
-        if prediction in options:
-            logger.info(f"✅ VALID prediction '{prediction}' accepted for level '{classification_level_name}'")
-            return prediction
-        else:
-            # Attempt fuzzy matching or handle near misses? For now, strict match.
-            logger.warning(f"❌ INVALID prediction '{prediction}' not in valid options {options} for level '{classification_level_name}'. Classification failed at this level.")
-            return None
+        # Validation of prediction against options must happen *after* this call,
+        # in the calling function (classify_email_tags_hierarchical), as this function
+        # no longer knows the 'options' directly. It only knows it got a prediction.
+        # The calling function will compare `prediction` with `current_level_dict.keys()` or list items.
+        return prediction
             
     except openai.APIError as e:
         logger.error(f"OpenAI API error during hierarchical classification at level '{classification_level_name}': {e}", exc_info=True)
@@ -535,96 +437,44 @@ def _check_for_conflicting_top_level_topics(
 
 async def get_rules_for_classification_step(
     classification_path: List[str],
-    conversation_id: str
-) -> Tuple[str, str]:
+    conversation_id: str # For logging
+) -> Tuple[str, str]: # (llm_prompt_template, rules_source_description)
     """
-    Get the appropriate classification rules for the current step in the hierarchy.
-    
-    This function implements the core rule fetching logic:
-    - For top-level decisions (empty path): Uses ROOT category rules
-    - For intermediate decisions: Uses PRIMARY_CLASSIFICATION_RULES.{parent_category} rules
-    - Falls back to detailed rules if intermediate rules not found
-    
-    Args:
-        classification_path: List of parent categories chosen so far 
-                           - [] for top-level (choose between Scheduling, Medical Records, Accounts Receivable)
-                           - ["Accounts Receivable"] for intermediate (choose between Billing, Liens, etc.)
-                           - ["Accounts Receivable", "Liens"] for deeper levels
-        conversation_id: The conversation ID for logging purposes
-        
-    Returns:
-        Tuple[str, str]: (rules_content, rules_source_description)
-                        - rules_content: The actual rule text to pass to LLM
-                        - rules_source_description: Human-readable description of where rules came from
-                        
-    Examples:
-        >>> await get_rules_for_classification_step([], "conv_123")
-        ("Classification Rules for Email Categories...", "ROOT (top-level differentiation)")
-        
-        >>> await get_rules_for_classification_step(["Accounts Receivable"], "conv_123") 
-        ("Sub-Classification Rules for Accounts Receivable...", "PRIMARY_CLASSIFICATION_RULES.Accounts Receivable")
+    Get the appropriate LLM prompt template for the current step in the hierarchy
+    by querying the hierarchical_classification_rules table.
     """
+    hierarchical_category_key: str
     if not classification_path:
-        # Top-level decision: choose between main categories
-        try:
-            rules_content = await load_rules_for_top_level_decision()
-            if rules_content:
-                logger.info(f"✅ Using TOP-LEVEL rules (ROOT) for conversation {conversation_id}. Length: {len(rules_content)}")
-                return rules_content, "ROOT (top-level differentiation)"
-            else:
-                logger.warning(f"⚠️  No top-level rules found for conversation {conversation_id}")
-                return "", "none (no top-level rules found)"
-        except Exception as e:
-            logger.error(f"Error loading top-level rules for conversation {conversation_id}: {e}", exc_info=True)
-            return "", "error (top-level rules fetch failed)"
-    
+        hierarchical_category_key = "ROOT"
     else:
-        # Intermediate/sub-category decision: choose between sub-categories of the parent
-        parent_category = classification_path[-1]
-        # logger.info(f"Fetching intermediate-level rules for parent category: {parent_category}")
+        sanitized_path_parts = [sanitize_category_part(part) for part in classification_path]
+        hierarchical_category_key = "ROOT_" + "_".join(sanitized_path_parts)
+    
+    logger.info(f"Attempting to fetch rule prompt for hierarchical category key: '{hierarchical_category_key}' for conversation {conversation_id}")
+    
+    async_db_session: AsyncSession = AsyncSessionLocal()
+    try:
+        # Need an instance of HierarchicalRulesService
+        # Re-using get_hierarchical_rules_service but with a locally managed session
+        # Alternatively, pass the service instance down or make HierarchicalRulesService methods static if no state
+        h_rules_service = HierarchicalRulesService(async_db_session) 
         
-        try:
-            # Primary method: Get rules from PRIMARY_CLASSIFICATION_RULES category 
-            # with rule name matching the parent category
-            async_db_session: AsyncSession = AsyncSessionLocal()
-            try:
-                rules_service = ClassificationRulesService(async_db_session)
-                
-                # Get all rules from PRIMARY_CLASSIFICATION_RULES category
-                primary_rules = await rules_service.get_active_rules_by_category("PRIMARY_CLASSIFICATION_RULES")
-                
-                # Find the specific rule with name matching our parent category
-                matching_rule = None
-                for rule in primary_rules:
-                    if rule.name == parent_category:
-                        matching_rule = rule
-                        break
-                
-                if matching_rule:
-                    rules_content = f"# {matching_rule.name}\n{matching_rule.content}"
-                    rules_source = f"PRIMARY_CLASSIFICATION_RULES.{matching_rule.name}"
-                    logger.info(f"✅ Using INTERMEDIATE rules (PRIMARY_CLASSIFICATION_RULES.{matching_rule.name}) for conversation {conversation_id}. Length: {len(rules_content)}")
-                    return rules_content, rules_source
-                else:
-                    logger.warning(f"❌ No rule found in PRIMARY_CLASSIFICATION_RULES category with name '{parent_category}'")
-                    
-            finally:
-                await async_db_session.close()
+        # This method needs to exist in HierarchicalRulesService
+        # It should fetch a single rule object by its 'category' field
+        rule_obj = await h_rules_service.get_rule_by_hierarchical_category(hierarchical_category_key)
+
+        if rule_obj and rule_obj.rule:
+            logger.info(f"✅ Using rule prompt from DB category '{hierarchical_category_key}'. Length: {len(rule_obj.rule)}")
+            return rule_obj.rule, hierarchical_category_key # Return the prompt template and the key as source
+        else:
+            logger.warning(f"⚠️ No rule prompt found in DB for hierarchical category key '{hierarchical_category_key}' for conversation {conversation_id}. An empty string will be used.")
+            return "", f"none (no rule found for {hierarchical_category_key})"
             
-            # Fallback method: Try direct category lookup
-            # logger.info(f"Falling back to direct category lookup for '{parent_category}'")
-            fallback_rules = await get_classification_rules_for_category(parent_category)
-            if fallback_rules:
-                logger.warning(f"⚠️  Using FALLBACK detailed rules from '{parent_category}' for conversation {conversation_id} - these may contain sub-sub-category rules")
-                return fallback_rules, f"fallback:{parent_category} (detailed rules)"
-            
-            # No rules found
-            logger.warning(f"⚠️  No rules found for '{parent_category}' using any method. Proceeding without rules.")
-            return "", "none (no intermediate rules found)"
-            
-        except Exception as e:
-            logger.error(f"Unexpected error fetching intermediate-level rules for {parent_category} in conversation {conversation_id}: {e}", exc_info=True)
-            return "", "error (intermediate rules fetch failed)"
+    except Exception as e:
+        logger.error(f"Error loading rule prompt for DB category '{hierarchical_category_key}' for conversation {conversation_id}: {e}", exc_info=True)
+        return "", f"error (rule fetch failed for {hierarchical_category_key})"
+    finally:
+        await async_db_session.close()
 
 
 async def classify_email_tags_hierarchical(
@@ -634,168 +484,112 @@ async def classify_email_tags_hierarchical(
     message_times: str
 ) -> List[str]:
     """
-    Classifies an email conversation by traversing the EMAIL_CATEGORIES hierarchy.
-    Checks for conflicting top-level topics first.
-
-    Args:
-        front_conversation_id (str): The Front conversation ID (for logging).
-        conversation_text (str): Full text content of the conversation.
-        sender_info (str): Information about the sender(s).
-        message_times (str): Timestamps or timing information for the messages.
-
-    Returns:
-        List[str]: A list of the final tag(s) determined by the classification. 
-                   Returns ["AI: Human review required"] if conflicting topics are detected upfront.
-                   Returns an empty list if classification fails at the first step or structure is invalid.
-                   Returns ["AI: Human review required"] if classification fails after succeeding at least once (ambiguous).
+    Classifies an email conversation by traversing the EMAIL_CATEGORIES hierarchy,
+    using rules from the hierarchical_classification_rules table.
     """
-    # logger.info(f"haraami Starting hierarchical classification process for conversation {front_conversation_id}")
     client = get_openai_client()
 
-    # --- BEGIN PRE-CHECK FOR CONFLICTING TOPICS ---    
+    # --- PRE-CHECK FOR CONFLICTING TOPICS (remains the same) ---
     try:
-        # logger.info('inside the function called check_for_conflicting_top_level_topics')
-        has_conflicts = _check_for_conflicting_top_level_topics(
-            client, conversation_text, sender_info, message_times
-        )
+        has_conflicts = _check_for_conflicting_top_level_topics(client, conversation_text, sender_info, message_times)
         if has_conflicts:
-            logger.info(f"🚫 CONFLICT DETECTED: Multiple top-level topics found for conversation {front_conversation_id}. Assigning human review.")
+            logger.info(f"🚫 CONFLICT DETECTED for {front_conversation_id}. Assigning human review.")
             return ["AI: Human review required"]
-        else:
-            # logger.info(f"No conflicting top-level topics detected. Proceeding with hierarchical classification for {front_conversation_id}.")
-            pass # Added pass
-    except Exception as conflict_check_error: # Catch errors during the check itself
-        # logger.error(f"Error during conflict check for conversation {front_conversation_id}: {conflict_check_error}. Proceeding to hierarchical classification.", exc_info=True)
-        # Decide whether to proceed or require human review upon check failure
-        # For now, let's proceed, but this could be changed to return Human Review Required.
-        pass # Added pass
-    # --- END PRE-CHECK FOR CONFLICTING TOPICS ---    
+    except Exception as conflict_check_error:
+        logger.error(f"Error during conflict check for {front_conversation_id}: {conflict_check_error}. Proceeding.", exc_info=True)
+    # --- END PRE-CHECK ---
 
     try:
-        # logger.info('wtf inside the function called classify_email_tags_hierarchical')
-        current_level_dict = settings.EMAIL_CATEGORIES
-        classification_path = [] # To track the path taken, e.g., ['Accounts Receivable', 'Liens']
-        level_name = "Category" # Start with top level
+        current_level_dict = settings.EMAIL_CATEGORIES # This defines the structure to traverse
+        classification_path = [] 
+        level_name_for_logging = "Category" 
 
         while isinstance(current_level_dict, dict):
-            # logger.info('here the value of current_level_dict is: %s', current_level_dict)
             options = list(current_level_dict.keys())
-            # logger.info('here the value of options is: %s', options)
             if not options:
-                # logger.warning(f"Reached an empty dictionary level in EMAIL_CATEGORIES at path: {classification_path}. Stopping classification.")
-                # Return human review if we got part way, empty list if structure was bad from start
+                logger.warning(f"Reached an empty dictionary level in EMAIL_CATEGORIES at path: {classification_path} for {front_conversation_id}. Assigning review.")
                 return ["AI: Human review required"] if classification_path else []
 
-            # Get rules for this classification step
-            rules_to_pass_to_llm, rules_source = await get_rules_for_classification_step(
+            # Get the LLM prompt template for this classification step
+            llm_prompt_template, rules_source = await get_rules_for_classification_step(
                 classification_path, 
                 front_conversation_id
             )
             
-            # Log rules information
-            # logger.info(f"Using rules from: {rules_source}")
-            if rules_to_pass_to_llm and not rules_source.startswith("fallback:"):
-                # log_content = rules_to_pass_to_llm if len(rules_to_pass_to_llm) < 500 else rules_to_pass_to_llm[:497] + "..."
-                # logger.info(f"Content preview: {log_content}")
-                pass
+            if not llm_prompt_template:
+                logger.warning(f"No LLM prompt template found from source '{rules_source}' for {front_conversation_id} at path {classification_path}. Assigning review.")
+                return ["AI: Human review required"] if classification_path else []
 
-            # Call LLM to choose from the current level's keys
             chosen_option = _call_llm_for_classification(
                 client, 
                 conversation_text, 
-                sender_info, 
-                message_times, 
-                options,
-                level_name,
-                classification_path,
-                rules_to_pass_to_llm # Pass determined rules
+                llm_prompt_template, # Pass the fetched prompt template
+                level_name_for_logging,
+                classification_path
             )
 
-            if not chosen_option:
-                logger.warning(f"LLM failed to classify at level '{level_name}' with options {options} for conversation {front_conversation_id}. Path: {classification_path}")
-                # Return human review if we got part way, empty list if failed at first level
+            if not chosen_option or chosen_option not in options: # Validate prediction against current options
+                logger.warning(f"LLM failed to classify or returned invalid option '{chosen_option}' at level '{level_name_for_logging}' with options {options} for {front_conversation_id}. Path: {classification_path}. Assigning review.")
                 return ["AI: Human review required"] if classification_path else []
 
-            logger.info(f"📍 CLASSIFICATION STEP: Level '{level_name}' chose '{chosen_option}' for conversation {front_conversation_id}")
-            # logger.info(f"🔄 CLASSIFICATION PATH UPDATE: {classification_path} → {classification_path + [chosen_option]}")
+            logger.info(f"📍 CLASSIFICATION STEP for {front_conversation_id}: Level '{level_name_for_logging}' (source: {rules_source}) chose '{chosen_option}'")
             classification_path.append(chosen_option)
             
-            # Get the value associated with the chosen option to determine next step
-            next_level = current_level_dict[chosen_option]
+            next_level_structure = current_level_dict[chosen_option]
+            level_name_for_logging = chosen_option # Update for next iteration's logging
 
-            if isinstance(next_level, dict):
-                # Drill down to the next level
-                # logger.info(f"📂 HIERARCHY: Drilling down into dict for '{chosen_option}' - found {len(next_level)} sub-options: {list(next_level.keys())}")
-                current_level_dict = next_level
-                level_name = chosen_option # Use the chosen key as the next level name for prompts
-            elif isinstance(next_level, list):
-                # Reached a list. Need to ask the LLM to CHOOSE ONE tag from this list.
-                # logger.info(f"📋 HIERARCHY: Reached list level under '{chosen_option}' with {len(next_level)} options: {next_level}")
-                final_options = [tag for tag in next_level if isinstance(tag, str) and tag] # Filter out non-strings/empty
-                
-                if not final_options:
-                    logger.warning(f"Reached a list level, but it contains no valid string tags. Path: {classification_path}. Stopping classification.")
-                    # Treat as failure after partial success
+            if isinstance(next_level_structure, dict):
+                current_level_dict = next_level_structure
+            elif isinstance(next_level_structure, list):
+                final_options_in_list = [tag for tag in next_level_structure if isinstance(tag, str) and tag]
+                if not final_options_in_list:
+                    logger.warning(f"Reached list level for {front_conversation_id} at {classification_path}, but list is empty or invalid. Assigning review.")
                     return ["AI: Human review required"]
 
-                # Call LLM to choose ONE from the final list
-                # Use the last chosen option name as the level name for clarity
-                final_level_name = classification_path[-1] if classification_path else "Final Tag"
-                
-                # Get rules for the final list choice using the abstracted function
-                rules_for_final_list_choice, final_rules_source = await get_rules_for_classification_step(
-                    classification_path,  # This will use the current path to get rules for the chosen option
+                # Get LLM prompt template for choosing from this list.
+                # The classification_path already includes the parent that led to this list.
+                llm_prompt_template_for_list, list_rules_source = await get_rules_for_classification_step(
+                    classification_path, 
                     front_conversation_id
                 )
-                
-                # logger.info(f"Using rules for final list choice from: {final_rules_source}")
+
+                if not llm_prompt_template_for_list:
+                    logger.warning(f"No LLM prompt template found from source '{list_rules_source}' for list choice at {classification_path} for {front_conversation_id}. Assigning review.")
+                    return ["AI: Human review required"]
 
                 chosen_final_tag = _call_llm_for_classification(
                     client,
                     conversation_text,
-                    sender_info,
-                    message_times,
-                    final_options, 
-                    final_level_name, 
-                    classification_path,
-                    rules_for_final_list_choice # Pass determined rules
+                    llm_prompt_template_for_list,
+                    level_name_for_logging, # Name of the parent that led to this list
+                    classification_path
                 )
 
-                if chosen_final_tag:
+                if chosen_final_tag and chosen_final_tag in final_options_in_list:
                     tags_to_return = [chosen_final_tag]
-                    logger.info(f"🎯 FINAL RESULT: Hierarchical classification complete for {front_conversation_id}. FULL PATH: {' → '.join(classification_path + [chosen_final_tag])}. RETURNING TAGS: {tags_to_return}")
+                    logger.info(f"🎯 FINAL RESULT for {front_conversation_id}. FULL PATH: {' → '.join(classification_path + [chosen_final_tag])}. TAGS: {tags_to_return}")
                     return tags_to_return
                 else:
-                    logger.warning(f"LLM failed to choose a final tag from the list {final_options} for conversation {front_conversation_id} (path: {classification_path}). Assigning 'AI: Human review required'.") # Enhanced log
-                    # Failed after reaching a list, needs review
+                    logger.warning(f"LLM failed to choose or returned invalid final tag '{chosen_final_tag}' from list {final_options_in_list} for {front_conversation_id} (path: {classification_path}). Assigning review.")
                     return ["AI: Human review required"]
 
-            elif isinstance(next_level, str):
-                # Reached a single final tag string
-                final_tag = next_level
-                
-                tags_to_return = [final_tag] # New way: Only leaf node
-                logger.info(f"🎯 FINAL RESULT: Hierarchical classification complete for {front_conversation_id}. FULL PATH: {' → '.join(classification_path + [final_tag])}. RETURNING TAGS: {tags_to_return}")
+            elif isinstance(next_level_structure, str): # Leaf node directly a string tag
+                final_tag = next_level_structure
+                tags_to_return = [final_tag]
+                logger.info(f"🎯 FINAL RESULT for {front_conversation_id}. FULL PATH: {' → '.join(classification_path)}. TAG: {final_tag}. RETURNING TAGS: {tags_to_return}")
                 return tags_to_return
             else:
-                # Unexpected structure
-                # logger.error(f"Unexpected data type ({type(next_level)}) found in EMAIL_CATEGORIES at path {classification_path} for key '{chosen_option}'. Stopping classification.")
-                # Return human review if we got part way, empty list if structure was bad from start
+                logger.error(f"Unexpected data type ({type(next_level_structure)}) in EMAIL_CATEGORIES at {classification_path} for {front_conversation_id}. Assigning review.")
                 return ["AI: Human review required"] if classification_path else []
 
-        # If the loop finishes because current_level_dict is no longer a dict (e.g., initial structure wasn't a dict)
-        # logger.error("EMAIL_CATEGORIES structure is not a dictionary at the top level or became invalid.")
-        return [] # Structure issue, return empty list
+        logger.error(f"Loop finished unexpectedly for {front_conversation_id}. EMAIL_CATEGORIES structure might be invalid at top level. Path: {classification_path}")
+        return ["AI: Human review required"] if classification_path else []
         
     except Exception as e:
-        # logger.error(f"Unexpected error during hierarchical classification for conversation {front_conversation_id}: {e}", exc_info=True)
-        # Unhandled exception, assume review needed if we made any progress
-        # Check if classification_path was populated to determine if it's a partial success / later failure
+        logger.error(f"Unexpected error during hierarchical classification for {front_conversation_id}: {e}", exc_info=True)
         review_tag = ["AI: Human review required"]
-        if 'classification_path' in locals() and classification_path: # Check if classification_path exists and is not empty
-            logger.error(f"Unexpected error during hierarchical classification for {front_conversation_id} after path {classification_path}: {e}. Assigning '{review_tag[0]}'.", exc_info=True)
-        else:
-            logger.error(f"Unexpected error during hierarchical classification for {front_conversation_id} at initial stage: {e}. Assigning '{review_tag[0]}'.", exc_info=True)
+        path_info = locals().get('classification_path', []) # Get path if available
+        logger.error(f"Assigning '{review_tag[0]}' due to error. Path: {path_info}")
         return review_tag
 
 def _get_all_defined_tags(hierarchy: Dict[str, Any]) -> set:
@@ -887,6 +681,21 @@ def remove_conflicting_tags(
         # Re-raise the exception to be handled by the calling task? Or return False?
         # Let's return False for now, indicating the conflict resolution step failed.
         return False
+
+def sanitize_category_part(part_text: str) -> str:
+    """Sanitizes a part of a category string for use in hierarchical keys."""
+    if not isinstance(part_text, str):
+        part_text = str(part_text)
+    s = part_text.upper()
+    s = s.replace(' ', '_')
+    s = s.replace('&', 'AND')
+    s = s.replace('/', '_')
+    s = s.replace('-', '_')
+    s = s.replace('.', '_')
+    while "__" in s:
+        s = s.replace("__", "_")
+    s = s.strip('_')
+    return s if s else "INVALIDKEY"
 
 # Example usage (for testing purposes) - Needs update to work with conversation ID
 if __name__ == "__main__":
