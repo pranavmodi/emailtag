@@ -144,7 +144,7 @@ def sanitize_category_part(part_text: str) -> str:
     return s if s else "INVALIDKEY"
 
 def generate_llm_prompt(rule_set_name: str, category_str: str, child_options: list[str]) -> str:
-    """Generates a standardized LLM prompt for classification."""
+    """Generates a standardized LLM prompt (instruction part only) for classification."""
     if not child_options:
         # This case should ideally be handled by not creating a rule entry if there are no children to decide among,
         # but as a fallback for the prompt itself:
@@ -160,21 +160,14 @@ def generate_llm_prompt(rule_set_name: str, category_str: str, child_options: li
     prompt = (
         f"You are an expert email classifier.\n"
         f"You are currently working with the rule set: '{rule_set_name}' (Category Path: '{category_str}').\n\n"
-        f"Your task is to classify the email content below into ONE of the following options. "
+        f"Your task is to classify the email content (which will be provided to you separately, following these instructions) into ONE of the following options. "
         f"These options represent the next possible classifications within the '{category_str}' context.\n\n"
         f"Available options:\n"
         f"{options_list_str}\n\n"
         f"Instructions:\n"
-        f"1. Carefully read the email content provided after the '--- EMAIL CONTENT TO CLASSIFY START ---' marker.\n"
+        f"1. Carefully read the email content that will be provided following these instructions.\n"
         f"2. Determine which of the listed options best describes or categorizes the primary subject or request in the email.\n"
-        f"3. Respond with ONLY the name of the chosen option from the list above. Do not add any other text, explanation, or punctuation.\n\n"
-        f"--- EMAIL CONTENT TO CLASSIFY START ---\
-"
-        f"{{EMAIL_CONTENT_PLACEHOLDER}}\
-"
-        f"--- EMAIL CONTENT TO CLASSIFY END ---\
-\n"
-        f"Chosen Option:"
+        f"3. Respond with ONLY the name of the chosen option from the list above. Do not add any other text, explanation, or punctuation."
     )
     return prompt
 

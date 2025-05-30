@@ -204,10 +204,15 @@ async def classify_email_category(front_conversation_id: str, existing_tags: Lis
         if not conversation_text:
             return None, 0.0
 
-        # Inject content into the fetched 'ROOT' prompt template
-        # The ROOT template expects {{EMAIL_CONTENT_PLACEHOLDER}}
-        # It also implicitly lists the top-level categories as options.
-        final_llm_prompt = llm_prompt_template.replace("{{EMAIL_CONTENT_PLACEHOLDER}}", conversation_text)
+        # Inject content into the fetched 'ROOT' prompt template (which is now just instructions)
+        final_llm_prompt = (
+            f"{llm_prompt_template}\n\n" # llm_prompt_template is the instruction part from DB
+            f"--- EMAIL CONTENT TO CLASSIFY START ---\n"
+            f"{conversation_text}\n"
+            f"--- EMAIL CONTENT TO CLASSIFY END ---\n\n"
+            f"Chosen Option:"
+        )
+        logger.info(f"Final LLM prompt: {final_llm_prompt}")
         # Note: The ROOT prompt template should already instruct to choose from top-level categories.
         # Any additional context like sender_info, message_times would need placeholders in the DB prompt if desired.
 
@@ -321,11 +326,19 @@ def _call_llm_for_classification(
     Helper function to call the LLM using a pre-fetched and pre-formatted prompt template.
     It injects the conversation text into the placeholder.
     """
-    if "{{EMAIL_CONTENT_PLACEHOLDER}}" not in llm_prompt_template:
-        logger.error(f"Prompt template for level '{classification_level_name}' (Path: {current_path}) is missing EMAIL_CONTENT_PLACEHOLDER. Cannot proceed.")
-        return None
+    # The placeholder check is no longer needed as llm_prompt_template is now just instructions.
+    # if "{EMAIL_CONTENT_PLACEHOLDER}" not in llm_prompt_template: 
+    #     logger.error(f"Prompt template for level '{classification_level_name}' (Path: {current_path}) is missing {{EMAIL_CONTENT_PLACEHOLDER}} (single braces). Cannot proceed.")
+    #     return None
     
-    final_llm_prompt = llm_prompt_template.replace("{{EMAIL_CONTENT_PLACEHOLDER}}", conversation_text)
+    # Construct the final prompt by appending email content and cue to the instructions
+    final_llm_prompt = (
+        f"{llm_prompt_template}\n\n"
+        f"--- EMAIL CONTENT TO CLASSIFY START ---\n"
+        f"{conversation_text}\n"
+        f"--- EMAIL CONTENT TO CLASSIFY END ---\n\n"
+        f"Chosen Option:"
+    )
 
     try:
         # The system message can be very generic as instructions are in the user prompt.
@@ -465,6 +478,10 @@ async def get_rules_for_classification_step(
 
         if rule_obj and rule_obj.rule:
             logger.info(f"✅ Using rule prompt from DB category '{hierarchical_category_key}'. Length: {len(rule_obj.rule)}")
+            if hierarchical_category_key == "ROOT":
+                logger.info("Content of 'ROOT' rule prompt: >>>")
+                logger.info(rule_obj.rule) # Log the rule content directly
+                logger.info("<<< End of 'ROOT' rule prompt.")
             return rule_obj.rule, hierarchical_category_key # Return the prompt template and the key as source
         else:
             logger.warning(f"⚠️ No rule prompt found in DB for hierarchical category key '{hierarchical_category_key}' for conversation {conversation_id}. An empty string will be used.")
