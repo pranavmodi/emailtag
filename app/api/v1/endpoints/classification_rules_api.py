@@ -107,12 +107,12 @@ async def add_rule(
         await rules_service.create_rule(category, name, content, created_by)
         # Redirect to the rules UI page after adding
         # Use the route name for url_for to be robust against path changes
-        return RedirectResponse(url=router.url_path_for("view_classification_rules_ui"), status_code=303)
+        return RedirectResponse(url=request.url_for("view_classification_rules_ui"), status_code=303)
     except Exception as e:
         logger.error(f"Error adding rule: {e}", exc_info=True)
         # Handle error, maybe show form again with error message
         # For simplicity, just redirecting back or showing a basic error
-        return HTMLResponse(content=f"<html><body><h1>Error adding rule: {e}</h1><a href='{router.url_path_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", status_code=500)
+        return HTMLResponse(content=f"<html><body><h1>Error adding rule: {e}</h1><a href='{request.url_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", status_code=500)
 
 @router.post("/rules/update/{rule_id}", name="update_classification_rule")
 async def update_rule_form(
@@ -128,12 +128,12 @@ async def update_rule_form(
         rule = await rules_service.update_rule(rule_id, name, content, updated_by)
         if not rule:
             raise HTTPException(status_code=404, detail="Rule not found")
-        return RedirectResponse(url=router.url_path_for("view_classification_rules_ui"), status_code=303)
+        return RedirectResponse(url=request.url_for("view_classification_rules_ui"), status_code=303)
     except HTTPException:
         raise # Re-raise HTTPExceptions to let FastAPI handle them
     except Exception as e:
         logger.error(f"Error updating rule {rule_id}: {e}", exc_info=True)
-        return HTMLResponse(content=f"<html><body><h1>Error updating rule: {e}</h1><a href='{router.url_path_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", status_code=500)
+        return HTMLResponse(content=f"<html><body><h1>Error updating rule: {e}</h1><a href='{request.url_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", status_code=500)
 
 @router.post("/rules/deactivate/{rule_id}", name="deactivate_classification_rule")
 async def deactivate_rule_form(
@@ -147,12 +147,12 @@ async def deactivate_rule_form(
         success = await rules_service.deactivate_rule(rule_id, updated_by)
         if not success:
             raise HTTPException(status_code=404, detail="Rule not found or already inactive")
-        return RedirectResponse(url=router.url_path_for("view_classification_rules_ui"), status_code=303)
+        return RedirectResponse(url=request.url_for("view_classification_rules_ui"), status_code=303)
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error deactivating rule {rule_id}: {e}", exc_info=True)
-        return HTMLResponse(content=f"<html><body><h1>Error deactivating rule: {e}</h1><a href='{router.url_path_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", status_code=500)
+        return HTMLResponse(content=f"<html><body><h1>Error deactivating rule: {e}</h1><a href='{request.url_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", status_code=500)
 
 # You might want an endpoint to view/edit a single rule in a dedicated form
 @router.get("/rules/edit/{rule_id}", response_class=HTMLResponse, name="edit_classification_rule_ui")
@@ -310,7 +310,7 @@ async def handle_update_hierarchical_rule_form(
     
     # Redirect to the main rules UI page after updating
     # The main rules UI is still named view_classification_rules_ui, which is fine.
-    return RedirectResponse(url=router.url_path_for("view_classification_rules_ui"), status_code=303)
+    return RedirectResponse(url=request.url_for("view_classification_rules_ui"), status_code=303)
 
 # These old endpoints still operate on the ClassificationRulesService and old table.
 # They would need to be refactored or removed if the old system is fully deprecated. 

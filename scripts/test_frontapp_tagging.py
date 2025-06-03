@@ -417,6 +417,31 @@ if __name__ == "__main__":
                 "Patricia Wong</p>"
             ),
             "recipient_email": "ai.benchd@gmail.com"
+        },
+        "15": {
+            "description": "Appointment Status Check - Confirmation Request",
+            "subject": "Checking on my MRI appointment scheduled for next week",
+            "body_html": (
+                "<p>Hello,</p>"
+                "<p>I have an MRI appointment scheduled for next week and wanted to confirm the details.</p>"
+                "<p>Patient Information:<br>"
+                "Name: Rachel Thompson<br>"
+                "DOB: 04/30/1982<br>"
+                "Phone: (555) 234-5678</p>"
+                "<p>I believe my appointment is scheduled for Tuesday, March 26th, but I'm not sure of the exact time. Could you please confirm:</p>"
+                "<ul>"
+                "<li>The date and time of my appointment</li>"
+                "<li>The type of MRI (I think it's for my right knee)</li>"
+                "<li>The location/address where I should go</li>"
+                "<li>Any preparation instructions I need to follow</li>"
+                "<li>How long the procedure will take</li>"
+                "</ul>"
+                "<p>Also, do I need to arrive early for paperwork? I want to make sure I'm fully prepared.</p>"
+                "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}.</p>"
+                "<p>Thank you for your help,<br>"
+                "Rachel Thompson</p>"
+            ),
+            "recipient_email": "ai.benchd@gmail.com"
         }
         # Add more SMTP scenarios here if needed
     }
