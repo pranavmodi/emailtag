@@ -108,6 +108,15 @@ def send_smtp_email(scenario_details, choice_key):
         random_invoice_number = f"INV-2024-{random_invoice_suffix}"
         subject = subject.replace("#INV-2024-00123", f"#{random_invoice_number}")
         body_html = body_html.replace("#INV-2024-00123", f"#{random_invoice_number}")
+    elif choice_key == "15":
+        subject_variations = [
+            "Checking on my MRI appointment scheduled for next week",
+            "Confirming my MRI appointment details - next week",
+            "MRI Appointment Confirmation Request - Next Week",
+            "Query about my upcoming MRI scan",
+            "Need to confirm my MRI for next week"
+        ]
+        subject = random.choice(subject_variations)
 
     # Replace placeholder in body with actual sender email for clarity
     body_html = body_html.replace("{SENDER_EMAIL_PLACEHOLDER}", SENDER_EMAIL)
