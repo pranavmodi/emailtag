@@ -49,6 +49,9 @@ class Email(Base):
     # e.g., [{"attachment_id": "att_123", "patient_id": "P1", "accession_nums": ["A1"], ...}, ...]
     ocr_results: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSONB, nullable=True)
 
+    # Stage tracking for multi-turn Appointment Status Request auto-response
+    apt_status_interaction_stage: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

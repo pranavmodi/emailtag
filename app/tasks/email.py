@@ -3,9 +3,8 @@
 import nest_asyncio # Import nest_asyncio
 nest_asyncio.apply() # Apply the patch
 
-
 import logging
-from typing import Dict, List
+from typing import Dict, List, Any
 from uuid import UUID
 import base64 # Added for encoding
 import io # Added for handling binary data
@@ -23,7 +22,7 @@ from app.crud.sync import tag as tag_crud_sync
 from app.db.session import SessionLocal
 from app.db.session import AsyncSessionLocal # Add AsyncSessionLocal import
 from app.services.classification_service import classify_email_tags_hierarchical, remove_conflicting_tags
-from app.services.frontapp_service import add_conversation_tags, get_conversation_text, get_conversation_tags, remove_conversation_tags, create_new_conversation_for_split # Added create_new_conversation_for_split
+from app.services.frontapp_service import add_conversation_tags, get_conversation_text, get_conversation_tags, remove_conversation_tags, create_new_conversation_for_split, send_conversation_reply # Added send_conversation_reply
 from app.services.ocr_service import process_ocr_content # Import the new function
 from app.services.autorespond_service import process_autorespond  # Add this import
 from app.services.topic_analysis_service import is_new_unresolved_topic_present # Added topic analysis service
@@ -33,8 +32,52 @@ from app.models.email import Email # Added for type hinting
 from app.schemas.email import EmailUpdate # Added for type hinting
 from app.services.archiving_service import check_and_archive_conversation # Import the new archiving service
 
+# --- BEGIN: Updated Agent Imports ---
+# Remove direct openai-agents SDK imports from here, they are in the agent file.
+from app.agents.apt_status_req_agent import handle_apt_status_request_agent_sdk # New orchestrator
+from app.core.config import settings # Import settings for passing to agent orchestrator
+# --- END: Updated Agent Imports ---
+
 logger = get_task_logger(__name__)
 
+# Helper function to format conversation history for the agent
+def _format_conversation_history_for_agent(
+    structured_messages: List[Dict[str, Any]],
+    max_exchanges: int = 3 # Number of recent user-assistant turn pairs
+) -> str:
+    if not structured_messages:
+        return "No relevant conversation history found."
+
+    history_texts = []
+    # Process messages to create a simplified dialog
+    for msg in structured_messages:
+        role = "Unknown"
+        body = msg.get("body", "").strip()
+        body_oneline = body.replace('\n', ' ').replace('\r', ' ')
+
+        msg_type = msg.get("type")
+        author_role = msg.get("author_role") # e.g., user, teammate
+        direction = msg.get("direction") # e.g., inbound, outbound
+
+        if direction == "inbound": # Typically user messages
+            role = "User"
+        elif direction == "outbound": # Typically assistant/teammate replies sent as messages
+            role = "Assistant"
+        elif msg_type == "comment" and author_role == "teammate": # Comments from teammates (could be internal notes or replies)
+            # We might want to distinguish AI assistant comments vs human teammate comments if possible
+            # For now, let's assume outbound-like comments are from Assistant for simplicity in history.
+            role = "Assistant (comment)" 
+        elif author_role == "user": # Fallback for user if direction not primary determinant
+            role = "User"
+        
+        if body_oneline and role != "Unknown":
+            history_texts.append(f"{role}: {body_oneline}")
+
+    if not history_texts:
+        return "No relevant conversation history found after formatting."
+    
+    # Return the last few exchanges (max_exchanges * 2 lines for User/Assistant pair)
+    return "\n".join(history_texts[-(max_exchanges * 2):])
 
 @celery_app.task(name="app.tasks.email.process_email")
 def process_email(email_id: str) -> Dict:
@@ -447,12 +490,6 @@ def perform_tagging_task(email_id: str) -> Dict:
 
 @celery_app.task(name="app.tasks.email.perform_autorespond_task")
 def perform_autorespond_task(email_id: str) -> Dict:
-    """
-    Handles auto-response logic for an email and sets final status.
-    1. Fetches email and conversation context.
-    2. Checks and applies auto-response rules.
-    3. Updates email status to a final state.
-    """
     logger.info(f"Performing auto-response check for email {email_id}")
 
     try:
@@ -474,70 +511,106 @@ def perform_autorespond_task(email_id: str) -> Dict:
             email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="autorespond_failed_no_front_id", is_processed=True))
             return {"status": "error", "message": "Missing Front conversation ID for auto-response"}
 
-        # Fetch conversation text for auto-response (can be optimized if passed from previous task)
-        conversation_data = get_conversation_text(front_conversation_id) # Assuming this is still needed by process_autorespond
-        if not conversation_data or 'text' not in conversation_data: # Check if process_autorespond actually needs full conv_data or just text
-            logger.error(f"Could not retrieve conversation text for {front_conversation_id}. Cannot auto-respond.")
-            email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="autorespond_failed_no_content", is_processed=True))
-            return {"status": "error", "message": "Failed to get conversation text for auto-response"}
+        current_email_content = email_obj.content_text or email_obj.content_html or ""
         
-        conversation_text_for_autorespond = conversation_data.get('text', '')
-
-        # --- AUTO-RESPONSE CHECK (Adapted from tag_email) ---
-        auto_response_processed_flag = False # Renamed to avoid conflict if we pass a dict later
-        auto_response_details = None
-        try:
-            logger.info(f"Checking for auto-response for conversation {front_conversation_id}.")
-
-            async def _run_autorespond_async():
-                async_db_session = AsyncSessionLocal() # process_autorespond needs async session
-                try:
-                    return await process_autorespond(async_db_session, front_conversation_id, conversation_text_for_autorespond)
-                finally:
-                    await async_db_session.close()
-            
-            auto_response_result = asyncio.run(_run_autorespond_async())
-
-            if auto_response_result and auto_response_result.get("status") == "auto_response_sent":
-                logger.info(f"Auto-response sent for conversation {front_conversation_id}. Details: {auto_response_result.get('details')}")
-                auto_response_processed_flag = True
-                auto_response_details = auto_response_result.get('details')
-            elif auto_response_result and auto_response_result.get("status") == "no_auto_response_needed":
-                logger.info(f"No auto-response needed for conversation {front_conversation_id}.")
+        conversation_data = get_conversation_text(front_conversation_id)
+        structured_history_messages = []
+        if conversation_data and conversation_data.get('_structured_messages'):
+            all_messages = conversation_data['_structured_messages']
+            # Crude filter: if current email content appears at the end of structured history, remove it.
+            # This helps avoid passing the current email (which the agent gets separately) as part of "history".
+            if all_messages and current_email_content and all_messages[-1].get("body","").strip() == current_email_content.strip():
+                logger.debug("Last message in structured_history matches current_email_content, removing from history for agent prompt.")
+                structured_history_messages = all_messages[:-1]
             else:
-                logger.warning(f"Auto-response processing for {front_conversation_id} had unexpected result: {auto_response_result}")
+                structured_history_messages = all_messages
 
-        except Exception as e_auto_respond:
-            logger.error(f"Error during auto-response check for {front_conversation_id}: {e_auto_respond}", exc_info=True)
-            # Proceed to set final status even if auto-response check fails
+        auto_response_processed_flag = False
+        auto_response_details = None
+        agent_handled_response = False
 
-        # Determine final status based on tagging and auto-response outcomes
-        # The status from perform_tagging_task (e.g., "tagging_completed_applied_tags", "tagging_completed_no_tags")
-        # is already on email_obj.status if it was updated successfully.
+        APT_STATUS_REQ_TAG_NAME = "Apt Status Req" 
+        applied_tag_names = [tag.name for tag in email_obj.tags if hasattr(tag, 'name')]
+
+        if APT_STATUS_REQ_TAG_NAME in applied_tag_names:
+            logger.info(f"Email {email_id} (conv: {front_conversation_id}) tagged with '{APT_STATUS_REQ_TAG_NAME}'. Attempting agent SDK via orchestrator.")
+            
+            agent_result_dict = None
+            async def _run_agent_sdk_orchestrator():
+                nonlocal agent_result_dict
+                agent_result_dict = await handle_apt_status_request_agent_sdk(
+                    front_conversation_id=front_conversation_id,
+                    current_email_content=current_email_content,
+                    structured_history_messages=structured_history_messages,
+                    settings_obj=settings # Pass the main settings module
+                )
+            
+            # Celery tasks are synchronous, so we run the async orchestrator using asyncio.run()
+            # nest_asyncio.apply() should be at the top of the tasks file for this to work smoothly.
+            try:
+                asyncio.run(_run_agent_sdk_orchestrator())
+            except RuntimeError as e_async_run:
+                if "cannot be called from a running event loop" in str(e_async_run):
+                    logger.warning(f"Asyncio run issue for agent orchestrator (loop already running?): {e_async_run}. Trying nest_asyncio if not already applied broadly.")
+                    # This path might be complex if nest_asyncio isn't applied at the top or if it's a deeper issue.
+                    # For now, log and the agent_result_dict will remain None or its initial state.
+                    agent_result_dict = {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Asyncio runtime error: {e_async_run}"}}
+
+                else:
+                    raise # Re-raise if it's a different RuntimeError
+
+            if agent_result_dict:
+                agent_handled_response = agent_result_dict.get("agent_handled", False)
+                auto_response_processed_flag = agent_result_dict.get("processed_flag", False)
+                auto_response_details = agent_result_dict.get("details", {"reason": "Unknown agent processing outcome"})
+                if agent_handled_response:
+                    logger.info(f"Agent SDK orchestrator handled response for {front_conversation_id}. Details: {auto_response_details}")
+                else:
+                    logger.warning(f"Agent SDK orchestrator did NOT handle response for {front_conversation_id}. Details: {auto_response_details}")
+            else:
+                logger.error(f"Agent SDK orchestrator call failed to return a result for {front_conversation_id}.")
+                auto_response_details = {"reason": "Agent orchestrator call failed or returned None."}
+
+        if not agent_handled_response:
+            logger.info(f"Proceeding with generic auto-response check for conv {front_conversation_id} (agent_handled={agent_handled_response}). Details: {auto_response_details}")
+            try:
+                async def _run_generic_autorespond_async():
+                    async_db_session = AsyncSessionLocal() 
+                    try:
+                        full_conv_text_for_generic = conversation_data.get('text', '') if conversation_data else ""
+                        return await process_autorespond(async_db_session, front_conversation_id, full_conv_text_for_generic)
+                    finally:
+                        await async_db_session.close()
+                generic_auto_response_result = asyncio.run(_run_generic_autorespond_async())
+
+                if generic_auto_response_result and generic_auto_response_result.get("status") == "auto_response_sent":
+                    logger.info(f"Generic auto-response sent for conversation {front_conversation_id}. Details: {generic_auto_response_result.get('details')}")
+                    auto_response_processed_flag = True 
+                    auto_response_details = generic_auto_response_result.get('details')
+                elif generic_auto_response_result and generic_auto_response_result.get("status") == "no_auto_response_needed":
+                    logger.info(f"No generic auto-response needed for conversation {front_conversation_id}.")
+                else:
+                    logger.warning(f"Generic auto-response processing for {front_conversation_id} had unexpected result: {generic_auto_response_result}")
+            except Exception as e_auto_respond:
+                logger.error(f"Error during generic auto-response check for {front_conversation_id}: {e_auto_respond}", exc_info=True)
         
-        current_status_from_tagging = email_obj.status # This reflects the outcome of the tagging step
+        current_status_from_tagging = email_obj.status
         final_email_status = "processed_unknown_state"
 
         if auto_response_processed_flag:
-            if current_status_from_tagging == "tagging_completed_applied_tags":
-                final_email_status = "processed_autorespond_tagged"
-            elif current_status_from_tagging == "tagging_completed_no_tags":
-                final_email_status = "processed_autorespond_notags"
-            else: # Tagging might have failed or had a different status
-                final_email_status = "processed_autorespond_tag_state_unknown"
-        else: # No auto-response sent
+            if agent_handled_response:
+                final_email_status = f"processed_agent_apt_status_req"
+            else:
+                final_email_status = "processed_autorespond_generic"
+        else:
             if current_status_from_tagging == "tagging_completed_applied_tags":
                 final_email_status = "processed_tagged_no_autorespond"
             elif current_status_from_tagging == "tagging_completed_no_tags":
                 final_email_status = "processed_notags_no_autorespond"
-            else: # Tagging might have failed before this step, or other status
-                 # If tagging failed and set is_processed=True, this task might not even run for certain failures.
-                 # However, if it does, we reflect that. Or, simply use a generic processed status.
-                 final_email_status = f"processed_tag_status_({current_status_from_tagging})_no_autorespond"
-                 # A simpler approach if previous status is not critical for final status: just "processed"
-                 # final_email_status = "processed" 
-
-        logger.info(f"Setting final status for email {email_id} to: {final_email_status}")
+            else:
+                final_email_status = f"processed_tag_status_({current_status_from_tagging})_no_autorespond"
+                 
+        logger.info(f"Setting final status for email {email_id} to: {final_email_status}. Original tagging status: {current_status_from_tagging}. Agent handled: {agent_handled_response}")
         email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_email_status, is_processed=True))
         
         return {
@@ -545,19 +618,14 @@ def perform_autorespond_task(email_id: str) -> Dict:
             "email_id": email_id, 
             "final_db_status": final_email_status,
             "auto_response_sent": auto_response_processed_flag,
-            "auto_response_details": auto_response_details
+            "auto_response_details": auto_response_details,
+            "agent_handled_response": agent_handled_response
         }
 
     except Exception as e:
-        logger.exception(f"Error in perform_autorespond_task for {email_id}: {str(e)}")
+        logger.exception(f"Critical error in perform_autorespond_task for {email_id}: {str(e)}")
         if db.is_active:
             db.rollback()
-        try:
-            email_uuid_for_error = UUID(email_id)
-            # Attempt to mark as failure if possible, though db session might be bad
-            # update_email_status_sync(email_uuid_for_error, "autorespond_failed_exception") # Needs careful implementation
-        except:
-            pass
         return {"status": "error", "message": str(e)}
     finally:
         if db.is_active:
@@ -720,7 +788,7 @@ def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
 
         # Update the email record using the sync CRUD helper
         # This now updates ocr_results and ocr_attachments_completed
-        updated_email = email_crud_sync.update(db, db_obj=email_obj, obj_in=update_payload)
+        updated_email = email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(**update_payload))
 
         # logger.info(f"Updated email {email_id} with OCR result for attachment {attachment_url}. Completed {completed_count}/{updated_email.ocr_attachments_total} attachments.")
 
@@ -763,10 +831,9 @@ def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
 
 # Helper function to update status (consider moving to crud)
 async def update_email_status(db: AsyncSession, email_id: str, status: str):
-    email = await email_crud.get(db, id=email_id)
+    email = await email_crud.get(db, id=UUID(email_id))
     if email:
-        update_data = {"status": status}
-        await email_crud.update(db, db_obj=email, obj_in=update_data)
+        await email_crud.update(db, db_obj=email, obj_in=EmailUpdate(status=status))
         # logger.info(f"Updated status for email {email_id} to {status}") 
 
 # Define error status constant
@@ -781,7 +848,7 @@ def update_email_sync(email_uuid: UUID, update_data: dict):
             # logger.error(f"[update_email_sync] Email {email_uuid} not found for update.")
             return None
         
-        updated_email = email_crud_sync.update(db, db_obj=email_obj, obj_in=update_data)
+        updated_email = email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(**update_data))
         # No need to commit here, update() handles it
         # db.commit()
         # db.refresh(updated_email) # Refresh is handled by update()
@@ -804,3 +871,57 @@ def update_email_status_sync(email_uuid: UUID, status: str):
     else:
          # logger.error(f"[update_email_status_sync] Failed to update status for email {email_uuid} to {status}")
          pass 
+
+# Helper function to format conversation history for the agent
+def _format_conversation_history_for_agent(
+    structured_messages: List[Dict[str, Any]], 
+    current_email_id: str, # To avoid including the current email in history
+    max_exchanges: int = 5 # Number of user-assistant exchanges to include
+) -> str:
+    if not structured_messages:
+        return "No relevant conversation history found."
+
+    history_texts = []
+    # Assuming structured_messages are ordered chronologically (oldest to newest)
+    # And that each message has a unique identifier, e.g., a Front message ID if available
+    # For now, we'll rely on the order and try to exclude current.
+    # A more robust way would be to ensure current email_obj.raw_data has a message_id
+    # and filter based on that. get_conversation_text might already exclude current one.
+
+    # Let's assume `get_conversation_text` provides messages *before* the current one
+    # or includes it, and we need to filter. For now, this formatting is illustrative.
+    # A better approach might be to filter `structured_messages` to exclude the one matching `current_email_id`
+    # if `structured_messages` always contains the latest message that triggered the task.
+    # The `get_conversation_text` service's `_structured_messages` typically represents the whole conversation.
+    
+    # Simple formatting:
+    relevant_messages = []
+    for msg in structured_messages:
+        # Heuristic: try to identify and skip the current message based on common patterns or if an ID is available.
+        # This is hard without knowing the exact structure of raw_data and how current_email_id relates.
+        # For this example, we'll assume structured_messages is the history PRIOR to current email.
+        # If it includes current, the agent prompt needs to be aware.
+
+        role = "User"
+        if msg.get("type") == "comment" and msg.get("author_role") == "teammate": # Example: an assistant's previous reply via comment
+             role = "Assistant"
+        elif msg.get("direction") == "outbound": # Example: an assistant's previous reply via message
+            role = "Assistant"
+        # Crude mapping for user:
+        elif msg.get("author_role") == "user" or msg.get("direction") == "inbound":
+            role = "User"
+        else: # Other types like internal comments might be filtered or labeled differently
+            role = msg.get("author_role", "System")
+
+
+        body = msg.get("body", "").strip()
+        if body:
+            # Basic sanitization of newlines for prompt clarity
+            body_oneline = body.replace('\\n', ' ').replace('\\r', '')
+            history_texts.append(f"{role}: {body_oneline}")
+
+    if not history_texts:
+        return "No relevant conversation history found."
+        
+    # Return the last few exchanges
+    return "\\n".join(history_texts[- (max_exchanges * 2) :]) # *2 for user+assistant turns 
