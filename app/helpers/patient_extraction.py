@@ -43,11 +43,11 @@ async def extract_and_log_patient_info(
                 try:
                     # Fetch patient data
                     patient_data_dict = await fetch_patient_by_id(patient_id=p_id, conversation_id=conversation_id)
-                    parent_logger.info(f"Patient data for {p_id}: {json.dumps(patient_data_dict, indent=2)}")
+                    # parent_logger.info(f"Patient data for {p_id}: {json.dumps(patient_data_dict, indent=2)}")
                     
                     # Fetch study details
                     study_data_dict = await _fetch_patient_study_data(patient_id=p_id, conversation_id=conversation_id)
-                    parent_logger.info(f"Study data for {p_id}: {json.dumps(study_data_dict, indent=2)}")
+                    # parent_logger.info(f"Study data for {p_id}: {json.dumps(study_data_dict, indent=2)}")
                     
                     # Create PatientConversationData entry with both patient and study information
                     pcd_create = PatientConversationDataCreate(
@@ -68,8 +68,8 @@ async def extract_and_log_patient_info(
                     )
                     if stored_data:
                         parent_logger.info(f"Final database contents for patient {p_id}:")
-                        parent_logger.info(f"Patient Info: {json.dumps(stored_data.patient_info, indent=2)}")
-                        parent_logger.info(f"Appointment Info: {json.dumps(stored_data.appointment_info, indent=2)}")
+                        # parent_logger.info(f"Patient Info: {json.dumps(stored_data.patient_info, indent=2)}")
+                        # parent_logger.info(f"Appointment Info: {json.dumps(stored_data.appointment_info, indent=2)}")
                         parent_logger.info(f"Record created at: {stored_data.created_at}")
                         parent_logger.info(f"Record last updated at: {stored_data.updated_at}")
                     else:

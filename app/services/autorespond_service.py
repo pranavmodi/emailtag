@@ -171,6 +171,10 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
     """
     Process an email for potential auto-response.
     """
+    logger.info(f"PROCESS_AUTORESPOND ENTRY: conversation_id='{conversation_id}' (type: {type(conversation_id)}, id: {id(conversation_id)})")
+    logger.info(f"PROCESS_AUTORESPOND ENTRY: db object (type: {type(db)}, id: {id(db)})")
+    logger.info(f"PROCESS_AUTORESPOND ENTRY: conversation_text (type: {type(conversation_text)}, length: {len(conversation_text) if isinstance(conversation_text, str) else 'N/A'})")
+
     try:
         # Log all channels for debugging
         # try:
@@ -185,9 +189,19 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
         # except Exception as e_channels:
         #     logger.error(f"Error listing Front channels: {e_channels}", exc_info=True)
 
+        logger.info(f"BEFORE get_conversation_text: conversation_id='{conversation_id}' (type: {type(conversation_id)}, id: {id(conversation_id)}), db id: {id(db)}")
         conversation_data = get_conversation_text(conversation_id)
+        logger.info(f"AFTER get_conversation_text: conversation_id='{conversation_id}' (type: {type(conversation_id)}, id: {id(conversation_id)}), db id: {id(db)}")
+        logger.info(f"AFTER get_conversation_text: conversation_data type={type(conversation_data)}")
+        if isinstance(conversation_data, dict):
+            logger.info(f"AFTER get_conversation_text: conversation_data keys={list(conversation_data.keys()) if conversation_data else 'None'}")
+        elif conversation_data is None:
+            logger.info("AFTER get_conversation_text: conversation_data is None")
+        else:
+            logger.info(f"AFTER get_conversation_text: conversation_data is of unexpected type: {type(conversation_data)}")
+
         if not conversation_data or not isinstance(conversation_data, dict):
-            logger.warning(f"Could not get conversation data for {conversation_id}, skipping auto-response")
+            logger.warning(f"Could not get conversation data for conversation_id='{str(conversation_id)}' (type: {type(conversation_id)}), skipping auto-response")
             return {"status": "no_auto_response_needed", "details": "Failed to retrieve conversation data for auto-response"}
 
         last_message_details = conversation_data.get('last_message_details', {})
@@ -203,9 +217,12 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
         elif senders_list:
             last_sender_identifier = senders_list[-1]
         
+        logger.info(f"BEFORE bot check log (line 205 context): current conversation_id='{str(conversation_id)}' (type: {type(conversation_id)}, id: {id(conversation_id)})")
+        logger.info(f"Comparing with initial db id: {id(db)}")
         logger.info(f"Identifier for bot check: {last_sender_identifier} for conversation {conversation_id}. Sender name: {sender_name}")
         
         if not last_sender_identifier:
+            logger.info(f"BEFORE 'No sender identifier found' log (line 209 context): current conversation_id='{str(conversation_id)}' (type: {type(conversation_id)}, id: {id(conversation_id)})")
             logger.warning(f"No sender identifier found for conversation ID '{str(conversation_id)}'. Skipping auto-response.")
             return {"status": "no_auto_response_needed", "details": "No sender identifier found"}
 
@@ -317,5 +334,5 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
             logger.error(f"Failed to generate AI response text for {conversation_id}") # Should be caught by fallback in generator
             return {"status": "no_auto_response_needed", "details": "Failed to generate AI response text"}
     
-    logger.info(f"Auto-response not triggered for {conversation_id} (inquiry: {is_appointment_inquiry}, confidence: {inquiry_info.get('confidence')}")
+    logger.info(f"Auto-response not triggered for conversation_id='{str(conversation_id)}' (inquiry: {is_appointment_inquiry}, confidence: {inquiry_info.get('confidence')}")
     return {"status": "no_auto_response_needed", "details": "Auto-response conditions not met (e.g., not appointment inquiry or low confidence)."} 

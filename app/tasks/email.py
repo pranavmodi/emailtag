@@ -492,7 +492,7 @@ def perform_autorespond_task(email_id: str) -> Dict:
             async def _run_autorespond_async():
                 async_db_session = AsyncSessionLocal() # process_autorespond needs async session
                 try:
-                    return await process_autorespond(front_conversation_id, async_db_session, conversation_text_for_autorespond)
+                    return await process_autorespond(async_db_session, front_conversation_id, conversation_text_for_autorespond)
                 finally:
                     await async_db_session.close()
             
