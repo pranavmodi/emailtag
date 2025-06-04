@@ -25,96 +25,96 @@ from app.services.front_api_helpers.permission_checker import (
 logger = logging.getLogger(__name__)
 
 # Helper function to log diagnostic information
-def _log_front_permission_diagnostics(conversation_id: str, error_context: str):
-    logger.info(f"--- Attempting to gather permission/configuration details for Front Support ({error_context}) ---")
-    
-    bot_teammate_id = settings.FRONT_BOT_TEAMMATE_ID
-    logger.info(f"1. Details for Bot Teammate (ID: {bot_teammate_id}):")
-    teammate_details = get_teammate_details(bot_teammate_id)
-    if teammate_details:
-        logger.info(f"   - Username: {teammate_details.get('username')}, Email: {teammate_details.get('email')}")
-        logger.info(f"   - Is Admin: {teammate_details.get('is_admin')}, Is Available: {teammate_details.get('is_available')}")
-        logger.info(f"   - Roles: {teammate_details.get('roles')}")
-        # Log inboxes the teammate has access to
-        teammate_inboxes = list_teammate_inboxes(bot_teammate_id)
-        if teammate_inboxes is not None:
-            logger.info(f"   - Inboxes accessible by {bot_teammate_id} (via /teammates/{{id}}/inboxes):")
-            if teammate_inboxes:
-                for inbox in teammate_inboxes:
-                    logger.info(f"     - Name: {inbox.get('name')}, ID: {inbox.get('id')}")
-            else:
-                logger.info("     - No inboxes listed for this teammate via this endpoint.")
-        else:
-            logger.warning(f"   - Could not retrieve inbox list for teammate {bot_teammate_id} via /teammates/{{id}}/inboxes.")
-    else:
-        logger.warning(f"   - Could not fetch details for teammate ID: {bot_teammate_id}")
+# def _log_front_permission_diagnostics(conversation_id: str, error_context: str):
+#     logger.info(f"--- Attempting to gather permission/configuration details for Front Support ({error_context}) ---")
+#     
+#     bot_teammate_id = settings.FRONT_BOT_TEAMMATE_ID
+#     logger.info(f"1. Details for Bot Teammate (ID: {bot_teammate_id}):")
+#     teammate_details = get_teammate_details(bot_teammate_id)
+#     if teammate_details:
+#         logger.info(f"   - Username: {teammate_details.get('username')}, Email: {teammate_details.get('email')}")
+#         logger.info(f"   - Is Admin: {teammate_details.get('is_admin')}, Is Available: {teammate_details.get('is_available')}")
+#         logger.info(f"   - Roles: {teammate_details.get('roles')}")
+#         # Log inboxes the teammate has access to
+#         teammate_inboxes = list_teammate_inboxes(bot_teammate_id)
+#         if teammate_inboxes is not None:
+#             logger.info(f"   - Inboxes accessible by {bot_teammate_id} (via /teammates/{{id}}/inboxes):")
+#             if teammate_inboxes:
+#                 for inbox in teammate_inboxes:
+#                     logger.info(f"     - Name: {inbox.get('name')}, ID: {inbox.get('id')}")
+#             else:
+#                 logger.info("     - No inboxes listed for this teammate via this endpoint.")
+#         else:
+#             logger.warning(f"   - Could not retrieve inbox list for teammate {bot_teammate_id} via /teammates/{{id}}/inboxes.")
+#     else:
+#         logger.warning(f"   - Could not fetch details for teammate ID: {bot_teammate_id}")
 
-    channel_id_to_check = settings.FRONT_CHANNEL_ID
-    logger.info(f"2. Details for Channel (ID: {channel_id_to_check}):")
-    channel_details = get_channel_details(channel_id_to_check)
-    inbox_id_from_channel_direct_attr = None 
-    if channel_details:
-        logger.info(f"   - Channel Name: {channel_details.get('name')}, Type: {channel_details.get('type')}")
-        logger.info(f"   - Send As (Address): {channel_details.get('send_as')}")
-        inbox_id_from_channel_direct_attr = channel_details.get('inbox_id') 
-        logger.info(f"   - Associated Inbox ID (from channel.inbox_id direct attribute if available): {inbox_id_from_channel_direct_attr}")
-        # Log inboxes the channel is part of - REMOVED DUE TO API 404 ON THIS ENDPOINT FOR CUSTOM CHANNELS
-        # channel_associated_inboxes = list_channel_inboxes(channel_id_to_check)
-        # if channel_associated_inboxes is not None:
-        #     logger.info(f"   - Inboxes this channel ({channel_id_to_check}) is part of (via /channels/{{id}}/inboxes):")
-        #     if channel_associated_inboxes:
-        #         for inbox in channel_associated_inboxes:
-        #             logger.info(f"     - Name: {inbox.get('name')}, ID: {inbox.get('id')}")
-        #     else:
-        #         logger.info("     - This channel is not explicitly listed as part of any inboxes via this endpoint.")
-        # else:
-        #     logger.warning(f"   - Could not retrieve inbox list for channel {channel_id_to_check} via /channels/{{id}}/inboxes.")
-    else:
-        logger.warning(f"   - Could not fetch details for channel ID: {channel_id_to_check}")
-    
-    actual_inbox_id = None
-    conversation_obj = get_conversation(conversation_id) # get_conversation is already in this file
-    if conversation_obj and conversation_obj.get('inbox_id'):
-        actual_inbox_id = conversation_obj.get('inbox_id')
-        logger.info(f"3. Details for Conversation's Primary Inbox (ID: {actual_inbox_id}):")
-    elif inbox_id_from_channel_direct_attr:
-        actual_inbox_id = inbox_id_from_channel_direct_attr
-        logger.info(f"3. Details for Channel's Associated Inbox (from direct attribute) (ID: {actual_inbox_id}):")
-    else:
-        logger.warning("3. Could not determine relevant Inbox ID from conversation or channel details.")
+#     channel_id_to_check = settings.FRONT_CHANNEL_ID
+#     logger.info(f"2. Details for Channel (ID: {channel_id_to_check}):")
+#     channel_details = get_channel_details(channel_id_to_check)
+#     inbox_id_from_channel_direct_attr = None 
+#     if channel_details:
+#         logger.info(f"   - Channel Name: {channel_details.get('name')}, Type: {channel_details.get('type')}")
+#         logger.info(f"   - Send As (Address): {channel_details.get('send_as')}")
+#         inbox_id_from_channel_direct_attr = channel_details.get('inbox_id') 
+#         logger.info(f"   - Associated Inbox ID (from channel.inbox_id direct attribute if available): {inbox_id_from_channel_direct_attr}")
+#         # Log inboxes the channel is part of - REMOVED DUE TO API 404 ON THIS ENDPOINT FOR CUSTOM CHANNELS
+#         # channel_associated_inboxes = list_channel_inboxes(channel_id_to_check)
+#         # if channel_associated_inboxes is not None:
+#         #     logger.info(f"   - Inboxes this channel ({channel_id_to_check}) is part of (via /channels/{{id}}/inboxes):")
+#         #     if channel_associated_inboxes:
+#         #         for inbox in channel_associated_inboxes:
+#         #             logger.info(f"     - Name: {inbox.get('name')}, ID: {inbox.get('id')}")
+#         #     else:
+#         #         logger.info("     - This channel is not explicitly listed as part of any inboxes via this endpoint.")
+#         # else:
+#         #     logger.warning(f"   - Could not retrieve inbox list for channel {channel_id_to_check} via /channels/{{id}}/inboxes.")
+#     else:
+#         logger.warning(f"   - Could not fetch details for channel ID: {channel_id_to_check}")
+#     
+#     actual_inbox_id = None
+#     conversation_obj = get_conversation(conversation_id) # get_conversation is already in this file
+#     if conversation_obj and conversation_obj.get('inbox_id'):
+#         actual_inbox_id = conversation_obj.get('inbox_id')
+#         logger.info(f"3. Details for Conversation's Primary Inbox (ID: {actual_inbox_id}):")
+#     elif inbox_id_from_channel_direct_attr:
+#         actual_inbox_id = inbox_id_from_channel_direct_attr
+#         logger.info(f"3. Details for Channel's Associated Inbox (from direct attribute) (ID: {actual_inbox_id}):")
+#     else:
+#         logger.warning("3. Could not determine relevant Inbox ID from conversation or channel details.")
 
-    if actual_inbox_id:
-        inbox_details = get_inbox_details(actual_inbox_id)
-        if inbox_details:
-            logger.info(f"   - Inbox Name: {inbox_details.get('name')}")
-            logger.info(f"   - Teammates explicitly listed for this inbox (via /inboxes/{{inbox_id}}/teammates):")
-            teammates_in_inbox = list_teammates_for_inbox(actual_inbox_id)
-            if teammates_in_inbox:
-                found_bot_in_inbox_list = False
-                for tm in teammates_in_inbox:
-                    logger.info(f"     - Teammate: {tm.get('username')} (ID: {tm.get('id')})")
-                    if tm.get('id') == bot_teammate_id:
-                        found_bot_in_inbox_list = True
-                if found_bot_in_inbox_list:
-                    logger.info(f"   -> CONFIRMED: Bot Teammate {bot_teammate_id} IS listed in teammates for Inbox {actual_inbox_id}.")
-                else:
-                    logger.warning(f"   -> WARNING: Bot Teammate {bot_teammate_id} IS NOT listed in teammates for Inbox {actual_inbox_id}.")
-            else:
-                logger.warning(f"     - Could not list teammates for Inbox {actual_inbox_id}, or list was empty.")
-        else:
-            logger.warning(f"   - Could not fetch details for Inbox ID: {actual_inbox_id}")
-    
-    logger.info("4. General list of all teammates in the company (for reference):")
-    try:
-        all_teammates_list = list_teammates() # This function should already be present
-        if all_teammates_list:
-            logger.info(f"   - Found {len(all_teammates_list)} total teammates. First few: {all_teammates_list[:3]}")
-        else:
-            logger.warning("   - list_teammates() returned an empty list or None.")
-    except Exception as e_list_teammates:
-        logger.error(f"   - Error calling list_teammates(): {e_list_teammates}", exc_info=True)
-    
-    logger.info("--- End of permission/configuration details log ---")
+#     if actual_inbox_id:
+#         inbox_details = get_inbox_details(actual_inbox_id)
+#         if inbox_details:
+#             logger.info(f"   - Inbox Name: {inbox_details.get('name')}")
+#             logger.info(f"   - Teammates explicitly listed for this inbox (via /inboxes/{{inbox_id}}/teammates):")
+#             teammates_in_inbox = list_teammates_for_inbox(actual_inbox_id)
+#             if teammates_in_inbox:
+#                 found_bot_in_inbox_list = False
+#                 for tm in teammates_in_inbox:
+#                     logger.info(f"     - Teammate: {tm.get('username')} (ID: {tm.get('id')})")
+#                     if tm.get('id') == bot_teammate_id:
+#                         found_bot_in_inbox_list = True
+#                 if found_bot_in_inbox_list:
+#                     logger.info(f"   -> CONFIRMED: Bot Teammate {bot_teammate_id} IS listed in teammates for Inbox {actual_inbox_id}.")
+#                 else:
+#                     logger.warning(f"   -> WARNING: Bot Teammate {bot_teammate_id} IS NOT listed in teammates for Inbox {actual_inbox_id}.")
+#             else:
+#                 logger.warning(f"     - Could not list teammates for Inbox {actual_inbox_id}, or list was empty.")
+#         else:
+#             logger.warning(f"   - Could not fetch details for Inbox ID: {actual_inbox_id}")
+#     
+#     logger.info("4. General list of all teammates in the company (for reference):")
+#     try:
+#         all_teammates_list = list_teammates() # This function should already be present
+#         if all_teammates_list:
+#             logger.info(f"   - Found {len(all_teammates_list)} total teammates. First few: {all_teammates_list[:3]}")
+#         else:
+#             logger.warning("   - list_teammates() returned an empty list or None.")
+#     except Exception as e_list_teammates:
+#         logger.error(f"   - Error calling list_teammates(): {e_list_teammates}", exc_info=True)
+#     
+#     logger.info("--- End of permission/configuration details log ---")
 
 
 def get_headers() -> Dict[str, str]:
@@ -326,7 +326,7 @@ def archive_conversation_in_front(conversation_id: str) -> bool:
                     error_details = response.text
                 logger.error(f"Failed to archive conversation {conversation_id}. Status: {response.status_code}, Details: {error_details}")
                 # Trigger diagnostic logging on failure
-                _log_front_permission_diagnostics(conversation_id, f"archive_conversation_in_front failure (status {response.status_code})")
+                # _log_front_permission_diagnostics(conversation_id, f"archive_conversation_in_front failure (status {response.status_code})") # Commented out
 
                 response.raise_for_status() # This will raise an exception for 4xx/5xx if not 204
                 return False # Should not be reached if raise_for_status() works
@@ -336,7 +336,7 @@ def archive_conversation_in_front(conversation_id: str) -> bool:
             return False
         except Exception as e:
             logger.error(f"Unexpected error archiving conversation {conversation_id}: {str(e)}", exc_info=True)
-            _log_front_permission_diagnostics(conversation_id, f"archive_conversation_in_front exception: {str(e)}")
+            # _log_front_permission_diagnostics(conversation_id, f"archive_conversation_in_front exception: {str(e)}") # Commented out
             return False
 
 
@@ -839,65 +839,71 @@ def _plain_text_to_html(plain_text: str) -> str:
     return "".join(html_paragraphs)
 
 def send_conversation_reply(conversation_id: str, text: str) -> bool:
-    """
-    Send a reply to a Front conversation.
-    """
-    try:
-        headers = {
-            "Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}",
-            "Content-Type": "application/json"
-        }
+    """Send a reply to a conversation in Front as a specific teammate."""
+    if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL or not settings.FRONT_CHANNEL_ID or not settings.FRONT_BOT_TEAMMATE_ID:
+        logger.error("Missing required Front configuration for sending reply (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL, FRONT_CHANNEL_ID, FRONT_BOT_TEAMMATE_ID)")
+        return False
 
-        html_body = _plain_text_to_html(text)
+    html_body = _plain_text_to_html(text)
+    
+    headers = {
+        "Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+    data = {
+        "body": html_body, # Use the HTML formatted body
+        "channel_id": settings.FRONT_CHANNEL_ID,
+        "author_id": settings.FRONT_BOT_TEAMMATE_ID, # Restore author_id
+        "body_format": "html",  # Specify that the body is HTML
+        "type": "message"
+    }
+    url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/messages"
 
-        data = {
-            "body": html_body, # Use the HTML formatted body
-            "channel_id": settings.FRONT_CHANNEL_ID,
-            "author_id": settings.FRONT_BOT_TEAMMATE_ID,
-            "body_format": "html"  # Specify that the body is HTML
-        }
-        url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/messages"
-        
-        logger.info(f"Sending reply to conversation {conversation_id}")
-        logger.info(f"URL: {url}")
-        logger.info(f"Channel ID: {settings.FRONT_CHANNEL_ID}")
-        logger.info(f"Author ID: {settings.FRONT_BOT_TEAMMATE_ID}")
-        logger.debug(f"Request payload: {data}")
-        
-        with httpx.Client(verify=False) as client:
+    logger.info(f"Sending reply to conversation {conversation_id}")
+    # logger.debug(f"URL: {url}")
+    # logger.debug(f"Channel ID: {settings.FRONT_CHANNEL_ID}")
+    # logger.debug(f"Author ID: {settings.FRONT_BOT_TEAMMATE_ID}")
+    # logger.debug(f"Payload: {json.dumps(data)}") # Log the payload being sent
+
+    with httpx.Client(verify=False) as client: # Consider SSL verification
+        try:
             response = client.post(url, headers=headers, json=data)
-            response.raise_for_status()
-            
             logger.info(f"Response status: {response.status_code}")
-            logger.info(f"Response headers: {response.headers}")
-            response_data = {} 
-            try:
-                response_data = response.json()
-                logger.info(f"Response body: {response_data}")
-            except Exception as e:
-                logger.info(f"Response body (raw): {response.text}")
-                pass 
+            # logger.debug(f"Response headers: {response.headers}")
+            # logger.debug(f"Response body: {response.text}")
+
+            response_data = response.json()
             
-            if response_data.get('is_draft') is True:
-                _log_front_permission_diagnostics(conversation_id, "Message created as DRAFT")
-                logger.info("Returning False because message was a draft.")
-                return False 
-                
-            logger.info(f"Successfully sent reply to conversation {conversation_id} (is_draft was not True or not present).")
-            return True
-            
-    except httpx.HTTPStatusError as e:
-        logger.error(f"HTTP error sending reply to conversation {conversation_id}: Status {e.response.status_code} - Response: {e.response.text}")
-        # Check for specific 400 error for channel
-        if e.response.status_code == 400 and "Channel cannot send reply" in e.response.text:
-            _log_front_permission_diagnostics(conversation_id, "HTTP 400: Channel cannot send reply")
-        return False
-    except httpx.RequestError as e:
-        logger.error(f"Request error sending reply to conversation {conversation_id}: {str(e)}")
-        return False
-    except Exception as e:
-        logger.error(f"Unexpected error sending reply to conversation {conversation_id}: {e}", exc_info=True)
-        return False
+            # Check if the message was created as a draft, even if status is 202
+            is_draft = response_data.get('is_draft', False) # Default to False if key is missing
+            draft_mode = response_data.get('draft_mode')
+
+            if response.status_code in [200, 201, 202] and not is_draft:
+                logger.info(f"Successfully sent reply to conversation {conversation_id}.")
+                return True
+            elif response.status_code in [200, 201, 202] and is_draft:
+                # NOTE: The Front API response for POST /conversations/{id}/messages
+                # when author_id is specified (sending as a teammate) often returns
+                # is_draft: true and draft_mode: 'private' in the immediate response body,
+                # even if the message is successfully sent to the recipient almost immediately.
+                # This warning reflects the direct API response. Empirically, messages
+                # to channels like Gmail are often delivered despite this.
+                logger.warning(f"Reply to {conversation_id} created as a DRAFT (mode: {draft_mode}). It was NOT sent to the recipient according to the API response. Status: {response.status_code}")
+                # _log_front_permission_diagnostics(conversation_id, "Message Created as Draft") # Commented out
+                return False # Treat as failure for auto-response purposes based on API response
+            else:
+                logger.error(f"Error sending reply to {conversation_id}: {response.status_code} - {response.text}")
+                # _log_front_permission_diagnostics(conversation_id, f"API Error {response.status_code}") # Commented out
+                return False
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error sending reply to {conversation_id}: {e.response.status_code} - {e.response.text}", exc_info=True)
+            # _log_front_permission_diagnostics(conversation_id, "HTTPStatusError") # Commented out
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error sending reply to {conversation_id}: {str(e)}", exc_info=True)
+            # _log_front_permission_diagnostics(conversation_id, "Generic Exception") # Commented out
+            return False
 
 def list_teammates() -> List[Dict[str, Any]]:
     """List all teammates in the company.

@@ -84,7 +84,7 @@ Respond in JSON format with the following structure:
         reasoning = result.get("reasoning", "")
         extracted_info = result.get("extracted_info", {})
         
-        logger.info(f"Appointment inquiry detection reasoning: {reasoning}")
+        # logger.info(f"Appointment inquiry detection reasoning: {reasoning}") # Removed for cleaner logs
         
         return is_appointment_inquiry, {
             "is_appointment_inquiry": is_appointment_inquiry,
@@ -171,9 +171,9 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
     """
     Process an email for potential auto-response.
     """
-    logger.info(f"PROCESS_AUTORESPOND ENTRY: conversation_id='{conversation_id}' (type: {type(conversation_id)}, id: {id(conversation_id)})")
-    logger.info(f"PROCESS_AUTORESPOND ENTRY: db object (type: {type(db)}, id: {id(db)})")
-    logger.info(f"PROCESS_AUTORESPOND ENTRY: conversation_text (type: {type(conversation_text)}, length: {len(conversation_text) if isinstance(conversation_text, str) else 'N/A'})")
+    # logger.info(f"PROCESS_AUTORESPOND ENTRY: conversation_id='{conversation_id}' (type: {type(conversation_id)}, id: {id(conversation_id)})")
+    # logger.info(f"PROCESS_AUTORESPOND ENTRY: db object (type: {type(db)}, id: {id(db)})")
+    # logger.info(f"PROCESS_AUTORESPOND ENTRY: conversation_text (type: {type(conversation_text)}, length: {len(conversation_text) if isinstance(conversation_text, str) else 'N/A'})")
 
     try:
         # Log all channels for debugging
@@ -189,23 +189,23 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
         # except Exception as e_channels:
         #     logger.error(f"Error listing Front channels: {e_channels}", exc_info=True)
 
-        logger.info(f"BEFORE get_conversation_text: conversation_id='{conversation_id}' (type: {type(conversation_id)}, id: {id(conversation_id)}), db id: {id(db)}")
+        # logger.info(f"BEFORE get_conversation_text: conversation_id='{conversation_id}' (type: {type(conversation_id)}, id: {id(conversation_id)}), db id: {id(db)}")
         conversation_data = get_conversation_text(conversation_id)
-        logger.info(f"AFTER get_conversation_text: conversation_id='{conversation_id}' (type: {type(conversation_id)}, id: {id(conversation_id)}), db id: {id(db)}")
-        logger.info(f"AFTER get_conversation_text: conversation_data type={type(conversation_data)}")
-        if isinstance(conversation_data, dict):
-            logger.info(f"AFTER get_conversation_text: conversation_data keys={list(conversation_data.keys()) if conversation_data else 'None'}")
-        elif conversation_data is None:
-            logger.info("AFTER get_conversation_text: conversation_data is None")
-        else:
-            logger.info(f"AFTER get_conversation_text: conversation_data is of unexpected type: {type(conversation_data)}")
+        # logger.info(f"AFTER get_conversation_text: conversation_id='{conversation_id}' (type: {type(conversation_id)}, id: {id(conversation_id)}), db id: {id(db)}")
+        # logger.info(f"AFTER get_conversation_text: conversation_data type={type(conversation_data)}")
+        # if isinstance(conversation_data, dict):
+        #     logger.info(f"AFTER get_conversation_text: conversation_data keys={list(conversation_data.keys()) if conversation_data else 'None'}")
+        # elif conversation_data is None:
+        #     logger.info("AFTER get_conversation_text: conversation_data is None")
+        # else:
+        #     logger.info(f"AFTER get_conversation_text: conversation_data is of unexpected type: {type(conversation_data)}")
 
         if not conversation_data or not isinstance(conversation_data, dict):
             logger.warning(f"Could not get conversation data for conversation_id='{str(conversation_id)}' (type: {type(conversation_id)}), skipping auto-response")
             return {"status": "no_auto_response_needed", "details": "Failed to retrieve conversation data for auto-response"}
 
         last_message_details = conversation_data.get('last_message_details', {})
-        logger.info(f"Details for the last message author: {last_message_details}")
+        # logger.info(f"Details for the last message author: {last_message_details}") # Removed for cleaner logs
         
         sender_email = last_message_details.get('email') or last_message_details.get('handle')
         sender_name = last_message_details.get('name', "Valued Patient")
@@ -217,12 +217,12 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
         elif senders_list:
             last_sender_identifier = senders_list[-1]
         
-        logger.info(f"BEFORE bot check log (line 205 context): current conversation_id='{str(conversation_id)}' (type: {type(conversation_id)}, id: {id(conversation_id)})")
-        logger.info(f"Comparing with initial db id: {id(db)}")
+        # logger.info(f"BEFORE bot check log (line 205 context): current conversation_id='{str(conversation_id)}' (type: {type(conversation_id)}, id: {id(conversation_id)})")
+        # logger.info(f"Comparing with initial db id: {id(db)}")
         logger.info(f"Identifier for bot check: {last_sender_identifier} for conversation {conversation_id}. Sender name: {sender_name}")
         
         if not last_sender_identifier:
-            logger.info(f"BEFORE 'No sender identifier found' log (line 209 context): current conversation_id='{str(conversation_id)}' (type: {type(conversation_id)}, id: {id(conversation_id)})")
+            # logger.info(f"BEFORE 'No sender identifier found' log (line 209 context): current conversation_id='{str(conversation_id)}' (type: {type(conversation_id)}, id: {id(conversation_id)})")
             logger.warning(f"No sender identifier found for conversation ID '{str(conversation_id)}'. Skipping auto-response.")
             return {"status": "no_auto_response_needed", "details": "No sender identifier found"}
 
@@ -245,22 +245,22 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
         logger.error(f"Error during initial data retrieval or bot check for {conversation_id}: {e}", exc_info=True)
         return {"status": "no_auto_response_needed", "details": f"Error during initial data retrieval or bot check: {e}"}
     
-    logger.info(f"Checking for mofo patient data for conversation {conversation_id}")
+    # logger.info(f"Checking for mofo patient data for conversation {conversation_id}") # Removed for cleaner logs
     patient_data_records = await pcd_crud.get_all_for_conversation(db, front_conversation_id=conversation_id)
-    logger.info(f"Patient data records: {patient_data_records}")
+    # logger.info(f"Patient data records: {patient_data_records}") # Removed for cleaner logs
 
     if not patient_data_records:
         logger.info(f"No patient data found for conversation {conversation_id}, skipping auto-response based on patient data linkage.")
         return {"status": "no_auto_response_needed", "details": "No patient data found for conversation"}
-    else:
-        logger.info(f"Patient data found for conversation {conversation_id}. Count: {len(patient_data_records)}")
+    # else: # Removed for cleaner logs
+        # logger.info(f"Patient data found for conversation {conversation_id}. Count: {len(patient_data_records)}") # Removed for cleaner logs
 
     is_appointment_inquiry, inquiry_info = detect_appointment_inquiry(conversation_text)
-    logger.info(f"is_appointment_inquiry: {is_appointment_inquiry}, confidence: {inquiry_info.get('confidence')}")
+    logger.info(f"Appointment inquiry detection for {conversation_id}: {is_appointment_inquiry}, confidence: {inquiry_info.get('confidence')}") # Simplified log
     
     # Using hardcoded confidence threshold of 0.75
     if is_appointment_inquiry and inquiry_info.get("confidence", 0.0) >= 0.75:
-        logger.info(f"Detected appointment inquiry in conversation {conversation_id} with confidence {inquiry_info['confidence']}")
+        logger.info(f"Proceeding with auto-response for {conversation_id} (inquiry: {is_appointment_inquiry}, confidence: {inquiry_info['confidence']})") # Simplified log
         
         extracted_info = inquiry_info.get("extracted_info", {})
         patient_record = patient_data_records[0]
@@ -283,15 +283,15 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
             if first_name and last_name:
                 patient_name_for_greeting = f"{str(first_name).strip()} {str(last_name).strip()}" # Added str() for safety
                 db_patient_name_found = True
-                logger.info(f"Using patient name from DB record: {patient_name_for_greeting}")
+                # logger.info(f"Using patient name from DB record: {patient_name_for_greeting}") # Removed for cleaner logs
             elif actual_patient_data.get("full_name"): 
                 patient_name_for_greeting = str(actual_patient_data.get("full_name")).strip() # Added str()
                 db_patient_name_found = True
-                logger.info(f"Using patient full_name from DB record: {patient_name_for_greeting}")
+                # logger.info(f"Using patient full_name from DB record: {patient_name_for_greeting}") # Removed for cleaner logs
 
         if not db_patient_name_found:
             patient_name_for_greeting = sender_name 
-            logger.info(f"Patient name not found or incomplete in DB patient_info. Using sender name from email: {patient_name_for_greeting}")
+            # logger.info(f"Patient name not found or incomplete in DB patient_info. Using sender name from email: {patient_name_for_greeting}") # Removed for cleaner logs
         
         appointment_info_for_ai = {
             "date": extracted_info.get("dates", ["To be confirmed"])[0] if extracted_info.get("dates") else "To be confirmed",
@@ -301,7 +301,7 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
             "accession_number": extracted_info.get("accession_number", "To be retrieved")
         }
         
-        logger.info(f"Data prepared for AI response generation: {appointment_info_for_ai}")
+        # logger.info(f"Data prepared for AI response generation: {appointment_info_for_ai}") # Removed for cleaner logs
         
         template_content = load_template("appointment_details_response")
         if not template_content:
@@ -317,7 +317,7 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
         
         if response_text:
             logger.info(f"Generated AI response text for {conversation_id}. Length: {len(response_text)}")
-            logger.debug(f"AI Response for {conversation_id}:\n{response_text}")
+            # logger.debug(f"AI Response for {conversation_id}:\n{response_text}") # Removed for cleaner logs
             try:
                 # Using send_conversation_reply to send as a teammate
                 success = send_conversation_reply(conversation_id, response_text)
@@ -325,8 +325,11 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
                     logger.info(f"Sent auto-response as teammate for inquiry in {conversation_id}.")
                     return {"status": "auto_response_sent", "details": "AI appointment response sent as teammate."}
                 else:
-                    logger.error(f"Failed to send auto-response as teammate for {conversation_id}. Check Front logs and FRONT_BOT_TEAMMATE_ID permissions.")
-                    return {"status": "no_auto_response_needed", "details": "Failed to send auto-response as teammate via Front API."}
+                    # This error is logged because send_conversation_reply returns False when the Front API
+                    # indicates the message is a draft (is_draft: true). However, empirically,
+                    # the message often still gets delivered to the recipient.
+                    logger.error(f"Failed to send auto-response as teammate for {conversation_id} according to Front API (likely due to 'is_draft: true'). Message may still have been delivered.")
+                    return {"status": "no_auto_response_needed", "details": "Failed to send auto-response as teammate via Front API (reported as draft)."}
             except Exception as e:
                 logger.error(f"Exception sending auto-response as teammate for {conversation_id}: {e}", exc_info=True)
                 return {"status": "no_auto_response_needed", "details": f"Exception sending auto-response: {e}"}
@@ -334,5 +337,6 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
             logger.error(f"Failed to generate AI response text for {conversation_id}") # Should be caught by fallback in generator
             return {"status": "no_auto_response_needed", "details": "Failed to generate AI response text"}
     
-    logger.info(f"Auto-response not triggered for conversation_id='{str(conversation_id)}' (inquiry: {is_appointment_inquiry}, confidence: {inquiry_info.get('confidence')}")
+    # logger.info(f"Auto-response not triggered for conversation_id='{str(conversation_id)}' (inquiry: {is_appointment_inquiry}, confidence: {inquiry_info.get('confidence')}") # This can be noisy if not triggered often
+    logger.info(f"Auto-response not triggered for {conversation_id} (inquiry: {is_appointment_inquiry}, confidence: {inquiry_info.get('confidence')})") # Reverted to original, less verbose
     return {"status": "no_auto_response_needed", "details": "Auto-response conditions not met (e.g., not appointment inquiry or low confidence)."} 
