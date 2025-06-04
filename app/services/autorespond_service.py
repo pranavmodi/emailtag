@@ -167,7 +167,7 @@ def generate_appointment_response(
         logger.error(f"Missing template variable: {e}")
         return ""
 
-async def process_autorespond(db: AsyncSession, conversation_id: str, conversation_text: str) -> bool:
+async def process_autorespond(db: AsyncSession, conversation_id: str, conversation_text: str) -> Dict[str, Any]:
     """
     Process an email for potential auto-response.
     """
@@ -188,7 +188,7 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
         conversation_data = get_conversation_text(conversation_id)
         if not conversation_data or not isinstance(conversation_data, dict):
             logger.warning(f"Could not get conversation data for {conversation_id}, skipping auto-response")
-            return False
+            return {"status": "no_auto_response_needed", "details": "Failed to retrieve conversation data for auto-response"}
 
         last_message_details = conversation_data.get('last_message_details', {})
         logger.info(f"Details for the last message author: {last_message_details}")
@@ -206,8 +206,8 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
         logger.info(f"Identifier for bot check: {last_sender_identifier} for conversation {conversation_id}. Sender name: {sender_name}")
         
         if not last_sender_identifier:
-            logger.warning(f"No sender identifier found for conversation {conversation_id}. Skipping auto-response.")
-            return False
+            logger.warning(f"No sender identifier found for conversation ID '{str(conversation_id)}'. Skipping auto-response.")
+            return {"status": "no_auto_response_needed", "details": "No sender identifier found"}
 
         # Enhanced bot detection: check identifier, name, and signature
         is_bot_in_identifier = "bot" in last_sender_identifier.lower()
@@ -222,11 +222,11 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
                         f"Identifier: '{last_sender_identifier}' (match: {is_bot_in_identifier}), "
                         f"Name: '{sender_name}' (match: {is_bot_in_name}), "
                         f"Signature match: {is_bot_signature_match}")
-            return False
+            return {"status": "no_auto_response_needed", "details": "Bot detected"}
             
     except Exception as e:
         logger.error(f"Error during initial data retrieval or bot check for {conversation_id}: {e}", exc_info=True)
-        return False
+        return {"status": "no_auto_response_needed", "details": f"Error during initial data retrieval or bot check: {e}"}
     
     logger.info(f"Checking for mofo patient data for conversation {conversation_id}")
     patient_data_records = await pcd_crud.get_all_for_conversation(db, front_conversation_id=conversation_id)
@@ -234,7 +234,7 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
 
     if not patient_data_records:
         logger.info(f"No patient data found for conversation {conversation_id}, skipping auto-response based on patient data linkage.")
-        return False
+        return {"status": "no_auto_response_needed", "details": "No patient data found for conversation"}
     else:
         logger.info(f"Patient data found for conversation {conversation_id}. Count: {len(patient_data_records)}")
 
@@ -289,7 +289,7 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
         template_content = load_template("appointment_details_response")
         if not template_content:
             logger.error(f"Failed to load 'appointment_details_response' template for {conversation_id}. Cannot generate AI response.")
-            return False
+            return {"status": "no_auto_response_needed", "details": "Failed to load appointment_details_response template"}
 
         response_text = generate_openai_appointment_response( # This is now imported
             base_template_content=template_content,
@@ -306,15 +306,16 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
                 success = send_conversation_reply(conversation_id, response_text)
                 if success:
                     logger.info(f"Sent auto-response as teammate for inquiry in {conversation_id}.")
+                    return {"status": "auto_response_sent", "details": "AI appointment response sent as teammate."}
                 else:
                     logger.error(f"Failed to send auto-response as teammate for {conversation_id}. Check Front logs and FRONT_BOT_TEAMMATE_ID permissions.")
-                return success
+                    return {"status": "no_auto_response_needed", "details": "Failed to send auto-response as teammate via Front API."}
             except Exception as e:
                 logger.error(f"Exception sending auto-response as teammate for {conversation_id}: {e}", exc_info=True)
-                return False
+                return {"status": "no_auto_response_needed", "details": f"Exception sending auto-response: {e}"}
         else:
             logger.error(f"Failed to generate AI response text for {conversation_id}") # Should be caught by fallback in generator
-            return False
+            return {"status": "no_auto_response_needed", "details": "Failed to generate AI response text"}
     
     logger.info(f"Auto-response not triggered for {conversation_id} (inquiry: {is_appointment_inquiry}, confidence: {inquiry_info.get('confidence')}")
-    return False 
+    return {"status": "no_auto_response_needed", "details": "Auto-response conditions not met (e.g., not appointment inquiry or low confidence)."} 

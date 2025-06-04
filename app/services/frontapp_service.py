@@ -774,27 +774,47 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
-                # logger.warning(f"Conversation {conversation_id} not found in Front.")
+                logger.warning(f"Front API returned 404 (Not Found) for messages in conversation {conversation_id}. This might be due to timing, permissions, or if the conversation has no messages or was deleted. Returning empty details.")
                 return {
                     'text': '', 
                     'senders': [], 
                     'timestamps': [], 
-                    'last_message_details': {},
+                    'last_message_details': { # Explicitly return empty dict with keys for consistency if preferred, or just {} is fine
+                        'email': None,
+                        'handle': None,
+                        'name': "Unknown Sender"
+                    },
                     '_structured_messages': []
                 }
-            # logger.error(f"HTTP error fetching messages for {conversation_id}: {e.response.status_code} - {e.response.text}")
+            logger.error(f"HTTP error fetching messages for {conversation_id}: {e.response.status_code} - {e.response.text}")
             raise
         except Exception as e:
-            # logger.error(f"Error fetching messages for conversation {conversation_id}: {str(e)}")
+            logger.error(f"Unexpected error fetching messages for conversation {conversation_id}: {str(e)}", exc_info=True)
             # Ensure default structure is returned on other errors too
             return {
                 'text': '', 
                 'senders': [], 
                 'timestamps': [], 
-                'last_message_details': {},
+                'last_message_details': {
+                    'email': None,
+                    'handle': None,
+                    'name': "Unknown Sender"
+                },
                 '_structured_messages': []
             }
-            # raise # Optionally re-raise after returning default
+    # Fallback if client context exits unexpectedly (should not happen with try/finally)
+    logger.error(f"Exited httpx.Client context unexpectedly in get_conversation_text for {conversation_id}")
+    return {
+        'text': '', 
+        'senders': [], 
+        'timestamps': [], 
+        'last_message_details': {
+            'email': None,
+            'handle': None,
+            'name': "Unknown Sender"
+        },
+        '_structured_messages': []
+    }
 
 def _plain_text_to_html(plain_text: str) -> str:
     """Converts plain text to simple HTML with paragraphs and line breaks."""
