@@ -48,6 +48,7 @@ class EmailInDBBase(EmailBase):
     
     id: UUID
     status: str
+    has_attachments: bool
     ocr_attachments_total: Optional[int] = None
     ocr_attachments_completed: Optional[int] = None
     # ocr_patient_id: Optional[str] = None # Removed

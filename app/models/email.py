@@ -38,6 +38,7 @@ class Email(Base):
     
     # Add status field
     status: Mapped[str] = mapped_column(String, default="pending_initial", index=True) # e.g., pending_initial, pending_ocr, ocr_completed, processing, processed, error
+    has_attachments: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     # Add OCR tracking fields
     ocr_attachments_total: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
