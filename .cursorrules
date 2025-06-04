@@ -19,5 +19,68 @@ Development guidelines:
 
 When an email comes into the CRM - FrontApp - it sends the email to a webhook defined by this repo. 
 
+The category tree, for an understanding of the tagging structure. Tagging should only be done using a leaf node from the hierarchy
+
+Email_Categories
+├── Scheduling
+│   ├── RX
+│   │   ├── Order Pending
+│   │   ├── Order Entered
+│   │   ├── Incomplete
+│   │   ├── RX Request
+│   │   ├── Apt Status Req
+│   │   ├── No Show
+│   │   └── Cash Patient
+│   ├── Cancelled
+│   │   └── Cancelled
+│   ├── Reschedule Request
+│   │   └── Reschedule Request
+│   ├── Schedule Request
+│   │   └── Schedule Request
+│   └── Will contact patient
+│       └── Will contact patient
+├── Medical Records & Images
+│   ├── Release of Records
+│   ├── Image Request
+│   ├── CD Requests
+│   ├── Reports Request
+│   ├── US Tech Sheet
+│   ├── Portal Requests
+│   ├── Referral pad request
+│   ├── Incorrect patient info
+│   └── Incorrect study info
+└── Accounts Receivable
+    ├── Billing
+    │   └── Bill or balance Request
+    ├── Liens
+    │   ├── Missing Lien Request
+    │   ├── PSL
+    │   │   ├── Rad Lien
+    │   │   ├── Tech Lien
+    │   │   └── Lien Modified
+    │   └── ASL
+    │       ├── Rad Lien
+    │       ├── Tech Lien
+    │       └── Lien Modified
+    ├── Negotiations
+    │   ├── Bill Offer
+    │   ├── Pending Approval
+    │   ├── Offer Approved
+    │   └── Counter Offer Sent
+    ├── Case Updates
+    │   ├── New Attorney
+    │   ├── Drop Letter
+    │   ├── Drop Pending
+    │   ├── Promise to send payment
+    │   ├── Waiting to clear liability
+    │   ├── Waiting on settlement check
+    │   ├── Sent payment but not received
+    │   ├── Refund Request
+    │   └── Payment on way
+    └── Collections
+        ├── To send to collections
+        ├── Sent to Collections
+        ├── Attorney Non-Payment
+        └── To Review
 
 
