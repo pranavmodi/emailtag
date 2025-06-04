@@ -39,156 +39,203 @@ logger = get_task_logger(__name__)
 @celery_app.task(name="app.tasks.email.process_email")
 def process_email(email_id: str) -> Dict:
     """
-    Process an email by validating its ID and starting the classification task.
-
-    Args:
-        email_id: The UUID of the email to process
-
-    Returns:
-        Dict: Status of the processing initiation
+    Process an email:
+    1. Validates email ID.
+    2. Checks if OCR is needed based on attachments.
+    3. If OCR is needed, sets status to 'pending_ocr', populates 'ocr_attachments_total',
+       and dispatches 'send_attachment_to_ocr' tasks for each attachment.
+    4. If OCR is not needed (no attachments or already processed),
+       it directly queues 'orchestrate_post_ocr_processing'.
     """
-    # logger.info(f"Processing email {email_id}")
+    logger.info(f"Processing email {email_id} in new flow.")
 
-    # Convert string to UUID
     try:
         email_uuid = UUID(email_id)
     except ValueError:
-        # logger.error(f"Invalid UUID format for email_id: {email_id}")
+        logger.error(f"Invalid UUID format for email_id: {email_id}")
         return {"status": "error", "message": "Invalid email ID format"}
 
-    # Start classification/tagging task
-    # Rename tag_email task to classify_email_category_task for clarity? Let's keep tag_email for now.
-    tag_email.delay(email_id)
-
-    return {"status": "processing", "email_id": email_id}
-
-
-@celery_app.task(name="app.tasks.email.tag_email")
-def tag_email(email_id: str) -> Dict:
-    """
-    Classify an email into a category and subcategory using AI analysis and apply tags.
-
-    Args:
-        email_id: The UUID of the email to classify and tag
-
-    Returns:
-        Dict: Status of the classification and tagging process
-    """
-    # logger.info(f"Classifying email {email_id}")
-
-    # Convert string to UUID
-    try:
-        email_uuid = UUID(email_id)
-    except ValueError:
-        # logger.error(f"Invalid UUID format for email_id in tag_email task: {email_id}")
-        return {"status": "error", "message": "Invalid email ID format"}
-
-    # Get database session
     db = SessionLocal()
     try:
-        # Get email from database using synchronous CRUD
-        logger.info("motherfucker sisterfucker")
         email_obj = email_crud_sync.get(db, id=email_uuid)
         if not email_obj:
-            # logger.error(f"Email {email_id} not found for classification")
+            logger.error(f"Email {email_id} not found in process_email task.")
             return {"status": "error", "message": "Email not found"}
 
-        # Get front conversation ID for analysis
+        # Assuming 'ocr_status' can be: None (not processed), 'pending_ocr', 'ocr_completed', 'ocr_error', 'ocr_skipped'
+        # And Email model has 'ocr_attachments_total'
+        
+        needs_ocr = False
+        if email_obj.has_attachments and email_obj.status not in ["ocr_completed", "ocr_error", "ocr_skipped", "pending_ocr"]: # Basic check
+             # More robust: check a dedicated ocr_status field if available
+             needs_ocr = True
+
+
+        if needs_ocr:
+            logger.info(f"Email {email_id} has attachments and requires OCR.")
+            
+            attachments_data = []
+            try:
+                # Path to attachments in raw_data might vary based on your webhook structure
+                # Example path assuming FrontApp webhook structure stored in raw_data:
+                if email_obj.raw_data and isinstance(email_obj.raw_data, dict):
+                    target_data = email_obj.raw_data.get('target', {}).get('data', {})
+                    attachments_data = target_data.get('attachments', [])
+                
+                if not attachments_data:
+                     logger.warning(f"Email {email_id} marked with has_attachments but no attachment data found in raw_data. Skipping OCR.")
+                     # Update status to indicate skipped OCR or proceed as if no attachments
+                     email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="ocr_skipped")) # Example status
+                     orchestrate_post_ocr_processing.apply_async(args=[email_id], queue='processing')
+                     return {"status": "ocr_skipped", "email_id": email_id}
+
+            except Exception as e:
+                logger.error(f"Error accessing attachment data from raw_data for {email_id}: {e}. Skipping OCR.")
+                email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="ocr_error")) # Mark as error
+                return {"status": "error", "message": "Failed to access attachment data"}
+
+            ocr_attachments_total = len(attachments_data)
+            logger.info(f"Found {ocr_attachments_total} attachments for email {email_id}.")
+
+            # Update email with pending_ocr status and total attachments count
+            # Ensure EmailUpdate schema and Email model support ocr_attachments_total
+            update_payload = EmailUpdate(
+                status="pending_ocr",
+                ocr_attachments_total=ocr_attachments_total,
+                ocr_attachments_completed=0 # Reset completed count
+            )
+            email_crud_sync.update(db, db_obj=email_obj, obj_in=update_payload)
+            
+            for attachment in attachments_data:
+                attachment_url = attachment.get("url")
+                if attachment_url:
+                    logger.info(f"Queueing OCR for attachment {attachment_url} for email {email_id} to 'ocr' queue")
+                    # send_attachment_to_ocr.delay(email_id, attachment_url)
+                    send_attachment_to_ocr.apply_async(args=[email_id, attachment_url], queue='ocr')
+                else:
+                    logger.warning(f"Attachment for email {email_id} is missing a URL. Decrementing total.")
+                    # If an attachment has no URL, we should decrement the total count
+                    # so the completion logic in send_attachment_to_ocr works correctly.
+                    ocr_attachments_total -= 1
+                    email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(ocr_attachments_total=ocr_attachments_total))
+
+
+            if ocr_attachments_total == 0 and attachments_data: # All attachments lacked URLs
+                logger.warning(f"All attachments for {email_id} lacked URLs. Skipping OCR phase.")
+                email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="ocr_skipped"))
+                # orchestrate_post_ocr_processing.delay(email_id)
+                orchestrate_post_ocr_processing.apply_async(args=[email_id], queue='processing')
+                return {"status": "ocr_skipped_no_urls", "email_id": email_id}
+            
+            return {"status": "ocr_initiated", "email_id": email_id, "attachments_queued": ocr_attachments_total}
+
+        else:
+            logger.info(f"Email {email_id} does not require OCR or OCR already handled. Proceeding to orchestration on 'processing' queue.")
+            # If OCR was previously completed, status might be 'ocr_completed'.
+            # If no attachments, has_attachments is false.
+            # If OCR was skipped, status might be 'ocr_skipped'.
+            # orchestrate_post_ocr_processing.delay(email_id)
+            orchestrate_post_ocr_processing.apply_async(args=[email_id], queue='processing')
+            return {"status": "processing_ocr_not_needed", "email_id": email_id}
+
+    except Exception as e:
+        logger.exception(f"Error in process_email for {email_id}: {e}")
+        if db.is_active:
+            db.rollback()
+        # Optionally update email status to an error state here
+        return {"status": "error", "message": str(e)}
+    finally:
+        if db.is_active:
+            db.close()
+
+
+@celery_app.task(name="app.tasks.email.orchestrate_post_ocr_processing")
+def orchestrate_post_ocr_processing(email_id: str) -> Dict:
+    """
+    Orchestrates processing after OCR (or if OCR was skipped).
+    1. Fetches email.
+    2. Performs Topic Split Detection.
+    3. Performs Archiving Check.
+    4. If not split or archived, queues perform_tagging_task.
+    """
+    logger.info(f"Orchestrating post-OCR/skipped processing for email {email_id}")
+
+    try:
+        email_uuid = UUID(email_id)
+    except ValueError:
+        logger.error(f"Invalid UUID format for email_id in orchestrate_post_ocr_processing: {email_id}")
+        return {"status": "error", "message": "Invalid email ID format"}
+
+    db = SessionLocal()
+    try:
+        email_obj = email_crud_sync.get(db, id=email_uuid)
+        if not email_obj:
+            logger.error(f"Email {email_id} not found for orchestration")
+            return {"status": "error", "message": "Email not found"}
+
         front_conversation_id = email_obj.front_conversation_id
         if not front_conversation_id:
-            # logger.error(f"Email {email_id} does not have a Front conversation ID. Cannot classify.")
-            email_crud_sync.mark_as_processed(db, email_id=email_uuid)
-            return {"status": "error", "message": "Missing Front conversation ID"}
+            logger.error(f"Email {email_id} does not have a Front conversation ID. Cannot orchestrate.")
+            # Mark as processed with an error or a specific status
+            email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="orchestration_failed_no_front_id", is_processed=True))
+            return {"status": "error", "message": "Missing Front conversation ID for orchestration"}
 
-        # --- TOPIC SPLIT DETECTION ---
+        # --- TOPIC SPLIT DETECTION --- (Copied and adapted from tag_email)
         is_potential_split = False
         try:
-            # Get conversation history for topic analysis
-            conversation_data_for_split = get_conversation_text(front_conversation_id) # Fetches all messages including _structured_messages
-            
+            conversation_data_for_split = get_conversation_text(front_conversation_id)
             structured_messages_for_analysis = conversation_data_for_split.get('_structured_messages', [])
 
             if not structured_messages_for_analysis:
-                logger.warning(f"Could not retrieve structured message history from get_conversation_text for {front_conversation_id} to attempt topic split. Proceeding without split check.")
-            elif len(structured_messages_for_analysis) <= 1: # If only one message (the current one) or no messages, no history to compare.
-                logger.info(f"Conversation {front_conversation_id} has only one or no messages in structured history. No split check needed.")
+                logger.warning(f"Could not retrieve structured message history for {front_conversation_id} to attempt topic split. Proceeding without split check.")
+            elif len(structured_messages_for_analysis) <= 1:
+                logger.info(f"Conversation {front_conversation_id} has only one or no messages. No split check needed.")
             else:
-                # The history is all messages *before* the current one (which is usually the last one in structured_messages_for_analysis if it includes the current incoming).
-                # Assuming the current email_obj corresponds to the *last* message in structured_messages_for_analysis.
-                # If structured_messages_for_analysis *only* contains history prior to email_obj, adjust logic.
-                # For now, assume it *includes* the current message as the last item.
-                logger.debug(f"[SPLIT_DEBUG] Raw structured_messages_for_analysis for {front_conversation_id}: {structured_messages_for_analysis}")
-
-                history_for_prompt = structured_messages_for_analysis[:-1] # All but the last message
-                logger.debug(f"[SPLIT_DEBUG] history_for_prompt for {front_conversation_id}: {history_for_prompt}")
-                # current_message_from_structured = structured_messages_for_analysis[-1] # The current message, for reference
-
+                history_for_prompt = structured_messages_for_analysis[:-1]
                 transformed_history_for_analysis = []
                 for msg in history_for_prompt:
                     transformed_history_for_analysis.append({
-                        "sender_type": msg.get("author_role", "user"), # 'user' or 'agent'
-                        "body": msg.get("body", "") # Cleaned text body
+                        "sender_type": msg.get("author_role", "user"),
+                        "body": msg.get("body", "")
                     })
-                logger.debug(f"[SPLIT_DEBUG] transformed_history_for_analysis for {front_conversation_id}: {transformed_history_for_analysis}")
                 
-                # The new message triggering this task is represented by email_obj
-                new_message_text_for_analysis = email_obj.content_text # Changed from email_obj.body
-                new_message_sender_role_for_analysis = "User" # Current inbound is always from a 'User' perspective
-                logger.debug(f"[SPLIT_DEBUG] new_message_text_for_analysis for {front_conversation_id}: {new_message_text_for_analysis}")
-                logger.debug(f"[SPLIT_DEBUG] new_message_sender_role_for_analysis for {front_conversation_id}: {new_message_sender_role_for_analysis}")
-
-                # Wrap the async call with asyncio.run()
-                split_decision = False # Default to false
+                new_message_text_for_analysis = email_obj.content_text
+                new_message_sender_role_for_analysis = "User"
+                
+                split_decision = False
                 async def _run_topic_analysis_async():
-                    nonlocal split_decision # Allow modification of outer scope variable
+                    nonlocal split_decision
                     split_decision = await is_new_unresolved_topic_present(
                         conversation_messages=transformed_history_for_analysis,
                         new_message_text=new_message_text_for_analysis,
                         new_message_sender_role=new_message_sender_role_for_analysis
                     )
-                
                 asyncio.run(_run_topic_analysis_async())
-                logger.debug(f"[SPLIT_DEBUG] AI decision for {front_conversation_id} (is_new_unresolved_topic_present result): {split_decision}")
                 
                 if split_decision:
                     is_potential_split = True
                     logger.info(f"AI detected new unresolved topic for email {email_id} in conversation {front_conversation_id}.")
                 else:
-                    logger.info(f"AI analysis: No new unresolved topic detected for email {email_id}. Proceeding normally.")
+                    logger.info(f"AI analysis: No new unresolved topic for email {email_id}. Proceeding normally.")
 
         except Exception as e_topic_detect:
             logger.error(f"Error during topic split detection for {front_conversation_id}: {e_topic_detect}", exc_info=True)
-            # Fallback: do not split if detection fails
             is_potential_split = False
 
         if is_potential_split:
             try:
                 logger.info(f"Attempting to split message from email {email_id} (conversation {front_conversation_id}).")
-                
-                # Details for the new conversation
-                # The 'to_handle' should be the address of your Front channel
-                # This information might not be directly on email_obj if it's just storing sender/body.
-                # We'll use the configured FRONT_CHANNEL_ID to form a presumed "to" handle.
-                # This might need adjustment based on how you want the "to" field of the new message to look.
-                # For an incoming message to a channel, the "to" is usually the channel's address.
-                if not settings.FRONT_CHANNEL_PRIMARY_EMAIL: # New setting: e.g., support@yourcompany.com
+                if not settings.FRONT_CHANNEL_PRIMARY_EMAIL:
                     logger.error("FRONT_CHANNEL_PRIMARY_EMAIL setting is not configured. Cannot determine 'to_handle' for split.")
                     raise ValueError("FRONT_CHANNEL_PRIMARY_EMAIL not configured.")
 
                 new_conv_subject = f"Split: {email_obj.subject.replace('[SPLIT]', '').strip() if email_obj.subject else 'Split Conversation'}"
-                new_conv_body = email_obj.content_text if email_obj.content_text else email_obj.content_html # Prefer text, fallback to HTML
-                new_conv_sender_handle = email_obj.sender # Changed from sender_address
-                # email_obj.sender_name is not a direct attribute of the Email model.
-                # We should use the sender handle as name, or potentially retrieve it differently if crucial.
-                # For now, using the handle (email address typically) as the name for simplicity.
-                new_conv_sender_name = email_obj.sender # Using sender handle as name
-                
-                # The channel ID for the NEW message will be your primary channel
+                new_conv_body = email_obj.content_text if email_obj.content_text else email_obj.content_html
+                new_conv_sender_handle = email_obj.sender
+                new_conv_sender_name = email_obj.sender
                 target_channel_id_for_new_conv = settings.FRONT_CHANNEL_ID
-
-                # Metadata for the new conversation
                 new_conv_metadata = {
-                    "thread_ref": f"split-from-{front_conversation_id}-{email_obj.id.hex[:8]}", # Unique thread ref
+                    "thread_ref": f"split-from-{front_conversation_id}-{email_obj.id.hex[:8]}",
                     "is_inbound": True,
                     "source_conversation_id": front_conversation_id,
                     "source_email_db_id": str(email_obj.id)
@@ -198,34 +245,28 @@ def tag_email(email_id: str) -> Dict:
                     channel_id=target_channel_id_for_new_conv,
                     sender_handle=new_conv_sender_handle,
                     sender_name=new_conv_sender_name,
-                    to_handle=settings.FRONT_CHANNEL_PRIMARY_EMAIL, # The address of *your* channel
+                    to_handle=settings.FRONT_CHANNEL_PRIMARY_EMAIL,
                     subject=new_conv_subject,
                     body=new_conv_body,
-                    body_format="html", # Assuming HTML, adjust if needed from email_obj
+                    body_format="html",
                     metadata=new_conv_metadata
                 )
 
                 if split_response and split_response.get("conversation_reference"):
                     new_front_conv_ref = split_response.get("conversation_reference")
                     logger.info(f"Successfully created new Front conversation ({new_front_conv_ref}) for split message from email {email_id}.")
-                    
-                    # Tag original conversation
                     try:
                         add_conversation_tags(front_conversation_id, ["System: Split - New Topic"])
                         logger.info(f"Tagged original conversation {front_conversation_id} for split.")
                     except Exception as tag_err:
                         logger.error(f"Failed to tag original conversation {front_conversation_id} after split: {tag_err}")
                     
-                    # Update status of the original email_obj that was split off
                     email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="split_off", is_processed=True))
                     logger.info(f"Marked email {email_id} as 'split_off' and processed.")
-                    
-                    # The new conversation created will be picked up by the webhook as a new inbound message
-                    # and will go through the process_email -> tag_email flow independently.
                     return {"status": "success_split", "original_email_id": email_id, "new_conversation_reference": new_front_conv_ref}
                 else:
                     logger.error(f"Failed to create new conversation for split (email {email_id}). API response: {split_response}")
-                    # Fall through to regular processing if split failed critically
+                    # Fall through to regular processing if split failed critically (handled by not returning)
 
             except Exception as e_split:
                 logger.error(f"Error during split attempt for email {email_id}: {e_split}", exc_info=True)
@@ -233,35 +274,88 @@ def tag_email(email_id: str) -> Dict:
         
         # --- END TOPIC SPLIT DETECTION ---
 
-        # --- Check for archiving before proceeding (if not split) --- 
+        # --- Check for archiving before proceeding (if not split and split didn't return) ---
+        # (Copied and adapted from tag_email)
         try:
-            logger.info(f"Checking if mofo conversation {front_conversation_id} can be archived before tagging.")
-            # Note: check_and_archive_conversation is an async function
-            # We need to run it in an event loop if called from a sync celery task
+            logger.info(f"Checking if conversation {front_conversation_id} can be archived before tagging.")
             async def _run_archive_check_async():
-                # Ensure AsyncSessionLocal is used if check_and_archive_conversation needs a db session
-                # For now, assuming it handles its own session or doesn't need one directly passed here.
                 return await check_and_archive_conversation(front_conversation_id)
             
             was_archived = asyncio.run(_run_archive_check_async())
 
             if was_archived:
-                logger.info(f"Conversation {front_conversation_id} was archived. Skipping auto-response and tagging.")
-                # Mark email as processed since archiving is a final state for this workflow path
-                email_crud_sync.mark_as_processed(db, email_id=email_uuid)
-                return {"status": "success_archived", "email_id": email_id}
+                logger.info(f"Conversation {front_conversation_id} was archived. Orchestration complete for this path.")
+                email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="archived_in_orchestration", is_processed=True))
+                return {"status": "success_archived_orchestration", "email_id": email_id}
             else:
-                logger.info(f"Conversation {front_conversation_id} not archived. Proceeding with auto-response and tagging.")
+                logger.info(f"Conversation {front_conversation_id} not archived. Proceeding to tagging.")
         except Exception as e_archive_check:
             logger.error(f"Error during pre-tagging archive check for {front_conversation_id}: {e_archive_check}", exc_info=True)
             # Proceed with tagging if archive check fails
 
-        # Fetch conversation text for classification and auto-response (moved earlier)
+        # If not split and not archived, queue for tagging
+        # perform_tagging_task.delay(email_id)
+        perform_tagging_task.apply_async(args=[email_id], queue='tagging')
+        logger.info(f"Queued email {email_id} for tagging on 'tagging' queue.")
+        return {"status": "queued_for_tagging", "email_id": email_id}
+
+    except Exception as e:
+        logger.exception(f"Error in orchestrate_post_ocr_processing for {email_id}: {str(e)}")
+        if db.is_active:
+            db.rollback()
+        # Update email status to reflect orchestration failure
+        try: # Try to update status even in exception block
+            email_uuid_for_error = UUID(email_id) # Re-validate for safety
+            # email_obj_for_error = email_crud_sync.get(db, id=email_uuid_for_error) # db might be closed or rolled back
+            # To update status in case of failure, we might need a fresh session or a separate utility
+            # For now, this error will be caught by Celery retry or marked as failed by Celery itself.
+            # Consider a robust way to mark email as 'orchestration_failed' if possible.
+        except: # Outer try-except for safety with UUID conversion
+            pass 
+        return {"status": "error", "message": str(e)}
+    finally:
+        if db.is_active:
+            db.close()
+
+
+@celery_app.task(name="app.tasks.email.perform_tagging_task")
+def perform_tagging_task(email_id: str) -> Dict:
+    """
+    Performs email classification and tagging.
+    1. Fetches email and conversation context.
+    2. Classifies email for tags.
+    3. Resolves tag conflicts.
+    4. Applies tags to Front conversation.
+    5. Updates local DB.
+    6. Queues perform_autorespond_task.
+    """
+    logger.info(f"Performing tagging for email {email_id}")
+
+    try:
+        email_uuid = UUID(email_id)
+    except ValueError:
+        logger.error(f"Invalid UUID format for email_id in perform_tagging_task: {email_id}")
+        return {"status": "error", "message": "Invalid email ID format"}
+
+    db = SessionLocal()
+    try:
+        email_obj = email_crud_sync.get(db, id=email_uuid)
+        if not email_obj:
+            logger.error(f"Email {email_id} not found for tagging")
+            return {"status": "error", "message": "Email not found"}
+
+        front_conversation_id = email_obj.front_conversation_id
+        if not front_conversation_id:
+            logger.error(f"Email {email_id} has no Front conversation ID for tagging.")
+            email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="tagging_failed_no_front_id", is_processed=True))
+            return {"status": "error", "message": "Missing Front conversation ID for tagging"}
+
+        # Fetch conversation text for classification (Adapted from tag_email)
         conversation_data = get_conversation_text(front_conversation_id)
         if not conversation_data or 'text' not in conversation_data:
-            logger.error(f"Could not retrieve conversation text for {front_conversation_id}. Cannot classify or auto-respond.")
-            email_crud_sync.mark_as_processed(db, email_id=email_uuid)
-            return {"status": "error", "message": "Failed to get conversation text"}
+            logger.error(f"Could not retrieve conversation text for {front_conversation_id}. Cannot tag.")
+            email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="tagging_failed_no_content", is_processed=True))
+            return {"status": "error", "message": "Failed to get conversation text for tagging"}
 
         conversation_text = conversation_data.get('text', '')
         raw_senders = conversation_data.get('senders', ['Unknown Sender'])
@@ -270,90 +364,35 @@ def tag_email(email_id: str) -> Dict:
         sender_info = ", ".join(map(str, raw_senders)) if raw_senders else "Unknown Sender"
         message_times = ", ".join(map(str, raw_timestamps)) if raw_timestamps else "Unknown Timestamps"
 
-        if not conversation_text: # Check specifically for empty text after extraction
-            logger.warning(f"Received empty conversation text for Front conversation ID: {front_conversation_id}. Cannot classify or auto-respond meaningfully.")
-            # Decide if to proceed or mark as error. For now, let it proceed but it might lead to poor results.
-            # email_crud_sync.mark_as_processed(db, email_id=email_uuid)
-            # return {"status": "error", "message": "Empty conversation text"}
+        if not conversation_text:
+            logger.warning(f"Received empty conversation text for {front_conversation_id}. Tagging might be ineffective.")
+            # Decide if to proceed or mark as error. For now, let it proceed.
 
-        # --- AUTO-RESPONSE CHECK BEFORE TAGGING ---
-        auto_response_processed = False
-        try:
-            logger.info(f"Checking for auto-response for conversation {front_conversation_id} before hierarchical tagging.")
-
-            async def _run_autorespond_async():
-                nonlocal conversation_text # Make conversation_text available from outer scope
-                # process_autorespond is async and needs an async DB session
-                async_db_session = AsyncSessionLocal()
-                try:
-                    return await process_autorespond(front_conversation_id, async_db_session, conversation_text) # Pass conversation_text
-                finally:
-                    await async_db_session.close()
-            
-            auto_response_result = asyncio.run(_run_autorespond_async())
-
-            if auto_response_result and auto_response_result.get("status") == "auto_response_sent":
-                logger.info(f"Auto-response sent for conversation {front_conversation_id}. Auto-response details: {auto_response_result.get('details')}")
-                auto_response_processed = True # Indicates an auto-response was handled
-
-                # Decide if further tagging should be skipped
-                # For now, assume if an auto-response is sent, we might still want to tag.
-                # If specific auto-responses should halt tagging, that logic would go here.
-                # For example, if auto_response_result['action'] == 'halt_processing':
-                # email_crud_sync.mark_as_processed(db, email_id=email_uuid)
-                # return {"status": "success_autoresponded_halted", "email_id": email_id, "details": auto_response_result.get('details')}
-                
-            elif auto_response_result and auto_response_result.get("status") == "no_auto_response_needed":
-                logger.info(f"No auto-response needed for conversation {front_conversation_id} based on rules.")
-            else: # Includes errors or unexpected status from auto-response
-                logger.warning(f"Auto-response processing for {front_conversation_id} did not result in a sent message or explicit 'no_auto_response_needed'. Result: {auto_response_result}")
-
-        except Exception as e_auto_respond:
-            logger.error(f"Error during auto-response check for {front_conversation_id}: {e_auto_respond}", exc_info=True)
-            # Proceed with tagging even if auto-response check fails
-
-        # Get current tags from Front (important for conflict resolution)
+        # Get current tags from Front (Adapted from tag_email)
         current_front_tags = get_conversation_tags(front_conversation_id)
-        if current_front_tags is None: # Indicates an API error
-            logger.warning(f"Failed to retrieve current tags for {front_conversation_id}. Proceeding without them for conflict check, but this is risky.")
-            current_front_tags = [] # Default to empty list to avoid crashing
+        if current_front_tags is None:
+            logger.warning(f"Failed to retrieve current tags for {front_conversation_id}. Proceeding with empty list for conflict check.")
+            current_front_tags = []
 
-        # Classify using the hierarchical service
-        # new_tags: List[str] = classify_email_tags_hierarchical(
-        #     front_conversation_id=front_conversation_id,
-        #     conversation_text=conversation_text,
-        #     sender_info=sender_info,
-        #     message_times=message_times
-        # )
-
-        new_tags: List[str] = [] # Initialize new_tags
-
+        # Classify using the hierarchical service (Adapted from tag_email)
+        new_tags: List[str] = []
         async def _run_hierarchical_classification_async():
-            nonlocal new_tags # Allow modification of outer scope variable
+            nonlocal new_tags
             new_tags = await classify_email_tags_hierarchical(
                 front_conversation_id=front_conversation_id,
                 conversation_text=conversation_text,
                 sender_info=sender_info,
                 message_times=message_times
             )
-        
         asyncio.run(_run_hierarchical_classification_async())
 
-
+        applied_tags_to_front = False
         if not new_tags:
-            logger.warning(f"Hierarchical classification returned no tags for {front_conversation_id}. This might be an error or simply no classification found.")
-            # Potentially mark as processed or apply a default "needs review" tag if no tags are found.
-            # For now, just log and proceed (which means no tags will be applied if new_tags is empty).
-            # Consider if "AI: Human review required" should be applied by default if empty.
-            # Current behavior of classify_email_tags_hierarchical is to return it if ambiguous.
-            # If it's truly empty, it means a structural issue or failure at the very first step.
+            logger.warning(f"Hierarchical classification returned no tags for {front_conversation_id}.")
+            email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="tagging_completed_no_tags"))
+            # No tags to apply, but still proceed to auto-respond check
         else:
             logger.info(f"Hierarchical classification for {front_conversation_id} resulted in tags: {new_tags}")
-
-            # Remove conflicting tags before applying new ones
-            # The EMAIL_CATEGORIES structure is needed for remove_conflicting_tags.
-            # It's part of settings, so can be accessed directly.
-            # Ensure settings are loaded where EMAIL_CATEGORIES is defined.
             removed_conflicts = remove_conflicting_tags(
                 conversation_id=front_conversation_id,
                 existing_tags=current_front_tags,
@@ -361,84 +400,168 @@ def tag_email(email_id: str) -> Dict:
                 hierarchy=settings.EMAIL_CATEGORIES 
             )
             if not removed_conflicts:
-                logger.warning(f"Failed to remove conflicting tags for {front_conversation_id}. Proceeding to apply new tags anyway, but there might be redundant tags.")
+                logger.warning(f"Failed to remove conflicting tags for {front_conversation_id}. Applying new tags anyway.")
 
-            # Apply new tags
             apply_success = add_conversation_tags(front_conversation_id, new_tags)
             if apply_success:
                 logger.info(f"Successfully applied tags {new_tags} to conversation {front_conversation_id}")
-                
-                # Store applied tags in the database
+                applied_tags_to_front = True
                 tag_objects = []
                 for tag_name in new_tags:
                     tag_obj = tag_crud_sync.get_or_create_tag(db, name=tag_name)
                     tag_objects.append(tag_obj)
-                
                 email_crud_sync.update_tags(db, db_obj=email_obj, tags=tag_objects)
                 logger.info(f"Updated tags in database for email {email_id}")
-
+                email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="tagging_completed_applied_tags"))
             else:
                 logger.error(f"Failed to apply tags {new_tags} to conversation {front_conversation_id}")
-                # Update email status to reflect classification/tagging failure
-                email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="classification_failed", is_processed=True))
-                return {"status": "error", "message": "Failed to apply tags to Front conversation"}
-
-        # Mark email as processed after attempting classification and tagging
-        final_status = "processed"
-        if auto_response_processed and new_tags:
-            final_status = "processed_autorespond_tagged"
-        elif auto_response_processed:
-            final_status = "processed_autorespond_only"
-        elif not new_tags: # No tags were determined or applied
-            final_status = "processed_no_tags_applied"
-
-
-        email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_status, is_processed=True))
-        return {"status": "success", "email_id": email_id, "applied_tags": new_tags, "auto_response_status": auto_response_processed}
+                email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="tagging_failed_front_apply", is_processed=True))
+                # Even if Front apply fails, we might want to proceed to auto-respond or halt.
+                # For now, proceed to auto-respond, but is_processed=True to avoid retries on this specific error.
+        
+        # Regardless of tagging outcome (unless critical error above), proceed to auto-response.
+        # perform_autorespond_task.delay(email_id)
+        perform_autorespond_task.apply_async(args=[email_id], queue='processing')
+        logger.info(f"Queued email {email_id} for auto-response on 'processing' queue.")
+        return {"status": "queued_for_autorespond", "email_id": email_id, "tags_applied_to_front": applied_tags_to_front, "determined_tags": new_tags}
 
     except Exception as e:
-        # logger.exception(f"Error classifying/tagging email {email_id}: {str(e)}")
-        db.rollback()
+        logger.exception(f"Error in perform_tagging_task for {email_id}: {str(e)}")
+        if db.is_active:
+            db.rollback()
+        try:
+            email_uuid_for_error = UUID(email_id)
+            # Consider updating status to "tagging_failed_exception" if email_obj was fetched
+            # db_temp = SessionLocal()
+            # temp_email_obj = email_crud_sync.get(db_temp, id=email_uuid_for_error)
+            # if temp_email_obj:
+            #     email_crud_sync.update(db_temp, db_obj=temp_email_obj, obj_in=EmailUpdate(status="tagging_failed_exception", is_processed=True))
+            # db_temp.close()
+        except: # Outer try-except for safety with UUID conversion
+            pass
         return {"status": "error", "message": str(e)}
-
     finally:
-        db.close()
+        if db.is_active:
+            db.close()
 
-# Define error status constant
-OCR_ERROR_STATUS = "ocr_error"
 
-def update_email_sync(email_uuid: UUID, update_data: dict):
-    """Helper function to update email fields synchronously."""
+@celery_app.task(name="app.tasks.email.perform_autorespond_task")
+def perform_autorespond_task(email_id: str) -> Dict:
+    """
+    Handles auto-response logic for an email and sets final status.
+    1. Fetches email and conversation context.
+    2. Checks and applies auto-response rules.
+    3. Updates email status to a final state.
+    """
+    logger.info(f"Performing auto-response check for email {email_id}")
+
+    try:
+        email_uuid = UUID(email_id)
+    except ValueError:
+        logger.error(f"Invalid UUID format for email_id in perform_autorespond_task: {email_id}")
+        return {"status": "error", "message": "Invalid email ID format"}
+
     db = SessionLocal()
     try:
         email_obj = email_crud_sync.get(db, id=email_uuid)
         if not email_obj:
-            # logger.error(f"[update_email_sync] Email {email_uuid} not found for update.")
-            return None
-        
-        updated_email = email_crud_sync.update(db, db_obj=email_obj, obj_in=update_data)
-        # No need to commit here, update() handles it
-        # db.commit()
-        # db.refresh(updated_email) # Refresh is handled by update()
-        # logger.info(f"[update_email_sync] Successfully updated email {email_uuid} with data: {update_data}")
-        return updated_email # Return the updated object
-    except Exception as e:
-        # logger.exception(f"[update_email_sync] Error updating email {email_uuid}: {e}")
-        db.rollback()
-        return None # Indicate failure
-    finally:
-        db.close()
+            logger.error(f"Email {email_id} not found for auto-response.")
+            return {"status": "error", "message": "Email not found"}
 
-def update_email_status_sync(email_uuid: UUID, status: str):
-    """Helper function to update email status synchronously."""
-    update_data = {"status": status}
-    updated_email = update_email_sync(email_uuid, update_data)
-    if updated_email:
-         # logger.info(f"[update_email_status_sync] Updated status for email {email_uuid} to {status}")
-         pass
-    else:
-         # logger.error(f"[update_email_status_sync] Failed to update status for email {email_uuid} to {status}")
-         pass
+        front_conversation_id = email_obj.front_conversation_id
+        if not front_conversation_id:
+            logger.error(f"Email {email_id} has no Front conversation ID for auto-response.")
+            email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="autorespond_failed_no_front_id", is_processed=True))
+            return {"status": "error", "message": "Missing Front conversation ID for auto-response"}
+
+        # Fetch conversation text for auto-response (can be optimized if passed from previous task)
+        conversation_data = get_conversation_text(front_conversation_id) # Assuming this is still needed by process_autorespond
+        if not conversation_data or 'text' not in conversation_data: # Check if process_autorespond actually needs full conv_data or just text
+            logger.error(f"Could not retrieve conversation text for {front_conversation_id}. Cannot auto-respond.")
+            email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="autorespond_failed_no_content", is_processed=True))
+            return {"status": "error", "message": "Failed to get conversation text for auto-response"}
+        
+        conversation_text_for_autorespond = conversation_data.get('text', '')
+
+        # --- AUTO-RESPONSE CHECK (Adapted from tag_email) ---
+        auto_response_processed_flag = False # Renamed to avoid conflict if we pass a dict later
+        auto_response_details = None
+        try:
+            logger.info(f"Checking for auto-response for conversation {front_conversation_id}.")
+
+            async def _run_autorespond_async():
+                async_db_session = AsyncSessionLocal() # process_autorespond needs async session
+                try:
+                    return await process_autorespond(front_conversation_id, async_db_session, conversation_text_for_autorespond)
+                finally:
+                    await async_db_session.close()
+            
+            auto_response_result = asyncio.run(_run_autorespond_async())
+
+            if auto_response_result and auto_response_result.get("status") == "auto_response_sent":
+                logger.info(f"Auto-response sent for conversation {front_conversation_id}. Details: {auto_response_result.get('details')}")
+                auto_response_processed_flag = True
+                auto_response_details = auto_response_result.get('details')
+            elif auto_response_result and auto_response_result.get("status") == "no_auto_response_needed":
+                logger.info(f"No auto-response needed for conversation {front_conversation_id}.")
+            else:
+                logger.warning(f"Auto-response processing for {front_conversation_id} had unexpected result: {auto_response_result}")
+
+        except Exception as e_auto_respond:
+            logger.error(f"Error during auto-response check for {front_conversation_id}: {e_auto_respond}", exc_info=True)
+            # Proceed to set final status even if auto-response check fails
+
+        # Determine final status based on tagging and auto-response outcomes
+        # The status from perform_tagging_task (e.g., "tagging_completed_applied_tags", "tagging_completed_no_tags")
+        # is already on email_obj.status if it was updated successfully.
+        
+        current_status_from_tagging = email_obj.status # This reflects the outcome of the tagging step
+        final_email_status = "processed_unknown_state"
+
+        if auto_response_processed_flag:
+            if current_status_from_tagging == "tagging_completed_applied_tags":
+                final_email_status = "processed_autorespond_tagged"
+            elif current_status_from_tagging == "tagging_completed_no_tags":
+                final_email_status = "processed_autorespond_notags"
+            else: # Tagging might have failed or had a different status
+                final_email_status = "processed_autorespond_tag_state_unknown"
+        else: # No auto-response sent
+            if current_status_from_tagging == "tagging_completed_applied_tags":
+                final_email_status = "processed_tagged_no_autorespond"
+            elif current_status_from_tagging == "tagging_completed_no_tags":
+                final_email_status = "processed_notags_no_autorespond"
+            else: # Tagging might have failed before this step, or other status
+                 # If tagging failed and set is_processed=True, this task might not even run for certain failures.
+                 # However, if it does, we reflect that. Or, simply use a generic processed status.
+                 final_email_status = f"processed_tag_status_({current_status_from_tagging})_no_autorespond"
+                 # A simpler approach if previous status is not critical for final status: just "processed"
+                 # final_email_status = "processed" 
+
+        logger.info(f"Setting final status for email {email_id} to: {final_email_status}")
+        email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_email_status, is_processed=True))
+        
+        return {
+            "status": "completed_autorespond_phase", 
+            "email_id": email_id, 
+            "final_db_status": final_email_status,
+            "auto_response_sent": auto_response_processed_flag,
+            "auto_response_details": auto_response_details
+        }
+
+    except Exception as e:
+        logger.exception(f"Error in perform_autorespond_task for {email_id}: {str(e)}")
+        if db.is_active:
+            db.rollback()
+        try:
+            email_uuid_for_error = UUID(email_id)
+            # Attempt to mark as failure if possible, though db session might be bad
+            # update_email_status_sync(email_uuid_for_error, "autorespond_failed_exception") # Needs careful implementation
+        except:
+            pass
+        return {"status": "error", "message": str(e)}
+    finally:
+        if db.is_active:
+            db.close()
 
 
 @celery_app.task(name="tasks.send_attachment_to_ocr", bind=True, max_retries=3, default_retry_delay=60)
@@ -613,7 +736,10 @@ def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
             
             # Only queue next step if there were no errors
             if final_status == "ocr_completed":
-                process_email.delay(str(email_uuid))
+                # process_email.delay(str(email_uuid))
+                logger.info(f"OCR completed for {email_id}, queueing for post-OCR orchestration on 'processing' queue.")
+                # orchestrate_post_ocr_processing.delay(str(email_uuid))
+                orchestrate_post_ocr_processing.apply_async(args=[str(email_uuid)], queue='processing')
             else:
                 # logger.warning(f"Skipping final processing for email {email_id} due to OCR errors.")
                 pass
@@ -642,3 +768,39 @@ async def update_email_status(db: AsyncSession, email_id: str, status: str):
         update_data = {"status": status}
         await email_crud.update(db, db_obj=email, obj_in=update_data)
         # logger.info(f"Updated status for email {email_id} to {status}") 
+
+# Define error status constant
+OCR_ERROR_STATUS = "ocr_error"
+
+def update_email_sync(email_uuid: UUID, update_data: dict):
+    """Helper function to update email fields synchronously."""
+    db = SessionLocal()
+    try:
+        email_obj = email_crud_sync.get(db, id=email_uuid)
+        if not email_obj:
+            # logger.error(f"[update_email_sync] Email {email_uuid} not found for update.")
+            return None
+        
+        updated_email = email_crud_sync.update(db, db_obj=email_obj, obj_in=update_data)
+        # No need to commit here, update() handles it
+        # db.commit()
+        # db.refresh(updated_email) # Refresh is handled by update()
+        # logger.info(f"[update_email_sync] Successfully updated email {email_uuid} with data: {update_data}")
+        return updated_email # Return the updated object
+    except Exception as e:
+        # logger.exception(f"[update_email_sync] Error updating email {email_uuid}: {e}")
+        db.rollback()
+        return None # Indicate failure
+    finally:
+        db.close()
+
+def update_email_status_sync(email_uuid: UUID, status: str):
+    """Helper function to update email status synchronously."""
+    update_data = {"status": status}
+    updated_email = update_email_sync(email_uuid, update_data)
+    if updated_email:
+         # logger.info(f"[update_email_status_sync] Updated status for email {email_uuid} to {status}")
+         pass
+    else:
+         # logger.error(f"[update_email_status_sync] Failed to update status for email {email_uuid} to {status}")
+         pass 

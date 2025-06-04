@@ -98,7 +98,7 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8444 --ssl-keyfile
 2. Start the Celery worker:
 
 ```bash
-celery -A app.tasks.worker worker -l info -Q emails,tagging
+celery -A app.tasks.worker worker -l info -Q emails,ocr,processing,tagging
 ```
 
 3. (Optional) Start Flower for monitoring Celery tasks:

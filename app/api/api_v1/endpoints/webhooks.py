@@ -189,21 +189,11 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         # Extract and process patient IDs using the helper function
         await extract_and_log_patient_info(db, content_text, conversation_id, db_email.id, logger)
 
-        # If attachments exist, queue OCR tasks, otherwise queue standard processing
-        if attachments:
-            logger.info(f"Email {db_email.id} has {len(attachments)} attachments. Queuing for OCR.")
-            for attachment in attachments:
-                # Assuming attachment object has a 'url' key
-                attachment_url = attachment.get("url")
-                if attachment_url:
-                    send_attachment_to_ocr.delay(str(db_email.id), attachment_url)
-                else:
-                    logger.warning(f"Attachment for email {db_email.id} is missing a URL. Skipping OCR.")
-                    # Optionally, decrement ocr_attachments_total here or handle differently
-        else:
-            # Queue standard processing task if no attachments
-            process_email.delay(str(db_email.id))
-            logger.info(f"Queued email {db_email.id} for standard processing (no attachments)")
+        # Always queue the main process_email task.
+        # The process_email task itself will determine if OCR is needed and dispatch OCR tasks.
+        # process_email.delay(str(db_email.id))
+        process_email.apply_async(args=[str(db_email.id)], queue='emails')
+        logger.info(f"Queued email {db_email.id} for initial processing via process_email task to 'emails' queue.")
         
     except Exception as e:
         logger.exception(f"Error processing inbound message: {str(e)}")
