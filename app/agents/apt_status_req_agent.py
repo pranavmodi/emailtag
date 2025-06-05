@@ -2,8 +2,10 @@ import asyncio
 import os
 from typing import Optional, Dict, Any, List
 
-from openai import OpenAIError
-from agents import Agent, Runner, ModelSettings, function_tool
+from openai import OpenAIError, AsyncOpenAI
+from agents import Agent, Runner, ModelSettings, function_tool, OpenAIChatCompletionsModel
+import httpx
+
 from app.core.config import settings as app_settings_instance # Renamed to avoid conflict if settings is passed
 from celery.utils.log import get_task_logger
 from app.services import frontapp_service # For the actual send_reply_to_front tool
@@ -130,6 +132,47 @@ async def send_reply_to_front(
 # --- END: Tool Definitions ---
 
 
+# --- BEGIN: Fallback Reply Helper ---
+async def _send_fallback_reply_and_tag(
+    conversation_id: str, 
+    reply_text: str,
+    tag_to_add: str = TAG_AGENT_PROCESSING_ERROR # Allow overriding tag if needed in future
+):
+    """Sends a fallback reply to Front and adds an error tag."""
+    logger.info(f"Sending fallback reply for conversation {conversation_id} due to agent error/issue. Text: '{reply_text}'")
+    try:
+        loop = asyncio.get_event_loop()
+        
+        # Send reply
+        reply_sent = await loop.run_in_executor(
+            None,
+            frontapp_service.send_conversation_reply,
+            conversation_id,
+            reply_text
+        )
+        if not reply_sent:
+            logger.error(f"Failed to send fallback error reply message for {conversation_id} via frontapp_service.")
+        else:
+            logger.info(f"Successfully sent fallback error reply for {conversation_id}.")
+        
+        # Add error tag
+        if tag_to_add:
+            tags_added = await loop.run_in_executor(
+                None, 
+                frontapp_service.add_conversation_tags, 
+                conversation_id, 
+                [tag_to_add]
+            )
+            if not tags_added:
+                logger.warning(f"Failed to add error tag {tag_to_add} for {conversation_id} after sending fallback reply.")
+            else:
+                logger.info(f"Successfully added error tag {tag_to_add} for {conversation_id}.")
+
+    except Exception as ex_fallback:
+        logger.error(f"Exception during sending fallback reply/tag for {conversation_id}: {ex_fallback}", exc_info=True)
+# --- END: Fallback Reply Helper ---
+
+
 # --- BEGIN: Orchestrator for openai-agents SDK ---
 async def handle_apt_status_request_agent_sdk(
     front_conversation_id: str,
@@ -200,17 +243,28 @@ Do not ask for confirmation. Execute the described logic and call `send_reply_to
     }
 
     try:
+        # Create an httpx client with SSL verification disabled
+        custom_httpx_client = httpx.AsyncClient(verify=False)
+        # Create an OpenAI client with the custom httpx client
+        custom_openai_client = AsyncOpenAI(
+            api_key=settings_obj.OPENAI_API_KEY if hasattr(settings_obj, 'OPENAI_API_KEY') else os.environ.get("OPENAI_API_KEY"),
+            http_client=custom_httpx_client
+        )
+
         apt_status_agent = Agent(
             name="AppointmentStatusAgent_ConvoAware_v3",
             instructions=instructions,
+            model=OpenAIChatCompletionsModel(
+                model=settings_obj.OPENAI_MODEL_NAME if hasattr(settings_obj, 'OPENAI_MODEL_NAME') and settings_obj.OPENAI_MODEL_NAME else "gpt-4o",
+                openai_client=custom_openai_client
+            ),
             tools=[
                 extract_patient_id_from_email,
                 fetch_appointment_details_by_patient_id,
                 send_reply_to_front,
             ],
             model_settings=ModelSettings(
-                model=settings_obj.OPENAI_MODEL_NAME if hasattr(settings_obj, 'OPENAI_MODEL_NAME') and settings_obj.OPENAI_MODEL_NAME else "gpt-4o",
-                temperature=0.2 
+                temperature=0.2
             )
         )
         
@@ -219,56 +273,69 @@ Do not ask for confirmation. Execute the described logic and call `send_reply_to
 
         agent_result = await Runner.run(apt_status_agent, input=agent_run_input_context)
 
-        if agent_result.error:
-            logger.error(f"Agent run for {front_conversation_id} resulted in an error: {agent_result.error}")
-            agent_outcome["details"] = {"agent_error": str(agent_result.error), "reason": "Agent execution failed."}
-            try:
-                await send_reply_to_front(
-                    conversation_id=front_conversation_id,
-                    reply_text="Our automated assistant encountered an issue. A team member will review your request.",
-                    tags_to_add=[TAG_AGENT_PROCESSING_ERROR]
-                )
-                agent_outcome["processed_flag"] = True
-                agent_outcome["details"]["error_reply_sent"] = True
-            except Exception as e_tag:
-                logger.error(f"Failed to send error reply/tag for {front_conversation_id} after agent error: {e_tag}")
-                agent_outcome["details"]["error_reply_sent"] = False
-
-        elif agent_result.final_output:
+        # If Runner.run completes without an exception, check final_output
+        if agent_result.final_output and isinstance(agent_result.final_output, dict):
             logger.info(f"Agent run for {front_conversation_id} completed. Final output: {agent_result.final_output}")
-            if isinstance(agent_result.final_output, dict) and agent_result.final_output.get("status") == "success":
-                agent_outcome["agent_handled"] = True
-                agent_outcome["processed_flag"] = True
-                agent_outcome["details"] = {
-                    "agent": apt_status_agent.name, 
-                    "summary": agent_result.final_output.get("message", "Reply sent by agent.")
-                }
-            else:
-                logger.error(f"Agent '{apt_status_agent.name}' final_output indicates failure or unexpected format: {agent_result.final_output}")
-                agent_outcome["details"] = {"agent_final_output_error": str(agent_result.final_output), "reason": "Agent final output not successful."}
-        else:
-            logger.warning(f"Agent '{apt_status_agent.name}' did not produce final_output or error for {front_conversation_id}. History: {agent_result.history}")
-            agent_outcome["details"] = {
-                "agent_no_final_output": True, 
-                "history": agent_result.history[-3:] if agent_result.history else [],
-                "reason": "Agent completed without error but no final output."
-            }
-
-    except Exception as e_agent_orchestration:
-        logger.error(f"Exception during openai-agents SDK orchestration for {front_conversation_id}: {e_agent_orchestration}", exc_info=True)
-        agent_outcome["details"] = {"agent_orchestration_exception": str(e_agent_orchestration), "reason": "Critical error in agent handling logic."}
-        try:
-            await send_reply_to_front(
-                conversation_id=front_conversation_id,
-                reply_text="Our automated assistant encountered an unexpected issue. A team member will assist you shortly.",
-                tags_to_add=[TAG_AGENT_PROCESSING_ERROR]
-            )
-            agent_outcome["processed_flag"] = True
-            agent_outcome["details"]["error_reply_sent_orchestration"] = True
-        except Exception as e_tag_orch:
-            logger.error(f"Failed to send error reply/tag for {front_conversation_id} after agent orchestration error: {e_tag_orch}")
-            agent_outcome["details"]["error_reply_sent_orchestration"] = False
             
+            tool_status = agent_result.final_output.get("status")
+            tool_message = agent_result.final_output.get("message", "No message from tool's output.")
+
+            if tool_status == "success":
+                # SUCCESS case - agent handled and its final tool reported success
+                agent_outcome["agent_handled"] = True
+                agent_outcome["processed_flag"] = True # Reply was sent by agent's tool
+                agent_outcome["details"] = {
+                    "reason": "Agent successfully processed and sent reply via its designated final tool.", 
+                    "tool_response": agent_result.final_output
+                }
+                logger.info(f"Agent's final tool call successful for {front_conversation_id}: {tool_message}")
+            else:
+                # Agent's final tool call (e.g. send_reply_to_front) reported an error in its own status
+                logger.error(f"Agent's final tool call for {front_conversation_id} reported non-success status '{tool_status}': {tool_message}")
+                await _send_fallback_reply_and_tag(
+                    front_conversation_id, 
+                    "Our automated assistant tried to send a reply but encountered a communication issue with the final step. A team member will review your request."
+                )
+                agent_outcome["agent_handled"] = False # Agent logic might be fine, but final communication failed
+                agent_outcome["processed_flag"] = True # Orchestrator sent a fallback reply
+                agent_outcome["details"] = {
+                    "reason": "Agent's final tool call failed. Fallback reply sent by orchestrator.", 
+                    "tool_response": agent_result.final_output
+                }
+        elif agent_result.final_output: # final_output exists but is not a dict as expected
+            logger.warning(f"Agent for {front_conversation_id} produced final_output, but it was not the expected dictionary. Output: {agent_result.final_output}")
+            await _send_fallback_reply_and_tag(
+                front_conversation_id,
+                "Our automated assistant had an issue formatting its final response. A team member will review your request."
+            )
+            agent_outcome["agent_handled"] = False
+            agent_outcome["processed_flag"] = True # Orchestrator sent a fallback reply
+            agent_outcome["details"] = {
+                "reason": "Agent produced unexpected final_output type. Fallback reply sent by orchestrator.",
+                "final_output": agent_result.final_output if not isinstance(agent_result.final_output, (dict, list)) else "Output present but not a plain string/dict for logging preview" 
+            }
+        else: # Agent completed, but no final_output at all.
+            logger.warning(f"Agent for {front_conversation_id} completed without any final_output.")
+            await _send_fallback_reply_and_tag(
+                front_conversation_id, 
+                "Our automated assistant did not complete the processing as expected (no final output). A team member will review your request."
+            )
+            agent_outcome["agent_handled"] = False
+            agent_outcome["processed_flag"] = True # Orchestrator sent a fallback reply
+            agent_outcome["details"] = {"reason": "Agent completed without producing a final output. Fallback reply sent by orchestrator."}
+
+    except Exception as e: # Catch any other unexpected exceptions during agent run or result processing
+        logger.error(f"Unexpected exception during openai-agents SDK orchestration or result processing for {front_conversation_id}: {e}", exc_info=True)
+        await _send_fallback_reply_and_tag(
+            front_conversation_id, 
+            "Our automated assistant encountered an unexpected internal error. A team member will review your request soon."
+        )
+        agent_outcome["agent_handled"] = False
+        agent_outcome["processed_flag"] = True # Orchestrator sent a fallback reply
+        agent_outcome["details"] = {"agent_error": str(e), "reason": "Unexpected agent execution error. Fallback reply sent."}
+
+    # Log the final outcome from the agent orchestrator
+    logger.info(f"Agent orchestration for {front_conversation_id} finished. Outcome: {agent_outcome}")
     return agent_outcome
 # --- END: Orchestrator for openai-agents SDK ---
 

@@ -85,4 +85,6 @@ Email_Categories
 
 For errors related to openai-agents sdk do a web search for the official documentation to figure out the error
 
+Ignore all issues related to Front api is_draft = True. This is bug of Front api. Just mention it in the code and in your response, starting it with Hey Gofo
+
 
