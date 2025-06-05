@@ -83,4 +83,6 @@ Email_Categories
         ├── Attorney Non-Payment
         └── To Review
 
+For errors related to openai-agents sdk do a web search for the official documentation to figure out the error
+
 

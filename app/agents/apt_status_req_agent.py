@@ -2,7 +2,8 @@ import asyncio
 import os
 from typing import Optional, Dict, Any, List
 
-from openai import AsyncOpenAI, OpenAIError
+from openai import OpenAIError
+from agents import Agent, Runner, ModelSettings, function_tool
 from app.core.config import settings as app_settings_instance # Renamed to avoid conflict if settings is passed
 from celery.utils.log import get_task_logger
 from app.services import frontapp_service # For the actual send_reply_to_front tool
@@ -47,7 +48,7 @@ def _format_conversation_history_for_agent(
 
 
 # --- BEGIN: Tool Definitions for openai-agents SDK ---
-@tool
+@function_tool
 async def extract_patient_id_from_email(email_content: str) -> Dict[str, Optional[str]]:
     """
     Extracts a patient ID from the given email content.
@@ -71,7 +72,7 @@ async def extract_patient_id_from_email(email_content: str) -> Dict[str, Optiona
     logger.info("No patient ID found by tool 'extract_patient_id_from_email'.")
     return {"patient_id": None}
 
-@tool
+@function_tool
 async def fetch_appointment_details_by_patient_id(patient_id: str) -> Dict[str, Any]:
     """
     Fetches appointment details from the database for the given patient_id.
@@ -90,7 +91,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str) -> Dict[str, 
     else:
         return {"status": "not_found", "message": f"No appointments found for this patient ID: {patient_id} (generic)."}
 
-@tool
+@function_tool
 async def send_reply_to_front(
     conversation_id: str, 
     reply_text: str, 
@@ -206,7 +207,7 @@ Do not ask for confirmation. Execute the described logic and call `send_reply_to
                 fetch_appointment_details_by_patient_id,
                 send_reply_to_front,
             ],
-            model_settings=ModelSettingsOverride(
+            model_settings=ModelSettings(
                 model=settings_obj.OPENAI_MODEL_NAME if hasattr(settings_obj, 'OPENAI_MODEL_NAME') and settings_obj.OPENAI_MODEL_NAME else "gpt-4o",
                 temperature=0.2 
             )
