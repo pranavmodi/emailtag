@@ -430,40 +430,57 @@ def perform_tagging_task(email_id: str) -> Dict:
         asyncio.run(_run_hierarchical_classification_async())
 
         applied_tags_to_front = False
+        final_tagging_status = "tagging_error_unknown" # Default status for logging if something unexpected happens
+
         if not new_tags:
             logger.warning(f"Hierarchical classification returned no tags for {front_conversation_id}.")
-            email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="tagging_completed_no_tags"))
-            # No tags to apply, but still proceed to auto-respond check
+            final_tagging_status = "tagging_completed_no_tags"
+            email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_tagging_status))
+            # No tags to apply to DB or Front in this case. is_processed remains False by default.
         else:
             logger.info(f"Hierarchical classification for {front_conversation_id} resulted in tags: {new_tags}")
+
+            # --- Step 1: Update tags in the local database ---
+            # This ensures that email_obj in this session and any subsequent fetches within other tasks
+            # (if they fetch fresh data) will see the determined tags.
+            tag_objects = []
+            for tag_name in new_tags:
+                tag_obj = tag_crud_sync.get_or_create(db, name=tag_name)
+                tag_objects.append(tag_obj)
+            email_obj.tags = tag_objects # This updates the email_obj.tags relationship in the current session
+            logger.info(f"Updated determined tags {new_tags} in database for email {email_id}")
+            # Note: The actual commit that saves this relationship change will happen
+            # during the subsequent email_crud_sync.update() calls for status updates.
+
+            # --- Step 2: Resolve conflicts and attempt to apply tags to Front ---
+            # current_front_tags were fetched earlier and represent the state on Front before our changes.
             removed_conflicts = remove_conflicting_tags(
                 conversation_id=front_conversation_id,
-                existing_tags=current_front_tags,
+                existing_tags=current_front_tags, 
                 new_tags=new_tags,
                 hierarchy=settings.EMAIL_CATEGORIES 
             )
             if not removed_conflicts:
-                logger.warning(f"Failed to remove conflicting tags for {front_conversation_id}. Applying new tags anyway.")
+                # This means removal from Front might have failed or wasn't needed.
+                logger.warning(f"Conflict removal from Front for {front_conversation_id} reported as not successful or not performed. Proceeding to add new tags.")
 
             apply_success = add_conversation_tags(front_conversation_id, new_tags)
             if apply_success:
-                logger.info(f"Successfully applied tags {new_tags} to conversation {front_conversation_id}")
+                logger.info(f"Successfully applied tags {new_tags} to conversation {front_conversation_id} on Front.")
                 applied_tags_to_front = True
-                tag_objects = []
-                for tag_name in new_tags:
-                    tag_obj = tag_crud_sync.get_or_create_tag(db, name=tag_name)
-                    tag_objects.append(tag_obj)
-                email_crud_sync.update_tags(db, db_obj=email_obj, tags=tag_objects)
-                logger.info(f"Updated tags in database for email {email_id}")
-                email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="tagging_completed_applied_tags"))
+                final_tagging_status = "tagging_completed_applied_tags"
+                # Update status; is_processed defaults to False, allowing subsequent tasks in the chain.
+                email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_tagging_status))
             else:
-                logger.error(f"Failed to apply tags {new_tags} to conversation {front_conversation_id}")
-                email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="tagging_failed_front_apply", is_processed=True))
-                # Even if Front apply fails, we might want to proceed to auto-respond or halt.
-                # For now, proceed to auto-respond, but is_processed=True to avoid retries on this specific error.
+                logger.error(f"Failed to apply tags {new_tags} to conversation {front_conversation_id} on Front.")
+                applied_tags_to_front = False 
+                final_tagging_status = "tagging_completed_front_failed" 
+                # Update status to reflect Front failure; mark as 'is_processed=True' for this tagging stage
+                # to prevent retries of perform_tagging_task for Front API issues,
+                # but auto-response will still proceed based on local DB tags.
+                email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_tagging_status, is_processed=True))
         
         # Regardless of tagging outcome (unless critical error above), proceed to auto-response.
-        # perform_autorespond_task.delay(email_id)
         perform_autorespond_task.apply_async(args=[email_id], queue='processing')
         logger.info(f"Queued email {email_id} for auto-response on 'processing' queue.")
         return {"status": "queued_for_autorespond", "email_id": email_id, "tags_applied_to_front": applied_tags_to_front, "determined_tags": new_tags}
@@ -570,45 +587,29 @@ def perform_autorespond_task(email_id: str) -> Dict:
             else:
                 logger.error(f"Agent SDK orchestrator call failed to return a result for {front_conversation_id}.")
                 auto_response_details = {"reason": "Agent orchestrator call failed or returned None."}
+        # Removed generic auto-response block
+        # else: # This 'else' corresponded to 'if APT_STATUS_REQ_TAG_NAME in applied_tag_names' not being met
+        #    logger.info(f"Email {email_id} not tagged with '{APT_STATUS_REQ_TAG_NAME}'. Skipping agentic auto-response.")
+        #    # agent_handled_response remains False, auto_response_processed_flag remains False
 
-        if not agent_handled_response:
-            logger.info(f"Proceeding with generic auto-response check for conv {front_conversation_id} (agent_handled={agent_handled_response}). Details: {auto_response_details}")
-            try:
-                async def _run_generic_autorespond_async():
-                    async_db_session = AsyncSessionLocal() 
-                    try:
-                        full_conv_text_for_generic = conversation_data.get('text', '') if conversation_data else ""
-                        return await process_autorespond(async_db_session, front_conversation_id, full_conv_text_for_generic)
-                    finally:
-                        await async_db_session.close()
-                generic_auto_response_result = asyncio.run(_run_generic_autorespond_async())
-
-                if generic_auto_response_result and generic_auto_response_result.get("status") == "auto_response_sent":
-                    logger.info(f"Generic auto-response sent for conversation {front_conversation_id}. Details: {generic_auto_response_result.get('details')}")
-                    auto_response_processed_flag = True 
-                    auto_response_details = generic_auto_response_result.get('details')
-                elif generic_auto_response_result and generic_auto_response_result.get("status") == "no_auto_response_needed":
-                    logger.info(f"No generic auto-response needed for conversation {front_conversation_id}.")
-                else:
-                    logger.warning(f"Generic auto-response processing for {front_conversation_id} had unexpected result: {generic_auto_response_result}")
-            except Exception as e_auto_respond:
-                logger.error(f"Error during generic auto-response check for {front_conversation_id}: {e_auto_respond}", exc_info=True)
-        
         current_status_from_tagging = email_obj.status
-        final_email_status = "processed_unknown_state"
+        final_email_status = "processed_unknown_state" # Default
 
-        if auto_response_processed_flag:
-            if agent_handled_response:
-                final_email_status = f"processed_agent_apt_status_req"
-            else:
-                final_email_status = "processed_autorespond_generic"
+        if agent_handled_response: # This implies auto_response_processed_flag is also true from agent_result_dict
+            final_email_status = f"processed_agent_apt_status_req"
+            # auto_response_processed_flag is already set from agent_result_dict
         else:
+            # No agent response (either not Apt Status Req, or agent chose not to handle, or agent error)
+            # No generic fallback anymore. Status reflects tagging outcome + no auto-response.
+            auto_response_processed_flag = False # Explicitly ensure this is false if agent didn't handle
             if current_status_from_tagging == "tagging_completed_applied_tags":
-                final_email_status = "processed_tagged_no_autorespond"
+                final_email_status = "processed_tagged_no_autorespond_agent_did_not_handle"
             elif current_status_from_tagging == "tagging_completed_no_tags":
-                final_email_status = "processed_notags_no_autorespond"
-            else:
-                final_email_status = f"processed_tag_status_({current_status_from_tagging})_no_autorespond"
+                final_email_status = "processed_notags_no_autorespond_agent_did_not_handle"
+            elif current_status_from_tagging == "tagging_completed_front_failed":
+                 final_email_status = "processed_tagged_frontfailed_no_autorespond_agent_did_not_handle"
+            else: # Other tagging statuses, or if tagging was skipped
+                 final_email_status = f"processed_tag_status_({current_status_from_tagging})_no_autorespond_agent_did_not_handle"
                  
         logger.info(f"Setting final status for email {email_id} to: {final_email_status}. Original tagging status: {current_status_from_tagging}. Agent handled: {agent_handled_response}")
         email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_email_status, is_processed=True))
