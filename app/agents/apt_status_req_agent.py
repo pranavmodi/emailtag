@@ -63,19 +63,19 @@ def _generate_response_from_template(scenario: str, data: Dict[str, Any]) -> str
         
         studies_table_rows_list = []
         for study in studies:
-            # Generate HTML table rows
+            # Generate HTML table rows without extra newlines
             studies_table_rows_list.append(
-                f"<tr>\n"
-                f"  <td style=\"border: 1px solid black; padding: 8px;\">{study.get('study_id','N/A')}</td>\n"
-                f"  <td style=\"border: 1px solid black; padding: 8px;\">{study.get('exam_description','N/A')}</td>\n"
-                f"  <td style=\"border: 1px solid black; padding: 8px;\">{study.get('status','N/A')}</td>\n"
-                f"  <td style=\"border: 1px solid black; padding: 8px;\">{study.get('appointment_datetime_str','N/A')}</td>\n"
-                f"  <td style=\"border: 1px solid black; padding: 8px;\">{study.get('location_name','N/A')}</td>\n"
-                f"  <td style=\"border: 1px solid black; padding: 8px;\">{study.get('images_available','N/A')}</td>\n"
-                f"  <td style=\"border: 1px solid black; padding: 8px;\">{study.get('report_available','N/A')}</td>\n"
+                f"<tr>"
+                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('study_id','N/A')}</td>"
+                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('exam_description','N/A')}</td>"
+                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('status','N/A')}</td>"
+                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('appointment_datetime_str','N/A')}</td>"
+                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('location_name','N/A')}</td>"
+                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('images_available','N/A')}</td>"
+                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('report_available','N/A')}</td>"
                 f"</tr>"
             )
-        studies_table_rows = "\n".join(studies_table_rows_list)
+        studies_table_rows = "".join(studies_table_rows_list) # Join without newlines
         
         personal_injury_info_text = ""
         if data.get("is_personal_injury_case"):

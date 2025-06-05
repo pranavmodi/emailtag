@@ -10,8 +10,7 @@ Appointment Location: {first_location_name}<br/><br/>
 Our direct scheduling phone # is {scheduling_phone} and we can assist with directions, rescheduling, canceling, or any other scheduling-related questions.<br/>
 {no_show_policy}<br/><br/>
 
-Here is a summary of the patient's exams we currently have entered into our system:<br/>
-<table border="1" style="border-collapse: collapse; width: 100%;">
+Here is a summary of the patient's exams we currently have entered into our system:<br/><table border="1" style="border-collapse: collapse; width: 100%;">
     <thead>
         <tr>
             <th style="border: 1px solid black; padding: 8px; text-align: left;">Study ID</th>
@@ -23,9 +22,7 @@ Here is a summary of the patient's exams we currently have entered into our syst
             <th style="border: 1px solid black; padding: 8px; text-align: left;">Report Available</th>
         </tr>
     </thead>
-    <tbody>
-{studies_table_rows}
-    </tbody>
+    <tbody>{studies_table_rows}</tbody>
 </table>
 <br/>
 {personal_injury_info}
