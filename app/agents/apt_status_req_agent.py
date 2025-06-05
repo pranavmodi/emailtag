@@ -1,5 +1,6 @@
 import asyncio
 import os
+import json # Import json for parsing stringified JSON
 from typing import Optional, Dict, Any, List
 
 from openai import OpenAIError, AsyncOpenAI
@@ -280,11 +281,29 @@ Do not ask for confirmation. Execute the described logic and make sure your fina
         )
 
         # If Runner.run completes without an exception, check final_output
-        if agent_result.final_output and isinstance(agent_result.final_output, dict):
-            logger.info(f"Agent run for {front_conversation_id} completed. Final output: {agent_result.final_output}")
+        parsed_final_output = None
+        if agent_result.final_output:
+            if isinstance(agent_result.final_output, dict):
+                parsed_final_output = agent_result.final_output
+            elif isinstance(agent_result.final_output, str):
+                try:
+                    parsed_final_output = json.loads(agent_result.final_output)
+                    if not isinstance(parsed_final_output, dict):
+                        # If parsing succeeds but it's not a dict (e.g. a string like "OK" was JSON encoded)
+                        logger.warning(f"Agent for {front_conversation_id} final_output was a string that parsed to JSON, but not to a dictionary. Parsed: {parsed_final_output}")
+                        parsed_final_output = None # Treat as invalid format
+                except json.JSONDecodeError:
+                    logger.warning(f"Agent for {front_conversation_id} final_output was a string, but failed to parse as JSON: {agent_result.final_output}")
+                    parsed_final_output = None # Treat as invalid format
+            else:
+                 logger.warning(f"Agent for {front_conversation_id} final_output was neither a dict nor a string: {type(agent_result.final_output)}")
+                 # parsed_final_output remains None
+
+        if parsed_final_output: # Check if we have a valid dictionary now
+            logger.info(f"Agent run for {front_conversation_id} completed. Parsed final output: {parsed_final_output}")
             
-            tool_status = agent_result.final_output.get("status")
-            tool_message = agent_result.final_output.get("message", "No message from tool's output.")
+            tool_status = parsed_final_output.get("status")
+            tool_message = parsed_final_output.get("message", "No message from tool's output.")
 
             if tool_status == "success":
                 # SUCCESS case - agent handled and its final tool reported success
@@ -292,7 +311,7 @@ Do not ask for confirmation. Execute the described logic and make sure your fina
                 agent_outcome["processed_flag"] = True # Reply was sent by agent's tool
                 agent_outcome["details"] = {
                     "reason": "Agent successfully processed and sent reply via its designated final tool.", 
-                    "tool_response": agent_result.final_output
+                    "tool_response": parsed_final_output
                 }
                 logger.info(f"Agent's final tool call successful for {front_conversation_id}: {tool_message}")
             else:
@@ -306,10 +325,11 @@ Do not ask for confirmation. Execute the described logic and make sure your fina
                 agent_outcome["processed_flag"] = True # Orchestrator sent a fallback reply
                 agent_outcome["details"] = {
                     "reason": "Agent's final tool call failed. Fallback reply sent by orchestrator.", 
-                    "tool_response": agent_result.final_output
+                    "tool_response": parsed_final_output
                 }
-        elif agent_result.final_output: # final_output exists but is not a dict as expected
-            logger.warning(f"Agent for {front_conversation_id} produced final_output, but it was not the expected dictionary. Output: {agent_result.final_output}")
+        # This elif covers cases where original final_output existed but wasn't successfully parsed into a dict
+        elif agent_result.final_output: 
+            logger.warning(f"Agent for {front_conversation_id} produced final_output, but it was not the expected dictionary format. Original Output: {agent_result.final_output}")
             await _send_fallback_reply_and_tag(
                 front_conversation_id,
                 "Our automated assistant had an issue formatting its final response. A team member will review your request."
@@ -317,8 +337,9 @@ Do not ask for confirmation. Execute the described logic and make sure your fina
             agent_outcome["agent_handled"] = False
             agent_outcome["processed_flag"] = True # Orchestrator sent a fallback reply
             agent_outcome["details"] = {
-                "reason": "Agent produced unexpected final_output type. Fallback reply sent by orchestrator.",
-                "final_output": agent_result.final_output if not isinstance(agent_result.final_output, (dict, list)) else "Output present but not a plain string/dict for logging preview" 
+                "reason": "Agent produced unexpected final_output type or format. Fallback reply sent by orchestrator.",
+                # Log the original if it's simple, otherwise a placeholder
+                "original_final_output": str(agent_result.final_output) if len(str(agent_result.final_output)) < 200 else "Original output too long for details field"
             }
         else: # Agent completed, but no final_output at all.
             logger.warning(f"Agent for {front_conversation_id} completed without any final_output.")
