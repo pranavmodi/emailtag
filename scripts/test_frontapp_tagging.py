@@ -570,14 +570,14 @@ if __name__ == "__main__":
             "expected_tags": ["Apt Status Req"] # Corrected based on actual AI output & tree
         },
         "16": {
-            "description": "Appointment Status Request - Inquiry about existing appointment with Patient ID PRE248509",
-            "subject": "Checking Status of My Appointment - Patient ID: PRE248509",
+            "description": "Appointment Status Request - Inquiry about existing appointment with Patient ID PRE1079637",
+            "subject": "Checking Status of My Appointment - Patient ID: PRE1079637",
             "body_html": (
                 "<p>Hello Scheduling Team,</p>"
                 "<p>I am writing to check the status of an appointment I believe I have scheduled with your facility.</p>"
                 "<p>My details are:<br>"
                 "Patient Name: Alex Patient<br>"
-                "Patient ID: PRE248509<br>"
+                "Patient ID: PRE1079637<br>"
                 "DOB: 01/01/1980</p>"
                 "<p>Could you please confirm if an appointment is on file for me and, if so, provide the date, time, and any preparation instructions?</p>"
                 "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
