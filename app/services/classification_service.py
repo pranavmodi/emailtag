@@ -451,7 +451,7 @@ def _check_for_conflicting_top_level_topics(
 async def get_rules_for_classification_step(
     classification_path: List[str],
     conversation_id: str # For logging
-) -> Tuple[str, str]: # (llm_prompt_template, rules_source_description)
+) -> Optional[Tuple[str, str]]: # (llm_prompt_template, rules_source_description)
     """
     Get the appropriate LLM prompt template for the current step in the hierarchy
     by querying the hierarchical_classification_rules table.
@@ -467,29 +467,20 @@ async def get_rules_for_classification_step(
     
     async_db_session: AsyncSession = AsyncSessionLocal()
     try:
-        # Need an instance of HierarchicalRulesService
-        # Re-using get_hierarchical_rules_service but with a locally managed session
-        # Alternatively, pass the service instance down or make HierarchicalRulesService methods static if no state
         h_rules_service = HierarchicalRulesService(async_db_session) 
         
-        # This method needs to exist in HierarchicalRulesService
-        # It should fetch a single rule object by its 'category' field
         rule_obj = await h_rules_service.get_rule_by_hierarchical_category(hierarchical_category_key)
 
         if rule_obj and rule_obj.rule:
             logger.info(f"✅ Using rule prompt from DB category '{hierarchical_category_key}'. Length: {len(rule_obj.rule)}")
-            if hierarchical_category_key == "ROOT":
-                logger.info("Content of 'ROOT' rule prompt: >>>")
-                logger.info(rule_obj.rule) # Log the rule content directly
-                logger.info("<<< End of 'ROOT' rule prompt.")
-            return rule_obj.rule, hierarchical_category_key # Return the prompt template and the key as source
+            return rule_obj.rule, hierarchical_category_key
         else:
-            logger.warning(f"⚠️ No rule prompt found in DB for hierarchical category key '{hierarchical_category_key}' for conversation {conversation_id}. An empty string will be used.")
-            return "", f"none (no rule found for {hierarchical_category_key})"
+            logger.warning(f"⚠️ No rule prompt found in DB for hierarchical category key '{hierarchical_category_key}' for conversation {conversation_id}. Rule object or rule content is missing.")
+            return None # Explicitly return None
             
     except Exception as e:
         logger.error(f"Error loading rule prompt for DB category '{hierarchical_category_key}' for conversation {conversation_id}: {e}", exc_info=True)
-        return "", f"error (rule fetch failed for {hierarchical_category_key})"
+        return None # Explicitly return None on error
     finally:
         await async_db_session.close()
 
@@ -528,13 +519,19 @@ async def classify_email_tags_hierarchical(
                 return ["AI: Human review required"] if classification_path else []
 
             # Get the LLM prompt template for this classification step
-            llm_prompt_template, rules_source = await get_rules_for_classification_step(
+            rules_result = await get_rules_for_classification_step(
                 classification_path, 
                 front_conversation_id
             )
             
-            if not llm_prompt_template:
-                logger.warning(f"No LLM prompt template found from source '{rules_source}' for {front_conversation_id} at path {classification_path}. Assigning review.")
+            if rules_result is None:
+                logger.warning(f"No LLM prompt template could be retrieved for {front_conversation_id} at path {classification_path}. Assigning review.")
+                return ["AI: Human review required"] if classification_path else []
+
+            llm_prompt_template, rules_source = rules_result
+            
+            if not llm_prompt_template: # Should be redundant if rules_result is None check is comprehensive, but good for safety.
+                logger.warning(f"LLM prompt template is empty from source '{rules_source}' for {front_conversation_id} at path {classification_path}. Assigning review.")
                 return ["AI: Human review required"] if classification_path else []
 
             chosen_option = _call_llm_for_classification(
@@ -565,13 +562,19 @@ async def classify_email_tags_hierarchical(
 
                 # Get LLM prompt template for choosing from this list.
                 # The classification_path already includes the parent that led to this list.
-                llm_prompt_template_for_list, list_rules_source = await get_rules_for_classification_step(
+                list_rules_result = await get_rules_for_classification_step(
                     classification_path, 
                     front_conversation_id
                 )
 
-                if not llm_prompt_template_for_list:
-                    logger.warning(f"No LLM prompt template found from source '{list_rules_source}' for list choice at {classification_path} for {front_conversation_id}. Assigning review.")
+                if list_rules_result is None:
+                    logger.warning(f"No LLM prompt template could be retrieved for list choice at {classification_path} for {front_conversation_id}. Assigning review.")
+                    return ["AI: Human review required"]
+
+                llm_prompt_template_for_list, list_rules_source = list_rules_result
+
+                if not llm_prompt_template_for_list: # Safety check
+                    logger.warning(f"LLM prompt template for list is empty from source '{list_rules_source}' for {front_conversation_id} at path {classification_path}. Assigning review.")
                     return ["AI: Human review required"]
 
                 chosen_final_tag = _call_llm_for_classification(

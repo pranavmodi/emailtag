@@ -16,7 +16,6 @@ class EmailBase(BaseModel):
     recipients: List[str]
     content_text: Optional[str] = None
     content_html: Optional[str] = None
-    apt_status_interaction_stage: Optional[str] = None
 
 
 class EmailCreate(EmailBase):
@@ -26,8 +25,8 @@ class EmailCreate(EmailBase):
     status: Optional[str] = "pending_initial"
     ocr_attachments_total: Optional[int] = None
     ocr_attachments_completed: Optional[int] = 0
+    has_attachments: bool
     # ocr_results is not typically set on creation, it's populated later
-    # apt_status_interaction_stage will be inherited from EmailBase, defaulting to None
 
 
 class EmailUpdate(BaseModel):
@@ -43,7 +42,6 @@ class EmailUpdate(BaseModel):
     # ocr_study_type: Optional[List[str]] = None # Removed
     ocr_results: Optional[List[Dict[str, Any]]] = None # Added JSONB field
     raw_data: Optional[Dict[str, Any]] = None # Allow updating raw_data if needed
-    apt_status_interaction_stage: Optional[str] = None # Added for multi-turn AptStatusReq
 
 
 class EmailInDBBase(EmailBase):

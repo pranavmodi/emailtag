@@ -144,6 +144,7 @@ async def handle_apt_status_request_agent_sdk(
     logger.info(f"Initiating openai-agents SDK flow for Apt Status Req - Conv ID: {front_conversation_id}")
 
     formatted_history = _format_conversation_history_for_agent(structured_history_messages)
+    logger.info(f"Formatted conversation history: {formatted_history}")
     
     instructions = f"""
 You are an AI assistant for a medical imaging company, specializing in appointment status requests.
