@@ -3,7 +3,7 @@ import os
 from typing import Optional, Dict, Any, List
 
 from openai import OpenAIError, AsyncOpenAI
-from agents import Agent, Runner, ModelSettings, function_tool, OpenAIChatCompletionsModel
+from agents import Agent, Runner, ModelSettings, function_tool, OpenAIChatCompletionsModel, RunConfig
 import httpx
 
 from app.core.config import settings as app_settings_instance # Renamed to avoid conflict if settings is passed
@@ -13,12 +13,7 @@ from app.services import frontapp_service # For the actual send_reply_to_front t
 logger = get_task_logger(__name__)
 
 # --- BEGIN: Tag Constants for Appointment Status Agent ---
-TAG_APT_STATUS_RESOLVED = "System: Apt Status - Resolved"
-TAG_APT_STATUS_ID_NOT_FOUND_L1 = "System: Apt Status - Patient ID Requested L1"
-TAG_APT_STATUS_DB_ERROR = "System: Apt Status - DB Error"
-TAG_HUMAN_REVIEW_ID_UNMATCHED_L2 = "System: Apt Status - Human Review - ID Unmatched L2"
-TAG_HUMAN_REVIEW_ID_MISSING_L2 = "System: Apt Status - Human Review - ID Missing L2"
-TAG_AGENT_PROCESSING_ERROR = "System: Agent Error - Apt Status"
+TAG_AI_HUMAN_REVIEW_REQUIRED = "AI: Human review required" # Centralized tag for errors/escalations
 # --- END: Tag Constants ---
 
 
@@ -59,9 +54,10 @@ async def extract_patient_id_from_email(email_content: str) -> Dict[str, Optiona
     """
     logger.info(f"Tool 'extract_patient_id_from_email' called with content: {email_content[:100]}...")
     import re
-    match = re.search(r"(patient id is|Patient ID:|PID:)\s*(\d{6,10})", email_content, re.IGNORECASE)
+    # Updated regex to capture optional alphabetic prefixes (e.g., PRE, PX) and ensure whole word matching for the ID part.
+    match = re.search(r"(patient id is|Patient ID:|PID:)\s*([A-Z_]{0,5}\d{6,10})\b", email_content, re.IGNORECASE)
     if match:
-        extracted_id = match.group(2)
+        extracted_id = match.group(2) # Group 2 now captures the full ID (prefix + numbers)
         logger.info(f"Found patient ID: {extracted_id}")
         return {"patient_id": extracted_id}
     
@@ -81,16 +77,18 @@ async def fetch_appointment_details_by_patient_id(patient_id: str) -> Dict[str, 
     Returns example structures for success, not_found, or db_error.
     """
     logger.info(f"Tool 'fetch_appointment_details_by_patient_id' called for Patient ID: {patient_id}")
-    if patient_id == "123456":
+    if patient_id == "123456": # Mock data for testing
         return {
             "status": "success", 
             "data": {"exam_type": "MRI Brain", "appointment_date": "2024-07-15", "current_status": "Scheduled"}
         }
+    elif patient_id == "PRE248509": # Specific test case from logs for "not_found"
+         return {"status": "not_found", "message": f"No appointments found for Patient ID: {patient_id}."}
     elif patient_id == "654321":
         return {"status": "not_found", "message": "No appointments found for this patient ID."}
     elif patient_id == "DB_ERROR_PATIENT":
         return {"status": "db_error", "message": "Simulated database query failed."}
-    else:
+    else: # Default to not_found for other IDs
         return {"status": "not_found", "message": f"No appointments found for this patient ID: {patient_id} (generic)."}
 
 @function_tool
@@ -120,12 +118,12 @@ async def send_reply_to_front(
             tags_added_successfully = await loop.run_in_executor(None, frontapp_service.add_conversation_tags, conversation_id, tags_to_add)
             if not tags_added_successfully:
                 logger.warning(f"Sent reply to {conversation_id} but failed to add tags: {tags_to_add}")
-        if tags_to_remove:
+        if tags_to_remove: # This part of the tool can remain for generic use, even if agent prompt changes
             tags_removed_successfully = await loop.run_in_executor(None, frontapp_service.remove_conversation_tags, conversation_id, tags_to_remove)
             if not tags_removed_successfully:
                  logger.warning(f"Sent reply to {conversation_id} but failed to remove tags: {tags_to_remove}")
         
-        return {"status": "success", "message": "Reply sent and tags updated."}
+        return {"status": "success", "message": "Reply sent and tags (if any) updated."}
     except Exception as e:
         logger.error(f"Error in 'send_reply_to_front' tool for conversation {conversation_id}: {e}", exc_info=True)
         return {"status": "error", "message": f"Exception in send_reply_to_front: {str(e)}"}
@@ -136,7 +134,7 @@ async def send_reply_to_front(
 async def _send_fallback_reply_and_tag(
     conversation_id: str, 
     reply_text: str,
-    tag_to_add: str = TAG_AGENT_PROCESSING_ERROR # Allow overriding tag if needed in future
+    tag_to_add: str = TAG_AI_HUMAN_REVIEW_REQUIRED # Changed default tag
 ):
     """Sends a fallback reply to Front and adds an error tag."""
     logger.info(f"Sending fallback reply for conversation {conversation_id} due to agent error/issue. Text: '{reply_text}'")
@@ -214,27 +212,28 @@ Your Task & Tool Usage:
         a.  Call `fetch_appointment_details_by_patient_id` tool with the extracted `patient_id`.
         b.  If `fetch_appointment_details_by_patient_id` result `status` is "success":
             *   Formulate a reply like: "Your {{exam_type}} appointment on {{appointment_date}} is currently {{current_status}}." Fill in the placeholders using data from the tool result (e.g., result.data.exam_type).
-            *   Call `send_reply_to_front` with this formulated reply and `tags_to_add=["{TAG_APT_STATUS_RESOLVED}"]`. This is your final action.
+            *   Call `send_reply_to_front` with this formulated reply.
         c.  If `fetch_appointment_details_by_patient_id` result `status` is "not_found":
             *   Formulate a reply like: "We found your Patient ID: {{patient_id}}, but could not find any upcoming appointments. If you believe this is an error, please provide the approximate date and type of your exam so our team can investigate further." (Replace {{patient_id}} with the ID you have).
-            *   Call `send_reply_to_front` with this formulated reply and `tags_to_add=["{TAG_HUMAN_REVIEW_ID_UNMATCHED_L2}"]`. This is your final action.
+            *   Call `send_reply_to_front` with this formulated reply and `tags_to_add=["{TAG_AI_HUMAN_REVIEW_REQUIRED}"]`.
         d.  If `fetch_appointment_details_by_patient_id` result `status` is "db_error":
             *   Formulate a reply like: "We encountered a technical difficulty while trying to fetch your appointment details. Our team has been notified and will look into this."
-            *   Call `send_reply_to_front` with this formulated reply and `tags_to_add=["{TAG_APT_STATUS_DB_ERROR}"]`. This is your final action.
+            *   Call `send_reply_to_front` with this formulated reply and `tags_to_add=["{TAG_AI_HUMAN_REVIEW_REQUIRED}"]`.
 
     *   **If `extract_patient_id_from_email` returns NO `patient_id` (i.e., `patient_id` is null or empty)**:
         a.  **Review Conversation History**: Carefully examine the "Conversation History" provided. Determine if you (the Assistant) have previously asked for a Patient ID in this conversation, AND if the user's subsequent replies (visible in history or the "Latest User Email") did not provide a clear Patient ID that was then successfully used or found to be valid.
         b.  **If you determine you have NOT asked for a Patient ID before OR you asked but the user's response (if any) is not yet in the provided history or did not contain a clear ID**:
             *   Formulate a polite request: "To help me find your appointment status, could you please provide your Patient ID?"
-            *   Call `send_reply_to_front` with this request and `tags_to_add=["{TAG_APT_STATUS_ID_NOT_FOUND_L1}"]`. This is your final action.
+            *   Call `send_reply_to_front` with this request.
         c.  **If you determine you HAVE asked for a Patient ID before, and the user's subsequent replies (in history or "Latest User Email") STILL did not yield a usable Patient ID**:
             *   Formulate an escalation message: "Thank you for the information. We're still having trouble locating your appointment details. A member of our team will personally review your request and get back to you shortly."
-            *   Call `send_reply_to_front` with this message and `tags_to_add=["{TAG_HUMAN_REVIEW_ID_MISSING_L2}"]`. This is your final action.
+            *   Call `send_reply_to_front` with this message and `tags_to_add=["{TAG_AI_HUMAN_REVIEW_REQUIRED}"]`.
+
+IMPORTANT FINAL STEP: After deciding which action to take and calling the `send_reply_to_front` tool, your job is to return ONLY the direct JSON output received from that `send_reply_to_front` tool call. Do NOT add any conversational text, summaries, or any other information around it. Your entire response for this run MUST be the JSON object that the `send_reply_to_front` tool gives back.
 
 Remember to replace placeholders like `{{exam_type}}`, `{{appointment_date}}`, `{{current_status}}`, and `{{patient_id}}` in your formulated replies with actual values from tool outputs before calling `send_reply_to_front`.
-The `send_reply_to_front` tool also accepts `tags_to_remove` (e.g., `tags_to_remove=["{TAG_APT_STATUS_ID_NOT_FOUND_L1}"]`) if you need to clean up previous tags when resolving or escalating further.
-Your final output for this run MUST be the JSON result from a `send_reply_to_front` tool call.
-Do not ask for confirmation. Execute the described logic and call `send_reply_to_front` as your last step.
+The `send_reply_to_front` tool also accepts `tags_to_remove` if you need to clean up previous tags.
+Do not ask for confirmation. Execute the described logic and make sure your final returned value is strictly the JSON output from `send_reply_to_front`.
 """
     agent_outcome = {
         "agent_handled": False, 
@@ -255,7 +254,7 @@ Do not ask for confirmation. Execute the described logic and call `send_reply_to
             name="AppointmentStatusAgent_ConvoAware_v3",
             instructions=instructions,
             model=OpenAIChatCompletionsModel(
-                model=settings_obj.OPENAI_MODEL_NAME if hasattr(settings_obj, 'OPENAI_MODEL_NAME') and settings_obj.OPENAI_MODEL_NAME else "gpt-4o",
+                model=settings_obj.OPENAI_MODEL_NAME if hasattr(settings_obj, 'OPENAI_MODEL_NAME') and settings_obj.OPENAI_MODEL_NAME else "gpt-4o", # Ensure 'gpt-4o' is used if not specified
                 openai_client=custom_openai_client
             ),
             tools=[
@@ -264,14 +263,21 @@ Do not ask for confirmation. Execute the described logic and call `send_reply_to
                 send_reply_to_front,
             ],
             model_settings=ModelSettings(
-                temperature=0.2
+                temperature=0.2 # Lower temperature for more deterministic behavior in structured tasks
             )
         )
         
         agent_run_input_context = f"Process request based on Latest User Email provided in instructions for conversation {front_conversation_id}."
         logger.info(f"Running {apt_status_agent.name} for conv {front_conversation_id}.")
 
-        agent_result = await Runner.run(apt_status_agent, input=agent_run_input_context)
+        # Disable tracing for this specific run to avoid SSL errors if tracing backend is problematic
+        run_config_settings = RunConfig(tracing_disabled=True)
+
+        agent_result = await Runner.run(
+            apt_status_agent, 
+            input=agent_run_input_context,
+            run_config=run_config_settings
+        )
 
         # If Runner.run completes without an exception, check final_output
         if agent_result.final_output and isinstance(agent_result.final_output, dict):
@@ -324,6 +330,25 @@ Do not ask for confirmation. Execute the described logic and call `send_reply_to
             agent_outcome["processed_flag"] = True # Orchestrator sent a fallback reply
             agent_outcome["details"] = {"reason": "Agent completed without producing a final output. Fallback reply sent by orchestrator."}
 
+    except AgentsException as e:
+        error_msg_for_log = f"AgentsException during openai-agents SDK orchestration for {front_conversation_id}: {str(e)}"
+        error_details_for_outcome = str(e)
+        if hasattr(e, 'run_data') and e.run_data:
+            # Avoid logging overly verbose run_data directly, summarize or indicate presence
+            error_msg_for_log += " | Run Data available on exception object." 
+            # You might want to serialize e.run_data to string if it's useful and not too large
+            # For now, keeping it simple for the 'details' field.
+            # error_details_for_outcome += f" | Run Data: {str(e.run_data)}" # Could be too verbose
+        logger.error(error_msg_for_log, exc_info=True) # exc_info=True will log the full traceback
+
+        await _send_fallback_reply_and_tag(
+            front_conversation_id, 
+            "Our automated assistant encountered an internal SDK error. A team member will review your request shortly."
+        )
+        agent_outcome["agent_handled"] = False
+        agent_outcome["processed_flag"] = True # Orchestrator sent a fallback reply
+        agent_outcome["details"] = {"agent_error": error_details_for_outcome, "reason": "Agent execution raised an SDK exception. Fallback reply sent."}
+    
     except Exception as e: # Catch any other unexpected exceptions during agent run or result processing
         logger.error(f"Unexpected exception during openai-agents SDK orchestration or result processing for {front_conversation_id}: {e}", exc_info=True)
         await _send_fallback_reply_and_tag(
@@ -339,56 +364,135 @@ Do not ask for confirmation. Execute the described logic and call `send_reply_to
     return agent_outcome
 # --- END: Orchestrator for openai-agents SDK ---
 
+
+# --- BEGIN: Main Test Function (for local testing if needed) ---
+# (This section is typically for local development and testing of the agent logic)
+async def test_new_agent_sdk_flow():
+    """Simulates an email coming in that would trigger the agent SDK flow."""
+    
+    # Mock settings if needed, or rely on global app_settings_instance
+    class MockSDKSettings:
+        OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY") # Ensure this is set in your env
+        OPENAI_MODEL_NAME = "gpt-4o" # Explicitly use gpt-4o for testing
+        # Add any other settings your agent/tools might require from the settings_obj
+
+    mock_settings = MockSDKSettings()
+    if not mock_settings.OPENAI_API_KEY:
+        print("WARNING: OPENAI_API_KEY environment variable not set. Agent test may fail.")
+        # return # Optionally, exit if key is missing
+
+    # --- Test Case 1: Patient ID present, appointment should be found (mocked) ---
+    print("\n--- Test Case 1: Patient ID '123456' (Appointment Found) ---")
+    test_conv_id_1 = "test_conv_apt_found_123"
+    test_email_content_1 = "Hello, my Patient ID is 123456. What's my appointment status?"
+    test_history_1 = [
+        {"type": "message", "direction": "inbound", "author_role": "user", "body": "Previous question unrelated."},
+        {"type": "message", "direction": "outbound", "author_role": "teammate", "body": "Previous assistant reply."}
+    ]
+    outcome1 = await handle_apt_status_request_agent_sdk(
+        front_conversation_id=test_conv_id_1,
+        current_email_content=test_email_content_1,
+        structured_history_messages=test_history_1,
+        settings_obj=mock_settings 
+    )
+    print(f"Test Case 1 Outcome: {outcome1}")
+
+    # --- Test Case 2: Patient ID present, appointment NOT found (mocked) ---
+    print("\n--- Test Case 2: Patient ID '654321' (Appointment Not Found) ---")
+    test_conv_id_2 = "test_conv_apt_notfound_456"
+    test_email_content_2 = "My PID is 654321. Any updates?"
+    test_history_2 = []
+    outcome2 = await handle_apt_status_request_agent_sdk(
+        front_conversation_id=test_conv_id_2,
+        current_email_content=test_email_content_2,
+        structured_history_messages=test_history_2,
+        settings_obj=mock_settings
+    )
+    print(f"Test Case 2 Outcome: {outcome2}")
+
+    # --- Test Case 3: Patient ID NOT present (first attempt by agent) ---
+    print("\n--- Test Case 3: Patient ID Missing (Agent Asks) ---")
+    test_conv_id_3 = "test_conv_pid_missing_789"
+    test_email_content_3 = "I need to know my appointment details."
+    test_history_3 = []
+    outcome3 = await handle_apt_status_request_agent_sdk(
+        front_conversation_id=test_conv_id_3,
+        current_email_content=test_email_content_3,
+        structured_history_messages=test_history_3,
+        settings_obj=mock_settings
+    )
+    print(f"Test Case 3 Outcome: {outcome3}")
+    
+    # --- Test Case 4: Patient ID NOT present (second attempt, after agent asked once) ---
+    print("\n--- Test Case 4: Patient ID Missing Again (Agent Escalates) ---")
+    test_conv_id_4 = "test_conv_pid_missing_again_012"
+    test_email_content_4 = "I still don't know my Patient ID."
+    test_history_4 = [ # Simulate agent already asked for ID
+        {"type": "message", "direction": "inbound", "author_role": "user", "body": "I need to know my appointment details."},
+        {"type": "comment", "direction": "outbound", "author_role": "teammate", "body": "To help me find your appointment status, could you please provide your Patient ID?"}, # Agent's previous request
+        # Current email is test_email_content_4
+    ]
+    outcome4 = await handle_apt_status_request_agent_sdk(
+        front_conversation_id=test_conv_id_4,
+        current_email_content=test_email_content_4,
+        structured_history_messages=test_history_4,
+        settings_obj=mock_settings
+    )
+    print(f"Test Case 4 Outcome: {outcome4}")
+
+    # --- Test Case 5: DB Error during fetch ---
+    print("\n--- Test Case 5: Patient ID 'DB_ERROR_PATIENT' (DB Error) ---")
+    test_conv_id_5 = "test_conv_db_error_345"
+    test_email_content_5 = "My ID is DB_ERROR_PATIENT, please check."
+    test_history_5 = []
+    outcome5 = await handle_apt_status_request_agent_sdk(
+        front_conversation_id=test_conv_id_5,
+        current_email_content=test_email_content_5,
+        structured_history_messages=test_history_5,
+        settings_obj=mock_settings
+    )
+    print(f"Test Case 5 Outcome: {outcome5}")
+    
+    # --- Test Case 6: Real-world example from logs with PRE prefix (should be 'not_found') ---
+    print("\n--- Test Case 6: Patient ID 'PRE248509' (Appointment Not Found - Real Log Example) ---")
+    test_conv_id_6 = "test_conv_pre_id_notfound_678"
+    test_email_content_6 = "Hello Scheduling Team,I am writing to check the status of an appointment I believe I have scheduled with your facility.My details are:Patient Name: Alex PatientPatient ID: PRE248509DOB: 01/01/1980Could you please confirm if an appointment is on file for me and, if so, provide the date, time, and any preparation instructions?This email is sent via the Python test script from: pranav@possibleminds.in. Test ID: a5f099b4-bfaf-49b5-b574-018c9d6555daThank you,Alex Patient (via Test Script)"
+    test_history_6 = []
+    outcome6 = await handle_apt_status_request_agent_sdk(
+        front_conversation_id=test_conv_id_6,
+        current_email_content=test_email_content_6,
+        structured_history_messages=test_history_6,
+        settings_obj=mock_settings
+    )
+    print(f"Test Case 6 Outcome: {outcome6}")
+
 if __name__ == "__main__":
-    async def test_new_agent_sdk_flow():
-        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
-        global logger
-        logger = logging.getLogger(__name__)
-
-        class MockSDKSettings:
-            OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-            OPENAI_MODEL_NAME = "gpt-4o"
-        
-        if not MockSDKSettings.OPENAI_API_KEY:
-            logger.error("OPENAI_API_KEY env var not set. Cannot run new agent test.")
-            return
-
-        mock_history = [
-            {"type": "message", "direction": "inbound", "author_role": "user", "body": "Can I get an update on my appointment?"},
-            {"type": "comment", "author_role": "teammate", "body": "To help me find your appointment status, could you please provide your Patient ID?"} 
-        ]
-        
-        logger.info("\n--- Testing SDK Agent: User provides ID ---")
-        result1 = await handle_apt_status_request_agent_sdk(
-            front_conversation_id="sdk_test_convo_1",
-            current_email_content="My patient id is 123456, what is my status?",
-            structured_history_messages=[],
-            settings_obj=MockSDKSettings()
-        )
-        logger.info(f"SDK Agent Result 1: {result1}")
-
-        await asyncio.sleep(1)
-
-        logger.info("\n--- Testing SDK Agent: User does NOT provide ID, first time ---")
-        result2 = await handle_apt_status_request_agent_sdk(
-            front_conversation_id="sdk_test_convo_2",
-            current_email_content="What is my appointment status?",
-            structured_history_messages=[],
-            settings_obj=MockSDKSettings()
-        )
-        logger.info(f"SDK Agent Result 2: {result2}")
-        
-        await asyncio.sleep(1)
-
-        logger.info("\n--- Testing SDK Agent: User does NOT provide ID, agent asked before ---")
-        result3 = await handle_apt_status_request_agent_sdk(
-            front_conversation_id="sdk_test_convo_3",
-            current_email_content="I don't have my patient ID right now.",
-            structured_history_messages=mock_history, 
-            settings_obj=MockSDKSettings()
-        )
-        logger.info(f"SDK Agent Result 3: {result3}")
-
-    # To run specific tests:
-    asyncio.run(test_new_agent_sdk_flow()) # For the new openai-agents SDK method
-    pass 
+    # This allows running the test function directly using `python -m app.agents.apt_status_req_agent`
+    # Make sure nest_asyncio is applied if running in an environment that needs it (e.g. Jupyter)
+    # For simple script execution, asyncio.run should be fine.
+    
+    # For Celery tasks, nest_asyncio.apply() is usually at the top of the tasks.py file.
+    # If running this standalone, and it's part of a larger async ecosystem (like FastAPI tests),
+    # you might need to manage the event loop carefully or use pytest-asyncio.
+    # For this simple test script, asyncio.run is generally okay.
+    
+    # Check if OPENAI_API_KEY is set
+    if not os.environ.get("OPENAI_API_KEY"):
+        print("********************************************************************************")
+        print("WARNING: OPENAI_API_KEY environment variable is not set.")
+        print("The agent test flow requires an OpenAI API key to interact with the LLM.")
+        print("Please set the OPENAI_API_KEY environment variable before running this test.")
+        print("Example: export OPENAI_API_KEY='your_key_here'")
+        print("********************************************************************************")
+    else:
+        print("Attempting to run test_new_agent_sdk_flow()...")
+        try:
+            asyncio.run(test_new_agent_sdk_flow())
+        except RuntimeError as e:
+            if "cannot be called from a running event loop" in str(e):
+                print("Asyncio loop already running. Applying nest_asyncio and retrying.")
+                import nest_asyncio
+                nest_asyncio.apply()
+                asyncio.run(test_new_agent_sdk_flow())
+            else:
+                raise 
