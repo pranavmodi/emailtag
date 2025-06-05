@@ -1,23 +1,36 @@
 # app/agents/templates/appointment_status_templates.py
 
-TEMPLATE_APPOINTMENT_FOUND_DETAILED = """Patient ID: {patient_id_confirmed}
+TEMPLATE_APPOINTMENT_FOUND_DETAILED = """Patient ID: {patient_id_confirmed}<br/><br/>
 
-Study ID: {first_study_id} - {first_exam_description}
-I have confirmed that this study has been scheduled.
-Appointment Date/Time: {first_appointment_datetime_str}. Please arrive 15 minutes before the exam time at {first_arrival_time_str}
-Appointment Location: {first_location_name}
+Study ID: {first_study_id} - {first_exam_description}<br/>
+I have confirmed that this study has been scheduled.<br/>
+Appointment Date/Time: {first_appointment_datetime_str}. Please arrive 15 minutes before the exam time at {first_arrival_time_str}<br/>
+Appointment Location: {first_location_name}<br/><br/>
 
-Our direct scheduling phone # is {scheduling_phone} and we can assist with directions, rescheduling, canceling, or any other scheduling-related questions.
-{no_show_policy}
+Our direct scheduling phone # is {scheduling_phone} and we can assist with directions, rescheduling, canceling, or any other scheduling-related questions.<br/>
+{no_show_policy}<br/><br/>
 
-Here is a summary of the patient's exams we currently have entered into our system:
-Study ID | Exam Description | Status | Study Date | Location | Images Available | Report Available
----------|------------------|--------|------------|----------|------------------|-----------------
+Here is a summary of the patient's exams we currently have entered into our system:<br/>
+<table border="1" style="border-collapse: collapse; width: 100%;">
+    <thead>
+        <tr>
+            <th style="border: 1px solid black; padding: 8px; text-align: left;">Study ID</th>
+            <th style="border: 1px solid black; padding: 8px; text-align: left;">Exam Description</th>
+            <th style="border: 1px solid black; padding: 8px; text-align: left;">Status</th>
+            <th style="border: 1px solid black; padding: 8px; text-align: left;">Study Date</th>
+            <th style="border: 1px solid black; padding: 8px; text-align: left;">Location</th>
+            <th style="border: 1px solid black; padding: 8px; text-align: left;">Images Available</th>
+            <th style="border: 1px solid black; padding: 8px; text-align: left;">Report Available</th>
+        </tr>
+    </thead>
+    <tbody>
 {studies_table_rows}
-
+    </tbody>
+</table>
+<br/>
 {personal_injury_info}
-Access bills, appointment times, and e-sign liens (Click request login if you don't have an account): {bills_link}
-Access reports & images (Request login here for reports): {reports_link}
+Access bills, appointment times, and e-sign liens (Click request login if you don't have an account): <a href="{bills_link}">Click Here</a><br/>
+Access reports & images (Request login here for reports): <a href="{reports_link}">Click Here</a><br/>
 """
 
 TEMPLATE_REQUEST_PATIENT_ID = "To help me find your appointment status, could you please provide your Patient ID?"

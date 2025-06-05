@@ -63,18 +63,27 @@ def _generate_response_from_template(scenario: str, data: Dict[str, Any]) -> str
         
         studies_table_rows_list = []
         for study in studies:
+            # Generate HTML table rows
             studies_table_rows_list.append(
-                f"{study.get('study_id','N/A')} | {study.get('exam_description','N/A')} | {study.get('status','N/A')} | {study.get('appointment_datetime_str','N/A')} | {study.get('location_name','N/A')} | {study.get('images_available','N/A')} | {study.get('report_available','N/A')}"
+                f"<tr>\n"
+                f"  <td style=\"border: 1px solid black; padding: 8px;\">{study.get('study_id','N/A')}</td>\n"
+                f"  <td style=\"border: 1px solid black; padding: 8px;\">{study.get('exam_description','N/A')}</td>\n"
+                f"  <td style=\"border: 1px solid black; padding: 8px;\">{study.get('status','N/A')}</td>\n"
+                f"  <td style=\"border: 1px solid black; padding: 8px;\">{study.get('appointment_datetime_str','N/A')}</td>\n"
+                f"  <td style=\"border: 1px solid black; padding: 8px;\">{study.get('location_name','N/A')}</td>\n"
+                f"  <td style=\"border: 1px solid black; padding: 8px;\">{study.get('images_available','N/A')}</td>\n"
+                f"  <td style=\"border: 1px solid black; padding: 8px;\">{study.get('report_available','N/A')}</td>\n"
+                f"</tr>"
             )
         studies_table_rows = "\n".join(studies_table_rows_list)
         
         personal_injury_info_text = ""
         if data.get("is_personal_injury_case"):
-            personal_injury_info_text = """
-If this is also a personal injury case:
-A report containing the findings of the exam will also be sent to the attorney.
-A bill will be sent to the attorney once both the patient and the attorney sign all pending liens.
-Please make sure to submit a negotiation offer before sending the payment.
+            personal_injury_info_text = """<br/>
+If this is also a personal injury case:<br/>
+A report containing the findings of the exam will also be sent to the attorney.<br/>
+A bill will be sent to the attorney once both the patient and the attorney sign all pending liens.<br/>
+Please make sure to submit a negotiation offer before sending the payment.<br/>
 """
         return TEMPLATE_APPOINTMENT_FOUND_DETAILED.format(
             patient_id_confirmed=data.get("patient_id_confirmed", "N/A"),
