@@ -131,19 +131,22 @@ Please make sure to submit a negotiation offer before sending the payment.<br/>
 async def extract_patient_id_from_email(email_content: str) -> Dict[str, Optional[str]]:
     """
     Extracts a patient ID from the given email content.
-    Searches for patterns like "Patient ID: XXXX", "PID: XXXX", or a standalone 6-10 digit number.
+    Searches for patterns like "Patient ID: XXXX", "PID: XXXX", or a standalone ID with an optional alphabetic prefix.
     Returns a dictionary: {"patient_id": "extracted_id"} or {"patient_id": null} if not found.
     """
     logger.info(f"Tool 'extract_patient_id_from_email' called with content: {email_content[:100]}...")
     import re
     # Updated regex to capture optional alphabetic prefixes (e.g., PRE, PX) and ensure whole word matching for the ID part.
-    match = re.search(r"(patient id is|Patient ID:|PID:)\s*([A-Z_]{0,5}\d{6,10})\b", email_content, re.IGNORECASE)
+    # It also handles an optional period or colon after "Patient ID".
+    match = re.search(r"(patient id is|Patient ID[:.]?|PID:)\s*([A-Z_]{0,5}\d{6,10})\b", email_content, re.IGNORECASE)
     if match:
         extracted_id = match.group(2) # Group 2 now captures the full ID (prefix + numbers)
-        logger.info(f"Found patient ID: {extracted_id}")
+        logger.info(f"Found patient ID via labeled pattern: {extracted_id}")
         return {"patient_id": extracted_id}
     
-    standalone_match = re.search(r"\b(\d{6,10})\b", email_content)
+    # This regex looks for standalone IDs that might not have a clear label.
+    # It matches either a prefixed ID (e.g., PRE123456) or a numeric-only ID.
+    standalone_match = re.search(r"\b([A-Z_]{2,5}\d{6,10}|\d{6,10})\b", email_content)
     if standalone_match:
         potential_id = standalone_match.group(1)
         logger.info(f"Found potential standalone patient ID: {potential_id}")
@@ -401,29 +404,29 @@ async def handle_apt_status_request_agent_sdk(
     formatted_history = _format_conversation_history_for_agent(structured_history_messages)
     logger.info(f"Formatted conversation history: {formatted_history}")
     
+    # Combine history and current email for a complete context for extraction
+    full_conversation_text = f"Conversation History:\n{formatted_history}\n\nLatest User Email:\n{current_email_content}"
+
     instructions = f"""
 You are an AI assistant for a medical imaging company, specializing in appointment status requests.
 Your primary goal is to:
-1. Extract a Patient ID using `extract_patient_id_from_email`.
-2. Fetch appointment details using `fetch_appointment_details_by_patient_id` with the extracted ID and the current `conversation_id` which is `{front_conversation_id}`. Also pass the `settings_obj` to this tool.
+1.  Search the **'Entire Conversation For Extraction'** text provided below to find the Patient ID. You MUST pass this complete text block to the `extract_patient_id_from_email` tool.
+2.  Fetch appointment details using `fetch_appointment_details_by_patient_id` with the extracted ID and the current `conversation_id` which is `{front_conversation_id}`. Also pass the `settings_obj` to this tool.
 3. Based on the outcome of step 2, determine the correct scenario.
 4. Call the `generate_formatted_reply` tool, passing it the determined scenario and the FULL result from `fetch_appointment_details_by_patient_id` (if available), and the `extracted_patient_id` (if available).
 5. Take the `reply_text` from `generate_formatted_reply`'s output.
 6. Call `send_reply_to_front` with this `reply_text` and add tags ONLY IF the scenario requires escalation to a human.
 
 Conversation ID (use for tool calls): {front_conversation_id}
-Latest User Email:
+
+**Entire Conversation For Extraction:**
 ---
-{current_email_content}
----
-Conversation History (if any):
----
-{formatted_history}
+{full_conversation_text}
 ---
 
 **Scenarios & Tool Usage Flow:**
 
-A.  **If `extract_patient_id_from_email` returns a `patient_id` (let's call it `extracted_pid`):**
+A.  **If calling `extract_patient_id_from_email` on the 'Entire Conversation For Extraction' text returns a `patient_id` (let's call it `extracted_pid`):**
     1.  Call `fetch_appointment_details_by_patient_id` with `patient_id=extracted_pid`, `conversation_id="{front_conversation_id}"`, and `settings_obj=settings_obj` (pass through from orchestrator). Let the result be `fetch_result`.
     2.  **If `fetch_result.status` is "success"** (and `fetch_result.data.studies` is not empty):
         *   Scenario for `generate_formatted_reply`: "appointments_found"
@@ -441,8 +444,8 @@ A.  **If `extract_patient_id_from_email` returns a `patient_id` (let's call it `
         *   Take `reply_text` from its output.
         *   Call `send_reply_to_front` with this `reply_text` and `tags_to_add=["{TAG_AI_HUMAN_REVIEW_REQUIRED}"]`.
 
-B.  **If `extract_patient_id_from_email` returns NO `patient_id`:**
-    1.  Review Conversation History.
+B.  **If `extract_patient_id_from_email` returns NO `patient_id` after searching the 'Entire Conversation For Extraction' text:**
+    1.  Review the full conversation again.
     2.  **If you have NOT asked for a Patient ID before OR the user's response is not yet in history:**
         *   Scenario for `generate_formatted_reply`: "id_missing_first_attempt"
         *   Call `generate_formatted_reply` with `scenario="id_missing_first_attempt"`, `fetch_details_result={{}}` (empty dict as no fetch was done), `extracted_patient_id=None`.
