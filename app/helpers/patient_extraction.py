@@ -42,11 +42,11 @@ async def extract_and_log_patient_info(
                 study_data_dict = None
                 try:
                     # Fetch patient data
-                    patient_data_dict = await fetch_patient_by_id(patient_id=p_id, conversation_id=conversation_id)
+                    patient_data_dict = await fetch_patient_by_id(patient_id=p_id)
                     # parent_logger.info(f"Patient data for {p_id}: {json.dumps(patient_data_dict, indent=2)}")
                     
                     # Fetch study details
-                    study_data_dict = await _fetch_patient_study_data(patient_id=p_id, conversation_id=conversation_id)
+                    study_data_dict = await _fetch_patient_study_data(patient_id=p_id)
                     # parent_logger.info(f"Study data for {p_id}: {json.dumps(study_data_dict, indent=2)}")
                     
                     # Create PatientConversationData entry with both patient and study information

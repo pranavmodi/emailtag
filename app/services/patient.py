@@ -34,14 +34,13 @@ def get_headers() -> Dict[str, str]:
         "Accept": "application/json",
     }
 
-def process_patient_data(data: Dict[str, Any], phone: str, conversation_id: str) -> Dict[str, Any]:
+def process_patient_data(data: Dict[str, Any], phone: str) -> Dict[str, Any]:
     """
     Process patient data from API response and store in unified store.
     
     Args:
         data (Dict[str, Any]): Raw API response data
         phone (str): Phone number for indexing
-        conversation_id (str): The conversation ID for tracking
         
     Returns:
         Dict[str, Any]: Success status and message
@@ -120,19 +119,18 @@ def process_patient_data(data: Dict[str, Any], phone: str, conversation_id: str)
             "error": f"Failed to process patient data: {str(e)}"
         }
 
-async def fetch_patient_data(phone: str, conversation_id: str) -> Dict[str, Any]:
+async def fetch_patient_data(phone: str) -> Dict[str, Any]:
     """
     Fetch patient data from the API.
     
     Args:
         phone (str): Phone number to fetch data for
-        conversation_id (str): The conversation ID for tracking
         
     Returns:
         Dict[str, Any]: API response with patient data
     """
     try:
-        logger.info(f"Fetching patient data for phone: {phone}, conversation_id: {conversation_id}")
+        logger.info(f"Fetching patient data for phone: {phone}")
         
         # Remove +1 prefix if present for consistency
         storage_phone = phone.replace("+1", "")
@@ -186,7 +184,7 @@ async def fetch_patient_data(phone: str, conversation_id: str) -> Dict[str, Any]
                     }
                 
                 logger.info(f"Processing patient data response for phone: {storage_phone}")
-                result = process_patient_data(data, storage_phone, conversation_id)
+                result = process_patient_data(data, storage_phone)
                 
                 if result["success"]:
                     logger.info(f"Successfully retrieved patient data: {result['message']}")
@@ -215,13 +213,12 @@ async def fetch_patient_data(phone: str, conversation_id: str) -> Dict[str, Any]
             "error": f"Failed to fetch patient data: {str(e)}"
         }
 
-async def fetch_study_details(patient_id: str, conversation_id: str) -> Dict[str, Any]:
+async def fetch_study_details(patient_id: str) -> Dict[str, Any]:
     """
     Fetch study details for a patient and store them.
     
     Args:
         patient_id (str): Patient ID to fetch studies for
-        conversation_id (str): The conversation ID for tracking
         
     Returns:
         Dict[str, Any]: Success status and message
@@ -350,19 +347,18 @@ async def fetch_study_details(patient_id: str, conversation_id: str) -> Dict[str
             "error": f"Failed to fetch study details: {str(e)}"
         }
 
-async def fetch_patient_by_id(patient_id: str, conversation_id: str) -> Dict[str, Any]:
+async def fetch_patient_by_id(patient_id: str) -> Dict[str, Any]:
     """
     Fetch patient information by ID from the RadFlow API.
     
     Args:
         patient_id: The patient's ID
-        conversation_id: The conversation ID for tracking
         
     Returns:
         Dict[str, Any]: Patient information and status
     """
     try:
-        logger.info(f"Fetching patient data for ID: {patient_id}, conversation_id: {conversation_id}")
+        logger.info(f"Fetching patient data for ID: {patient_id}")
         
         payload = {
             "patientId": patient_id,
@@ -406,7 +402,7 @@ async def fetch_patient_by_id(patient_id: str, conversation_id: str) -> Dict[str
                 }
             
             logger.info(f"Processing patient data response for ID: {patient_id}")
-            result = process_patient_data(data, "", conversation_id)
+            result = process_patient_data(data, "")
             
             if result["success"]:
                 logger.info(f"Successfully retrieved patient data: {result['message']}")
@@ -423,7 +419,7 @@ async def fetch_patient_by_id(patient_id: str, conversation_id: str) -> Dict[str
             "error": f"Failed to fetch patient data: {str(e)}"
         }
 
-async def fetch_patient_by_name_dob(first_name: str, last_name: str, birth_date: str, conversation_id: str) -> Dict[str, Any]:
+async def fetch_patient_by_name_dob(first_name: str, last_name: str, birth_date: str) -> Dict[str, Any]:
     """
     Fetch patient information by name and date of birth from the RadFlow API.
     
@@ -431,13 +427,12 @@ async def fetch_patient_by_name_dob(first_name: str, last_name: str, birth_date:
         first_name: Patient's first name
         last_name: Patient's last name
         birth_date: Patient's date of birth in YYYY-MM-DD format
-        conversation_id: The conversation ID for tracking
         
     Returns:
         Dict[str, Any]: Patient information and status
     """
     try:
-        logger.info(f"Fetching patient data for name: {first_name} {last_name}, DOB: {birth_date}, conversation_id: {conversation_id}")
+        logger.info(f"Fetching patient data for name: {first_name} {last_name}, DOB: {birth_date}")
         
         payload = {
             "patientId": "",
@@ -481,7 +476,7 @@ async def fetch_patient_by_name_dob(first_name: str, last_name: str, birth_date:
                 }
             
             logger.info(f"Processing patient data response for name: {first_name} {last_name}, DOB: {birth_date}")
-            result = process_patient_data(data, "", conversation_id)
+            result = process_patient_data(data, "")
             
             if result["success"]:
                 logger.info(f"Successfully retrieved patient data: {result['message']}")
@@ -498,33 +493,31 @@ async def fetch_patient_by_name_dob(first_name: str, last_name: str, birth_date:
             "error": f"Failed to fetch patient data: {str(e)}"
         }
 
-async def get_patient_by_phone(phone: str, conversation_id: str) -> Dict[str, Any]:
+async def get_patient_by_phone(phone: str) -> Dict[str, Any]:
     """
     Get patient information by phone number from the backend API.
     
     Args:
         phone: Patient's phone number
-        conversation_id: The conversation ID for tracking
         
     Returns:
         Dict[str, Any]: Patient information and status
     """
-    return await fetch_patient_data(phone, conversation_id)
+    return await fetch_patient_data(phone)
 
-async def get_patient_by_id(patient_id: str, conversation_id: str) -> Dict[str, Any]:
+async def get_patient_by_id(patient_id: str) -> Dict[str, Any]:
     """
     Get patient information by ID from the backend API.
     
     Args:
         patient_id: The patient's ID
-        conversation_id: The conversation ID for tracking
         
     Returns:
         Dict[str, Any]: Patient information and status
     """
-    return await fetch_patient_by_id(patient_id, conversation_id)
+    return await fetch_patient_by_id(patient_id)
 
-async def get_patient_by_name_dob(first_name: str, last_name: str, birth_date: str, conversation_id: str) -> Dict[str, Any]:
+async def get_patient_by_name_dob(first_name: str, last_name: str, birth_date: str) -> Dict[str, Any]:
     """
     Get patient information by name and date of birth from the backend API.
     
@@ -532,39 +525,36 @@ async def get_patient_by_name_dob(first_name: str, last_name: str, birth_date: s
         first_name: Patient's first name
         last_name: Patient's last name
         birth_date: Patient's date of birth in YYYY-MM-DD format
-        conversation_id: The conversation ID for tracking
         
     Returns:
         Dict[str, Any]: Patient information and status
     """
-    return await fetch_patient_by_name_dob(first_name, last_name, birth_date, conversation_id)
+    return await fetch_patient_by_name_dob(first_name, last_name, birth_date)
 
-async def get_patient_studies(patient_id: str, conversation_id: str) -> Dict[str, Any]:
+async def get_patient_studies(patient_id: str) -> Dict[str, Any]:
     """
     Get patient's studies from the backend API.
     
     Args:
         patient_id: The patient's ID
-        conversation_id: The conversation ID for tracking
         
     Returns:
         Dict[str, Any]: Study information and status
     """
-    return await fetch_study_details(patient_id, conversation_id)
+    return await fetch_study_details(patient_id)
 
-async def _fetch_patient_study_data(patient_id: str, conversation_id: str) -> Dict[str, Any]:
+async def _fetch_patient_study_data(patient_id: str) -> Dict[str, Any]:
     """
     Fetch patient study data from the API.
     
     Args:
         patient_id (str): Patient ID to fetch studies for
-        conversation_id (str): The conversation ID for tracking
         
     Returns:
         Dict[str, Any]: API response with patient study data
     """
     try:
-        logger.info(f"Fetching patient study data for ID: {patient_id}, conversation_id: {conversation_id}")
+        logger.info(f"Fetching patient study data for ID: {patient_id}")
         
         payload = {
             "patientId": patient_id,

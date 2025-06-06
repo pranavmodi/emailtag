@@ -156,14 +156,14 @@ async def extract_patient_id_from_email(email_content: str) -> Dict[str, Optiona
     return {"patient_id": None}
 
 @function_tool
-async def fetch_appointment_details_by_patient_id(patient_id: str, conversation_id: str, settings_obj: Optional[Any] = None) -> Dict[str, Any]:
+async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj: Optional[Any] = None) -> Dict[str, Any]:
     """
     Fetches patient demographics and appointment/study details using real services.
     Transforms the data for use with response templates.
-    Requires patient_id and conversation_id (for service calls).
+    Requires patient_id.
     'settings_obj' can be passed to get dynamic config like phone numbers, links, etc.
     """
-    logger.info(f"Tool 'fetch_appointment_details_by_patient_id' called for Patient ID: {patient_id}, Conv ID: {conversation_id}")
+    logger.info(f"Tool 'fetch_appointment_details_by_patient_id' called for Patient ID: {patient_id}")
 
     # Get static info from settings_obj or use defaults
     scheduling_phone = getattr(settings_obj, "SCHEDULING_PHONE_NUMBER", DEFAULT_SCHEDULING_PHONE)
@@ -171,7 +171,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, conversation_
     portal_links = getattr(settings_obj, "PORTAL_LINKS", DEFAULT_PORTAL_LINKS)
 
     # 1. Fetch Patient Demographics
-    patient_details_response = await fetch_patient_by_id(patient_id, conversation_id)
+    patient_details_response = await fetch_patient_by_id(patient_id)
     is_personal_injury_case = False # Default
 
     if not patient_details_response.get("success"):
@@ -200,7 +200,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, conversation_
 
 
     # 2. Fetch Study Details
-    studies_response = await fetch_study_details(patient_id, conversation_id)
+    studies_response = await fetch_study_details(patient_id)
 
     if not studies_response.get("success"):
         logger.error(f"Failed to fetch study details for {patient_id}: {studies_response.get('error')}")
@@ -411,7 +411,7 @@ async def handle_apt_status_request_agent_sdk(
 You are an AI assistant for a medical imaging company, specializing in appointment status requests.
 Your primary goal is to:
 1.  Search the **'Entire Conversation For Extraction'** text provided below to find the Patient ID. You MUST pass this complete text block to the `extract_patient_id_from_email` tool.
-2.  Fetch appointment details using `fetch_appointment_details_by_patient_id` with the extracted ID and the current `conversation_id` which is `{front_conversation_id}`. Also pass the `settings_obj` to this tool.
+2.  Fetch appointment details using `fetch_appointment_details_by_patient_id` with the extracted ID. Also pass the `settings_obj` to this tool.
 3. Based on the outcome of step 2, determine the correct scenario.
 4. Call the `generate_formatted_reply` tool, passing it the determined scenario and the FULL result from `fetch_appointment_details_by_patient_id` (if available), and the `extracted_patient_id` (if available).
 5. Take the `reply_text` from `generate_formatted_reply`'s output.
@@ -427,7 +427,7 @@ Conversation ID (use for tool calls): {front_conversation_id}
 **Scenarios & Tool Usage Flow:**
 
 A.  **If calling `extract_patient_id_from_email` on the 'Entire Conversation For Extraction' text returns a `patient_id` (let's call it `extracted_pid`):**
-    1.  Call `fetch_appointment_details_by_patient_id` with `patient_id=extracted_pid`, `conversation_id="{front_conversation_id}"`, and `settings_obj=settings_obj` (pass through from orchestrator). Let the result be `fetch_result`.
+    1.  Call `fetch_appointment_details_by_patient_id` with `patient_id=extracted_pid` and `settings_obj=settings_obj` (pass through from orchestrator). Let the result be `fetch_result`.
     2.  **If `fetch_result.status` is "success"** (and `fetch_result.data.studies` is not empty):
         *   Scenario for `generate_formatted_reply`: "appointments_found"
         *   Call `generate_formatted_reply` with `scenario="appointments_found"`, `fetch_details_result=fetch_result`.
