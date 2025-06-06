@@ -9,4 +9,4 @@ if [ -z "$PORT" ]; then
 fi
 
 echo "Starting server on port $PORT"
-uvicorn app.main:app --reload --port $PORT 
+uvicorn app.main:app --reload --reload-dir app --port $PORT 
