@@ -1,7 +1,9 @@
 import asyncio
 import os
 import json # Import json for parsing stringified JSON
+import ast # Import ast for literal_eval
 from typing import Optional, Dict, Any, List
+from datetime import datetime, timedelta # Added for time manipulation
 
 from openai import OpenAIError, AsyncOpenAI
 from agents import Agent, Runner, ModelSettings, function_tool, OpenAIChatCompletionsModel, RunConfig
@@ -18,6 +20,8 @@ from app.agents.templates.appointment_status_templates import (
     TEMPLATE_APPOINTMENT_NOT_FOUND_FOR_ID,
     TEMPLATE_DB_ERROR
 )
+# Import real patient services
+from app.services.patient import fetch_patient_by_id, fetch_study_details
 
 logger = get_task_logger(__name__)
 
@@ -26,6 +30,15 @@ TAG_AI_HUMAN_REVIEW_REQUIRED = "AI: Human review required" # Centralized tag for
 # --- END: Tag Constants ---
 
 # --- Response Templates have been moved to app/agents/templates/appointment_status_templates.py ---
+
+# --- BEGIN: Placeholder Static Information (Ideally from settings_obj) ---
+DEFAULT_SCHEDULING_PHONE = "888-555-1212"
+DEFAULT_NO_SHOW_POLICY = "**If the patient cannot make the appointment please contact us within 48 hours of the appointment to reschedule or cancel to avoid any no-show fees. Two no-shows will require a $50 no-show payment before being scheduled for a 3rd time.**"
+DEFAULT_PORTAL_LINKS = {
+    "bills_appointments_liens": "https://example.com/portal/bills",
+    "reports_images": "https://example.com/portal/reports"
+}
+# --- END: Placeholder Static Information ---
 
 
 # --- BEGIN: Helper Function for openai-agents SDK ---
@@ -140,66 +153,133 @@ async def extract_patient_id_from_email(email_content: str) -> Dict[str, Optiona
     return {"patient_id": None}
 
 @function_tool
-async def fetch_appointment_details_by_patient_id(patient_id: str) -> Dict[str, Any]:
+async def fetch_appointment_details_by_patient_id(patient_id: str, conversation_id: str, settings_obj: Optional[Any] = None) -> Dict[str, Any]:
     """
-    Fetches appointment details from the database for the given patient_id.
-    Returns example structures for success, not_found, or db_error.
+    Fetches patient demographics and appointment/study details using real services.
+    Transforms the data for use with response templates.
+    Requires patient_id and conversation_id (for service calls).
+    'settings_obj' can be passed to get dynamic config like phone numbers, links, etc.
     """
-    logger.info(f"Tool 'fetch_appointment_details_by_patient_id' called for Patient ID: {patient_id}")
-    if patient_id == "123456": # Mock data for testing (simple success)
-        return {
-            "status": "success", 
-            "data": {
-                "patient_id_confirmed": "123456",
-                "studies": [{
-                    "study_id": "SINGLE123", "exam_description": "MRI Brain", 
-                    "status": "Scheduled", "appointment_datetime_str": "2024-07-15 @ 03:00 PM",
-                    "arrival_time_str": "02:45 PM", 
-                    "location_name": "Main Imaging Center",
-                    "images_available": "No", "report_available": "No"
-                }],
-                "is_personal_injury_case": False,
-                "scheduling_phone": "800-555-1212",
-                "no_show_policy": "**Standard no-show policy applies.**",
-                "links": {"bills_appointments_liens": "#internal", "reports_images": "#internal"}
-            }
+    logger.info(f"Tool 'fetch_appointment_details_by_patient_id' called for Patient ID: {patient_id}, Conv ID: {conversation_id}")
+
+    # Get static info from settings_obj or use defaults
+    scheduling_phone = getattr(settings_obj, "SCHEDULING_PHONE_NUMBER", DEFAULT_SCHEDULING_PHONE)
+    no_show_policy = getattr(settings_obj, "NO_SHOW_POLICY", DEFAULT_NO_SHOW_POLICY)
+    portal_links = getattr(settings_obj, "PORTAL_LINKS", DEFAULT_PORTAL_LINKS)
+
+    # 1. Fetch Patient Demographics
+    patient_details_response = await fetch_patient_by_id(patient_id, conversation_id)
+    is_personal_injury_case = False # Default
+
+    if not patient_details_response.get("success"):
+        logger.error(f"Failed to fetch patient details for {patient_id}: {patient_details_response.get('error')}")
+        # Even if patient details fail, we might still try to fetch studies if an ID is known.
+        # However, for a comprehensive response, it's often better to flag this early.
+        # For now, let's consider this a db_error if patient info is crucial and fails.
+        # If the problem is "no patient found for ID", it's more of a "not_found" for the patient.
+        # The service `fetch_patient_by_id` seems to return `{"success": False, "error": "No patients found"}` if Radflow says no patients.
+        if "No patients found" in patient_details_response.get('error', ""):
+             return {"status": "not_found", "message": f"No patient record found for Patient ID: {patient_id}.", "patient_id": patient_id}
+        return {"status": "db_error", "message": f"Error fetching patient details: {patient_details_response.get('error', 'Unknown error')}", "patient_id": patient_id}
+
+    # Assuming patient_data_list is what process_patient_data puts into result["patients"]
+    # and fetch_patient_by_id returns the structure from process_patient_data.
+    if patient_details_response.get("patients") and len(patient_details_response["patients"]) > 0:
+        patient_data = patient_details_response["patients"][0] # Take the first patient if multiple (should be specific by ID)
+        financial_type = patient_data.get("financial_type", "").lower()
+        if "pi" in financial_type or "lien" in financial_type or "personal injury" in financial_type:
+            is_personal_injury_case = True
+    else:
+        # This case implies success=true from service, but no patient data in the expected "patients" list
+        logger.warning(f"Patient details response for {patient_id} was successful but no patient data in 'patients' list. Response: {patient_details_response}")
+        # This could be treated as not_found for the patient, even if service call itself was "successful"
+        return {"status": "not_found", "message": f"Patient record found for ID {patient_id}, but no detailed data available.", "patient_id": patient_id}
+
+
+    # 2. Fetch Study Details
+    studies_response = await fetch_study_details(patient_id, conversation_id)
+
+    if not studies_response.get("success"):
+        logger.error(f"Failed to fetch study details for {patient_id}: {studies_response.get('error')}")
+        # If "No studies found", it's a 'not_found' for appointments for this patient.
+        if "No studies found" in studies_response.get('error', ""):
+            return {"status": "not_found", "message": f"Patient ID {patient_id} found, but no appointments/studies listed.", "patient_id": patient_id}
+        return {"status": "db_error", "message": f"Error fetching study details: {studies_response.get('error', 'Unknown error')}", "patient_id": patient_id}
+
+    raw_studies = studies_response.get("studies", [])
+    if not raw_studies:
+        logger.info(f"No studies found for patient {patient_id} after successful service call.")
+        return {"status": "not_found", "message": f"Patient ID {patient_id} found, but no appointments/studies listed.", "patient_id": patient_id}
+
+    # 3. Transform Study Data
+    transformed_studies_for_template = []
+    for study in raw_studies:
+        appointment_datetime_str = "Date/Time N/A"
+        arrival_time_str = "N/A"
+        
+        service_appt_time_str = study.get("appointment_time", "") # e.g., "05:30 PM" or "2025-05-22T17:30:00"
+        
+        parsed_dt = None
+        if service_appt_time_str:
+            try:
+                # Try parsing as ISO datetime first
+                if "T" in service_appt_time_str:
+                    parsed_dt = datetime.fromisoformat(service_appt_time_str.replace("Z", "")) # Handle Z if present
+                else: # Try parsing as  "%I:%M %p" or other common time formats if date is implied elsewhere (not handled yet)
+                      # For now, if it's just time, we cannot reliably form the full "MM/DD/YYYY @ hh:mm AM/PM"
+                      # Let's attempt to parse if it looks like a date might be embedded in a non-ISO way, or just use time
+                      # This part is tricky without knowing all possible formats from `ScheduledFor`
+                    try:
+                        parsed_dt = datetime.strptime(service_appt_time_str, "%m/%d/%Y %I:%M:%S %p") # Example if service gives this
+                    except ValueError:
+                        try: # If only time, we can't make the full string.
+                             parsed_time_obj = datetime.strptime(service_appt_time_str, "%I:%M %p").time()
+                             appointment_datetime_str = f"Date N/A @ {parsed_time_obj.strftime('%I:%M %p')}"
+                             # Arrival time cannot be calculated without a full datetime
+                        except ValueError:
+                            appointment_datetime_str = f"{service_appt_time_str} (Could not parse fully)"
+
+
+                if parsed_dt:
+                    appointment_datetime_str = parsed_dt.strftime("%m/%d/%Y @ %I:%M %p")
+                    pre_arrival_min = study.get("pre_arrival_minutes", 30)
+                    arrival_dt = parsed_dt - timedelta(minutes=pre_arrival_min)
+                    arrival_time_str = arrival_dt.strftime("%I:%M %p")
+                    
+            except ValueError as e_date:
+                logger.warning(f"Could not parse appointment_time '{service_appt_time_str}' for study {study.get('authorization_number')}: {e_date}")
+                appointment_datetime_str = f"{service_appt_time_str} (Unparseable)"
+        
+        facility_info = study.get("facility", {})
+        location_display = f"{facility_info.get('facility_name', 'N/A')} - {facility_info.get('address', 'N/A')}".strip(" -")
+        if location_display == "N/A - N/A" or not location_display: location_display = "Location N/A"
+
+
+        transformed_studies_for_template.append({
+            "study_id": study.get("authorization_number", "N/A"), # AccessionNumber
+            "exam_description": study.get("study_description", "N/A"),
+            "status": study.get("status", "N/A"),
+            "appointment_datetime_str": appointment_datetime_str,
+            "arrival_time_str": arrival_time_str,
+            "location_name": location_display,
+            "images_available": "No",  # Default, not in service output
+            "report_available": "No"   # Default, not in service output
+        })
+
+    if not transformed_studies_for_template: # Should have been caught by "if not raw_studies" but as a safeguard
+        return {"status": "not_found", "message": f"Patient ID {patient_id} found, studies retrieved, but failed to transform any for display.", "patient_id": patient_id}
+
+    return {
+        "status": "success",
+        "data": {
+            "patient_id_confirmed": patient_id,
+            "studies": transformed_studies_for_template,
+            "is_personal_injury_case": is_personal_injury_case,
+            "scheduling_phone": scheduling_phone,
+            "no_show_policy": no_show_policy,
+            "links": portal_links
         }
-    elif patient_id == "PRE1079637": # Detailed case for template
-        return {
-            "status": "success",
-            "data": {
-                "patient_id_confirmed": "PRE1079637",
-                "studies": [
-                    {
-                        "study_id": "RAM1030696", "exam_description": "MRI THORACIC SPINE W/O CONTRAST",
-                        "status": "SCHEDULED", "appointment_datetime_str": "05/22/2025 @ 05:30 PM",
-                        "arrival_time_str": "05:15 PM", 
-                        "location_name": "1550 Pepper Dr. Suite G El Centro CA 92243",
-                        "images_available": "No", "report_available": "No"
-                    },
-                    {
-                        "study_id": "RAM1030697", "exam_description": "MRI LUMBAR SPINE W/O CONTRAST",
-                        "status": "SCHEDULED", "appointment_datetime_str": "05/22/2025 @ 06:05 PM",
-                        "arrival_time_str": "05:50 PM",
-                        "location_name": "1550 Pepper Dr. Suite G El Centro CA 92243",
-                        "images_available": "No", "report_available": "No"
-                    }
-                ],
-                "is_personal_injury_case": True,
-                "scheduling_phone": "818-629-1169",
-                "no_show_policy": "**If the patient cannot make the appointment please contact us within 48 hours of the appointment to reschedule or cancel to avoid any no-show fees. Two no-shows will require a $50 no-show payment before being scheduled for a 3rd time.**",
-                "links": {
-                    "bills_appointments_liens": "https://example.com/portal/access_bills", # Placeholder
-                    "reports_images": "https://example.com/portal/access_reports" # Placeholder
-                }
-            }
-        }
-    elif patient_id == "654321" or patient_id == "PRE248509": # PRE248509 from previous logs, now explicitly 'not_found'
-         return {"status": "not_found", "message": f"No appointments found for Patient ID: {patient_id}.", "patient_id": patient_id}
-    elif patient_id == "DB_ERROR_PATIENT":
-        return {"status": "db_error", "message": "Simulated database query failed.", "patient_id": patient_id}
-    else: # Default to not_found for other IDs
-        return {"status": "not_found", "message": f"No appointments found for this patient ID: {patient_id} (generic).", "patient_id": patient_id}
+    }
 
 @function_tool
 async def generate_formatted_reply(scenario: str, fetch_details_result: Dict[str, Any], extracted_patient_id: Optional[str] = None) -> Dict[str, str]:
@@ -325,13 +405,13 @@ async def handle_apt_status_request_agent_sdk(
 You are an AI assistant for a medical imaging company, specializing in appointment status requests.
 Your primary goal is to:
 1. Extract a Patient ID using `extract_patient_id_from_email`.
-2. Fetch appointment details using `fetch_appointment_details_by_patient_id` with the extracted ID.
+2. Fetch appointment details using `fetch_appointment_details_by_patient_id` with the extracted ID and the current `conversation_id` which is `{front_conversation_id}`. Also pass the `settings_obj` to this tool.
 3. Based on the outcome of step 2, determine the correct scenario.
 4. Call the `generate_formatted_reply` tool, passing it the determined scenario and the FULL result from `fetch_appointment_details_by_patient_id` (if available), and the `extracted_patient_id` (if available).
 5. Take the `reply_text` from `generate_formatted_reply`'s output.
 6. Call `send_reply_to_front` with this `reply_text` and add tags ONLY IF the scenario requires escalation to a human.
 
-Conversation ID: {front_conversation_id}
+Conversation ID (use for tool calls): {front_conversation_id}
 Latest User Email:
 ---
 {current_email_content}
@@ -344,20 +424,20 @@ Conversation History (if any):
 **Scenarios & Tool Usage Flow:**
 
 A.  **If `extract_patient_id_from_email` returns a `patient_id` (let's call it `extracted_pid`):**
-    1.  Call `fetch_appointment_details_by_patient_id` with `extracted_pid`. Let the result be `fetch_result`.
-    2.  **If `fetch_result.status` is "success"**:
+    1.  Call `fetch_appointment_details_by_patient_id` with `patient_id=extracted_pid`, `conversation_id="{front_conversation_id}"`, and `settings_obj=settings_obj` (pass through from orchestrator). Let the result be `fetch_result`.
+    2.  **If `fetch_result.status` is "success"** (and `fetch_result.data.studies` is not empty):
         *   Scenario for `generate_formatted_reply`: "appointments_found"
         *   Call `generate_formatted_reply` with `scenario="appointments_found"`, `fetch_details_result=fetch_result`.
         *   Take `reply_text` from its output.
         *   Call `send_reply_to_front` with this `reply_text`. (No tags needed for this success case).
-    3.  **If `fetch_result.status` is "not_found"**:
+    3.  **If `fetch_result.status` is "not_found"** (meaning patient ID was valid but no appointments, or patient ID itself was not found by the service):
         *   Scenario for `generate_formatted_reply`: "id_not_found_in_system"
-        *   Call `generate_formatted_reply` with `scenario="id_not_found_in_system"`, `fetch_details_result=fetch_result` (which contains patient_id).
+        *   Call `generate_formatted_reply` with `scenario="id_not_found_in_system"`, `fetch_details_result=fetch_result` (which contains patient_id from input, and potentially a message from the service).
         *   Take `reply_text` from its output.
         *   Call `send_reply_to_front` with this `reply_text` and `tags_to_add=["{TAG_AI_HUMAN_REVIEW_REQUIRED}"]`.
-    4.  **If `fetch_result.status` is "db_error"**:
+    4.  **If `fetch_result.status` is "db_error"** (any other error from fetching/processing):
         *   Scenario for `generate_formatted_reply`: "db_error"
-        *   Call `generate_formatted_reply` with `scenario="db_error"`, `fetch_details_result=fetch_result` (which contains patient_id).
+        *   Call `generate_formatted_reply` with `scenario="db_error"`, `fetch_details_result=fetch_result` (which contains patient_id and error message).
         *   Take `reply_text` from its output.
         *   Call `send_reply_to_front` with this `reply_text` and `tags_to_add=["{TAG_AI_HUMAN_REVIEW_REQUIRED}"]`.
 
@@ -365,12 +445,12 @@ B.  **If `extract_patient_id_from_email` returns NO `patient_id`:**
     1.  Review Conversation History.
     2.  **If you have NOT asked for a Patient ID before OR the user's response is not yet in history:**
         *   Scenario for `generate_formatted_reply`: "id_missing_first_attempt"
-        *   Call `generate_formatted_reply` with `scenario="id_missing_first_attempt"`, `fetch_details_result={{}}` (empty dict as no fetch was done).
+        *   Call `generate_formatted_reply` with `scenario="id_missing_first_attempt"`, `fetch_details_result={{}}` (empty dict as no fetch was done), `extracted_patient_id=None`.
         *   Take `reply_text` from its output.
         *   Call `send_reply_to_front` with this `reply_text`. (No tag needed for first request).
     3.  **If you HAVE asked for a Patient ID before, and user STILL did not provide a usable one:**
         *   Scenario for `generate_formatted_reply`: "id_missing_second_attempt"
-        *   Call `generate_formatted_reply` with `scenario="id_missing_second_attempt"`, `fetch_details_result={{}}`.
+        *   Call `generate_formatted_reply` with `scenario="id_missing_second_attempt"`, `fetch_details_result={{}}`, `extracted_patient_id=None`.
         *   Take `reply_text` from its output.
         *   Call `send_reply_to_front` with this `reply_text` and `tags_to_add=["{TAG_AI_HUMAN_REVIEW_REQUIRED}"]`.
 
@@ -427,13 +507,21 @@ Do not ask for confirmation. Execute the described logic.
                 parsed_final_output = agent_result.final_output
             elif isinstance(agent_result.final_output, str):
                 try:
+                    # First, try to parse it as standard JSON
                     parsed_final_output = json.loads(agent_result.final_output)
-                    if not isinstance(parsed_final_output, dict):
-                        logger.warning(f"Agent for {front_conversation_id} final_output was a string that parsed to JSON, but not to a dictionary. Parsed: {parsed_final_output}")
-                        parsed_final_output = None 
                 except json.JSONDecodeError:
-                    logger.warning(f"Agent for {front_conversation_id} final_output was a string, but failed to parse as JSON: {agent_result.final_output}")
+                    # If JSON parsing fails, it might be a string representation of a Python dict
+                    logger.warning(f"JSON parsing failed for agent output. Attempting literal_eval. Output: {agent_result.final_output}")
+                    try:
+                        parsed_final_output = ast.literal_eval(agent_result.final_output)
+                    except (ValueError, SyntaxError) as e:
+                        logger.warning(f"Agent for {front_conversation_id} final_output was a string, but failed to parse as JSON or Python literal: {agent_result.final_output}. Error: {e}")
+                        parsed_final_output = None
+                
+                if parsed_final_output and not isinstance(parsed_final_output, dict):
+                    logger.warning(f"Agent for {front_conversation_id} final_output was parsed, but it is not a dictionary. Parsed Type: {type(parsed_final_output)}")
                     parsed_final_output = None
+
             else:
                  logger.warning(f"Agent for {front_conversation_id} final_output was neither a dict nor a string: {type(agent_result.final_output)}")
 

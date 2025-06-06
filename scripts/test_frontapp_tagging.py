@@ -570,14 +570,14 @@ if __name__ == "__main__":
             "expected_tags": ["Apt Status Req"] # Corrected based on actual AI output & tree
         },
         "16": {
-            "description": "Appointment Status Request - Inquiry about existing appointment with Patient ID PRE1079637",
-            "subject": "Checking Status of My Appointment - Patient ID: PRE1079637",
+            "description": "Appointment Status Request - Inquiry about existing appointment with Patient ID PRE248509",
+            "subject": "Checking Status of My Appointment - Patient ID: {PATIENT_ID}",
             "body_html": (
                 "<p>Hello Scheduling Team,</p>"
                 "<p>I am writing to check the status of an appointment I believe I have scheduled with your facility.</p>"
                 "<p>My details are:<br>"
                 "Patient Name: Alex Patient<br>"
-                "Patient ID: PRE1079637<br>"
+                "Patient ID: {PATIENT_ID}<br>"
                 "DOB: 01/01/1980</p>"
                 "<p>Could you please confirm if an appointment is on file for me and, if so, provide the date, time, and any preparation instructions?</p>"
                 "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
@@ -585,7 +585,43 @@ if __name__ == "__main__":
                 "Alex Patient (via Test Script)</p>"
             ),
             "recipient_email": "ai.benchd@gmail.com",
-            "expected_tags": ["Apt Status Req"]
+            "expected_tags": ["Apt Status Req"],
+            "patient_id": "PRE248509"
+        },
+        "17": {
+            "description": "Multi-email: Appt status check (no ID), then followup with ID",
+            "is_multi_step": True,
+            "recipient_email": "ai.benchd@gmail.com",
+            "expected_tags": ["Apt Status Req"],
+            "patient_id": "PRE248509",
+            "steps": [
+                {
+                    "subject": "Checking status of my appointment",
+                    "body_html": (
+                        "<p>Hello Scheduling Team,</p>"
+                        "<p>I am writing to check the status of an appointment I believe I have scheduled with your facility.</p>"
+                        "<p>My details are:<br>"
+                        "Patient Name: Alex Patient<br>"
+                        "DOB: 01/01/1980</p>"
+                        "<p>I do not have my patient ID handy at the moment. Can you please check with my name and date of birth?</p>"
+                        "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+                        "<p>Thank you,<br>"
+                        "Alex Patient (via Test Script)</p>"
+                    )
+                },
+                {
+                    "subject": "Re: Checking status of my appointment - Found my ID",
+                    "body_html": (
+                        "<p>Hello again,</p>"
+                        "<p>I've found my patient ID. It is {PATIENT_ID}.</p>"
+                        "<p>Hopefully this helps locate my appointment details.</p>"
+                        "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+                        "<p>Thanks,<br>"
+                        "Alex Patient</p>"
+                    ),
+                    "wait_for_user_input": True
+                }
+            ]
         }
     }
 
@@ -621,11 +657,43 @@ if __name__ == "__main__":
         if VERBOSE_MODE:
             print(f"Generated TestID: {test_unique_id}")
 
-        send_smtp_email(selected_scenario, key, test_unique_id)
+        if selected_scenario.get("is_multi_step"):
+            patient_id = selected_scenario.get("patient_id")
+            for i, step in enumerate(selected_scenario["steps"]):
+                print(f"Executing step {i+1}/{len(selected_scenario['steps'])} for scenario {key}...")
+                
+                if step.get("wait_for_user_input"):
+                    input("Press Enter to send the next email...")
+                elif "delay_before_sending" in step:
+                    delay = step["delay_before_sending"]
+                    print(f"Waiting for {delay} seconds before next step...")
+                    time.sleep(delay)
+
+                subject = step["subject"]
+                body_html = step["body_html"]
+
+                if patient_id:
+                    subject = subject.replace("{PATIENT_ID}", patient_id)
+                    body_html = body_html.replace("{PATIENT_ID}", patient_id)
+
+                email_details = {
+                    "subject": subject,
+                    "body_html": body_html,
+                    "recipient_email": selected_scenario["recipient_email"]
+                }
+                send_smtp_email(email_details, key, test_unique_id)
+        else:
+            email_details = selected_scenario.copy()
+            patient_id = email_details.get("patient_id")
+            if patient_id:
+                if "{PATIENT_ID}" in email_details.get("subject", ""):
+                    email_details["subject"] = email_details["subject"].replace("{PATIENT_ID}", patient_id)
+                if "{PATIENT_ID}" in email_details.get("body_html", ""):
+                    email_details["body_html"] = email_details["body_html"].replace("{PATIENT_ID}", patient_id)
+            send_smtp_email(email_details, key, test_unique_id)
+        
         # The print statement inside send_smtp_email "Email successfully sent via SMTP to..." will always print.
-        if VERBOSE_MODE:
-            print(f"Email sent for TestID: {test_unique_id}.") # This part is a bit redundant if the one in send_smtp_email prints
-        # Let's remove the redundancy here since send_smtp_email confirms it.
+        # So no need for another confirmation here.
 
         if not can_check_tags:
             print("Skipping Front tag validation as API credentials are not configured.")
