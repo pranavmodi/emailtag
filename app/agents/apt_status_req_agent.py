@@ -12,6 +12,7 @@ import httpx
 from app.core.config import settings as app_settings_instance # Renamed to avoid conflict if settings is passed
 from celery.utils.log import get_task_logger
 from app.services import frontapp_service # For the actual send_reply_to_front tool
+from app.mcp import MCPClient # Import MCP client from separate module
 # Import templates from their new location
 from app.agents.templates.appointment_status_templates import (
     TEMPLATE_APPOINTMENT_FOUND_DETAILED,
@@ -20,8 +21,6 @@ from app.agents.templates.appointment_status_templates import (
     TEMPLATE_APPOINTMENT_NOT_FOUND_FOR_ID,
     TEMPLATE_DB_ERROR
 )
-# Import real patient services
-from app.services.patient import fetch_patient_by_id, fetch_study_details
 
 logger = get_task_logger(__name__)
 
@@ -40,6 +39,10 @@ DEFAULT_PORTAL_LINKS = {
 }
 # --- END: Placeholder Static Information ---
 
+# --- BEGIN: MCP Client instance ---
+# Global MCP client instance
+mcp_client = MCPClient()
+# --- END: MCP Client instance ---
 
 # --- BEGIN: Helper Function for openai-agents SDK ---
 def _format_conversation_history_for_agent(
@@ -126,7 +129,7 @@ Please make sure to submit a negotiation offer before sending the payment.<br/>
 
 # --- END: Reply Generation Helper ---
 
-# --- BEGIN: Tool Definitions for openai-agents SDK ---
+# --- BEGIN: Tool Definitions using MCP Client ---
 @function_tool
 async def extract_patient_id_from_email(email_content: str) -> Dict[str, Optional[str]]:
     """
@@ -158,7 +161,7 @@ async def extract_patient_id_from_email(email_content: str) -> Dict[str, Optiona
 @function_tool
 async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj: Optional[Any] = None) -> Dict[str, Any]:
     """
-    Fetches patient demographics and appointment/study details using real services.
+    Fetches patient demographics and appointment/study details using MCP server.
     Transforms the data for use with response templates.
     Requires patient_id.
     'settings_obj' can be passed to get dynamic config like phone numbers, links, etc.
@@ -170,119 +173,122 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
     no_show_policy = getattr(settings_obj, "NO_SHOW_POLICY", DEFAULT_NO_SHOW_POLICY)
     portal_links = getattr(settings_obj, "PORTAL_LINKS", DEFAULT_PORTAL_LINKS)
 
-    # 1. Fetch Patient Demographics
-    patient_details_response = await fetch_patient_by_id(patient_id)
-    is_personal_injury_case = False # Default
+    try:
+        # 1. Fetch Patient Demographics using MCP server
+        patient_result = await mcp_client.call_tool("fetch_patient_by_id", {"patient_id": patient_id})
+        
+        # More robust checking of the result from the MCP tool
+        if not isinstance(patient_result, dict) or "success" not in patient_result:
+            logger.error(f"Invalid or malformed response from MCP tool 'fetch_patient_by_id' for patient {patient_id}. Response: {patient_result}")
+            return {"status": "db_error", "message": "Received an invalid response from the patient data service.", "patient_id": patient_id}
 
-    if not patient_details_response.get("success"):
-        logger.error(f"Failed to fetch patient details for {patient_id}: {patient_details_response.get('error')}")
-        # Even if patient details fail, we might still try to fetch studies if an ID is known.
-        # However, for a comprehensive response, it's often better to flag this early.
-        # For now, let's consider this a db_error if patient info is crucial and fails.
-        # If the problem is "no patient found for ID", it's more of a "not_found" for the patient.
-        # The service `fetch_patient_by_id` seems to return `{"success": False, "error": "No patients found"}` if Radflow says no patients.
-        if "No patients found" in patient_details_response.get('error', ""):
-             return {"status": "not_found", "message": f"No patient record found for Patient ID: {patient_id}.", "patient_id": patient_id}
-        return {"status": "db_error", "message": f"Error fetching patient details: {patient_details_response.get('error', 'Unknown error')}", "patient_id": patient_id}
+        if not patient_result["success"]:
+            error_message = patient_result.get('error', 'An unknown error occurred.') # Default error message
+            logger.error(f"Failed to fetch patient details for {patient_id}: {error_message}")
+            if "No patients found" in str(error_message):
+                return {"status": "not_found", "message": f"No patient record found for Patient ID: {patient_id}.", "patient_id": patient_id}
+            return {"status": "db_error", "message": f"Error fetching patient details: {error_message}", "patient_id": patient_id}
 
-    # Assuming patient_data_list is what process_patient_data puts into result["patients"]
-    # and fetch_patient_by_id returns the structure from process_patient_data.
-    if patient_details_response.get("patients") and len(patient_details_response["patients"]) > 0:
-        patient_data = patient_details_response["patients"][0] # Take the first patient if multiple (should be specific by ID)
-        financial_type = patient_data.get("financial_type", "").lower()
-        if "pi" in financial_type or "lien" in financial_type or "personal injury" in financial_type:
-            is_personal_injury_case = True
-    else:
-        # This case implies success=true from service, but no patient data in the expected "patients" list
-        logger.warning(f"Patient details response for {patient_id} was successful but no patient data in 'patients' list. Response: {patient_details_response}")
-        # This could be treated as not_found for the patient, even if service call itself was "successful"
-        return {"status": "not_found", "message": f"Patient record found for ID {patient_id}, but no detailed data available.", "patient_id": patient_id}
+        # Parse patient data from MCP response
+        patient_data = None
+        is_personal_injury_case = False
+        
+        if patient_result.get("patients") and len(patient_result["patients"]) > 0:
+            patient_data = patient_result["patients"][0]
+            financial_type = patient_data.get("financial_type", "").lower()
+            if "pi" in financial_type or "lien" in financial_type or "personal injury" in financial_type:
+                is_personal_injury_case = True
+        else:
+            logger.warning(f"Patient details response for {patient_id} was successful but no patient data in 'patients' list.")
+            return {"status": "not_found", "message": f"Patient record found for ID {patient_id}, but no detailed data available.", "patient_id": patient_id}
 
+        # 2. Fetch Study Details using MCP server
+        studies_result = await mcp_client.call_tool("fetch_study_details", {"patient_id": patient_id})
 
-    # 2. Fetch Study Details
-    studies_response = await fetch_study_details(patient_id)
+        # More robust checking of the result from the MCP tool for studies
+        if not isinstance(studies_result, dict) or "success" not in studies_result:
+            logger.error(f"Invalid or malformed response from MCP tool 'fetch_study_details' for patient {patient_id}. Response: {studies_result}")
+            return {"status": "db_error", "message": "Received an invalid response from the appointment data service.", "patient_id": patient_id}
 
-    if not studies_response.get("success"):
-        logger.error(f"Failed to fetch study details for {patient_id}: {studies_response.get('error')}")
-        # If "No studies found", it's a 'not_found' for appointments for this patient.
-        if "No studies found" in studies_response.get('error', ""):
+        if not studies_result.get("success"):
+            error_message = studies_result.get('error', 'An unknown error occurred.')
+            logger.error(f"Failed to fetch study details for {patient_id}: {error_message}")
+            if "No studies found" in str(error_message):
+                return {"status": "not_found", "message": f"Patient ID {patient_id} found, but no appointments/studies listed.", "patient_id": patient_id}
+            return {"status": "db_error", "message": f"Error fetching study details: {error_message}", "patient_id": patient_id}
+
+        raw_studies = studies_result.get("studies", [])
+        if not raw_studies:
+            logger.info(f"No studies found for patient {patient_id} after successful service call.")
             return {"status": "not_found", "message": f"Patient ID {patient_id} found, but no appointments/studies listed.", "patient_id": patient_id}
-        return {"status": "db_error", "message": f"Error fetching study details: {studies_response.get('error', 'Unknown error')}", "patient_id": patient_id}
 
-    raw_studies = studies_response.get("studies", [])
-    if not raw_studies:
-        logger.info(f"No studies found for patient {patient_id} after successful service call.")
-        return {"status": "not_found", "message": f"Patient ID {patient_id} found, but no appointments/studies listed.", "patient_id": patient_id}
-
-    # 3. Transform Study Data
-    transformed_studies_for_template = []
-    for study in raw_studies:
-        appointment_datetime_str = "Date/Time N/A"
-        arrival_time_str = "N/A"
-        
-        service_appt_time_str = study.get("appointment_time", "") # e.g., "05:30 PM" or "2025-05-22T17:30:00"
-        
-        parsed_dt = None
-        if service_appt_time_str:
-            try:
-                # Try parsing as ISO datetime first
-                if "T" in service_appt_time_str:
-                    parsed_dt = datetime.fromisoformat(service_appt_time_str.replace("Z", "")) # Handle Z if present
-                else: # Try parsing as  "%I:%M %p" or other common time formats if date is implied elsewhere (not handled yet)
-                      # For now, if it's just time, we cannot reliably form the full "MM/DD/YYYY @ hh:mm AM/PM"
-                      # Let's attempt to parse if it looks like a date might be embedded in a non-ISO way, or just use time
-                      # This part is tricky without knowing all possible formats from `ScheduledFor`
-                    try:
-                        parsed_dt = datetime.strptime(service_appt_time_str, "%m/%d/%Y %I:%M:%S %p") # Example if service gives this
-                    except ValueError:
-                        try: # If only time, we can't make the full string.
-                             parsed_time_obj = datetime.strptime(service_appt_time_str, "%I:%M %p").time()
-                             appointment_datetime_str = f"Date N/A @ {parsed_time_obj.strftime('%I:%M %p')}"
-                             # Arrival time cannot be calculated without a full datetime
+        # 3. Transform Study Data for template compatibility
+        transformed_studies_for_template = []
+        for study in raw_studies:
+            appointment_datetime_str = "Date/Time N/A"
+            arrival_time_str = "N/A"
+            
+            service_appt_time_str = study.get("appointment_time", "")
+            
+            parsed_dt = None
+            if service_appt_time_str:
+                try:
+                    # Try parsing as ISO datetime first
+                    if "T" in service_appt_time_str:
+                        parsed_dt = datetime.fromisoformat(service_appt_time_str.replace("Z", ""))
+                    else:
+                        try:
+                            parsed_dt = datetime.strptime(service_appt_time_str, "%m/%d/%Y %I:%M:%S %p")
                         except ValueError:
-                            appointment_datetime_str = f"{service_appt_time_str} (Could not parse fully)"
+                            try:
+                                parsed_time_obj = datetime.strptime(service_appt_time_str, "%I:%M %p").time()
+                                appointment_datetime_str = f"Date N/A @ {parsed_time_obj.strftime('%I:%M %p')}"
+                            except ValueError:
+                                appointment_datetime_str = f"{service_appt_time_str} (Could not parse fully)"
 
+                    if parsed_dt:
+                        appointment_datetime_str = parsed_dt.strftime("%m/%d/%Y @ %I:%M %p")
+                        pre_arrival_min = study.get("pre_arrival_minutes", 30)
+                        arrival_dt = parsed_dt - timedelta(minutes=pre_arrival_min)
+                        arrival_time_str = arrival_dt.strftime("%I:%M %p")
+                        
+                except ValueError as e_date:
+                    logger.warning(f"Could not parse appointment_time '{service_appt_time_str}' for study {study.get('authorization_number')}: {e_date}")
+                    appointment_datetime_str = f"{service_appt_time_str} (Unparseable)"
+            
+            facility_info = study.get("facility", {})
+            location_display = f"{facility_info.get('facility_name', 'N/A')} - {facility_info.get('address', 'N/A')}".strip(" -")
+            if location_display == "N/A - N/A" or not location_display: location_display = "Location N/A"
 
-                if parsed_dt:
-                    appointment_datetime_str = parsed_dt.strftime("%m/%d/%Y @ %I:%M %p")
-                    pre_arrival_min = study.get("pre_arrival_minutes", 30)
-                    arrival_dt = parsed_dt - timedelta(minutes=pre_arrival_min)
-                    arrival_time_str = arrival_dt.strftime("%I:%M %p")
-                    
-            except ValueError as e_date:
-                logger.warning(f"Could not parse appointment_time '{service_appt_time_str}' for study {study.get('authorization_number')}: {e_date}")
-                appointment_datetime_str = f"{service_appt_time_str} (Unparseable)"
-        
-        facility_info = study.get("facility", {})
-        location_display = f"{facility_info.get('facility_name', 'N/A')} - {facility_info.get('address', 'N/A')}".strip(" -")
-        if location_display == "N/A - N/A" or not location_display: location_display = "Location N/A"
+            transformed_studies_for_template.append({
+                "study_id": study.get("authorization_number", "N/A"),
+                "exam_description": study.get("study_description", "N/A"),
+                "status": study.get("status", "N/A"),
+                "appointment_datetime_str": appointment_datetime_str,
+                "arrival_time_str": arrival_time_str,
+                "location_name": location_display,
+                "images_available": "No",  # Default, not in service output
+                "report_available": "No"   # Default, not in service output
+            })
 
+        if not transformed_studies_for_template:
+            return {"status": "not_found", "message": f"Patient ID {patient_id} found, studies retrieved, but failed to transform any for display.", "patient_id": patient_id}
 
-        transformed_studies_for_template.append({
-            "study_id": study.get("authorization_number", "N/A"), # AccessionNumber
-            "exam_description": study.get("study_description", "N/A"),
-            "status": study.get("status", "N/A"),
-            "appointment_datetime_str": appointment_datetime_str,
-            "arrival_time_str": arrival_time_str,
-            "location_name": location_display,
-            "images_available": "No",  # Default, not in service output
-            "report_available": "No"   # Default, not in service output
-        })
-
-    if not transformed_studies_for_template: # Should have been caught by "if not raw_studies" but as a safeguard
-        return {"status": "not_found", "message": f"Patient ID {patient_id} found, studies retrieved, but failed to transform any for display.", "patient_id": patient_id}
-
-    return {
-        "status": "success",
-        "data": {
-            "patient_id_confirmed": patient_id,
-            "studies": transformed_studies_for_template,
-            "is_personal_injury_case": is_personal_injury_case,
-            "scheduling_phone": scheduling_phone,
-            "no_show_policy": no_show_policy,
-            "links": portal_links
+        return {
+            "status": "success",
+            "data": {
+                "patient_id_confirmed": patient_id,
+                "studies": transformed_studies_for_template,
+                "is_personal_injury_case": is_personal_injury_case,
+                "scheduling_phone": scheduling_phone,
+                "no_show_policy": no_show_policy,
+                "links": portal_links
+            }
         }
-    }
+
+    except Exception as e:
+        logger.error(f"Exception in fetch_appointment_details_by_patient_id: {e}")
+        return {"status": "db_error", "message": f"Exception during MCP call: {str(e)}", "patient_id": patient_id}
 
 @function_tool
 async def generate_formatted_reply(scenario: str, fetch_details_result: Dict[str, Any], extracted_patient_id: Optional[str] = None) -> Dict[str, str]:
@@ -346,7 +352,6 @@ async def send_reply_to_front(
         return {"status": "error", "message": f"Exception in send_reply_to_front: {str(e)}"}
 # --- END: Tool Definitions ---
 
-
 # --- BEGIN: Fallback Reply Helper ---
 async def _send_fallback_reply_and_tag(
     conversation_id: str, 
@@ -387,7 +392,6 @@ async def _send_fallback_reply_and_tag(
         logger.error(f"Exception during sending fallback reply/tag for {conversation_id}: {ex_fallback}", exc_info=True)
 # --- END: Fallback Reply Helper ---
 
-
 # --- BEGIN: Orchestrator for openai-agents SDK ---
 async def handle_apt_status_request_agent_sdk(
     front_conversation_id: str,
@@ -396,10 +400,24 @@ async def handle_apt_status_request_agent_sdk(
     settings_obj: Any = app_settings_instance 
 ) -> Dict[str, Any]:
     """
-    Handles an "Apt Status Req" using the openai-agents SDK.
+    Handles an "Apt Status Req" using the openai-agents SDK with MCP server integration.
     Returns a dictionary with agent processing results.
     """
-    logger.info(f"Initiating openai-agents SDK flow for Apt Status Req - Conv ID: {front_conversation_id}")
+    logger.info(f"Initiating openai-agents SDK flow with MCP integration for Apt Status Req - Conv ID: {front_conversation_id}")
+
+    # Initialize MCP client connection
+    mcp_connected = await mcp_client.connect()
+    if not mcp_connected:
+        logger.error("Failed to connect to MCP server, falling back to error response")
+        await _send_fallback_reply_and_tag(
+            front_conversation_id,
+            "Our automated assistant is currently unable to connect to patient data services. A team member will review your request."
+        )
+        return {
+            "agent_handled": False,
+            "processed_flag": True,
+            "details": {"reason": "MCP server connection failed. Fallback reply sent."}
+        }
 
     formatted_history = _format_conversation_history_for_agent(structured_history_messages)
     logger.info(f"Formatted conversation history: {formatted_history}")
@@ -477,7 +495,7 @@ Do not ask for confirmation. Execute the described logic.
         )
 
         apt_status_agent = Agent(
-            name="AppointmentStatusAgent_ConvoAware_v4_Templated", # Updated name
+            name="AppointmentStatusAgent_MCP_v1", # Updated name
             instructions=instructions,
             model=OpenAIChatCompletionsModel(
                 model=settings_obj.OPENAI_MODEL_NAME if hasattr(settings_obj, 'OPENAI_MODEL_NAME') and settings_obj.OPENAI_MODEL_NAME else "gpt-4o",
@@ -486,7 +504,7 @@ Do not ask for confirmation. Execute the described logic.
             tools=[
                 extract_patient_id_from_email,
                 fetch_appointment_details_by_patient_id,
-                generate_formatted_reply, # Added new tool
+                generate_formatted_reply,
                 send_reply_to_front,
             ],
             model_settings=ModelSettings(
@@ -575,21 +593,6 @@ Do not ask for confirmation. Execute the described logic.
             agent_outcome["processed_flag"] = True 
             agent_outcome["details"] = {"reason": "Agent completed without producing a final output. Fallback reply sent by orchestrator."}
 
-    except AgentsException as e:
-        error_msg_for_log = f"AgentsException during openai-agents SDK orchestration for {front_conversation_id}: {str(e)}"
-        error_details_for_outcome = str(e)
-        if hasattr(e, 'run_data') and e.run_data:
-            error_msg_for_log += " | Run Data available on exception object." 
-        logger.error(error_msg_for_log, exc_info=True) 
-
-        await _send_fallback_reply_and_tag(
-            front_conversation_id, 
-            "Our automated assistant encountered an internal SDK error. A team member will review your request shortly."
-        )
-        agent_outcome["agent_handled"] = False
-        agent_outcome["processed_flag"] = True 
-        agent_outcome["details"] = {"agent_error": error_details_for_outcome, "reason": "Agent execution raised an SDK exception. Fallback reply sent."}
-    
     except Exception as e: 
         logger.error(f"Unexpected exception during openai-agents SDK orchestration or result processing for {front_conversation_id}: {e}", exc_info=True)
         await _send_fallback_reply_and_tag(
@@ -599,11 +602,14 @@ Do not ask for confirmation. Execute the described logic.
         agent_outcome["agent_handled"] = False
         agent_outcome["processed_flag"] = True 
         agent_outcome["details"] = {"agent_error": str(e), "reason": "Unexpected agent execution error. Fallback reply sent."}
+    
+    finally:
+        # Clean up MCP client connection
+        await mcp_client.close()
 
     logger.info(f"Agent orchestration for {front_conversation_id} finished. Outcome: {agent_outcome}")
     return agent_outcome
 # --- END: Orchestrator for openai-agents SDK ---
-
 
 # --- BEGIN: Main Test Function (for local testing if needed) ---
 # (This section is typically for local development and testing of the agent logic)
@@ -631,7 +637,6 @@ async def test_new_agent_sdk_flow():
             print(f"WARNING: {case_name} was expected to be handled by agent but was not.")
         elif not expected_to_handle and outcome.get("agent_handled"):
              print(f"INFO: {case_name} was not expected to be handled by agent and was not (or agent chose not to).")
-
 
     await run_test_case(
         "Patient ID '123456' (Simple Appointment Found)", "test_conv_simple_found",
@@ -666,7 +671,6 @@ async def test_new_agent_sdk_flow():
         "Patient ID 'DB_ERROR_PATIENT' (DB Error)", "test_conv_db_error",
         "My ID is DB_ERROR_PATIENT, please check.", [], True
     )
-
 
 if __name__ == "__main__":
     if not os.environ.get("OPENAI_API_KEY"):
