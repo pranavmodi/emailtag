@@ -604,7 +604,8 @@ Do not ask for confirmation. Execute the described logic.
     
     finally:
         # Clean up MCP client connection
-        await mcp_client.close()
+        # await mcp_client.close() # Removed this line to prevent closing the shared client
+        pass
 
     logger.info(f"Agent orchestration for {front_conversation_id} finished. Outcome: {agent_outcome}")
     return agent_outcome

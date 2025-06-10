@@ -30,7 +30,7 @@ Access bills, appointment times, and e-sign liens (Click request login if you do
 Access reports & images (Request login here for reports): <a href="{reports_link}">Click Here</a><br/>
 """
 
-TEMPLATE_REQUEST_PATIENT_ID = "To help me find your appointment status, could you please provide your Patient ID?"
+TEMPLATE_REQUEST_PATIENT_ID = "Please provide the patient ID or first name, last name and date of birth."
 
 TEMPLATE_REQUEST_PATIENT_ID_AGAIN_ESCALATE = "Thank you for the information. We're still having trouble locating your appointment details without a Patient ID. A member of our team will personally review your request and get back to you shortly."
 
