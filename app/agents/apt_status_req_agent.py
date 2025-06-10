@@ -12,7 +12,7 @@ import httpx
 from app.core.config import settings as app_settings_instance # Renamed to avoid conflict if settings is passed
 from celery.utils.log import get_task_logger
 from app.services import frontapp_service # For the actual send_reply_to_front tool
-from app.mcp import MCPClient # Import MCP client from separate module
+from app.mcp import default_mcp_client as mcp_client # Import default configured MCP client
 # Import templates from their new location
 from app.agents.templates.appointment_status_templates import (
     TEMPLATE_APPOINTMENT_FOUND_DETAILED,
@@ -40,8 +40,7 @@ DEFAULT_PORTAL_LINKS = {
 # --- END: Placeholder Static Information ---
 
 # --- BEGIN: MCP Client instance ---
-# Global MCP client instance
-mcp_client = MCPClient()
+# The global MCP client is now imported from app.mcp
 # --- END: MCP Client instance ---
 
 # --- BEGIN: Helper Function for openai-agents SDK ---

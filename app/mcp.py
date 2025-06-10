@@ -10,6 +10,7 @@ from typing import Dict, Any, List, Optional
 import httpx
 from celery.utils.log import get_task_logger
 import json
+from app.core.config import settings # Import settings
 
 logger = get_task_logger(__name__)
 
@@ -25,7 +26,7 @@ class MCPClient:
     - Connection cleanup
     """
     
-    def __init__(self, server_url: str = "http://localhost:8000/mcp"):
+    def __init__(self, server_url: str):
         """
         Initialize MCP client.
         
@@ -246,7 +247,7 @@ class MCPClient:
 
 
 # Global MCP client instance for shared use
-default_mcp_client = MCPClient()
+default_mcp_client = MCPClient(server_url=str(settings.MCP_SERVER_URL))
 
 
 async def get_mcp_client(server_url: Optional[str] = None) -> MCPClient:
@@ -259,10 +260,8 @@ async def get_mcp_client(server_url: Optional[str] = None) -> MCPClient:
     Returns:
         MCPClient instance
     """
-    if server_url and server_url != default_mcp_client.server_url:
-        # Create a new client for custom URL
-        return MCPClient(server_url)
-    
+    if server_url:
+        return MCPClient(server_url=server_url)
     return default_mcp_client
 
 

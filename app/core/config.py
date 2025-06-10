@@ -53,8 +53,9 @@ class Settings(BaseSettings):
     # New settings
     MAX_CLASSIFICATION_RETRIES: int = 3
     
-    # Add OCR Service Endpoint
+    # Service Endpoints
     OCR_SERVICE_ENDPOINT: HttpUrl = "http://localhost:5000/ocr" # Default, override in .env
+    MCP_SERVER_URL: HttpUrl = "http://localhost:8001/mcp"
 
     # FrontApp settings
     FRONT_API_BASE_URL: str = "https://api2.frontapp.com"  # Default Front API base URL
@@ -79,6 +80,13 @@ class Settings(BaseSettings):
 
     # Classification Rules
     CLASSIFICATION_RULES_PATH: str = str(ROOT / "app" / "prompts" / "classification_rules.txt")
+
+    # Celery
+    CELERY_BROKER_URL: str
+    CELERY_RESULT_BACKEND: str
+
+    # OpenAI
+    OPENAI_API_KEY: str
 
     @field_validator("ASYNC_DATABASE_URL", mode="before")
     def assemble_async_db_connection(cls, v: Optional[str], info) -> Any:
@@ -129,13 +137,6 @@ class Settings(BaseSettings):
             
         # Build the async URL
         return f"postgresql+asyncpg://{username}{':' + password if password else ''}@{host}:{port}/{path}"
-
-    # Celery
-    CELERY_BROKER_URL: str
-    CELERY_RESULT_BACKEND: str
-
-    # OpenAI
-    OPENAI_API_KEY: str
 
     class Config:
         """Pydantic settings config."""
