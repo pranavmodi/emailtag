@@ -664,6 +664,25 @@ if __name__ == "__main__":
             ),
             "recipient_email": "ai.benchd@gmail.com",
             "expected_tags": ["Incorrect study info", "AI: Human review required"]
+        },
+        "21": {
+            "description": "Refund Request",
+            "subject": "Request for a refund for overpayment - Account #ACC-2024-9988",
+            "body_html": (
+                "<p>Dear Billing Department,</p>"
+                "<p>I am writing to request a refund for an overpayment on my account.</p>"
+                "<p>My records show that I was double-billed for the service on May 1st, 2024, and I ended up paying twice.</p>"
+                "<p>Patient Name: John Doe<br>"
+                "Account #: ACC-2024-9988<br>"
+                "Amount of overpayment: $150.00</p>"
+                "<p>Could you please investigate this matter and process a refund for the overpaid amount?</p>"
+                "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+                "<p>Thank you for your assistance.</p>"
+                "<p>Sincerely,<br>"
+                "John Doe</p>"
+            ),
+            "recipient_email": "ai.benchd@gmail.com",
+            "expected_tags": ["Refund Request"]
         }
     }
 
@@ -695,7 +714,7 @@ if __name__ == "__main__":
     for key, selected_scenario in scenarios_to_run.items():
         print(f"\n--- Testing Scenario {key}: {selected_scenario['description']} ---")
         
-        test_unique_id = "PRE248509"
+        test_unique_id = str(uuid.uuid4())
         if VERBOSE_MODE:
             print(f"Using TestID: {test_unique_id}")
 
