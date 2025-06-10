@@ -435,7 +435,7 @@ if __name__ == "__main__":
                 "Thomas Wilson</p>"
             ),
             "recipient_email": "ai.benchd@gmail.com",
-            "expected_tags": ["Bill Offer"] # Corrected based on actual AI output & tree
+            "expected_tags": ["Bill Offer", "Human Review"] # Corrected based on actual AI output & tree
         },
         "10": {
             "description": "Case Update - New Attorney",
@@ -622,6 +622,21 @@ if __name__ == "__main__":
                     "wait_for_user_input": True
                 }
             ]
+        },
+        "18": {
+            "description": "Negotiation Status - Pending Approval",
+            "subject": "Follow-up on settlement offer - Case #PN-2024-112",
+            "body_html": (
+                "<p>To Whom It May Concern,</p>"
+                "<p>We are following up on the settlement offer submitted on behalf of our client, Jane Doe, regarding case #PN-2024-112.</p>"
+                "<p>Our records show the offer was $2,500. Could you please confirm if this is currently pending approval on your end?</p>"
+                "<p>We need to provide an update to our client by the end of the week.</p>"
+                "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+                "<p>Thank you,<br>"
+                "The Legal Team</p>"
+            ),
+            "recipient_email": "ai.benchd@gmail.com",
+            "expected_tags": ["Pending Approval", "Human Review"]
         }
     }
 

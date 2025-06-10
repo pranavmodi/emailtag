@@ -546,8 +546,37 @@ def perform_autorespond_task(email_id: str) -> Dict:
         auto_response_details = None
         agent_handled_response = False
 
-        APT_STATUS_REQ_TAG_NAME = "Apt Status Req" 
         applied_tag_names = [tag.name for tag in email_obj.tags if hasattr(tag, 'name')]
+
+        # --- Human Review Check for Bill Offer or Pending Approval ---
+        BILL_OFFER_TAG_NAME = "Bill Offer"
+        PENDING_APPROVAL_TAG_NAME = "Pending Approval"
+        HUMAN_REVIEW_TAG_NAME = "AI: Human review required" # As per instruction
+
+        if BILL_OFFER_TAG_NAME in applied_tag_names or PENDING_APPROVAL_TAG_NAME in applied_tag_names:
+            logger.info(f"Email {email_id} requires human review due to tags. Applying '{HUMAN_REVIEW_TAG_NAME}' tag.")
+            final_status = ""
+            try:
+                add_conversation_tags(front_conversation_id, [HUMAN_REVIEW_TAG_NAME])
+                logger.info(f"Successfully applied '{HUMAN_REVIEW_TAG_NAME}' tag to conversation {front_conversation_id}.")
+                final_status = "processed_human_review_needed"
+            except Exception as e:
+                logger.error(f"Failed to apply '{HUMAN_REVIEW_TAG_NAME}' tag for email {email_id}: {e}", exc_info=True)
+                final_status = "processed_human_review_tag_failed"
+            
+            email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_status, is_processed=True))
+            logger.info(f"Email {email_id} processing stopped after handling human review tag. Final status: {final_status}")
+            return {
+                "status": "completed_autorespond_phase",
+                "email_id": email_id,
+                "final_db_status": final_status,
+                "auto_response_sent": False,
+                "auto_response_details": {"reason": f"Tagged for human review due to: {', '.join(list(filter(lambda t: t in [BILL_OFFER_TAG_NAME, PENDING_APPROVAL_TAG_NAME], applied_tag_names)))}"},
+                "agent_handled_response": False
+            }
+        # --- End Human Review Check ---
+
+        APT_STATUS_REQ_TAG_NAME = "Apt Status Req" 
 
         if APT_STATUS_REQ_TAG_NAME in applied_tag_names:
             logger.info(f"Email {email_id} (conv: {front_conversation_id}) tagged with '{APT_STATUS_REQ_TAG_NAME}'. Attempting agent SDK via orchestrator.")
