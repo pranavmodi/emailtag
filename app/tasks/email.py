@@ -481,7 +481,7 @@ def perform_tagging_task(email_id: str) -> Dict:
                 email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_tagging_status, is_processed=True))
         
         # Regardless of tagging outcome (unless critical error above), proceed to auto-response.
-        perform_autorespond_task.apply_async(args=[email_id], queue='processing')
+        perform_autorespond_task.apply_async(args=[email_id], kwargs={'determined_tags': new_tags}, queue='processing')
         logger.info(f"Queued email {email_id} for auto-response on 'processing' queue.")
         return {"status": "queued_for_autorespond", "email_id": email_id, "tags_applied_to_front": applied_tags_to_front, "determined_tags": new_tags}
 
@@ -506,8 +506,10 @@ def perform_tagging_task(email_id: str) -> Dict:
 
 
 @celery_app.task(name="app.tasks.email.perform_autorespond_task")
-def perform_autorespond_task(email_id: str) -> Dict:
+def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -> Dict:
     logger.info(f"Performing auto-response check for email {email_id}")
+    if determined_tags is not None:
+        logger.info(f"Received determined tags: {determined_tags}")
 
     try:
         email_uuid = UUID(email_id)
@@ -546,15 +548,38 @@ def perform_autorespond_task(email_id: str) -> Dict:
         auto_response_details = None
         agent_handled_response = False
 
-        applied_tag_names = [tag.name for tag in email_obj.tags if hasattr(tag, 'name')]
+        applied_tag_names = []
+        if determined_tags is not None:
+            logger.info(f"Using determined_tags passed from tagging task: {determined_tags}")
+            applied_tag_names = determined_tags
+        else:
+            logger.warning("determined_tags not passed to autorespond task. Reading from DB, which may be stale.")
+            applied_tag_names = [tag.name for tag in email_obj.tags if hasattr(tag, 'name')]
 
-        # --- Human Review Check for Bill Offer or Pending Approval ---
+        # --- Human Review Check for various tags ---
         BILL_OFFER_TAG_NAME = "Bill Offer"
         PENDING_APPROVAL_TAG_NAME = "Pending Approval"
-        HUMAN_REVIEW_TAG_NAME = "AI: Human review required" # As per instruction
+        NEW_ATTORNEY_TAG_NAME = "New Attorney"
+        DROP_LETTER_TAG_NAME = "Drop Letter"
+        INCORRECT_PATIENT_INFO_TAG_NAME = "Incorrect patient info"
+        INCORRECT_STUDY_INFO_TAG_NAME = "Incorrect study info"
+        REFUND_REQUEST_TAG_NAME = "Refund Request"
+        HUMAN_REVIEW_TAG_NAME = "AI: Human review required"
 
-        if BILL_OFFER_TAG_NAME in applied_tag_names or PENDING_APPROVAL_TAG_NAME in applied_tag_names:
-            logger.info(f"Email {email_id} requires human review due to tags. Applying '{HUMAN_REVIEW_TAG_NAME}' tag.")
+        tags_requiring_human_review = {
+            BILL_OFFER_TAG_NAME,
+            PENDING_APPROVAL_TAG_NAME,
+            NEW_ATTORNEY_TAG_NAME,
+            DROP_LETTER_TAG_NAME,
+            INCORRECT_PATIENT_INFO_TAG_NAME,
+            INCORRECT_STUDY_INFO_TAG_NAME,
+            REFUND_REQUEST_TAG_NAME,
+        }
+
+        triggered_human_review_tags = [tag for tag in applied_tag_names if tag in tags_requiring_human_review]
+
+        if triggered_human_review_tags:
+            logger.info(f"Email {email_id} requires human review due to tags: {triggered_human_review_tags}. Applying '{HUMAN_REVIEW_TAG_NAME}' tag.")
             final_status = ""
             try:
                 add_conversation_tags(front_conversation_id, [HUMAN_REVIEW_TAG_NAME])
@@ -571,7 +596,7 @@ def perform_autorespond_task(email_id: str) -> Dict:
                 "email_id": email_id,
                 "final_db_status": final_status,
                 "auto_response_sent": False,
-                "auto_response_details": {"reason": f"Tagged for human review due to: {', '.join(list(filter(lambda t: t in [BILL_OFFER_TAG_NAME, PENDING_APPROVAL_TAG_NAME], applied_tag_names)))}"},
+                "auto_response_details": {"reason": f"Tagged for human review due to: {', '.join(triggered_human_review_tags)}"},
                 "agent_handled_response": False
             }
         # --- End Human Review Check ---

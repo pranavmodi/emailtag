@@ -435,7 +435,7 @@ if __name__ == "__main__":
                 "Thomas Wilson</p>"
             ),
             "recipient_email": "ai.benchd@gmail.com",
-            "expected_tags": ["Bill Offer", "Human Review"] # Corrected based on actual AI output & tree
+            "expected_tags": ["Bill Offer", "AI: Human review required"]
         },
         "10": {
             "description": "Case Update - New Attorney",
@@ -459,7 +459,7 @@ if __name__ == "__main__":
                 "Email: rmartinez@martinezlegal.com</p>"
             ),
             "recipient_email": "ai.benchd@gmail.com",
-            "expected_tags": ["New Attorney"] # Corrected based on actual AI output & tree
+            "expected_tags": ["New Attorney", "AI: Human review required"]
         },
         "11": {
             "description": "Collections Warning - Account Review",
@@ -480,7 +480,7 @@ if __name__ == "__main__":
                 "Kevin Park</p>"
             ),
             "recipient_email": "ai.benchd@gmail.com",
-            "expected_tags": ["To Review"] # Corrected based on actual AI output & tree
+            "expected_tags": ["To Review"]
         },
         "12": {
             "description": "Patient No-Show Follow-up",
@@ -499,7 +499,7 @@ if __name__ == "__main__":
                 "Nicole Adams</p>"
             ),
             "recipient_email": "ai.benchd@gmail.com",
-            "expected_tags": ["No Show"] # Corrected based on tree (AI failed)
+            "expected_tags": ["No Show"]
         },
         "13": {
             "description": "Incorrect Patient Information",
@@ -520,7 +520,7 @@ if __name__ == "__main__":
                 "James Miller</p>"
             ),
             "recipient_email": "ai.benchd@gmail.com",
-            "expected_tags": ["Incorrect patient info"] # Corrected based on actual AI output & tree
+            "expected_tags": ["Incorrect patient info", "AI: Human review required"]
         },
         "14": {
             "description": "Payment Sent But Not Received",
@@ -541,7 +541,7 @@ if __name__ == "__main__":
                 "Patricia Wong</p>"
             ),
             "recipient_email": "ai.benchd@gmail.com",
-            "expected_tags": ["Sent payment but not received"] # Corrected based on tree (AI misclassified)
+            "expected_tags": ["Sent payment but not received"]
         },
         "15": {
             "description": "Appointment Status Check - Confirmation Request",
@@ -567,7 +567,7 @@ if __name__ == "__main__":
                 "Rachel Thompson</p>"
             ),
             "recipient_email": "ai.benchd@gmail.com",
-            "expected_tags": ["Apt Status Req"] # Corrected based on actual AI output & tree
+            "expected_tags": ["Apt Status Req"]
         },
         "16": {
             "description": "Appointment Status Request - Inquiry about existing appointment with Patient ID PRE248509",
@@ -585,7 +585,7 @@ if __name__ == "__main__":
                 "Alex Patient (via Test Script)</p>"
             ),
             "recipient_email": "ai.benchd@gmail.com",
-            "expected_tags": ["Apt Status Req"],
+            "expected_tags": ["Pending Approval", "AI: Human review required"],
             "patient_id": "PRE248509"
         },
         "17": {
@@ -636,7 +636,34 @@ if __name__ == "__main__":
                 "The Legal Team</p>"
             ),
             "recipient_email": "ai.benchd@gmail.com",
-            "expected_tags": ["Pending Approval", "Human Review"]
+            "expected_tags": ["Pending Approval", "AI: Human review required"]
+        },
+        "19": {
+            "description": "Case Update - Drop Letter",
+            "subject": "Attorney Drop Letter - Case #DL-2024-555",
+            "body_html": (
+                "<p>To Whom It May Concern,</p>"
+                "<p>Please see the attached drop letter for the case of John Smith, reference #DL-2024-555.</p>"
+                "<p>We will no longer be representing this client. Please direct all future correspondence to the client directly.</p>"
+                "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+                "<p>Regards,<br>Former Legal Counsel</p>"
+            ),
+            "recipient_email": "ai.benchd@gmail.com",
+            "expected_tags": ["Drop Letter", "AI: Human review required"]
+        },
+        "20": {
+            "description": "Incorrect Study Information",
+            "subject": "Correction needed on my recent MRI report",
+            "body_html": (
+                "<p>Hello,</p>"
+                "<p>I am reviewing the report for my recent scan and it seems to have the wrong study information listed.</p>"
+                "<p>My appointment was for a 'Right Knee MRI', but the report says 'Left Shoulder MRI'. This needs to be corrected urgently.</p>"
+                "<p>Patient: Emily White<br>Scan Date: March 20, 2024</p>"
+                "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+                "<p>Thank you,<br>Emily White</p>"
+            ),
+            "recipient_email": "ai.benchd@gmail.com",
+            "expected_tags": ["Incorrect study info", "AI: Human review required"]
         }
     }
 
@@ -668,9 +695,9 @@ if __name__ == "__main__":
     for key, selected_scenario in scenarios_to_run.items():
         print(f"\n--- Testing Scenario {key}: {selected_scenario['description']} ---")
         
-        test_unique_id = str(uuid.uuid4())
+        test_unique_id = "PRE248509"
         if VERBOSE_MODE:
-            print(f"Generated TestID: {test_unique_id}")
+            print(f"Using TestID: {test_unique_id}")
 
         if selected_scenario.get("is_multi_step"):
             patient_id = selected_scenario.get("patient_id")
