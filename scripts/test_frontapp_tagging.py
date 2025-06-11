@@ -585,7 +585,7 @@ if __name__ == "__main__":
                 "Alex Patient (via Test Script)</p>"
             ),
             "recipient_email": "ai.benchd@gmail.com",
-            "expected_tags": ["Pending Approval", "AI: Human review required"],
+            "expected_tags": ["Apt Status Req"],
             "patient_id": "PRE248509"
         },
         "17": {

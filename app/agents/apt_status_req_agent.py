@@ -21,6 +21,15 @@ from app.agents.templates.appointment_status_templates import (
     TEMPLATE_APPOINTMENT_NOT_FOUND_FOR_ID,
     TEMPLATE_DB_ERROR
 )
+# --- BEGIN: Agent Helper Imports ---
+from app.agents.agent_helpers import (
+    format_conversation_history_for_agent,
+    get_patient_and_study_info,
+    send_fallback_reply_and_tag,
+    extract_patient_id_from_email,
+    send_reply_to_front
+)
+# --- END: Agent Helper Imports ---
 
 logger = get_task_logger(__name__)
 
@@ -44,29 +53,7 @@ DEFAULT_PORTAL_LINKS = {
 # --- END: MCP Client instance ---
 
 # --- BEGIN: Helper Function for openai-agents SDK ---
-def _format_conversation_history_for_agent(
-    structured_messages: List[Dict[str, Any]],
-    max_exchanges: int = 3
-) -> str:
-    if not structured_messages:
-        return "No relevant conversation history found."
-    history_texts = []
-    for msg in structured_messages:
-        role = "Unknown"
-        body = msg.get("body", "").strip()
-        body_oneline = body.replace('\n', ' ').replace('\r', ' ')
-        msg_type = msg.get("type")
-        author_role = msg.get("author_role")
-        direction = msg.get("direction")
-        if direction == "inbound": role = "User"
-        elif direction == "outbound": role = "Assistant"
-        elif msg_type == "comment" and author_role == "teammate": role = "Assistant (comment)"
-        elif author_role == "user": role = "User"
-        if body_oneline and role != "Unknown":
-            history_texts.append(f"{role}: {body_oneline}")
-    if not history_texts:
-        return "No relevant conversation history found after formatting."
-    return "\n".join(history_texts[-(max_exchanges * 2):])
+# This function is now imported from agent_helpers
 # --- END: Helper Function ---
 
 # --- BEGIN: Reply Generation Helper ---
@@ -130,37 +117,9 @@ Please make sure to submit a negotiation offer before sending the payment.<br/>
 
 # --- BEGIN: Tool Definitions using MCP Client ---
 @function_tool
-async def extract_patient_id_from_email(email_content: str) -> Dict[str, Optional[str]]:
-    """
-    Extracts a patient ID from the given email content.
-    Searches for patterns like "Patient ID: XXXX", "PID: XXXX", or a standalone ID with an optional alphabetic prefix.
-    Returns a dictionary: {"patient_id": "extracted_id"} or {"patient_id": null} if not found.
-    """
-    logger.info(f"Tool 'extract_patient_id_from_email' called with content: {email_content[:100]}...")
-    import re
-    # Updated regex to capture optional alphabetic prefixes (e.g., PRE, PX) and ensure whole word matching for the ID part.
-    # It also handles an optional period or colon after "Patient ID".
-    match = re.search(r"(patient id is|Patient ID[:.]?|PID:)\s*([A-Z_]{0,5}\d{6,10})\b", email_content, re.IGNORECASE)
-    if match:
-        extracted_id = match.group(2) # Group 2 now captures the full ID (prefix + numbers)
-        logger.info(f"Found patient ID via labeled pattern: {extracted_id}")
-        return {"patient_id": extracted_id}
-    
-    # This regex looks for standalone IDs that might not have a clear label.
-    # It matches either a prefixed ID (e.g., PRE123456) or a numeric-only ID.
-    standalone_match = re.search(r"\b([A-Z_]{2,5}\d{6,10}|\d{6,10})\b", email_content)
-    if standalone_match:
-        potential_id = standalone_match.group(1)
-        logger.info(f"Found potential standalone patient ID: {potential_id}")
-        return {"patient_id": potential_id}
-        
-    logger.info("No patient ID found by tool 'extract_patient_id_from_email'.")
-    return {"patient_id": None}
-
-@function_tool
 async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj: Optional[Any] = None) -> Dict[str, Any]:
     """
-    Fetches patient demographics and appointment/study details using MCP server.
+    Fetches patient demographics and appointment/study details using the shared helper.
     Transforms the data for use with response templates.
     Requires patient_id.
     'settings_obj' can be passed to get dynamic config like phone numbers, links, etc.
@@ -173,12 +132,14 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
     portal_links = getattr(settings_obj, "PORTAL_LINKS", DEFAULT_PORTAL_LINKS)
 
     try:
-        # 1. Fetch Patient Demographics using MCP server
-        patient_result = await mcp_client.call_tool("fetch_patient_by_id", {"patient_id": patient_id})
+        # 1. Fetch data using the shared helper
+        mcp_results = await get_patient_and_study_info(patient_id)
+        patient_result = mcp_results.get("patient_result", {})
+        studies_result = mcp_results.get("study_result", {})
         
         # More robust checking of the result from the MCP tool
         if not isinstance(patient_result, dict) or "success" not in patient_result:
-            logger.error(f"Invalid or malformed response from MCP tool 'fetch_patient_by_id' for patient {patient_id}. Response: {patient_result}")
+            logger.error(f"Invalid or malformed response from MCP patient service for patient {patient_id}. Response: {patient_result}")
             return {"status": "db_error", "message": "Received an invalid response from the patient data service.", "patient_id": patient_id}
 
         if not patient_result["success"]:
@@ -201,12 +162,9 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
             logger.warning(f"Patient details response for {patient_id} was successful but no patient data in 'patients' list.")
             return {"status": "not_found", "message": f"Patient record found for ID {patient_id}, but no detailed data available.", "patient_id": patient_id}
 
-        # 2. Fetch Study Details using MCP server
-        studies_result = await mcp_client.call_tool("fetch_study_details", {"patient_id": patient_id})
-
-        # More robust checking of the result from the MCP tool for studies
+        # 2. Check study details from the helper
         if not isinstance(studies_result, dict) or "success" not in studies_result:
-            logger.error(f"Invalid or malformed response from MCP tool 'fetch_study_details' for patient {patient_id}. Response: {studies_result}")
+            logger.error(f"Invalid or malformed response from MCP study service for patient {patient_id}. Response: {studies_result}")
             return {"status": "db_error", "message": "Received an invalid response from the appointment data service.", "patient_id": patient_id}
 
         if not studies_result.get("success"):
@@ -313,82 +271,12 @@ async def generate_formatted_reply(scenario: str, fetch_details_result: Dict[str
     logger.info(f"Generated reply text: {reply_text[:200]}...") # Log snippet
     return {"reply_text": reply_text}
 
-@function_tool
-async def send_reply_to_front(
-    conversation_id: str, 
-    reply_text: str, 
-    tags_to_add: Optional[List[str]] = None, 
-    tags_to_remove: Optional[List[str]] = None
-) -> Dict[str, Any]:
-    """
-    Sends a reply message to the specified Front conversation and optionally updates tags.
-    """
-    logger.info(f"Tool 'send_reply_to_front' called for conv_id {conversation_id}. Text: '{reply_text[:50]}...'. Tags to add: {tags_to_add}, Tags to remove: {tags_to_remove}")
-    try:
-        loop = asyncio.get_event_loop()
-        reply_sent_successfully = await loop.run_in_executor(
-            None, 
-            frontapp_service.send_conversation_reply, 
-            conversation_id, 
-            reply_text
-        )
-        if not reply_sent_successfully:
-            logger.error(f"Failed to send reply via Front for conversation {conversation_id}.")
-            return {"status": "error", "message": "Front API failed to send reply."}
+# send_reply_to_front is now imported from agent_helpers
 
-        if tags_to_add:
-            tags_added_successfully = await loop.run_in_executor(None, frontapp_service.add_conversation_tags, conversation_id, tags_to_add)
-            if not tags_added_successfully:
-                logger.warning(f"Sent reply to {conversation_id} but failed to add tags: {tags_to_add}")
-        if tags_to_remove: # This part of the tool can remain for generic use, even if agent prompt changes
-            tags_removed_successfully = await loop.run_in_executor(None, frontapp_service.remove_conversation_tags, conversation_id, tags_to_remove)
-            if not tags_removed_successfully:
-                 logger.warning(f"Sent reply to {conversation_id} but failed to remove tags: {tags_to_remove}")
-        
-        return {"status": "success", "message": "Reply sent and tags (if any) updated."}
-    except Exception as e:
-        logger.error(f"Error in 'send_reply_to_front' tool for conversation {conversation_id}: {e}", exc_info=True)
-        return {"status": "error", "message": f"Exception in send_reply_to_front: {str(e)}"}
 # --- END: Tool Definitions ---
 
 # --- BEGIN: Fallback Reply Helper ---
-async def _send_fallback_reply_and_tag(
-    conversation_id: str, 
-    reply_text: str,
-    tag_to_add: str = TAG_AI_HUMAN_REVIEW_REQUIRED # Changed default tag
-):
-    """Sends a fallback reply to Front and adds an error tag."""
-    logger.info(f"Sending fallback reply for conversation {conversation_id} due to agent error/issue. Text: '{reply_text}'")
-    try:
-        loop = asyncio.get_event_loop()
-        
-        # Send reply
-        reply_sent = await loop.run_in_executor(
-            None,
-            frontapp_service.send_conversation_reply,
-            conversation_id,
-            reply_text
-        )
-        if not reply_sent:
-            logger.error(f"Failed to send fallback error reply message for {conversation_id} via frontapp_service.")
-        else:
-            logger.info(f"Successfully sent fallback error reply for {conversation_id}.")
-        
-        # Add error tag
-        if tag_to_add:
-            tags_added = await loop.run_in_executor(
-                None, 
-                frontapp_service.add_conversation_tags, 
-                conversation_id, 
-                [tag_to_add]
-            )
-            if not tags_added:
-                logger.warning(f"Failed to add error tag {tag_to_add} for {conversation_id} after sending fallback reply.")
-            else:
-                logger.info(f"Successfully added error tag {tag_to_add} for {conversation_id}.")
-
-    except Exception as ex_fallback:
-        logger.error(f"Exception during sending fallback reply/tag for {conversation_id}: {ex_fallback}", exc_info=True)
+# This is now imported from agent_helpers
 # --- END: Fallback Reply Helper ---
 
 # --- BEGIN: Orchestrator for openai-agents SDK ---
@@ -408,9 +296,10 @@ async def handle_apt_status_request_agent_sdk(
     mcp_connected = await mcp_client.connect()
     if not mcp_connected:
         logger.error("Failed to connect to MCP server, falling back to error response")
-        await _send_fallback_reply_and_tag(
+        await send_fallback_reply_and_tag(
             front_conversation_id,
-            "Our automated assistant is currently unable to connect to patient data services. A team member will review your request."
+            "Our automated assistant is currently unable to connect to patient data services. A team member will review your request.",
+            TAG_AI_HUMAN_REVIEW_REQUIRED
         )
         return {
             "agent_handled": False,
@@ -418,7 +307,7 @@ async def handle_apt_status_request_agent_sdk(
             "details": {"reason": "MCP server connection failed. Fallback reply sent."}
         }
 
-    formatted_history = _format_conversation_history_for_agent(structured_history_messages)
+    formatted_history = format_conversation_history_for_agent(structured_history_messages)
     logger.info(f"Formatted conversation history: {formatted_history}")
     
     # Combine history and current email for a complete context for extraction
@@ -560,9 +449,10 @@ Do not ask for confirmation. Execute the described logic.
                 logger.info(f"Agent's final tool call successful for {front_conversation_id}: {tool_message}")
             else:
                 logger.error(f"Agent's final tool call for {front_conversation_id} reported non-success status '{tool_status}': {tool_message}")
-                await _send_fallback_reply_and_tag(
+                await send_fallback_reply_and_tag(
                     front_conversation_id, 
-                    "Our automated assistant tried to send a reply but encountered a communication issue with the final step. A team member will review your request."
+                    "Our automated assistant tried to send a reply but encountered a communication issue with the final step. A team member will review your request.",
+                    TAG_AI_HUMAN_REVIEW_REQUIRED
                 )
                 agent_outcome["agent_handled"] = False 
                 agent_outcome["processed_flag"] = True 
@@ -572,9 +462,10 @@ Do not ask for confirmation. Execute the described logic.
                 }
         elif agent_result.final_output: 
             logger.warning(f"Agent for {front_conversation_id} produced final_output, but it was not the expected dictionary format. Original Output: {agent_result.final_output}")
-            await _send_fallback_reply_and_tag(
+            await send_fallback_reply_and_tag(
                 front_conversation_id,
-                "Our automated assistant had an issue formatting its final response. A team member will review your request."
+                "Our automated assistant had an issue formatting its final response. A team member will review your request.",
+                TAG_AI_HUMAN_REVIEW_REQUIRED
             )
             agent_outcome["agent_handled"] = False
             agent_outcome["processed_flag"] = True 
@@ -584,9 +475,10 @@ Do not ask for confirmation. Execute the described logic.
             }
         else: 
             logger.warning(f"Agent for {front_conversation_id} completed without any final_output.")
-            await _send_fallback_reply_and_tag(
+            await send_fallback_reply_and_tag(
                 front_conversation_id, 
-                "Our automated assistant did not complete the processing as expected (no final output). A team member will review your request."
+                "Our automated assistant did not complete the processing as expected (no final output). A team member will review your request.",
+                TAG_AI_HUMAN_REVIEW_REQUIRED
             )
             agent_outcome["agent_handled"] = False
             agent_outcome["processed_flag"] = True 
@@ -594,9 +486,10 @@ Do not ask for confirmation. Execute the described logic.
 
     except Exception as e: 
         logger.error(f"Unexpected exception during openai-agents SDK orchestration or result processing for {front_conversation_id}: {e}", exc_info=True)
-        await _send_fallback_reply_and_tag(
+        await send_fallback_reply_and_tag(
             front_conversation_id, 
-            "Our automated assistant encountered an unexpected internal error. A team member will review your request soon."
+            "Our automated assistant encountered an unexpected internal error. A team member will review your request soon.",
+            TAG_AI_HUMAN_REVIEW_REQUIRED
         )
         agent_outcome["agent_handled"] = False
         agent_outcome["processed_flag"] = True 
