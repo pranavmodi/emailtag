@@ -36,6 +36,7 @@ from app.services.archiving_service import check_and_archive_conversation # Impo
 # Remove direct openai-agents SDK imports from here, they are in the agent file.
 from app.agents.apt_status_req_agent import handle_apt_status_request_agent_sdk # New orchestrator
 from app.agents.release_records_autorespond import handle_release_of_records_request # New ROR agent
+from app.agents.bill_balance_request_agent import handle_bill_balance_request # New Bill/Balance agent
 from app.core.config import settings # Import settings for passing to agent orchestrator
 # --- END: Updated Agent Imports ---
 
@@ -605,6 +606,7 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
 
         APT_STATUS_REQ_TAG_NAME = "Apt Status Req" 
         RELEASE_OF_RECORDS_TAG_NAME = "Release of Records"
+        BILL_OR_BALANCE_REQUEST_TAG_NAME = "Bill or balance Request"
 
         if APT_STATUS_REQ_TAG_NAME in applied_tag_names:
             agent_name_for_status = "apt_status_req"
@@ -683,6 +685,38 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                 else:
                     logger.error(f"ROR agent call failed to return a result for {front_conversation_id}.")
                     auto_response_details = {"reason": "ROR agent call failed or returned None."}
+
+        elif BILL_OR_BALANCE_REQUEST_TAG_NAME in applied_tag_names:
+            agent_name_for_status = "bill_balance_request"
+            logger.info(f"Email {email_id} tagged with '{BILL_OR_BALANCE_REQUEST_TAG_NAME}'. Attempting Bill/Balance agent.")
+
+            agent_result_dict = None
+            async def _run_bill_balance_agent():
+                nonlocal agent_result_dict
+                agent_result_dict = await handle_bill_balance_request(
+                    front_conversation_id=front_conversation_id,
+                    current_email_content=current_email_content,
+                    structured_history_messages=structured_history_messages,
+                    settings_obj=settings
+                )
+            
+            try:
+                asyncio.run(_run_bill_balance_agent())
+            except Exception as e:
+                logger.error(f"Error running Bill or balance Request agent for {email_id}: {e}", exc_info=True)
+                agent_result_dict = {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Agent execution error: {e}"}}
+
+            if agent_result_dict:
+                agent_handled_response = agent_result_dict.get("agent_handled", False)
+                auto_response_processed_flag = agent_result_dict.get("processed_flag", False)
+                auto_response_details = agent_result_dict.get("details", {"reason": "Unknown Bill/Balance agent processing outcome"})
+                if agent_handled_response:
+                    logger.info(f"Bill/Balance agent handled response for {front_conversation_id}.")
+                else:
+                    logger.warning(f"Bill/Balance agent did NOT handle response for {front_conversation_id}.")
+            else:
+                logger.error(f"Bill/Balance agent call failed to return a result for {front_conversation_id}.")
+                auto_response_details = {"reason": "Bill/Balance agent call failed or returned None."}
 
         current_status_from_tagging = email_obj.status
         final_email_status = "processed_unknown_state" # Default
