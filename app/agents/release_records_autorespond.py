@@ -322,7 +322,7 @@ Full Context:
             name="ReleaseOfRecordsAgent_v1",
             instructions=instructions,
             model=OpenAIChatCompletionsModel(
-                model=settings_obj.OPENAI_MODEL_NAME or "gpt-4o",
+                model=settings_obj.AGENT_MODEL or "gpt-4o",
                 openai_client=custom_openai_client
             ),
             tools=[

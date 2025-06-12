@@ -683,6 +683,21 @@ if __name__ == "__main__":
             ),
             "recipient_email": "ai.benchd@gmail.com",
             "expected_tags": ["Refund Request"]
+        },
+        "22": {
+            "description": "Inquiry about MRI service availability",
+            "subject": "Question about services offered",
+            "body_html": (
+                "<p>Hello,</p>"
+                "<p>I am writing to ask if you provide MRI scans at your facility.</p>"
+                "<p>I need to have an MRI done on my knee and I'm looking for a provider in the area.</p>"
+                "<p>Please let me know if this is a service you offer.</p>"
+                "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+                "<p>Thank you,<br>"
+                "Potential Patient</p>"
+            ),
+            "recipient_email": "ai.benchd@gmail.com",
+            "expected_tags": ["Schedule Request"]
         }
     }
 
