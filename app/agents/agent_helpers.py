@@ -111,30 +111,45 @@ async def send_fallback_reply_and_tag(
         logger.error(f"Exception during sending fallback reply/tag for {conversation_id}: {ex_fallback}", exc_info=True)
 
 
-@function_tool
-async def extract_patient_id_from_email(email_content: str) -> Dict[str, Optional[str]]:
+async def extract_patient_id_from_email_logic(email_content: str) -> Optional[str]:
     """
-    Extracts a patient ID from the given email content.
-    Searches for patterns like "Patient ID: XXXX", "PID: XXXX", or a standalone ID with an optional alphabetic prefix.
-    Returns a dictionary: {"patient_id": "extracted_id"} or {"patient_id": null} if not found.
+    Extracts a patient ID from the given email content using regex.
+    This is the core logic, designed to be called directly from code.
+    Returns the patient ID string or None if not found.
     """
-    logger.info(f"Tool 'extract_patient_id_from_email' called...")
+    logger.info("Running patient ID extraction logic...")
     # This regex handles labeled IDs (e.g., "Patient ID: PRE123456")
     match = re.search(r"(patient id is|Patient ID[:.]?|PID:)\s*([A-Z_]{0,5}\d{6,10})\b", email_content, re.IGNORECASE)
     if match:
         extracted_id = match.group(2)
         logger.info(f"Found patient ID via labeled pattern: {extracted_id}")
-        return {"patient_id": extracted_id}
+        return extracted_id
 
     # This regex looks for standalone IDs that might not have a clear label.
     standalone_match = re.search(r"\b([A-Z_]{2,5}\d{6,10}|\d{6,10})\b", email_content)
     if standalone_match:
         potential_id = standalone_match.group(1)
-        logger.info(f"Found potential standalone patient ID: {potential_id}")
-        return {"patient_id": potential_id}
+        # Avoid capturing 10-digit phone numbers as IDs
+        if len(potential_id) == 10 and potential_id.isdigit():
+            logger.info(f"Skipping potential ID '{potential_id}' because it resembles a phone number.")
+        else:
+            logger.info(f"Found potential standalone patient ID: {potential_id}")
+            return potential_id
 
-    logger.info("No patient ID found by tool 'extract_patient_id_from_email'.")
-    return {"patient_id": None}
+    logger.info("No patient ID found by extraction logic.")
+    return None
+
+
+@function_tool
+async def extract_patient_id_from_email(email_content: str) -> Dict[str, Optional[str]]:
+    """
+    Extracts a patient ID from the given email content.
+    Searches for patterns like "Patient ID: XXXX", "PID: XXXX", or a standalone ID.
+    This is a FunctionTool for use with agents and returns a dictionary.
+    """
+    logger.info(f"Tool 'extract_patient_id_from_email' called...")
+    patient_id = await extract_patient_id_from_email_logic(email_content)
+    return {"patient_id": patient_id}
 
 
 @function_tool

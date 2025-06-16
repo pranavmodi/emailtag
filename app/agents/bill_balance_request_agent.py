@@ -13,10 +13,11 @@ import re
 from pathlib import Path
 
 from celery.utils.log import get_task_logger
+# from agents import aio, function_tool, tool
 
 from app.core.config import settings as app_settings_instance
 from app.services import frontapp_service
-from app.agents.agent_helpers import send_reply_to_front, extract_patient_id_from_email
+from app.agents.agent_helpers import send_reply_to_front, extract_patient_id_from_email_logic
 
 # --- BEGIN: Logging ---
 logger = get_task_logger(__name__)
@@ -208,7 +209,7 @@ async def handle_bill_balance_request(
     """
     logger.info(f"handle_bill_balance_request called for conversation: {front_conversation_id}")
     
-    patient_id = await extract_patient_id_from_email(f"Subject: \n\n{current_email_content}")
+    patient_id = await extract_patient_id_from_email_logic(f"Subject: \n\n{current_email_content}")
     if not patient_id:
         logger.warning(f"Could not extract Patient ID from conversation {front_conversation_id}. Cannot proceed.")
         return {"agent_handled": False, "processed_flag": False, "details": {"reason": "Patient ID not found in email."}}
