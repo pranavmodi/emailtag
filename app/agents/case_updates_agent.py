@@ -20,7 +20,7 @@ from celery.utils.log import get_task_logger
 # Project
 from app.core.config import settings as app_settings_instance
 from app.agents.agent_helpers import (
-    send_reply_to_front,
+    send_reply_to_front_direct,
     extract_patient_id_from_email_logic,
 )
 from app.mcp import default_mcp_client as mcp_client
@@ -66,9 +66,9 @@ CASE_UPDATE_TAG_TEMPLATES: Dict[str, str] = {
 # Based on MCP function validation requirements
 CASE_UPDATE_TAG_EVENT_IDS: Dict[str, int] = {
     "Drop Pending": 7,  # General event requiring only notes
-    "Promise to send payment": 5,  # Requires expected_payment_date
+    "Promise to send payment": 20,  # Requires expected_payment_date
     "Waiting to clear liability": 2,  # Requires liability_expected_date
-    "Waiting on settlement check": 7,  # General event requiring only notes
+    "Waiting on settlement check": 5,  # Requires expected_payment_date
     "Sent payment but not received": 6,  # Requires payment_date_sent, check_number, check_amount
     "Payment on way": 20,  # Requires send_payment_of_estimated_date
 }
@@ -164,7 +164,7 @@ async def handle_case_update_request(
                 # Provide a placeholder liability expected date (30 days from now)
                 liability_date = (datetime.now() + timedelta(days=30)).strftime("%m/%d/%Y")
                 tool_args["liability_expected_date"] = liability_date
-            elif event_id == 5:  # Promise to send payment
+            elif event_id == 5:  # Waiting on settlement check
                 # Provide a placeholder expected payment date (14 days from now)
                 payment_date = (datetime.now() + timedelta(days=14)).strftime("%m/%d/%Y")
                 tool_args["expected_payment_date"] = payment_date
@@ -174,10 +174,15 @@ async def handle_case_update_request(
                 tool_args["payment_date_sent"] = payment_sent_date
                 tool_args["check_number"] = "UNKNOWN"  # Placeholder since we can't extract from email
                 tool_args["check_amount"] = 0.0  # Placeholder since we can't extract from email
-            elif event_id == 20:  # Payment on way
-                # Provide a placeholder estimated send date (7 days from now)
-                send_date = (datetime.now() + timedelta(days=7)).strftime("%m/%d/%Y")
-                tool_args["send_payment_of_estimated_date"] = send_date
+            elif event_id == 20:  # Promise to send payment or Payment on way
+                # For "Promise to send payment", provide expected payment date
+                # For "Payment on way", provide estimated send date
+                if chosen_tag == "Promise to send payment":
+                    payment_date = (datetime.now() + timedelta(days=14)).strftime("%m/%d/%Y")
+                    tool_args["expected_payment_date"] = payment_date
+                elif chosen_tag == "Payment on way":
+                    send_date = (datetime.now() + timedelta(days=7)).strftime("%m/%d/%Y")
+                    tool_args["send_payment_of_estimated_date"] = send_date
             
             logger.info(
                 "[CaseUpdatesAgent] Calling 'insert_case_update_log' with args: %s",
@@ -211,7 +216,7 @@ async def handle_case_update_request(
     reply_body = CASE_UPDATE_TAG_TEMPLATES[chosen_tag]
 
     # Send reply via helper (runs the blocking Front call in a thread pool)
-    send_result = await send_reply_to_front(
+    send_result = await send_reply_to_front_direct(
         front_conversation_id,
         reply_body,
         tags_to_add=None,

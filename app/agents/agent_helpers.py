@@ -111,6 +111,37 @@ async def send_fallback_reply_and_tag(
         logger.error(f"Exception during sending fallback reply/tag for {conversation_id}: {ex_fallback}", exc_info=True)
 
 
+async def send_reply_to_front_direct(
+    conversation_id: str,
+    reply_text: str,
+    tags_to_add: Optional[List[str]] = None,
+    tags_to_remove: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Sends a reply message to the specified Front conversation and optionally updates tags.
+    This is a direct helper function (not a FunctionTool) for use in agents.
+    """
+    logger.info(f"Helper 'send_reply_to_front_direct' called for conv_id {conversation_id}.")
+    try:
+        reply_sent_successfully = await asyncio.to_thread(
+            frontapp_service.send_conversation_reply,
+            conversation_id,
+            reply_text
+        )
+        if not reply_sent_successfully:
+            return {"status": "error", "message": "Front API failed to send reply."}
+
+        if tags_to_add:
+            await asyncio.to_thread(frontapp_service.add_conversation_tags, conversation_id, tags_to_add)
+        if tags_to_remove:
+            await asyncio.to_thread(frontapp_service.remove_conversation_tags, conversation_id, tags_to_remove)
+
+        return {"status": "success", "message": "Reply sent and tags (if any) updated."}
+    except Exception as e:
+        logger.error(f"Error in 'send_reply_to_front_direct' helper for conversation {conversation_id}: {e}", exc_info=True)
+        return {"status": "error", "message": f"Exception in send_reply_to_front_direct: {str(e)}"}
+
+
 async def extract_patient_id_from_email_logic(email_content: str) -> Optional[str]:
     """
     Extracts a patient ID from the given email content using regex.
