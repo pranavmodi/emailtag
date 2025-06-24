@@ -18,6 +18,11 @@ from celery.utils.log import get_task_logger
 from app.core.config import settings as app_settings_instance
 from app.services import frontapp_service
 from app.agents.agent_helpers import send_reply_to_front_direct, extract_patient_id_from_email_logic
+# Import shared templates
+from app.agents.templates.shared_templates import (
+    TEMPLATE_REQUEST_PATIENT_ID,
+    TEMPLATE_REQUEST_PATIENT_ID_AGAIN_ESCALATE
+)
 
 # --- BEGIN: Logging ---
 logger = get_task_logger(__name__)
@@ -81,34 +86,6 @@ Thank you,
 Precise Imaging Billing Dept.
 www.PreciseMRI.com
 """
-
-# Template for when patient ID is not found or multiple patients found
-PATIENT_CLARIFICATION_TEMPLATE = """
-Thank you for your request. 
-
-To provide you with the accurate billing information, we need to verify the patient details. Could you please provide:
-
-1. Patient ID (if available), OR
-2. Patient's full first and last name, AND
-3. Date of Birth (DOB) or Date of Loss (DOL)
-
-Once we have this information, we'll be able to provide you with the billing details and any necessary documentation.
-
-Thank you,
-Precise Imaging Billing Dept.
-http://www.PreciseMRI.com
-"""
-
-# Template for human review needed
-HUMAN_REVIEW_TEMPLATE = """
-Thank you for your request. 
-
-We are unable to locate the patient with the information provided. Your request has been forwarded to our billing team for manual review. Someone will contact you within 1-2 business days.
-
-Thank you,
-Precise Imaging Billing Dept.
-http://www.PreciseMRI.com
-"""
 # --- END: Response Templates ---
 
 
@@ -155,12 +132,13 @@ def _create_billing_status_section(bill_balance: float, bill_status: Dict[str, A
 def _check_if_clarification_request(conversation_history: List[Dict[str, Any]]) -> bool:
     """
     Check if we've already sent a clarification request in this conversation.
-    Returns True if we've already asked for patient details.
+    Returns True if we've already asked for patient details using apt status template.
     """
     for message in conversation_history:
         body = message.get('body', '').lower()
-        if ('patient id' in body and 'first and last name' in body and 
-            'date of birth' in body and message.get('direction') == 'outbound'):
+        # Check for apt status template: "Please provide the patient ID or first name, last name and date of birth."
+        if ('please provide the patient id' in body and 'first name' in body and 
+            'last name' in body and 'date of birth' in body and message.get('direction') == 'outbound'):
             return True
     return False
 
@@ -196,7 +174,7 @@ async def handle_bill_balance_request(
                 
                 await send_reply_to_front_direct(
                     conversation_id=front_conversation_id,
-                    reply_text=HUMAN_REVIEW_TEMPLATE
+                    reply_text=TEMPLATE_REQUEST_PATIENT_ID_AGAIN_ESCALATE
                 )
                 
                 return {"agent_handled": True, "processed_flag": True, "details": {"action": "tagged_for_human_review"}}
@@ -210,7 +188,7 @@ async def handle_bill_balance_request(
             try:
                 await send_reply_to_front_direct(
                     conversation_id=front_conversation_id,
-                    reply_text=PATIENT_CLARIFICATION_TEMPLATE
+                    reply_text=TEMPLATE_REQUEST_PATIENT_ID
                 )
                 
                 return {"agent_handled": True, "processed_flag": True, "details": {"action": "requested_clarification"}}

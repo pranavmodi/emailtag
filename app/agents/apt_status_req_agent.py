@@ -13,13 +13,15 @@ from app.core.config import settings as app_settings_instance # Renamed to avoid
 from celery.utils.log import get_task_logger
 from app.services import frontapp_service # For the actual send_reply_to_front tool
 from app.mcp import default_mcp_client as mcp_client # Import default configured MCP client
-# Import templates from their new location
+# Import templates from their locations
 from app.agents.templates.appointment_status_templates import (
     TEMPLATE_APPOINTMENT_FOUND_DETAILED,
-    TEMPLATE_REQUEST_PATIENT_ID,
-    TEMPLATE_REQUEST_PATIENT_ID_AGAIN_ESCALATE,
     TEMPLATE_APPOINTMENT_NOT_FOUND_FOR_ID,
     TEMPLATE_DB_ERROR
+)
+from app.agents.templates.shared_templates import (
+    TEMPLATE_REQUEST_PATIENT_ID,
+    TEMPLATE_REQUEST_PATIENT_ID_AGAIN_ESCALATE
 )
 # --- BEGIN: Agent Helper Imports ---
 from app.agents.agent_helpers import (

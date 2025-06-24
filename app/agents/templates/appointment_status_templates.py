@@ -30,9 +30,8 @@ Access bills, appointment times, and e-sign liens (Click request login if you do
 Access reports & images (Request login here for reports): <a href="{reports_link}">Click Here</a><br/>
 """
 
-TEMPLATE_REQUEST_PATIENT_ID = "Please provide the patient ID or first name, last name and date of birth."
-
-TEMPLATE_REQUEST_PATIENT_ID_AGAIN_ESCALATE = "Thank you for the information. We're still having trouble locating your appointment details without a Patient ID. A member of our team will personally review your request and get back to you shortly."
+# Note: TEMPLATE_REQUEST_PATIENT_ID and TEMPLATE_REQUEST_PATIENT_ID_AGAIN_ESCALATE 
+# have been moved to shared_templates.py since they're used by multiple agents
 
 TEMPLATE_APPOINTMENT_NOT_FOUND_FOR_ID = "We found your Patient ID: {patient_id}, but could not find any upcoming appointments. If you believe this is an error, please provide the approximate date and type of your exam so our team can investigate further. A member of our team will also review this request."
 
