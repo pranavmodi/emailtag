@@ -31,6 +31,9 @@ BILL_BALANCE_TEMPLATE = """
 Thank you for your request and for using Precise Imaging for your patient's imaging needs.
 {bill_attachment_line}
 
+Patient Information:
+{patient_info}
+
 Billing Status:
 {billing_status_section}
 
@@ -50,6 +53,9 @@ LIEN_REMINDER_TEMPLATE = """
 Thank you for your request and for using Precise Imaging for your patient's imaging needs.
 {report_header}
 
+Patient Information:
+{patient_info}
+
 Billing Status:
 Please review the lien status as we are missing signed liens which must be signed before a bill is produced.
 
@@ -57,6 +63,9 @@ Lien Status:
 {lien_status_table}
 
 How to eSign:
+Patient eSign Link: {patient_esign_link}
+Attorney eSign Link: {attorney_esign_link}
+
 1. Click the eSign link above
 2. Click Start at the top right
 3. Sign your full name
@@ -72,131 +81,88 @@ Thank you,
 Precise Imaging Billing Dept.
 www.PreciseMRI.com
 """
+
+# Template for when patient ID is not found or multiple patients found
+PATIENT_CLARIFICATION_TEMPLATE = """
+Thank you for your request. 
+
+To provide you with the accurate billing information, we need to verify the patient details. Could you please provide:
+
+1. Patient ID (if available), OR
+2. Patient's full first and last name, AND
+3. Date of Birth (DOB) or Date of Loss (DOL)
+
+Once we have this information, we'll be able to provide you with the billing details and any necessary documentation.
+
+Thank you,
+Precise Imaging Billing Dept.
+http://www.PreciseMRI.com
+"""
+
+# Template for human review needed
+HUMAN_REVIEW_TEMPLATE = """
+Thank you for your request. 
+
+We are unable to locate the patient with the information provided. Your request has been forwarded to our billing team for manual review. Someone will contact you within 1-2 business days.
+
+Thank you,
+Precise Imaging Billing Dept.
+http://www.PreciseMRI.com
+"""
 # --- END: Response Templates ---
 
 
-# --- BEGIN: Placeholder Data Fetching Functions ---
+# --- Helper Functions for MCP Integration ---
 
-async def get_patient_info(patient_id: str) -> Dict[str, Any]:
-    """Placeholder to fetch patient information."""
-    logger.info(f"Fetching patient info for ID: {patient_id}")
-    # In a real implementation, this would query a database or another service.
-    return {
-        "success": True,
-        "patient": {
-            "name": "JESSICA VALERIE RODRIGUEZ",
-            "dob": "10/09/1973",
-            "doi": "03/23/2025",
-            "id": patient_id
-        }
-    }
-
-async def get_billing_and_lien_info(patient_id: str) -> Dict[str, Any]:
-    """Placeholder to fetch billing and lien information."""
-    logger.info(f"Fetching billing and lien info for Patient ID: {patient_id}")
-    # This function simulates fetching financial details for a patient.
-    # It can be modified to return different states, e.g., for unsigned liens.
-    
-    # Scenario 1: Liens signed, bill available
-    return {
-        "success": True,
-        "liens_signed": True,
-        "bill_available": True,
-        "balance": "2,200.00",
-        "billed_studies": [
-            {
-                "description": "MRI LUMBAR SPINE W/O CONTRAST",
-                "date": "05/07/2025",
-                "status": "SIGNED",
-                "billing_status": "$2,200.00 - Billed on 05/16/2025"
-            }
-        ],
-        "pending_studies": [
-            {
-                "description": "MRI HIP W/O CONTRAST - LT",
-                "date": "05/27/2025",
-                "status": "SCHEDULED",
-                "billing_status": "Potential amount to be billed $2,200.00"
-            },
-            {
-                "description": "MRI KNEE W/O CONTRAST - LT",
-                "date": "05/30/2025",
-                "status": "SCHEDULED",
-                "billing_status": "Potential amount to be billed $2,200.00"
-            }
-        ],
-        "pending_studies_total": "4,400.00",
-        "lien_status": [
-            {"type": "Technical Lien (Imaging)", "patient_sig": "Signed 04/25/2025", "attorney_sig": "Signed 05/16/2025"},
-            {"type": "Professional lien (Report)", "patient_sig": "Signed 04/25/2025", "attorney_sig": "Signed 05/16/2025"}
-        ]
-    }
-    
-    # # Scenario 2: Liens not signed
-    # return {
-    #     "success": True,
-    #     "liens_signed": False,
-    #     "bill_available": False,
-    #     "lien_status": [
-    #         {"type": "Technical Lien (Imaging)", "patient_sig": "Not Signed. Please give your client this link to eSign", "attorney_sig": "Not Signed. Please eSign here"},
-    #         {"type": "Professional lien (Report)", "patient_sig": "Not Signed. Please give your client this link to eSign", "attorney_sig": "Not Signed. Please eSign here"}
-    #     ]
-    # }
-
-async def get_medical_report_attachments(patient_id: str) -> List[str]:
-    """Placeholder to get paths of medical report PDFs."""
-    logger.info(f"Fetching medical reports for Patient ID: {patient_id}")
-    # This would find and return the file paths for report attachments.
-    # Returning an empty list simulates no reports being available.
-    return []
-
-async def get_w9_form_attachment() -> Optional[str]:
-    """Placeholder to get the path of the W9 form."""
-    logger.info("Fetching W9 form path.")
-    # This should point to the location of your W9 PDF.
-    # For now, let's assume it's in a 'static' folder.
-    w9_path = Path("static/Precise_Imaging_W9_MI_2-3-25-2.pdf")
-    if w9_path.exists():
-        return str(w9_path)
-    logger.warning(f"W9 form not found at expected path: {w9_path}")
-    return None
-
-async def get_bill_attachment(patient_id: str) -> Optional[str]:
-    """Placeholder to get the path of the latest bill PDF."""
-    logger.info(f"Fetching latest bill for Patient ID: {patient_id}")
-    # This would generate or find the bill PDF and return its path.
-    return None # Simulate no bill attachment for now
-
-# --- END: Placeholder Data Fetching Functions ---
-
-def _create_lien_status_table(lien_statuses: List[Dict[str, str]]) -> str:
+def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
     """Creates a formatted string table for lien statuses."""
-    header = "Lien type\tPatient Signature\tAttorney Signature\n"
+    if not lien_statuses:
+        return "No lien information available"
+    
+    header = "Lien Type\tPatient Signature\tAttorney Signature\n"
     rows = [header]
+    
     for lien in lien_statuses:
-        rows.append(f"{lien['type']}\t{lien['patient_sig']}\t{lien['attorney_sig']}")
+        lien_type = lien.get('lienType', 'Unknown')
+        
+        if lien.get('hasPatientSigned'):
+            patient_sig = f"Signed {lien.get('patientSignedLienDate', 'Unknown Date')}"
+        else:
+            patient_sig = "Not Signed"
+            
+        if lien.get('hasAttorneySigned'):
+            attorney_sig = f"Signed {lien.get('attorneySignedDate', 'Unknown Date')}"
+        else:
+            attorney_sig = "Not Signed"
+            
+        rows.append(f"{lien_type}\t{patient_sig}\t{attorney_sig}")
+    
     return "\n".join(rows)
 
-def _create_billing_status_section(billing_info: Dict[str, Any]) -> str:
+def _create_billing_status_section(bill_balance: float, bill_status: Dict[str, Any]) -> str:
     """Creates the formatted string for the billing status section."""
     lines = []
-    if billing_info.get("bill_available"):
-        lines.append(f"The patient's current bill balance is $ {billing_info['balance']} as of {billing_info.get('date_today', 'today')}")
-        
-        if billing_info.get('billed_studies'):
-            lines.append("\nSTUDY DESCRIPTION\tSTUDY DATE\tEXAM STATUS\tBILLING STATUS")
-            for study in billing_info['billed_studies']:
-                lines.append(f"{study['description']}\t{study['date']}\t{study['status']}\t{study['billing_status']}")
-        
-        if billing_info.get('pending_studies'):
-            lines.append(f"\nThere are pending studies that might be completed shortly")
-            lines.append(f"$ {billing_info['pending_studies_total']} will be added to the bill balance once the studies below are completed:")
-            lines.append("\nSTUDY DESCRIPTION\tSTUDY DATE\tEXAM STATUS\tBILLING STATUS")
-            for study in billing_info['pending_studies']:
-                 lines.append(f"{study['description']}\t{study['date']}\t{study['status']}\t{study['billing_status']}")
+    
+    if bill_status.get("isBilled"):
+        lines.append(f"The patient's current bill balance is ${bill_balance:.2f}")
+        if bill_status.get("bill"):
+            lines.append("A copy of the most recent bill is attached.")
+    else:
+        lines.append("No bill has been generated yet. Please check the lien status below.")
     
     return "\n".join(lines)
 
+def _check_if_clarification_request(conversation_history: List[Dict[str, Any]]) -> bool:
+    """
+    Check if we've already sent a clarification request in this conversation.
+    Returns True if we've already asked for patient details.
+    """
+    for message in conversation_history:
+        body = message.get('body', '').lower()
+        if ('patient id' in body and 'first and last name' in body and 
+            'date of birth' in body and message.get('direction') == 'outbound'):
+            return True
+    return False
 
 async def handle_bill_balance_request(
     front_conversation_id: str,
@@ -206,78 +172,167 @@ async def handle_bill_balance_request(
 ) -> Dict[str, Any]:
     """
     Main orchestrator for handling "Bill or balance Request" emails.
+    Implements the 3-step logic:
+    1. If single Patient ID found → auto-reply
+    2. If no/multiple patients → ask for clarification (once)
+    3. If still can't find → tag for human review
     """
     logger.info(f"handle_bill_balance_request called for conversation: {front_conversation_id}")
     
+    # Check if we've already asked for clarification
+    already_asked_for_clarification = _check_if_clarification_request(structured_history_messages)
+    
+    # Try to extract patient ID from the email
     patient_id = await extract_patient_id_from_email_logic(f"Subject: \n\n{current_email_content}")
+    
     if not patient_id:
-        logger.warning(f"Could not extract Patient ID from conversation {front_conversation_id}. Cannot proceed.")
-        return {"agent_handled": False, "processed_flag": False, "details": {"reason": "Patient ID not found in email."}}
+        if already_asked_for_clarification:
+            # Step 3: We already asked for clarification, tag for human review
+            logger.info(f"Patient ID still not found after clarification request for conversation {front_conversation_id}. Tagging for human review.")
+            
+            try:
+                # Add human review tag
+                frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+                
+                await send_reply_to_front(
+                    front_conversation_id=front_conversation_id,
+                    body=HUMAN_REVIEW_TEMPLATE,
+                    subject="Re: Billing Request - Manual Review Required"
+                )
+                
+                return {"agent_handled": True, "processed_flag": True, "details": {"action": "tagged_for_human_review"}}
+            except Exception as e:
+                logger.error(f"Failed to tag for human review: {e}")
+                return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to tag for human review: {e}"}}
+        else:
+            # Step 2: First time we can't find patient ID, ask for clarification
+            logger.info(f"Patient ID not found for conversation {front_conversation_id}. Requesting clarification.")
+            
+            try:
+                await send_reply_to_front(
+                    front_conversation_id=front_conversation_id,
+                    body=PATIENT_CLARIFICATION_TEMPLATE,
+                    subject="Re: Billing Request - Patient Information Needed"
+                )
+                
+                return {"agent_handled": True, "processed_flag": True, "details": {"action": "requested_clarification"}}
+            except Exception as e:
+                logger.error(f"Failed to send clarification request: {e}")
+                return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to send clarification: {e}"}}
 
-    patient_info_data = await get_patient_info(patient_id)
-    if not patient_info_data.get("success"):
-        logger.error(f"Failed to fetch patient info for {patient_id}.")
-        return {"agent_handled": False, "processed_flag": False, "details": {"reason": "Failed to fetch patient data."}}
-    patient_info = patient_info_data["patient"]
+    # Step 1: Patient ID found, get billing information using MCP tool
+    logger.info(f"Patient ID {patient_id} found. Fetching billing information via MCP tool.")
     
-    billing_info = await get_billing_and_lien_info(patient_id)
-    if not billing_info.get("success"):
-        logger.error(f"Failed to fetch billing/lien info for {patient_id}.")
-        return {"agent_handled": False, "processed_flag": False, "details": {"reason": "Failed to fetch billing/lien data."}}
-
-    # Determine if reports are requested
-    include_reports = "report" in current_email_content.lower()
-    
-    attachments = []
-    reply_body = ""
-    subject = f"Re: {patient_info.get('id', '')} - {patient_info.get('name', '')} - DOB: {patient_info.get('dob', '')} - DOI: {patient_info.get('doi', '')}"
-
-    report_header = "The available final reports have been attached." if include_reports else ""
-
-    lien_status_table = _create_lien_status_table(billing_info['lien_status'])
-
-    if not billing_info.get("liens_signed"):
-        # Generate Lien Reminder response
-        reply_body = LIEN_REMINDER_TEMPLATE.format(
-            report_header=report_header.strip(),
-            lien_status_table=lien_status_table
-        )
-    else:
-        # Generate Bill & Balance response
-        billing_status_section = _create_billing_status_section(billing_info)
-        bill_attachment_line = "A copy of the most recent bill is attached." if billing_info.get("bill_available") else ""
-
-        reply_body = BILL_BALANCE_TEMPLATE.format(
-            report_header=report_header.strip(),
-            bill_attachment_line=bill_attachment_line,
-            billing_status_section=billing_status_section,
-            lien_status_table=lien_status_table
-        )
-
-        # Add W9 only if a bill is available
-        if billing_info.get("bill_available"):
-            w9_path = await get_w9_form_attachment()
-            if w9_path:
-                attachments.append(w9_path)
-        
-        # Add bill attachment
-        bill_path = await get_bill_attachment(patient_id)
-        if bill_path:
-            attachments.append(bill_path)
-
-    if include_reports:
-        report_paths = await get_medical_report_attachments(patient_id)
-        attachments.extend(report_paths)
-
     try:
+        # Import the MCP client function
+        from app.mcp import call_mcp_tool
+        
+        # Call the MCP tool to get billing information
+        mcp_response = await call_mcp_tool(
+            tool_name="mcp_precisemcp_get_patient_lien_bill_balance",
+            arguments={"patient_id": patient_id}
+        )
+        
+        if not mcp_response or not isinstance(mcp_response, dict):
+            logger.error(f"Invalid MCP response for patient {patient_id}: {mcp_response}")
+            return {"agent_handled": False, "processed_flag": False, "details": {"reason": "Invalid MCP tool response"}}
+        
+        # Check if MCP call was successful
+        if not mcp_response.get('success', False):
+            logger.error(f"MCP tool call failed for patient {patient_id}: {mcp_response.get('error', 'Unknown error')}")
+            return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"MCP tool error: {mcp_response.get('error', 'Unknown error')}"}}
+        
+        # Parse the MCP response - the actual tool result is in the 'result' field
+        tool_result = mcp_response.get('result', {})
+        if not tool_result or not isinstance(tool_result, dict):
+            logger.error(f"No valid result data in MCP response for patient {patient_id}: {tool_result}")
+            return {"agent_handled": False, "processed_flag": False, "details": {"reason": "No billing data found"}}
+        
+        # The actual patient data is in the 'result' field of the tool response
+        result = tool_result.get('result', {})
+        if not result:
+            logger.error(f"No result data in MCP response for patient {patient_id}")
+            return {"agent_handled": False, "processed_flag": False, "details": {"reason": "No billing data found"}}
+        
+        # Extract data from MCP response
+        patient_bill_balance = result.get('patientBillBalance', 0)
+        patient_bill_status = result.get('patientBillStatus', {})
+        lien_status_list = result.get('lienStatusList', [])
+        patient_esign_link = result.get('patientEsignLink', '')
+        attorney_esign_link = result.get('attorneyEsignLink', '')
+        
+        # Check if liens are properly signed
+        all_liens_signed = all(
+            lien.get('hasPatientSigned', False) and lien.get('hasAttorneySigned', False)
+            for lien in lien_status_list
+        )
+        
+        # Determine if reports are requested
+        include_reports = "report" in current_email_content.lower()
+        
+        # Build response
+        attachments = []
+        patient_info = f"Patient ID: {patient_id}"
+        report_header = "The available final reports have been attached." if include_reports else ""
+        
+        lien_status_table = _create_lien_status_table(lien_status_list)
+        
+        if not all_liens_signed:
+            # Generate Lien Reminder response
+            reply_body = LIEN_REMINDER_TEMPLATE.format(
+                report_header=report_header.strip(),
+                patient_info=patient_info,
+                lien_status_table=lien_status_table,
+                patient_esign_link=patient_esign_link,
+                attorney_esign_link=attorney_esign_link
+            )
+            subject = f"Re: {patient_id} - Lien Signature Required"
+        else:
+            # Generate Bill & Balance response
+            billing_status_section = _create_billing_status_section(patient_bill_balance, patient_bill_status)
+            bill_attachment_line = "A copy of the most recent bill is attached." if patient_bill_status.get("isBilled") else ""
+            
+            reply_body = BILL_BALANCE_TEMPLATE.format(
+                report_header=report_header.strip(),
+                bill_attachment_line=bill_attachment_line,
+                patient_info=patient_info,
+                billing_status_section=billing_status_section,
+                lien_status_table=lien_status_table
+            )
+            subject = f"Re: {patient_id} - Billing Information"
+            
+            # Add bill attachment if available
+            if patient_bill_status.get("bill"):
+                # TODO: Handle base64 bill attachment
+                # For now, we note that a bill is available but don't attach it
+                pass
+
+        # TODO: Add report attachments if requested
+        if include_reports:
+            # This would need additional MCP calls to get reports
+            pass
+
+        # Send the response
         await send_reply_to_front(
             front_conversation_id=front_conversation_id,
             body=reply_body,
             subject=subject,
             attachments=attachments
         )
-        logger.info(f"Successfully sent 'Bill or Balance Request' reply for conversation {front_conversation_id}")
-        return {"agent_handled": True, "processed_flag": True, "details": {"reply_sent": True, "attachments": len(attachments)}}
+        
+        logger.info(f"Successfully sent billing response for patient {patient_id} in conversation {front_conversation_id}")
+        return {
+            "agent_handled": True, 
+            "processed_flag": True, 
+            "details": {
+                "action": "sent_billing_info",
+                "patient_id": patient_id,
+                "bill_balance": patient_bill_balance,
+                "liens_signed": all_liens_signed,
+                "attachments": len(attachments)
+            }
+        }
+        
     except Exception as e:
-        logger.error(f"Failed to send reply to Front for conversation {front_conversation_id}: {e}", exc_info=True)
-        return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Front API error: {e}"}} 
+        logger.error(f"Error processing billing request for patient {patient_id}: {e}", exc_info=True)
+        return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Processing error: {e}"}} 
