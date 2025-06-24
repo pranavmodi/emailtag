@@ -150,14 +150,14 @@ async def extract_patient_id_from_email_logic(email_content: str) -> Optional[st
     """
     logger.info("Running patient ID extraction logic...")
     # This regex handles labeled IDs (e.g., "Patient ID: PRE123456")
-    match = re.search(r"(patient id is|Patient ID[:.]?|PID:)\s*([A-Z_]{0,5}\d{6,10})\b", email_content, re.IGNORECASE)
+    match = re.search(r"(patient id is|Patient ID[:.]?|PID:)\s*([A-Z_]{0,5}\d{5,10})\b", email_content, re.IGNORECASE)
     if match:
         extracted_id = match.group(2)
         logger.info(f"Found patient ID via labeled pattern: {extracted_id}")
         return extracted_id
 
     # This regex looks for standalone IDs that might not have a clear label.
-    standalone_match = re.search(r"\b([A-Z_]{2,5}\d{6,10}|\d{6,10})\b", email_content)
+    standalone_match = re.search(r"\b([A-Z_]{2,5}\d{5,10}|\d{6,10})\b", email_content)
     if standalone_match:
         potential_id = standalone_match.group(1)
         # Avoid capturing 10-digit phone numbers as IDs

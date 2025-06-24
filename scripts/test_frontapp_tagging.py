@@ -382,6 +382,7 @@ if __name__ == "__main__":
                 "<p>I received a statement showing an outstanding balance of $245.00 on my account, but I believe this should have been covered by my insurance.</p>"
                 "<p>Account Details:<br>"
                 "Patient: Lisa Chen<br>"
+                "Patient ID: PRE00001<br>"
                 "Account #: 789-456-123<br>"
                 "Service Date: December 15, 2023<br>"
                 "Insurance: Blue Cross Blue Shield</p>"
