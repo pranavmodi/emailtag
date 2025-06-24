@@ -26,6 +26,7 @@ from app.agents.templates.shared_templates import (
 # Import bill balance templates
 from app.agents.templates.bill_balance_templates import (
     COMPREHENSIVE_BILL_BALANCE_TEMPLATE,
+    COMPREHENSIVE_LIEN_REMINDER_TEMPLATE,
     COMPLETED_STUDIES_TABLE_HEADER,
     PENDING_STUDIES_SECTION_TEMPLATE,
     NO_PENDING_STUDIES,
@@ -115,12 +116,14 @@ def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
         lien_type = lien.get('lienType', 'Unknown')
         
         if lien.get('hasPatientSigned'):
-            patient_sig = f"Signed {lien.get('patientSignedLienDate', 'Unknown Date')}"
+            patient_date = lien.get('patientSignedLienDate', '')
+            patient_sig = f"Signed {patient_date}" if patient_date else "Signed"
         else:
             patient_sig = "Not Signed"
             
         if lien.get('hasAttorneySigned'):
-            attorney_sig = f"Signed {lien.get('attorneySignedDate', 'Unknown Date')}"
+            attorney_date = lien.get('attorneySignedDate', '')  
+            attorney_sig = f"Signed {attorney_date}" if attorney_date else "Signed"
         else:
             attorney_sig = "Not Signed"
             
@@ -462,10 +465,9 @@ www.PreciseMRI.com
         bill_attachment_line = "A copy of the most recent bill is attached." if patient_bill_status.get("isBilled") else ""
         
         if not all_liens_signed:
-            # Generate Lien Reminder response (keep existing template for this case)
-            reply_body = LIEN_REMINDER_TEMPLATE.format(
-                report_header=report_header.strip(),
-                patient_info=patient_header,
+            # Generate Lien Reminder response using new comprehensive template
+            reply_body = COMPREHENSIVE_LIEN_REMINDER_TEMPLATE.format(
+                patient_header=patient_header,
                 lien_status_table=lien_status_table,
                 patient_esign_link=patient_esign_link,
                 attorney_esign_link=attorney_esign_link
