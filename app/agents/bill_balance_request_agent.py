@@ -17,7 +17,7 @@ from celery.utils.log import get_task_logger
 
 from app.core.config import settings as app_settings_instance
 from app.services import frontapp_service
-from app.agents.agent_helpers import send_reply_to_front, extract_patient_id_from_email_logic
+from app.agents.agent_helpers import send_reply_to_front_direct, extract_patient_id_from_email_logic
 
 # --- BEGIN: Logging ---
 logger = get_task_logger(__name__)
@@ -194,10 +194,9 @@ async def handle_bill_balance_request(
                 # Add human review tag
                 frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
                 
-                await send_reply_to_front(
-                    front_conversation_id=front_conversation_id,
-                    body=HUMAN_REVIEW_TEMPLATE,
-                    subject="Re: Billing Request - Manual Review Required"
+                await send_reply_to_front_direct(
+                    conversation_id=front_conversation_id,
+                    reply_text=HUMAN_REVIEW_TEMPLATE
                 )
                 
                 return {"agent_handled": True, "processed_flag": True, "details": {"action": "tagged_for_human_review"}}
@@ -209,10 +208,9 @@ async def handle_bill_balance_request(
             logger.info(f"Patient ID not found for conversation {front_conversation_id}. Requesting clarification.")
             
             try:
-                await send_reply_to_front(
-                    front_conversation_id=front_conversation_id,
-                    body=PATIENT_CLARIFICATION_TEMPLATE,
-                    subject="Re: Billing Request - Patient Information Needed"
+                await send_reply_to_front_direct(
+                    conversation_id=front_conversation_id,
+                    reply_text=PATIENT_CLARIFICATION_TEMPLATE
                 )
                 
                 return {"agent_handled": True, "processed_flag": True, "details": {"action": "requested_clarification"}}
@@ -313,11 +311,9 @@ async def handle_bill_balance_request(
             pass
 
         # Send the response
-        await send_reply_to_front(
-            front_conversation_id=front_conversation_id,
-            body=reply_body,
-            subject=subject,
-            attachments=attachments
+        await send_reply_to_front_direct(
+            conversation_id=front_conversation_id,
+            reply_text=reply_body
         )
         
         logger.info(f"Successfully sent billing response for patient {patient_id} in conversation {front_conversation_id}")
