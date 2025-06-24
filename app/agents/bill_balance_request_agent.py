@@ -142,6 +142,7 @@ def _check_if_clarification_request(conversation_history: List[Dict[str, Any]]) 
             return True
     return False
 
+
 async def handle_bill_balance_request(
     front_conversation_id: str,
     current_email_content: str,
@@ -272,94 +273,28 @@ async def handle_bill_balance_request(
             except Exception as tag_error:
                 logger.error(f"Failed to add human review tag: {tag_error}")
             return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"MCP tool error: {mcp_response.get('error', 'Unknown error')}"}}
-        
+
         # Parse the MCP response - check multiple possible locations for the data
-        tool_result = mcp_response.get('result', {})
-        logger.info(f"Tool result for patient {patient_id}: {get_schema_info(tool_result)}")
-        
-        # If tool_result is empty, the data might be directly in mcp_response
-        if not tool_result or tool_result == {}:
-            logger.info(f"Tool result empty, checking if data is directly in mcp_response")
-            # Remove huge base64 data from logging for readability
-            clean_response = {k: v for k, v in mcp_response.items() if k != 'result' and not (isinstance(v, str) and len(v) > 1000)}
-            logger.info(f"Clean MCP response keys for patient {patient_id}: {list(mcp_response.keys())}")
-            logger.info(f"Clean MCP response (no large strings) for patient {patient_id}: {get_schema_info(clean_response)}")
-            
-            # Check if the billing data is directly in the response
-            if any(key in mcp_response for key in ['patientBillBalance', 'lienStatusList', 'patientBillStatus']):
-                tool_result = mcp_response
-                logger.info(f"Found billing data directly in mcp_response for patient {patient_id}")
-            else:
-                # Deep search for billing data in nested structures
-                billing_data_found = False
-                search_keys = ['patientBillBalance', 'lienStatusList', 'patientBillStatus', 'patientEsignLink', 'attorneyEsignLink']
-                
-                def deep_search_for_keys(obj, path=""):
-                    """Recursively search for billing-related keys in nested structures."""
-                    found_keys = []
-                    if isinstance(obj, dict):
-                        for k, v in obj.items():
-                            current_path = f"{path}.{k}" if path else k
-                            if k in search_keys:
-                                found_keys.append(current_path)
-                            elif isinstance(v, (dict, list)):
-                                found_keys.extend(deep_search_for_keys(v, current_path))
-                    elif isinstance(obj, list):
-                        for i, item in enumerate(obj):
-                            current_path = f"{path}[{i}]"
-                            if isinstance(item, (dict, list)):
-                                found_keys.extend(deep_search_for_keys(item, current_path))
-                    return found_keys
-                
-                found_billing_keys = deep_search_for_keys(mcp_response)
-                if found_billing_keys:
-                    logger.info(f"Found billing keys at these paths for patient {patient_id}: {found_billing_keys}")
-                    # Try to extract the parent object containing the billing data
-                    # For now, we'll just use the response as-is and let the extraction logic handle it
-                    tool_result = mcp_response
-                    billing_data_found = True
-                
-                if not billing_data_found:
-                    logger.error(f"No valid result data found anywhere in MCP response for patient {patient_id}")
-                    logger.error(f"Searched for keys: {search_keys}")
-                    # Tag for human review on empty result
-                    try:
-                        frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
-                    except Exception as tag_error:
-                        logger.error(f"Failed to add human review tag: {tag_error}")
-                    return {"agent_handled": False, "processed_flag": False, "details": {"reason": "No billing data found"}}
-        
-        if not tool_result or not isinstance(tool_result, dict):
-            logger.error(f"No valid result data in MCP response for patient {patient_id}: {get_schema_info(tool_result)}")
-            # Tag for human review on empty result
+        # The actual result is often nested under a 'data' key, so we check there first.
+        if 'data' in mcp_response and isinstance(mcp_response.get('data'), dict):
+            logger.info("Found 'data' key in MCP response, looking for 'result' inside.")
+            result = mcp_response.get('data', {}).get('result', {})
+        else:
+            logger.info("No 'data' key in MCP response, looking for 'result' at the top level.")
+            result = mcp_response.get('result', {})
+
+        # If the result is a JSON string, parse it.
+        if isinstance(result, str):
             try:
-                frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
-            except Exception as tag_error:
-                logger.error(f"Failed to add human review tag: {tag_error}")
-            return {"agent_handled": False, "processed_flag": False, "details": {"reason": "No billing data found"}}
-        
-        # The MCP response might have different structures based on how the tool returns data
-        # Let's check both direct tool_result and nested result patterns
-        result = tool_result
-        
-        # If tool_result has a nested 'result' field, use that instead
-        if 'result' in tool_result and isinstance(tool_result['result'], dict):
-            result = tool_result['result']
-            logger.info(f"Using nested result for patient {patient_id}: {get_schema_info(result)}")
-        elif 'result' in tool_result and isinstance(tool_result['result'], str):
-            # Sometimes the result might be a JSON string
-            try:
-                import json
-                result = json.loads(tool_result['result'])
-                logger.info(f"Parsed JSON string result for patient {patient_id}: {get_schema_info(result)}")
+                result = json.loads(result)
             except json.JSONDecodeError:
-                logger.warning(f"Result is a string but not valid JSON for patient {patient_id}: {tool_result['result'][:100] + '...' if len(tool_result['result']) > 100 else tool_result['result']}")
-                result = tool_result
-        
+                logger.warning(f"Result is a string but not valid JSON for patient {patient_id}: {result[:200]}")
+
+
         logger.info(f"Final result data for patient {patient_id}: {get_schema_info(result)}")
         
         if not result or not isinstance(result, dict):
-            logger.error(f"No valid result data in MCP response for patient {patient_id}. Tool result: {get_schema_info(tool_result)}")
+            logger.error(f"No valid result data in MCP response for patient {patient_id}.")
             # Tag for human review on empty result
             try:
                 frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
@@ -374,15 +309,15 @@ async def handle_bill_balance_request(
         patient_esign_link = result.get('patientEsignLink', '')
         attorney_esign_link = result.get('attorneyEsignLink', '')
         
-        logger.info(f"Extracted billing data for patient {patient_id}: balance={patient_bill_balance}, status={patient_bill_status}, liens={len(lien_status_list)}")
+        logger.info(f"Extracted billing data for patient {patient_id}: balance={patient_bill_balance}, status={get_schema_info(patient_bill_status)}, liens={len(lien_status_list)}")
         
         # Check if we actually have meaningful billing data
         has_billing_data = (
-            patient_bill_balance and patient_bill_balance > 0
+            patient_bill_balance is not None and patient_bill_balance > 0
         ) or (
             patient_bill_status and isinstance(patient_bill_status, dict) and patient_bill_status
         ) or (
-            lien_status_list and len(lien_status_list) > 0
+            lien_status_list and isinstance(lien_status_list, list) and len(lien_status_list) > 0
         )
         
         if not has_billing_data:
@@ -495,4 +430,4 @@ www.PreciseMRI.com
             frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
         except Exception as tag_error:
             logger.error(f"Failed to add human review tag: {tag_error}")
-        return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Processing error: {e}"}} 
+        return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Processing error: {e}"}}
