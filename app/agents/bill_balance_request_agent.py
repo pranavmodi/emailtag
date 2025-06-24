@@ -23,6 +23,18 @@ from app.agents.templates.shared_templates import (
     TEMPLATE_REQUEST_PATIENT_ID,
     TEMPLATE_REQUEST_PATIENT_ID_AGAIN_ESCALATE
 )
+# Import bill balance templates
+from app.agents.templates.bill_balance_templates import (
+    COMPREHENSIVE_BILL_BALANCE_TEMPLATE,
+    COMPLETED_STUDIES_TABLE_HEADER,
+    PENDING_STUDIES_SECTION_TEMPLATE,
+    NO_PENDING_STUDIES,
+    COMPLETED_STUDY_ROW_TEMPLATE,
+    PENDING_STUDY_ROW_TEMPLATE,
+    LIEN_STATUS_ROW_TEMPLATE,
+    PATIENT_HEADER_TEMPLATE,
+    SIMPLE_PATIENT_HEADER_TEMPLATE
+)
 
 # --- BEGIN: Logging ---
 logger = get_task_logger(__name__)
@@ -92,11 +104,11 @@ www.PreciseMRI.com
 # --- Helper Functions for MCP Integration ---
 
 def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
-    """Creates a formatted string table for lien statuses."""
+    """Creates a formatted string table for lien statuses using the new template."""
     if not lien_statuses:
         return "No lien information available"
     
-    header = "Lien Type\tPatient Signature\tAttorney Signature\n"
+    header = "Lien type\tPatient Signature\tAttorney Signature"
     rows = [header]
     
     for lien in lien_statuses:
@@ -112,7 +124,12 @@ def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
         else:
             attorney_sig = "Not Signed"
             
-        rows.append(f"{lien_type}\t{patient_sig}\t{attorney_sig}")
+        row = LIEN_STATUS_ROW_TEMPLATE.format(
+            lien_type=lien_type,
+            patient_signature=patient_sig,
+            attorney_signature=attorney_sig
+        )
+        rows.append(row)
     
     return "\n".join(rows)
 
@@ -121,13 +138,68 @@ def _create_billing_status_section(bill_balance: float, bill_status: Dict[str, A
     lines = []
     
     if bill_status.get("isBilled"):
-        lines.append(f"The patient's current bill balance is ${bill_balance:.2f}")
-        if bill_status.get("bill"):
-            lines.append("A copy of the most recent bill is attached.")
+        lines.append(f"The patient's current bill balance is ${bill_balance:.2f} as of {bill_status.get('lastBilledDate', 'unknown date')}")
     else:
         lines.append("No bill has been generated yet. Please check the lien status below.")
     
     return "\n".join(lines)
+
+def _create_patient_header(patient_data: Dict[str, Any], patient_id: str) -> str:
+    """Creates the patient header with full details if available."""
+    patient_name = patient_data.get('patientName', '')
+    dob = patient_data.get('dateOfBirth', '')
+    doi = patient_data.get('dateOfInjury', '')
+    
+    if patient_name and dob:
+        return PATIENT_HEADER_TEMPLATE.format(
+            patient_id=patient_id,
+            patient_name=patient_name,
+            dob=dob,
+            doi=doi if doi else 'N/A'
+        )
+    else:
+        return SIMPLE_PATIENT_HEADER_TEMPLATE.format(patient_id=patient_id)
+
+def _create_completed_studies_section(completed_studies: List[Dict[str, Any]]) -> str:
+    """Creates the completed studies section with table format."""
+    if not completed_studies:
+        return ""
+    
+    rows = [COMPLETED_STUDIES_TABLE_HEADER]
+    
+    for study in completed_studies:
+        row = COMPLETED_STUDY_ROW_TEMPLATE.format(
+            study_description=study.get('studyDescription', 'Unknown Study'),
+            study_date=study.get('studyDate', 'Unknown Date'),
+            exam_status=study.get('examStatus', 'UNKNOWN'),
+            amount=study.get('billedAmount', 0),
+            billed_date=study.get('billedDate', 'Unknown Date')
+        )
+        rows.append(row)
+    
+    return "\n".join(rows)
+
+def _create_pending_studies_section(pending_studies: List[Dict[str, Any]]) -> str:
+    """Creates the pending studies section with potential billing amounts."""
+    if not pending_studies:
+        return NO_PENDING_STUDIES
+    
+    total_pending_amount = sum(study.get('estimatedAmount', 0) for study in pending_studies)
+    
+    rows = []
+    for study in pending_studies:
+        row = PENDING_STUDY_ROW_TEMPLATE.format(
+            study_description=study.get('studyDescription', 'Unknown Study'),
+            study_date=study.get('studyDate', 'Unknown Date'),
+            exam_status=study.get('examStatus', 'SCHEDULED'),
+            amount=study.get('estimatedAmount', 0)
+        )
+        rows.append(row)
+    
+    return PENDING_STUDIES_SECTION_TEMPLATE.format(
+        pending_amount=total_pending_amount,
+        pending_studies_rows="\n".join(rows)
+    )
 
 def _check_if_clarification_request(conversation_history: List[Dict[str, Any]]) -> bool:
     """
@@ -308,8 +380,11 @@ async def handle_bill_balance_request(
         lien_status_list = result.get('lienStatusList', [])
         patient_esign_link = result.get('patientEsignLink', '')
         attorney_esign_link = result.get('attorneyEsignLink', '')
+        patient_data = result.get('patientData', {})
+        completed_studies = result.get('completedStudies', [])
+        pending_studies = result.get('pendingStudies', [])
         
-        logger.info(f"Extracted billing data for patient {patient_id}: balance={patient_bill_balance}, status={get_schema_info(patient_bill_status)}, liens={len(lien_status_list)}")
+        logger.info(f"Extracted billing data for patient {patient_id}: balance={patient_bill_balance}, status={get_schema_info(patient_bill_status)}, liens={len(lien_status_list)}, studies={len(completed_studies)}, pending={len(pending_studies)}")
         
         # Check if we actually have meaningful billing data
         has_billing_data = (
@@ -318,13 +393,21 @@ async def handle_bill_balance_request(
             patient_bill_status and isinstance(patient_bill_status, dict) and patient_bill_status
         ) or (
             lien_status_list and isinstance(lien_status_list, list) and len(lien_status_list) > 0
+        ) or (
+            completed_studies and isinstance(completed_studies, list) and len(completed_studies) > 0
+        ) or (
+            pending_studies and isinstance(pending_studies, list) and len(pending_studies) > 0
         )
         
         if not has_billing_data:
             logger.warning(f"No meaningful billing data found for patient {patient_id}. All values are empty/zero.")
+            # Create patient header for no data response
+            patient_header = _create_patient_header(patient_data, patient_id)
+            
             # Send a response indicating no billing data available
             no_data_response = f"""
-Thank you for your billing inquiry regarding Patient ID: {patient_id}.
+{patient_header}
+Thank you for your billing inquiry.
 
 Currently, there is no billing information available in our system for this patient. This could mean:
 - No services have been rendered yet
@@ -362,33 +445,40 @@ www.PreciseMRI.com
         # Determine if reports are requested
         include_reports = "report" in current_email_content.lower()
         
-        # Build response
+        # Build comprehensive response using new template
         attachments = []
-        patient_info = f"Patient ID: {patient_id}"
-        report_header = "The available final reports have been attached." if include_reports else ""
         
+        # Create patient header with full details
+        patient_header = _create_patient_header(patient_data, patient_id)
+        
+        # Create sections for the comprehensive template
+        billing_status_section = _create_billing_status_section(patient_bill_balance, patient_bill_status)
+        completed_studies_section = _create_completed_studies_section(completed_studies)
+        pending_studies_section = _create_pending_studies_section(pending_studies)
         lien_status_table = _create_lien_status_table(lien_status_list)
         
+        # Determine report header and bill attachment line
+        report_header = "The available final reports have been attached." if include_reports else ""
+        bill_attachment_line = "A copy of the most recent bill is attached." if patient_bill_status.get("isBilled") else ""
+        
         if not all_liens_signed:
-            # Generate Lien Reminder response
+            # Generate Lien Reminder response (keep existing template for this case)
             reply_body = LIEN_REMINDER_TEMPLATE.format(
                 report_header=report_header.strip(),
-                patient_info=patient_info,
+                patient_info=patient_header,
                 lien_status_table=lien_status_table,
                 patient_esign_link=patient_esign_link,
                 attorney_esign_link=attorney_esign_link
             )
             subject = f"Re: {patient_id} - Lien Signature Required"
         else:
-            # Generate Bill & Balance response
-            billing_status_section = _create_billing_status_section(patient_bill_balance, patient_bill_status)
-            bill_attachment_line = "A copy of the most recent bill is attached." if patient_bill_status.get("isBilled") else ""
-            
-            reply_body = BILL_BALANCE_TEMPLATE.format(
-                report_header=report_header.strip(),
+            # Generate comprehensive Bill & Balance response using new template
+            reply_body = COMPREHENSIVE_BILL_BALANCE_TEMPLATE.format(
+                patient_header=patient_header,
                 bill_attachment_line=bill_attachment_line,
-                patient_info=patient_info,
                 billing_status_section=billing_status_section,
+                completed_studies_section=completed_studies_section,
+                pending_studies_section=pending_studies_section,
                 lien_status_table=lien_status_table
             )
             subject = f"Re: {patient_id} - Billing Information"
@@ -410,16 +500,19 @@ www.PreciseMRI.com
             reply_text=reply_body
         )
         
-        logger.info(f"Successfully sent billing response for patient {patient_id} in conversation {front_conversation_id}")
+        logger.info(f"Successfully sent comprehensive billing response for patient {patient_id} in conversation {front_conversation_id}")
         return {
             "agent_handled": True, 
             "processed_flag": True, 
             "details": {
-                "action": "sent_billing_info",
+                "action": "sent_comprehensive_billing_info",
                 "patient_id": patient_id,
                 "bill_balance": patient_bill_balance,
                 "liens_signed": all_liens_signed,
-                "attachments": len(attachments)
+                "completed_studies": len(completed_studies),
+                "pending_studies": len(pending_studies),
+                "attachments": len(attachments),
+                "template_used": "comprehensive" if all_liens_signed else "lien_reminder"
             }
         }
         
