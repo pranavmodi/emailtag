@@ -12,11 +12,7 @@ Thank you for your request and for using Precise Imaging for your patient's imag
 {bill_attachment_line}
 
 Billing Status:
-{billing_status_section}
-
-{completed_studies_section}
-
-{pending_studies_section}
+{billing_status_section}{completed_studies_section}{pending_studies_section}
 
 Lien Status:
 {lien_status_table}

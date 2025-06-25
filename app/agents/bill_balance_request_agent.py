@@ -115,15 +115,24 @@ def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
     for lien in lien_statuses:
         lien_type = lien.get('lienType', 'Unknown')
         
-        if lien.get('hasPatientSigned'):
+        # Use the boolean flags as the source of truth for signature status
+        if lien.get('hasPatientSigned', False):
             patient_date = lien.get('patientSignedLienDate', '')
-            patient_sig = f"Signed {patient_date}" if patient_date else "Signed"
+            # Only show date if it exists and is not None/empty/null
+            if patient_date and str(patient_date).lower() not in ['none', 'null', '']:
+                patient_sig = f"Signed {patient_date}"
+            else:
+                patient_sig = "Signed"
         else:
             patient_sig = "Not Signed"
             
-        if lien.get('hasAttorneySigned'):
-            attorney_date = lien.get('attorneySignedDate', '')  
-            attorney_sig = f"Signed {attorney_date}" if attorney_date else "Signed"
+        if lien.get('hasAttorneySigned', False):
+            attorney_date = lien.get('attorneySignedDate', '')
+            # Only show date if it exists and is not None/empty/null
+            if attorney_date and str(attorney_date).lower() not in ['none', 'null', '']:
+                attorney_sig = f"Signed {attorney_date}"
+            else:
+                attorney_sig = "Signed"
         else:
             attorney_sig = "Not Signed"
             
@@ -180,7 +189,7 @@ def _create_completed_studies_section(completed_studies: List[Dict[str, Any]]) -
         )
         rows.append(row)
     
-    return "\n".join(rows)
+    return "\n\n" + "\n".join(rows)
 
 def _create_pending_studies_section(pending_studies: List[Dict[str, Any]]) -> str:
     """Creates the pending studies section with potential billing amounts."""
@@ -199,7 +208,7 @@ def _create_pending_studies_section(pending_studies: List[Dict[str, Any]]) -> st
         )
         rows.append(row)
     
-    return PENDING_STUDIES_SECTION_TEMPLATE.format(
+    return "\n\n" + PENDING_STUDIES_SECTION_TEMPLATE.format(
         pending_amount=total_pending_amount,
         pending_studies_rows="\n".join(rows)
     )
@@ -383,11 +392,27 @@ async def handle_bill_balance_request(
         lien_status_list = result.get('lienStatusList', [])
         patient_esign_link = result.get('patientEsignLink', '')
         attorney_esign_link = result.get('attorneyEsignLink', '')
+        
+        # Patient data might be at top level or in a nested structure
         patient_data = result.get('patientData', {})
+        if not patient_data:
+            # Create minimal patient data from available fields
+            patient_data = {
+                'patientName': result.get('patientName', ''),
+                'dateOfBirth': result.get('dateOfBirth', ''),
+                'dateOfInjury': result.get('dateOfInjury', '')
+            }
+        
+        # Study data might not be available in current MCP response
         completed_studies = result.get('completedStudies', [])
         pending_studies = result.get('pendingStudies', [])
         
         logger.info(f"Extracted billing data for patient {patient_id}: balance={patient_bill_balance}, status={get_schema_info(patient_bill_status)}, liens={len(lien_status_list)}, studies={len(completed_studies)}, pending={len(pending_studies)}")
+        
+        # Log lien status details for debugging
+        if lien_status_list:
+            for i, lien in enumerate(lien_status_list):
+                logger.info(f"Lien {i}: type={lien.get('lienType')}, patient_signed={lien.get('hasPatientSigned')}, patient_date={lien.get('patientSignedLienDate')}, attorney_signed={lien.get('hasAttorneySigned')}, attorney_date={lien.get('attorneySignedDate')}")
         
         # Check if we actually have meaningful billing data
         has_billing_data = (

@@ -220,6 +220,37 @@ class MCPClient:
                     else:
                         final_result = tool_result
                     
+                    # Log the raw response structure without base64 content
+                    def get_raw_response_keys(obj, max_depth=6, current_depth=0):
+                        """Get keys and structure info from raw MCP response, avoiding base64 content."""
+                        if current_depth >= max_depth:
+                            return f"<max_depth_reached_type_{type(obj).__name__}>"
+                        
+                        if isinstance(obj, dict):
+                            keys_info = {}
+                            for k, v in obj.items():
+                                if k in ['bill'] and isinstance(v, str) and len(v) > 100:
+                                    keys_info[k] = f"<base64_content_length_{len(v)}>"
+                                elif isinstance(v, str) and len(v) > 200:
+                                    keys_info[k] = f"<string_length_{len(v)}_truncated>"
+                                elif isinstance(v, (dict, list)):
+                                    keys_info[k] = get_raw_response_keys(v, max_depth, current_depth + 1)
+                                else:
+                                    keys_info[k] = v
+                            return keys_info
+                        elif isinstance(obj, list):
+                            if len(obj) == 0:
+                                return []
+                            elif len(obj) <= 2:
+                                return [get_raw_response_keys(item, max_depth, current_depth + 1) for item in obj]
+                            else:
+                                return [get_raw_response_keys(obj[0], max_depth, current_depth + 1), f"<{len(obj)-1}_more_items>"]
+                        else:
+                            return obj
+                    
+                    raw_response_structure = get_raw_response_keys(final_result)
+                    logger.info(f"MCP tool '{tool_name}' raw response structure: {raw_response_structure}")
+                    
                     # Log the raw response if the final result isn't a dictionary, as this is usually unexpected.
                     if not isinstance(final_result, dict):
                         logger.warning(f"MCP tool '{tool_name}' produced a non-dictionary result of type {type(final_result)}. This may cause issues for the agent. Raw server response: {response.text}")
