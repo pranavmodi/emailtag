@@ -11,6 +11,7 @@ import ast
 from typing import Optional, Dict, Any, List
 import re
 from pathlib import Path
+import time  # For performance monitoring
 
 from celery.utils.log import get_task_logger
 # from agents import aio, function_tool, tool
@@ -288,11 +289,17 @@ async def handle_bill_balance_request(
         # Import the MCP client function
         from app.mcp import call_mcp_tool
         
+        # Add performance monitoring
+        mcp_start_time = time.time()
+        
         # Call the MCP tool to get billing information
         mcp_response = await call_mcp_tool(
             tool_name="get_patient_lien_bill_balance",
             arguments={"patient_id": patient_id}
         )
+        
+        mcp_duration = time.time() - mcp_start_time
+        logger.info(f"MCP tool 'get_patient_lien_bill_balance' completed in {mcp_duration:.2f} seconds for patient {patient_id}")
         
         if not mcp_response or not isinstance(mcp_response, dict):
             logger.error(f"Invalid MCP response for patient {patient_id}: {mcp_response}")
@@ -357,6 +364,119 @@ async def handle_bill_balance_request(
             except Exception as tag_error:
                 logger.error(f"Failed to add human review tag: {tag_error}")
             return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"MCP tool error: {mcp_response.get('error', 'Unknown error')}"}}
+
+        # NEW: Check for business logic failures within successful transport
+        # Handle case where MCP transport succeeds but business logic fails
+        data_section = mcp_response.get('data', {})
+        if isinstance(data_section, dict):
+            response_status = data_section.get('responseStatus', '')
+            if response_status == 'Fail':
+                exception_info = data_section.get('exception', {})
+                if isinstance(exception_info, dict):
+                    error_message = exception_info.get('exceptionMessage', 'Unknown business logic error')
+                    logger.error(f"MCP business logic failed for patient {patient_id}: {error_message}")
+                    
+                    # Enhanced error pattern matching for different business logic failures
+                    error_patterns = [
+                        {
+                            'pattern': 'Object reference not set to an instance of an object',
+                            'action': 'patient_not_found',
+                            'description': 'Patient ID does not exist or has null/incomplete data'
+                        },
+                        {
+                            'pattern': 'No patients found',
+                            'action': 'patient_not_found',
+                            'description': 'Patient ID not found in database'
+                        },
+                        {
+                            'pattern': 'Invalid patient id',
+                            'action': 'patient_not_found',
+                            'description': 'Patient ID format is invalid'
+                        },
+                        {
+                            'pattern': 'Patient record is inactive',
+                            'action': 'patient_inactive',
+                            'description': 'Patient record exists but is inactive'
+                        },
+                        {
+                            'pattern': 'Access denied',
+                            'action': 'access_denied',
+                            'description': 'Insufficient permissions to access patient data'
+                        },
+                        {
+                            'pattern': 'timeout',
+                            'action': 'timeout',
+                            'description': 'RadFlow API request timed out'
+                        }
+                    ]
+                    
+                    matched_pattern = None
+                    for pattern_info in error_patterns:
+                        if pattern_info['pattern'].lower() in error_message.lower():
+                            matched_pattern = pattern_info
+                            break
+                    
+                    if matched_pattern and matched_pattern['action'] in ['patient_not_found', 'patient_inactive']:
+                        logger.info(f"Patient {patient_id} - {matched_pattern['description']}")
+                        
+                        # Send a polite "patient not found" response instead of erroring
+                        patient_not_found_response = f"""
+Patient ID: {patient_id}
+Thank you for your billing inquiry.
+
+We were unable to locate billing information for the provided Patient ID ({patient_id}) in our system. This could mean:
+- The Patient ID may be incorrect or incomplete
+- The patient may not have any services with our facility
+- The patient record may not be set up for billing yet
+
+Please verify the Patient ID and contact our billing department at (888) 555-1212 if you need assistance locating the correct information.
+
+Thank you,
+Precise Imaging Billing Dept.
+www.PreciseMRI.com
+"""
+                        
+                        await send_reply_to_front_direct(
+                            conversation_id=front_conversation_id,
+                            reply_text=patient_not_found_response.strip()
+                        )
+                        
+                        return {
+                            "agent_handled": True, 
+                            "processed_flag": True, 
+                            "details": {
+                                "action": "sent_patient_not_found_response",
+                                "patient_id": patient_id,
+                                "reason": matched_pattern['description'],
+                                "error_pattern": matched_pattern['pattern'],
+                                "mcp_error": error_message,
+                                "mcp_duration": mcp_duration
+                            }
+                        }
+                    else:
+                        # For other business logic errors, tag for human review
+                        error_classification = matched_pattern['action'] if matched_pattern else 'unknown_business_error'
+                        logger.error(f"Business logic error [{error_classification}] for patient {patient_id}: {error_message}")
+                        try:
+                            frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+                        except Exception as tag_error:
+                            logger.error(f"Failed to add human review tag: {tag_error}")
+                        return {
+                            "agent_handled": False, 
+                            "processed_flag": False, 
+                            "details": {
+                                "reason": f"MCP business logic error: {error_message}",
+                                "error_classification": error_classification,
+                                "mcp_duration": mcp_duration
+                            }
+                        }
+                else:
+                    logger.error(f"MCP responseStatus is 'Fail' but no exception details for patient {patient_id}")
+                    try:
+                        frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+                    except Exception as tag_error:
+                        logger.error(f"Failed to add human review tag: {tag_error}")
+                    return {"agent_handled": False, "processed_flag": False, "details": {"reason": "MCP business logic failed without details"}}
 
         # Parse the MCP response - check multiple possible locations for the data
         # The actual result is often nested under a 'data' key, so we check there first.
@@ -543,11 +663,57 @@ www.PreciseMRI.com
             }
         }
         
+    except asyncio.TimeoutError as e:
+        logger.error(f"Timeout error during MCP call for patient {patient_id}: {e}")
+        try:
+            frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+        except Exception as tag_error:
+            logger.error(f"Failed to add human review tag: {tag_error}")
+        
+        # Send user-friendly timeout response
+        timeout_response = f"""
+Patient ID: {patient_id}
+Thank you for your billing inquiry.
+
+We're currently experiencing delays in retrieving billing information from our system. This is likely temporary.
+
+Please try your request again in a few minutes, or contact our billing department directly at (888) 555-1212 for immediate assistance.
+
+Thank you for your patience,
+Precise Imaging Billing Dept.
+www.PreciseMRI.com
+"""
+        try:
+            await send_reply_to_front_direct(
+                conversation_id=front_conversation_id,
+                reply_text=timeout_response.strip()
+            )
+            return {
+                "agent_handled": True, 
+                "processed_flag": True, 
+                "details": {
+                    "action": "sent_timeout_response",
+                    "patient_id": patient_id,
+                    "reason": "MCP timeout error"
+                }
+            }
+        except Exception as send_error:
+            logger.error(f"Failed to send timeout response: {send_error}")
+            return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Timeout error and failed to send response: {e}"}}
+    
+    except ConnectionError as e:
+        logger.error(f"Connection error during MCP call for patient {patient_id}: {e}")
+        try:
+            frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+        except Exception as tag_error:
+            logger.error(f"Failed to add human review tag: {tag_error}")
+        return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"MCP connection error: {e}"}}
+    
     except Exception as e:
-        logger.error(f"Error processing billing request for patient {patient_id}: {e}", exc_info=True)
+        logger.error(f"Unexpected error processing billing request for patient {patient_id}: {e}", exc_info=True)
         # Tag for human review on processing error
         try:
             frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
         except Exception as tag_error:
             logger.error(f"Failed to add human review tag: {tag_error}")
-        return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Processing error: {e}"}}
+        return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Unexpected processing error: {e}"}}
