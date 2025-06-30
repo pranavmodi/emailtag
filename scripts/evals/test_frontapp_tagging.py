@@ -10,6 +10,8 @@ import time # For waiting for email processing
 import smtplib # For sending emails via SMTP
 from email.mime.text import MIMEText # For creating email messages
 from email.mime.multipart import MIMEMultipart # For HTML emails
+from email.mime.base import MIMEBase # For file attachments
+from email import encoders # For encoding attachments
 import random # Import random for generating random invoice numbers
 from typing import Optional, List
 from urllib.parse import quote as url_quote
@@ -77,11 +79,38 @@ def send_smtp_email(scenario_details, choice_key, unique_id):
     # Replace placeholder in body with actual sender email for clarity
     body_html_with_id = body_html_with_id.replace("{SENDER_EMAIL_PLACEHOLDER}", SENDER_EMAIL)
 
-    msg = MIMEMultipart('alternative')
+    msg = MIMEMultipart()
     msg['Subject'] = subject_with_id
     msg['From'] = SENDER_EMAIL
     msg['To'] = recipient_email
     msg.attach(MIMEText(body_html_with_id, 'html'))
+    
+    # Handle attachments if present
+    if 'attachments' in scenario_details:
+        for attachment_file in scenario_details['attachments']:
+            try:
+                with open(attachment_file, "rb") as attachment:
+                    # Instance of MIMEBase and named as part
+                    part = MIMEBase('application', 'octet-stream')
+                    part.set_payload(attachment.read())
+
+                # Encode file in ASCII characters to send by email    
+                encoders.encode_base64(part)
+
+                # Add header as key/value pair to attachment part
+                part.add_header(
+                    'Content-Disposition',
+                    f'attachment; filename= {os.path.basename(attachment_file)}',
+                )
+
+                # Attach the part to message
+                msg.attach(part)
+                if VERBOSE_MODE:
+                    print(f"Attached file: {attachment_file}")
+            except FileNotFoundError:
+                print(f"Warning: Attachment file {attachment_file} not found. Continuing without attachment.")
+            except Exception as e:
+                print(f"Error attaching file {attachment_file}: {e}. Continuing without attachment.")
 
     try:
         if smtp_port_int == 465:
@@ -840,6 +869,28 @@ if __name__ == "__main__":
             ),
             "recipient_email": "ai.benchd@gmail.com",
             "expected_tags": ["Payment on way"]
+        },
+        "29": {
+            "description": "Appointment Status Request with PDF Attachment - OCR Test",
+            "subject": "Appointment status inquiry - see attached document",
+            "body_html": (
+                "<p>Dear Scheduling Department,</p>"
+                "<p>I am writing to inquire about my upcoming appointment status. Please see the attached document for my patient information.</p>"
+                "<p>Could you please confirm:</p>"
+                "<ul>"
+                "<li>The date and time of my appointment</li>"
+                "<li>The type of scan/procedure scheduled</li>"
+                "<li>Any preparation instructions I need to follow</li>"
+                "<li>The location where I should arrive</li>"
+                "</ul>"
+                "<p>I have attached a document containing my patient details for your reference.</p>"
+                "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+                "<p>Thank you for your assistance,<br>"
+                "Test Patient</p>"
+            ),
+            "recipient_email": "ai.benchd@gmail.com",
+            "expected_tags": ["Apt Status Req"],
+            "attachments": ["../ocr_test_PRE100345.pdf"]
         }
     }
 

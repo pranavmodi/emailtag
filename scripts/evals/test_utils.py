@@ -1,0 +1,263 @@
+import os
+import requests
+import time
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
+import random
+from typing import Optional, List
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Environment variables
+FRONT_API_BASE_URL = os.getenv("FRONT_API_BASE_URL")
+FRONT_AUTH_TOKEN = os.getenv("FRONT_AUTH_TOKEN")
+SMTP_HOST = os.getenv("SMTP_HOST")
+SMTP_PORT = os.getenv("SMTP_PORT")
+SENDER_EMAIL = os.getenv("SENDER_EMAIL")
+SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
+
+# Global verbosity flag
+VERBOSE_MODE = False
+
+
+def set_verbose_mode(verbose: bool):
+    """Set the global verbose mode."""
+    global VERBOSE_MODE
+    VERBOSE_MODE = verbose
+
+
+def send_smtp_email(scenario_details, choice_key, unique_id):
+    """
+    Sends an email via SMTP based on the provided scenario details.
+    Includes a unique_id in the subject and body.
+    """
+    if not all([SMTP_HOST, SMTP_PORT, SENDER_EMAIL, SENDER_PASSWORD]):
+        print("Critical Error: SMTP environment variables (SMTP_HOST, SMTP_PORT, SENDER_EMAIL, SENDER_PASSWORD) are not all set in .env.")
+        return False
+    
+    try:
+        smtp_port_int = int(SMTP_PORT)
+    except ValueError:
+        print(f"Critical Error: SMTP_PORT ('{SMTP_PORT}') is not a valid integer.")
+        return False
+
+    subject = scenario_details['subject']
+    body_html = scenario_details['body_html']
+    recipient_email = scenario_details['recipient_email']
+
+    # Add unique_id to subject and body
+    subject_with_id = f"{subject} (TestID: {unique_id})"
+    body_html_with_id = body_html.replace("{UNIQUE_TEST_ID}", unique_id)
+
+    # Randomize invoice number for scenario "1"
+    if choice_key == "1": 
+        random_invoice_suffix = random.randint(10000, 99999)
+        random_invoice_number = f"INV-2024-{random_invoice_suffix}"
+        subject_with_id = subject_with_id.replace("#INV-2024-00123", f"#{random_invoice_number}")
+        body_html_with_id = body_html_with_id.replace("#INV-2024-00123", f"#{random_invoice_number}")
+    elif choice_key == "15":
+        subject_variations = [
+            "Checking on my MRI appointment scheduled for next week",
+            "Confirming my MRI appointment details - next week",
+            "MRI Appointment Confirmation Request - Next Week",
+            "Query about my upcoming MRI scan",
+            "Need to confirm my MRI for next week"
+        ]
+        base_subject = random.choice(subject_variations)
+        subject_with_id = f"{base_subject} (TestID: {unique_id})"
+
+    # Replace placeholder in body with actual sender email for clarity
+    body_html_with_id = body_html_with_id.replace("{SENDER_EMAIL_PLACEHOLDER}", SENDER_EMAIL)
+
+    msg = MIMEMultipart()
+    msg['Subject'] = subject_with_id
+    msg['From'] = SENDER_EMAIL
+    msg['To'] = recipient_email
+    msg.attach(MIMEText(body_html_with_id, 'html'))
+    
+    # Handle attachments if present
+    if 'attachments' in scenario_details:
+        for attachment_file in scenario_details['attachments']:
+            try:
+                with open(attachment_file, "rb") as attachment:
+                    part = MIMEBase('application', 'octet-stream')
+                    part.set_payload(attachment.read())
+
+                encoders.encode_base64(part)
+                part.add_header(
+                    'Content-Disposition',
+                    f'attachment; filename= {os.path.basename(attachment_file)}',
+                )
+                msg.attach(part)
+                if VERBOSE_MODE:
+                    print(f"Attached file: {attachment_file}")
+            except FileNotFoundError:
+                print(f"Warning: Attachment file {attachment_file} not found. Continuing without attachment.")
+            except Exception as e:
+                print(f"Error attaching file {attachment_file}: {e}. Continuing without attachment.")
+
+    try:
+        if smtp_port_int == 465:
+            if VERBOSE_MODE:
+                print(f"Attempting to send email via SMTP_SSL to {recipient_email} from {SENDER_EMAIL} using host {SMTP_HOST}:{smtp_port_int}...")
+            with smtplib.SMTP_SSL(SMTP_HOST, smtp_port_int) as server:
+                server.login(SENDER_EMAIL, SENDER_PASSWORD)
+                server.sendmail(SENDER_EMAIL, recipient_email, msg.as_string())
+        elif smtp_port_int == 587:
+            if VERBOSE_MODE:
+                print(f"Attempting to send email via SMTP (with STARTTLS) to {recipient_email} from {SENDER_EMAIL} using host {SMTP_HOST}:{smtp_port_int}...")
+            with smtplib.SMTP(SMTP_HOST, smtp_port_int) as server:
+                server.ehlo() 
+                server.starttls() 
+                server.ehlo() 
+                server.login(SENDER_EMAIL, SENDER_PASSWORD)
+                server.sendmail(SENDER_EMAIL, recipient_email, msg.as_string())
+        else:
+            if VERBOSE_MODE:
+                print(f"Warning: SMTP port {smtp_port_int} is not standard for SSL/TLS. Attempting SMTP with STARTTLS (may fail).")
+            with smtplib.SMTP(SMTP_HOST, smtp_port_int) as server:
+                server.starttls()
+                server.login(SENDER_EMAIL, SENDER_PASSWORD)
+                server.sendmail(SENDER_EMAIL, recipient_email, msg.as_string())
+        
+        print(f"Email successfully sent via SMTP to {recipient_email}.")
+        return True
+        
+    except smtplib.SMTPNotSupportedError as e:
+        print(f"SMTP Not Supported Error: {e}. This might indicate an issue with STARTTLS or another feature.")
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"SMTP Authentication Error: Failed to login. Check SENDER_EMAIL and SENDER_PASSWORD. ({e})")
+    except smtplib.SMTPConnectError as e:
+        print(f"SMTP Connect Error: Failed to connect to SMTP server {SMTP_HOST}:{smtp_port_int}. ({e})")
+    except smtplib.SMTPServerDisconnected as e:
+        print(f"SMTP Server Disconnected: The server unexpectedly disconnected. ({e})")
+    except Exception as e:
+        print(f"An unexpected error occurred while sending email via SMTP: {e}")
+    
+    return False
+
+
+def find_front_conversation(unique_id: str, max_retries=5, delay_seconds=10) -> Optional[str]:
+    """
+    Searches for a conversation in FrontApp by a unique ID in the subject
+    by fetching recent conversations and filtering them.
+    Retries a few times to allow for processing delays.
+    Returns the conversation ID if found, otherwise None.
+    """
+    if not FRONT_API_BASE_URL or not FRONT_AUTH_TOKEN:
+        print("Error: FRONT_API_BASE_URL or FRONT_AUTH_TOKEN is not set. Cannot query Front.")
+        return None
+
+    conversations_url = f"{FRONT_API_BASE_URL}/conversations"
+    
+    params = {
+        'q[sort_by]': 'date',
+        'q[sort_order]': 'desc',
+        'limit': 50
+    }
+
+    headers = {
+        "Authorization": f"Bearer {FRONT_AUTH_TOKEN}",
+        "Accept": "application/json"
+    }
+    
+    raw_query_text = f"(TestID: {unique_id})"
+
+    for attempt in range(max_retries):
+        if VERBOSE_MODE:
+            print(f"Fetching recent conversations from Front (Attempt {attempt + 1}/{max_retries}) to find TestID: {unique_id}...")
+            print(f"Request URL: {conversations_url} with params: {params}")
+        try:
+            response = requests.get(conversations_url, headers=headers, params=params)
+            response.raise_for_status()
+            list_conv_response = response.json()
+
+            found_conversation_id = None
+            if "_results" in list_conv_response:
+                for conv in list_conv_response["_results"]:
+                    conv_subject = conv.get("subject", "")
+                    conv_id = conv.get("id")
+                    if conv_id and raw_query_text in conv_subject:
+                        if VERBOSE_MODE:
+                            print(f"Found conversation ID: {conv_id} with matching subject for TestID: {unique_id}")
+                        found_conversation_id = conv_id
+                        break
+            
+            if found_conversation_id:
+                return found_conversation_id
+            if VERBOSE_MODE:
+                print(f"Conversation with TestID: {unique_id} not found in the latest batch of conversations. Retrying in {delay_seconds}s...")
+        except requests.exceptions.HTTPError as e:
+            print(f"HTTP Error fetching conversations from Front for TestID {unique_id}: {e}")
+            if e.response is not None:
+                print(f"Response Status: {e.response.status_code}")
+                if VERBOSE_MODE:
+                    print(f"Response Body: {e.response.text}")
+                if e.response.status_code == 404:
+                    print(f"The base /conversations endpoint ({conversations_url}) appears to be invalid for your Front instance. Cannot proceed with search.")
+                    return None
+        except requests.exceptions.RequestException as e:
+            print(f"Request Exception fetching conversations from Front for TestID {unique_id}: {e}")
+        except Exception as e:
+            print(f"Unexpected error during Front conversation fetch for TestID {unique_id}: {e}")
+        
+        time.sleep(delay_seconds)
+    
+    if VERBOSE_MODE:
+        print(f"Failed to find conversation with TestID: {unique_id} after {max_retries} retries by fetching recent conversations.")
+    return None
+
+
+def get_front_conversation_tags(conversation_id: str) -> Optional[List[str]]:
+    """
+    Retrieves the tags for a given Front conversation ID by fetching the conversation object.
+    Returns a list of tag names, or None if an error occurs.
+    """
+    if not FRONT_API_BASE_URL or not FRONT_AUTH_TOKEN:
+        print("Error: FRONT_API_BASE_URL or FRONT_AUTH_TOKEN is not set. Cannot query Front.")
+        return None
+
+    conversation_url = f"{FRONT_API_BASE_URL}/conversations/{conversation_id}"
+    headers = {
+        "Authorization": f"Bearer {FRONT_AUTH_TOKEN}",
+        "Accept": "application/json"
+    }
+
+    try:
+        if VERBOSE_MODE:
+            print(f"Fetching conversation details for ID: {conversation_id} to get tags...")
+        response = requests.get(conversation_url, headers=headers)
+        response.raise_for_status()
+        conversation_data = response.json()
+        
+        tags_array = conversation_data.get("tags", [])
+        tag_names = [tag.get("name") for tag in tags_array if tag.get("name")]
+        
+        if VERBOSE_MODE:
+            print(f"Found tags: {tag_names} for conversation ID: {conversation_id} from conversation object.")
+        return tag_names
+    except requests.exceptions.HTTPError as e:
+        print(f"HTTP Error fetching conversation details for {conversation_id}: {e}")
+        if e.response is not None:
+            print(f"Response Status: {e.response.status_code}")
+            if VERBOSE_MODE:
+                print(f"Response Body: {e.response.text}")
+            if e.response.status_code == 404:
+                print(f"The conversation endpoint ({conversation_url}) appears to be invalid. Cannot fetch tags.")
+        return None
+    except requests.exceptions.RequestException as e:
+        print(f"Request Exception fetching conversation details for {conversation_id}: {e}")
+        return None
+    except Exception as e:
+        print(f"Unexpected error fetching conversation details for {conversation_id}: {e}")
+        return None
+
+
+def check_front_api_config() -> bool:
+    """Check if Front API configuration is available."""
+    return bool(FRONT_API_BASE_URL and FRONT_AUTH_TOKEN) 
