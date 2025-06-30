@@ -33,7 +33,6 @@ from app.agents.templates.bill_balance_templates import (
     NO_PENDING_STUDIES,
     COMPLETED_STUDY_ROW_TEMPLATE,
     PENDING_STUDY_ROW_TEMPLATE,
-    LIEN_STATUS_ROW_TEMPLATE,
     PATIENT_HEADER_TEMPLATE,
     SIMPLE_PATIENT_HEADER_TEMPLATE
 )
@@ -106,12 +105,21 @@ www.PreciseMRI.com
 # --- Helper Functions for MCP Integration ---
 
 def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
-    """Creates a formatted string table for lien statuses using the new template."""
+    """Creates an HTML table for lien statuses that renders properly in email clients."""
     if not lien_statuses:
         return "No lien information available"
     
-    header = "Lien type\tPatient Signature\tAttorney Signature"
-    rows = [header]
+    # Create HTML table for proper email rendering
+    html_parts = []
+    html_parts.append('<table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-family: monospace; margin: 10px 0;">')
+    html_parts.append('<thead>')
+    html_parts.append('<tr style="background-color: #f0f0f0; font-weight: bold;">')
+    html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Lien type</th>')
+    html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Patient Signature</th>')
+    html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Attorney Signature</th>')
+    html_parts.append('</tr>')
+    html_parts.append('</thead>')
+    html_parts.append('<tbody>')
     
     for lien in lien_statuses:
         lien_type = lien.get('lienType', 'Unknown')
@@ -121,6 +129,10 @@ def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
             patient_date = lien.get('patientSignedLienDate', '')
             # Only show date if it exists and is not None/empty/null
             if patient_date and str(patient_date).lower() not in ['none', 'null', '']:
+                # Clean up the date format if it's too long
+                if len(patient_date) > 20:
+                    # Try to extract just the date part (first 10 characters usually)
+                    patient_date = patient_date[:10] if '/' in patient_date[:10] or '-' in patient_date[:10] else patient_date[:20]
                 patient_sig = f"Signed {patient_date}"
             else:
                 patient_sig = "Signed"
@@ -131,20 +143,26 @@ def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
             attorney_date = lien.get('attorneySignedDate', '')
             # Only show date if it exists and is not None/empty/null
             if attorney_date and str(attorney_date).lower() not in ['none', 'null', '']:
+                # Clean up the date format if it's too long
+                if len(attorney_date) > 20:
+                    attorney_date = attorney_date[:10] if '/' in attorney_date[:10] or '-' in attorney_date[:10] else attorney_date[:20]
                 attorney_sig = f"Signed {attorney_date}"
             else:
                 attorney_sig = "Signed"
         else:
             attorney_sig = "Not Signed"
-            
-        row = LIEN_STATUS_ROW_TEMPLATE.format(
-            lien_type=lien_type,
-            patient_signature=patient_sig,
-            attorney_signature=attorney_sig
-        )
-        rows.append(row)
+        
+        # Add table row
+        html_parts.append('<tr>')
+        html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{lien_type}</td>')
+        html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{patient_sig}</td>')
+        html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{attorney_sig}</td>')
+        html_parts.append('</tr>')
     
-    return "\n".join(rows)
+    html_parts.append('</tbody>')
+    html_parts.append('</table>')
+    
+    return ''.join(html_parts)
 
 def _create_billing_status_section(bill_balance: float, bill_status: Dict[str, Any]) -> str:
     """Creates the formatted string for the billing status section."""
