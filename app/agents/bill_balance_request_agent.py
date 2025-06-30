@@ -60,7 +60,7 @@ Lien Status:
 {lien_status_table}
 
 To save time, you can download the bills in our portal which also contains the bill balance at the bottom.
-Access bills, appointment times, and e-sign liens (Click request login if you don't have an account)
+<a href="http://precise.radflow360.com/">Access bills, appointment times, and e-sign liens (Click request login if you don't have an account)</a>
 
 Thank you,
 Precise Imaging Billing Dept.

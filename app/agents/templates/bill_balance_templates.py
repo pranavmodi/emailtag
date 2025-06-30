@@ -18,10 +18,11 @@ Lien Status:
 {lien_status_table}
 
 To save time, you can download the bills in our portal which also contains the bill balance at the bottom.
-Access bills, appointment times, and e-sign liens (Click request login if you don't have an account)
+<a href="http://precise.radflow360.com/">Access bills, appointment times, and e-sign liens (Click request login if you don't have an account)</a>
 
 Thank you,
 Precise Imaging Billing Dept.
+http://www.PreciseMRI.com
 """
 
 # Template for completed studies table
@@ -77,9 +78,9 @@ If you do not want to eSign, please click the link above and then save the docum
 Learn how to quickly e-Sign or download a PDF to manually sign here
 
 To save time, you can download the bills in our portal which also contains the bill balance at the bottom.
-Access bills, appointment times, and e-sign liens (Click request login if you don't have an account)
+<a href="http://precise.radflow360.com/">Access bills, appointment times, and e-sign liens (Click request login if you don't have an account)</a>
 
 Thank you,
 Precise Imaging Billing Dept.
-www.PreciseMRI.com
+http://www.PreciseMRI.com
 """ 
