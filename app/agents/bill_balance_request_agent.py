@@ -12,6 +12,7 @@ from typing import Optional, Dict, Any, List
 import re
 from pathlib import Path
 import time  # For performance monitoring
+from datetime import datetime  # For date formatting
 
 from celery.utils.log import get_task_logger
 # from agents import aio, function_tool, tool
@@ -300,8 +301,8 @@ async def handle_bill_balance_request(
                 logger.error(f"Failed to send clarification request: {e}")
                 return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to send clarification: {e}"}}
 
-    # Step 1: Patient ID found, get billing information using MCP tool
-    logger.info(f"Patient ID {patient_id} found. Fetching billing information via MCP tool.")
+    # Step 1: Patient ID found, get patient information and billing information using MCP tools
+    logger.info(f"Patient ID {patient_id} found. Fetching patient and billing information via MCP tools.")
     
     try:
         # Import the MCP client function
@@ -310,14 +311,71 @@ async def handle_bill_balance_request(
         # Add performance monitoring
         mcp_start_time = time.time()
         
-        # Call the MCP tool to get billing information
+        # First, get patient information (name, DOB, DOI)
+        patient_info_response = await call_mcp_tool(
+            tool_name="fetch_patient_info",
+            arguments={"patient_id": patient_id}
+        )
+        
+        # Then, call the MCP tool to get billing information
         mcp_response = await call_mcp_tool(
             tool_name="get_patient_lien_bill_balance",
             arguments={"patient_id": patient_id}
         )
         
         mcp_duration = time.time() - mcp_start_time
-        logger.info(f"MCP tool 'get_patient_lien_bill_balance' completed in {mcp_duration:.2f} seconds for patient {patient_id}")
+        logger.info(f"MCP tools completed in {mcp_duration:.2f} seconds for patient {patient_id}")
+        
+        # Process patient information response
+        patient_header_text = f"Patient ID: {patient_id}"  # Default fallback
+        if patient_info_response and isinstance(patient_info_response, dict):
+            patient_data_section = patient_info_response.get('data', {})
+            if patient_data_section and isinstance(patient_data_section, dict):
+                patients_list = patient_data_section.get('patients', [])
+                if patients_list and len(patients_list) > 0:
+                    patient_info = patients_list[0]
+                    first_name = patient_info.get('first_name', '').strip()
+                    last_name = patient_info.get('last_name', '').strip()
+                    birth_date = patient_info.get('birth_date', '')
+                    doi = patient_info.get('doi', '')
+                    
+                    # Format name
+                    if first_name and last_name:
+                        full_name = f"{first_name} {last_name}"
+                    elif first_name:
+                        full_name = first_name
+                    elif last_name:
+                        full_name = last_name
+                    else:
+                        full_name = "Unknown"
+                    
+                    # Format DOB (convert from YYYY-MM-DD to MM/DD/YYYY)
+                    formatted_dob = "Unknown"
+                    if birth_date:
+                        try:
+                            date_obj = datetime.strptime(birth_date, '%Y-%m-%d')
+                            formatted_dob = date_obj.strftime('%m/%d/%Y')
+                        except:
+                            formatted_dob = birth_date  # Use as-is if parsing fails
+                    
+                    # Format DOI (convert from YYYY-MM-DD to MM/DD/YYYY)
+                    formatted_doi = "Unknown"
+                    if doi:
+                        try:
+                            date_obj = datetime.strptime(doi, '%Y-%m-%d')
+                            formatted_doi = date_obj.strftime('%m/%d/%Y')
+                        except:
+                            formatted_doi = doi  # Use as-is if parsing fails
+                    
+                    # Create formatted patient header
+                    patient_header_text = f"{patient_id} - {full_name} - DOB: {formatted_dob} - DOI: {formatted_doi}"
+                    logger.info(f"Formatted patient header: {patient_header_text}")
+                else:
+                    logger.warning(f"No patients found in patient info response for {patient_id}")
+            else:
+                logger.warning(f"Invalid data structure in patient info response for {patient_id}")
+        else:
+            logger.warning(f"Invalid or empty patient info response for {patient_id}")
         
         if not mcp_response or not isinstance(mcp_response, dict):
             logger.error(f"Invalid MCP response for patient {patient_id}: {mcp_response}")
@@ -439,7 +497,8 @@ async def handle_bill_balance_request(
                         
                         # Send a polite "patient not found" response instead of erroring
                         patient_not_found_response = f"""
-Patient ID: {patient_id}
+{patient_header_text}
+
 Thank you for your billing inquiry.
 
 We were unable to locate billing information for the provided Patient ID ({patient_id}) in our system. This could mean:
@@ -572,7 +631,8 @@ www.PreciseMRI.com
             
             # Send a response indicating no billing data available
             no_data_response = f"""
-{patient_header}
+{patient_header_text}
+
 Thank you for your billing inquiry.
 
 Currently, there is no billing information available in our system for this patient. This could mean:
@@ -614,8 +674,8 @@ www.PreciseMRI.com
         # Build comprehensive response using new template
         attachments = []
         
-        # Create patient header with full details
-        patient_header = _create_patient_header(patient_data, patient_id)
+        # Use the formatted patient header from MCP data
+        patient_header = patient_header_text
         
         # Create sections for the comprehensive template
         billing_status_section = _create_billing_status_section(patient_bill_balance, patient_bill_status)
@@ -690,7 +750,8 @@ www.PreciseMRI.com
         
         # Send user-friendly timeout response
         timeout_response = f"""
-Patient ID: {patient_id}
+{patient_header_text}
+
 Thank you for your billing inquiry.
 
 We're currently experiencing delays in retrieving billing information from our system. This is likely temporary.
