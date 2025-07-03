@@ -190,6 +190,6 @@ SCHEDULING_SCENARIOS = {
         ),
         "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Apt Status Req"],
-        "attachments": ["../../ocr_test_PRE100345.pdf"]
+        "attachments": ["ocr_test_PRE100345.pdf"]
     }
 } 

@@ -88,29 +88,44 @@ def send_smtp_email(scenario_details, choice_key, unique_id):
     # Handle attachments if present
     if 'attachments' in scenario_details:
         for attachment_file in scenario_details['attachments']:
-            try:
-                with open(attachment_file, "rb") as attachment:
-                    # Instance of MIMEBase and named as part
-                    part = MIMEBase('application', 'octet-stream')
-                    part.set_payload(attachment.read())
+            # Try multiple potential paths for the attachment file
+            possible_paths = [
+                attachment_file,  # Try the path as-is first
+                os.path.join(os.path.dirname(__file__), attachment_file),  # Relative to this script
+                os.path.join(os.path.dirname(__file__), '..', attachment_file),  # One level up
+            ]
+            
+            attachment_found = False
+            for potential_path in possible_paths:
+                try:
+                    with open(potential_path, "rb") as attachment:
+                        # Instance of MIMEBase and named as part
+                        part = MIMEBase('application', 'octet-stream')
+                        part.set_payload(attachment.read())
 
-                # Encode file in ASCII characters to send by email    
-                encoders.encode_base64(part)
+                    # Encode file in ASCII characters to send by email    
+                    encoders.encode_base64(part)
 
-                # Add header as key/value pair to attachment part
-                part.add_header(
-                    'Content-Disposition',
-                    f'attachment; filename= {os.path.basename(attachment_file)}',
-                )
+                    # Add header as key/value pair to attachment part
+                    part.add_header(
+                        'Content-Disposition',
+                        f'attachment; filename= {os.path.basename(attachment_file)}',
+                    )
 
-                # Attach the part to message
-                msg.attach(part)
-                if VERBOSE_MODE:
-                    print(f"Attached file: {attachment_file}")
-            except FileNotFoundError:
-                print(f"Warning: Attachment file {attachment_file} not found. Continuing without attachment.")
-            except Exception as e:
-                print(f"Error attaching file {attachment_file}: {e}. Continuing without attachment.")
+                    # Attach the part to message
+                    msg.attach(part)
+                    if VERBOSE_MODE:
+                        print(f"Attached file: {potential_path}")
+                    attachment_found = True
+                    break
+                except FileNotFoundError:
+                    continue
+                except Exception as e:
+                    print(f"Error attaching file {potential_path}: {e}. Trying next path...")
+                    continue
+            
+            if not attachment_found:
+                print(f"Warning: Attachment file {attachment_file} not found in any expected location. Continuing without attachment.")
 
     try:
         if smtp_port_int == 465:
