@@ -1,0 +1,357 @@
+"""Auto-response and agent orchestration tasks."""
+
+import logging
+import asyncio
+from typing import Dict, List, Any
+from uuid import UUID
+
+from sqlalchemy.orm import Session
+from celery.utils.log import get_task_logger
+
+from app.core.config import settings
+from app.crud.sync import email as email_crud_sync
+from app.db.session import SessionLocal
+from app.schemas.email import EmailUpdate
+from app.tasks.worker import celery_app
+from app.services.frontapp_service import add_conversation_tags, get_conversation_text
+
+# Agent imports
+from app.agents.apt_status_req_agent import handle_apt_status_request_agent_sdk
+from app.agents.release_records_autorespond import handle_release_of_records_request
+from app.agents.bill_balance_request_agent import handle_bill_balance_request
+from app.agents.case_updates_agent import handle_case_update_request
+
+logger = get_task_logger(__name__)
+
+# Tag constants for auto-response logic
+APT_STATUS_REQ_TAG_NAME = "Apt Status Req"
+RELEASE_OF_RECORDS_TAG_NAME = "Release of Records"
+BILL_OR_BALANCE_REQUEST_TAG_NAME = "Bill or balance Request"
+
+# Human review tags
+BILL_OFFER_TAG_NAME = "Bill Offer"
+PENDING_APPROVAL_TAG_NAME = "Pending Approval"
+NEW_ATTORNEY_TAG_NAME = "New Attorney"
+DROP_LETTER_TAG_NAME = "Drop Letter"
+INCORRECT_PATIENT_INFO_TAG_NAME = "Incorrect patient info"
+INCORRECT_STUDY_INFO_TAG_NAME = "Incorrect study info"
+REFUND_REQUEST_TAG_NAME = "Refund Request"
+HUMAN_REVIEW_TAG_NAME = "AI: Human review required"
+
+TAGS_REQUIRING_HUMAN_REVIEW = {
+    BILL_OFFER_TAG_NAME,
+    PENDING_APPROVAL_TAG_NAME,
+    NEW_ATTORNEY_TAG_NAME,
+    DROP_LETTER_TAG_NAME,
+    INCORRECT_PATIENT_INFO_TAG_NAME,
+    INCORRECT_STUDY_INFO_TAG_NAME,
+    REFUND_REQUEST_TAG_NAME,
+}
+
+# Case update tags
+CASE_UPDATE_TAGS = {
+    "Drop Pending",
+    "Promise to send payment",
+    "Waiting to clear liability",
+    "Waiting on settlement check",
+    "Sent payment but not received",
+    "Payment on way",
+}
+
+
+@celery_app.task(name="app.tasks.autorespond.perform_autorespond_task")
+def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -> Dict:
+    """
+    Performs auto-response processing including:
+    1. Human review tag checking
+    2. Agent orchestration for specific tag types
+    3. Final status determination
+    """
+    logger.info(f"Performing auto-response check for email {email_id}")
+    if determined_tags is not None:
+        logger.info(f"Received determined tags: {determined_tags}")
+
+    try:
+        email_uuid = UUID(email_id)
+    except ValueError:
+        logger.error(f"Invalid UUID format for email_id in perform_autorespond_task: {email_id}")
+        return {"status": "error", "message": "Invalid email ID format"}
+
+    db = SessionLocal()
+    try:
+        email_obj = email_crud_sync.get(db, id=email_uuid)
+        if not email_obj:
+            logger.error(f"Email {email_id} not found for auto-response.")
+            return {"status": "error", "message": "Email not found"}
+
+        front_conversation_id = email_obj.front_conversation_id
+        if not front_conversation_id:
+            logger.error(f"Email {email_id} has no Front conversation ID for auto-response.")
+            email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="autorespond_failed_no_front_id", is_processed=True))
+            return {"status": "error", "message": "Missing Front conversation ID for auto-response"}
+
+        current_email_content = email_obj.content_text or email_obj.content_html or ""
+        
+        conversation_data = get_conversation_text(front_conversation_id)
+        structured_history_messages = []
+        if conversation_data and conversation_data.get('_structured_messages'):
+            all_messages = conversation_data['_structured_messages']
+            # Crude filter: if current email content appears at the end of structured history, remove it.
+            # This helps avoid passing the current email (which the agent gets separately) as part of "history".
+            if all_messages and current_email_content and all_messages[-1].get("body","").strip() == current_email_content.strip():
+                logger.debug("Last message in structured_history matches current_email_content, removing from history for agent prompt.")
+                structured_history_messages = all_messages[:-1]
+            else:
+                structured_history_messages = all_messages
+
+        auto_response_processed_flag = False
+        auto_response_details = None
+        agent_handled_response = False
+        agent_name_for_status = "none" # To track which agent ran for logging/status
+
+        applied_tag_names = []
+        if determined_tags is not None:
+            logger.info(f"Using determined_tags passed from tagging task: {determined_tags}")
+            applied_tag_names = determined_tags
+        else:
+            logger.warning("determined_tags not passed to autorespond task. Reading from DB, which may be stale.")
+            applied_tag_names = [tag.name for tag in email_obj.tags if hasattr(tag, 'name')]
+
+        # --- Human Review Check for various tags ---
+        triggered_human_review_tags = [tag for tag in applied_tag_names if tag in TAGS_REQUIRING_HUMAN_REVIEW]
+
+        if triggered_human_review_tags:
+            logger.info(f"Email {email_id} requires human review due to tags: {triggered_human_review_tags}. Applying '{HUMAN_REVIEW_TAG_NAME}' tag.")
+            final_status = ""
+            try:
+                add_conversation_tags(front_conversation_id, [HUMAN_REVIEW_TAG_NAME])
+                logger.info(f"Successfully applied '{HUMAN_REVIEW_TAG_NAME}' tag to conversation {front_conversation_id}.")
+                final_status = "processed_human_review_needed"
+            except Exception as e:
+                logger.error(f"Failed to apply '{HUMAN_REVIEW_TAG_NAME}' tag for email {email_id}: {e}", exc_info=True)
+                final_status = "processed_human_review_tag_failed"
+            
+            email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_status, is_processed=True))
+            logger.info(f"Email {email_id} processing stopped after handling human review tag. Final status: {final_status}")
+            return {
+                "status": "completed_autorespond_phase",
+                "email_id": email_id,
+                "final_db_status": final_status,
+                "auto_response_sent": False,
+                "auto_response_details": {"reason": f"Tagged for human review due to: {', '.join(triggered_human_review_tags)}"},
+                "agent_handled_response": False
+            }
+        # --- End Human Review Check ---
+
+        if APT_STATUS_REQ_TAG_NAME in applied_tag_names:
+            agent_name_for_status = "apt_status_req"
+            logger.info(f"Email {email_id} (conv: {front_conversation_id}) tagged with '{APT_STATUS_REQ_TAG_NAME}'. Attempting agent SDK via orchestrator.")
+            
+            agent_result_dict = None
+            async def _run_agent_sdk_orchestrator():
+                nonlocal agent_result_dict
+                agent_result_dict = await handle_apt_status_request_agent_sdk(
+                    front_conversation_id=front_conversation_id,
+                    current_email_content=current_email_content,
+                    structured_history_messages=structured_history_messages,
+                    settings_obj=settings # Pass the main settings module
+                )
+            
+            # Celery tasks are synchronous, so we run the async orchestrator using asyncio.run()
+            # nest_asyncio.apply() should be at the top of the tasks file for this to work smoothly.
+            try:
+                asyncio.run(_run_agent_sdk_orchestrator())
+            except RuntimeError as e_async_run:
+                if "cannot be called from a running event loop" in str(e_async_run):
+                    logger.warning(f"Asyncio run issue for agent orchestrator (loop already running?): {e_async_run}. Trying nest_asyncio if not already applied broadly.")
+                    # This path might be complex if nest_asyncio isn't applied at the top or if it's a deeper issue.
+                    # For now, log and the agent_result_dict will remain None or its initial state.
+                    agent_result_dict = {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Asyncio runtime error: {e_async_run}"}}
+
+                else:
+                    raise # Re-raise if it's a different RuntimeError
+
+            if agent_result_dict:
+                agent_handled_response = agent_result_dict.get("agent_handled", False)
+                auto_response_processed_flag = agent_result_dict.get("processed_flag", False)
+                auto_response_details = agent_result_dict.get("details", {"reason": "Unknown agent processing outcome"})
+                if agent_handled_response:
+                    logger.info(f"Agent SDK orchestrator handled response for {front_conversation_id}. Details: {auto_response_details}")
+                else:
+                    logger.warning(f"Agent SDK orchestrator did NOT handle response for {front_conversation_id}. Details: {auto_response_details}")
+            else:
+                logger.error(f"Agent SDK orchestrator call failed to return a result for {front_conversation_id}.")
+                auto_response_details = {"reason": "Agent orchestrator call failed or returned None."}
+
+        elif RELEASE_OF_RECORDS_TAG_NAME in applied_tag_names:
+            agent_name_for_status = "release_of_records"
+            logger.info(f"Email {email_id} tagged with '{RELEASE_OF_RECORDS_TAG_NAME}'. Attempting ROR agent.")
+            
+            email_sender = email_obj.sender
+            if not email_sender:
+                logger.error(f"Cannot run Release of Records agent for {email_id}: sender email is missing.")
+                auto_response_details = {"reason": "Sender email missing for ROR agent."}
+            else:
+                agent_result_dict = None
+                async def _run_ror_agent():
+                    nonlocal agent_result_dict
+                    agent_result_dict = await handle_release_of_records_request(
+                        front_conversation_id=front_conversation_id,
+                        current_email_content=current_email_content,
+                        email_sender=email_sender,
+                        structured_history_messages=structured_history_messages,
+                        settings_obj=settings
+                    )
+                
+                try:
+                    asyncio.run(_run_ror_agent())
+                except Exception as e:
+                    logger.error(f"Error running Release of Records agent for {email_id}: {e}", exc_info=True)
+                    agent_result_dict = {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Agent execution error: {e}"}}
+
+                if agent_result_dict:
+                    agent_handled_response = agent_result_dict.get("agent_handled", False)
+                    auto_response_processed_flag = agent_result_dict.get("processed_flag", False)
+                    auto_response_details = agent_result_dict.get("details", {"reason": "Unknown ROR agent processing outcome"})
+                    if agent_handled_response:
+                        logger.info(f"Release of Records agent handled response for {front_conversation_id}.")
+                    else:
+                        logger.warning(f"Release of Records agent did NOT handle response for {front_conversation_id}.")
+                else:
+                    logger.error(f"ROR agent call failed to return a result for {front_conversation_id}.")
+                    auto_response_details = {"reason": "ROR agent call failed or returned None."}
+
+        elif BILL_OR_BALANCE_REQUEST_TAG_NAME in applied_tag_names:
+            agent_name_for_status = "bill_balance_request"
+            logger.info(f"Email {email_id} tagged with '{BILL_OR_BALANCE_REQUEST_TAG_NAME}'. Attempting Bill/Balance agent.")
+
+            agent_result_dict = None
+            async def _run_bill_balance_agent():
+                nonlocal agent_result_dict
+                agent_result_dict = await handle_bill_balance_request(
+                    front_conversation_id=front_conversation_id,
+                    current_email_content=current_email_content,
+                    structured_history_messages=structured_history_messages,
+                    settings_obj=settings
+                )
+            
+            try:
+                asyncio.run(_run_bill_balance_agent())
+            except Exception as e:
+                logger.error(f"Error running Bill or balance Request agent for {email_id}: {e}", exc_info=True)
+                agent_result_dict = {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Agent execution error: {e}"}}
+
+            if agent_result_dict:
+                agent_handled_response = agent_result_dict.get("agent_handled", False)
+                auto_response_processed_flag = agent_result_dict.get("processed_flag", False)
+                auto_response_details = agent_result_dict.get("details", {"reason": "Unknown Bill/Balance agent processing outcome"})
+                if agent_handled_response:
+                    logger.info(f"Bill/Balance agent handled response for {front_conversation_id}.")
+                else:
+                    logger.warning(f"Bill/Balance agent did NOT handle response for {front_conversation_id}.")
+            else:
+                logger.error(f"Bill/Balance agent call failed to return a result for {front_conversation_id}.")
+                auto_response_details = {"reason": "Bill/Balance agent call failed or returned None."}
+
+        # --- BEGIN: Case Updates Agent Branch ---
+        else:
+            # Check for any Case Update tags (excluding those that require human review)
+            matching_case_tags = [tag for tag in applied_tag_names if tag in CASE_UPDATE_TAGS]
+
+            if matching_case_tags:
+                agent_name_for_status = "case_updates"
+                logger.info(
+                    f"Email {email_id} tagged with Case Update tag(s) {matching_case_tags}. Attempting Case Updates agent."
+                )
+
+                agent_result_dict = None
+
+                async def _run_case_updates_agent():
+                    nonlocal agent_result_dict
+                    agent_result_dict = await handle_case_update_request(
+                        front_conversation_id=front_conversation_id,
+                        current_email_content=current_email_content,
+                        applied_case_tags=matching_case_tags,
+                        structured_history_messages=structured_history_messages,
+                        settings_obj=settings,
+                    )
+
+                try:
+                    asyncio.run(_run_case_updates_agent())
+                except Exception as e:
+                    logger.error(
+                        f"Error running Case Updates agent for {email_id}: {e}",
+                        exc_info=True,
+                    )
+                    agent_result_dict = {
+                        "agent_handled": False,
+                        "processed_flag": False,
+                        "details": {"reason": f"Agent execution error: {e}"},
+                    }
+
+                if agent_result_dict:
+                    agent_handled_response = agent_result_dict.get("agent_handled", False)
+                    auto_response_processed_flag = agent_result_dict.get("processed_flag", False)
+                    auto_response_details = agent_result_dict.get(
+                        "details", {"reason": "Unknown Case Updates agent outcome"}
+                    )
+                    if agent_handled_response:
+                        logger.info(
+                            f"Case Updates agent handled response for {front_conversation_id}."
+                        )
+                    else:
+                        logger.warning(
+                            f"Case Updates agent did NOT handle response for {front_conversation_id}."
+                        )
+                else:
+                    logger.error(
+                        f"Case Updates agent call failed to return a result for {front_conversation_id}."
+                    )
+                    auto_response_details = {
+                        "reason": "Case Updates agent call failed or returned None."
+                    }
+        # --- END: Case Updates Agent Branch ---
+
+        current_status_from_tagging = email_obj.status
+        final_email_status = "processed_unknown_state" # Default
+
+        if agent_handled_response: # This implies auto_response_processed_flag is also true from agent_result_dict
+            final_email_status = f"processed_agent_{agent_name_for_status}"
+            # auto_response_processed_flag is already set from agent_result_dict
+        else:
+            # No agent response (either not tagged for an agent, or agent chose not to handle, or agent error)
+            auto_response_processed_flag = False # Explicitly ensure this is false if agent didn't handle
+            
+            reason_suffix = "no_agent_triggered"
+            if agent_name_for_status != "none":
+                reason_suffix = f"agent_{agent_name_for_status}_did_not_handle"
+
+            if current_status_from_tagging == "tagging_completed_applied_tags":
+                final_email_status = f"processed_tagged_no_autorespond_{reason_suffix}"
+            elif current_status_from_tagging == "tagging_completed_no_tags":
+                final_email_status = f"processed_notags_no_autorespond_{reason_suffix}"
+            elif current_status_from_tagging == "tagging_completed_front_failed":
+                 final_email_status = f"processed_tagged_frontfailed_no_autorespond_{reason_suffix}"
+            else: # Other tagging statuses, or if tagging was skipped
+                 final_email_status = f"processed_tag_status_({current_status_from_tagging})_no_autorespond_{reason_suffix}"
+                 
+        logger.info(f"Setting final status for email {email_id} to: {final_email_status}. Original tagging status: {current_status_from_tagging}. Agent handled: {agent_handled_response}")
+        email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_email_status, is_processed=True))
+        
+        return {
+            "status": "completed_autorespond_phase", 
+            "email_id": email_id, 
+            "final_db_status": final_email_status,
+            "auto_response_sent": auto_response_processed_flag,
+            "auto_response_details": auto_response_details,
+            "agent_handled_response": agent_handled_response
+        }
+
+    except Exception as e:
+        logger.exception(f"Critical error in perform_autorespond_task for {email_id}: {str(e)}")
+        if db.is_active:
+            db.rollback()
+        return {"status": "error", "message": str(e)}
+    finally:
+        if db.is_active:
+            db.close() 

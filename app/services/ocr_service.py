@@ -163,8 +163,8 @@ def process_ocr_content(content: bytes) -> Optional[Dict[str, Any]]:
         ]
     }
 
-    # Reuse client settings from perform_ocr
-    with httpx.Client(verify=False, timeout=300.0) as client: # Increased timeout like in the task
+    # Reuse client settings from perform_ocr with increased timeout for stability
+    with httpx.Client(verify=False, timeout=600.0) as client: # Increased timeout to 10 minutes for large files
         try:
             logger.info(f"Sending encoded content to OCR API: {OCR_API_URL}")
             response = client.post(OCR_API_URL, json=payload) 
