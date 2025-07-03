@@ -38,6 +38,7 @@ _TOP_LEVEL_RULES_CATEGORY_NAME = "ROOT" # Changed to use ROOT which contains top
 
 logger = logging.getLogger(__name__)
 
+from app.exceptions import RetryableOpenAIError
 
 def get_openai_client() -> OpenAI:
     """Initializes and returns the OpenAI client."""
@@ -361,12 +362,19 @@ def _call_llm_for_classification(
         # The calling function will compare `prediction` with `current_level_dict.keys()` or list items.
         return prediction
             
-    except openai.APIError as e:
-        logger.error(f"OpenAI API error during hierarchical classification at level '{classification_level_name}': {e}", exc_info=True)
-        return None
+    except openai.OpenAIError as e:
+        logger.error(
+            f"OpenAI API error during hierarchical classification at level '{classification_level_name}': {e}",
+            exc_info=True,
+        )
+        # Raise a retryable error so Celery can pause & retry this task later.
+        raise RetryableOpenAIError(str(e)) from e
     except Exception as e:
-        logger.error(f"Unexpected error during LLM call for hierarchical classification at level '{classification_level_name}': {e}", exc_info=True)
-        return None
+        logger.error(
+            f"Unexpected error during LLM call for hierarchical classification at level '{classification_level_name}': {e}",
+            exc_info=True,
+        )
+        raise RetryableOpenAIError(str(e)) from e
 
 def _check_for_conflicting_top_level_topics(
     client: OpenAI, 
@@ -441,12 +449,18 @@ def _check_for_conflicting_top_level_topics(
             logger.warning(f"❓ UNCLEAR CONFLICT RESPONSE: LLM returned unexpected response '{prediction}'. Assuming no conflict.")
             return False # Default to no conflict if response is unclear
             
-    except openai.APIError as e:
-        # logger.error(f"OpenAI API error during conflict check: {e}", exc_info=True)
-        return False # Assume no conflict on API error
+    except openai.OpenAIError as e:
+        # Treat OpenAI outages or rate limits as retry-worthy.
+        logger.error(
+            f"OpenAI API error during conflict check: {e}", exc_info=True,
+        )
+        raise RetryableOpenAIError(str(e)) from e
     except Exception as e:
-        # logger.error(f"Unexpected error during conflict check: {e}", exc_info=True)
-        return False # Assume no conflict on other errors
+        # Any unexpected exception during the LLM call should also trigger a retry.
+        logger.error(
+            f"Unexpected error during conflict check: {e}", exc_info=True,
+        )
+        raise RetryableOpenAIError(str(e)) from e
 
 async def get_rules_for_classification_step(
     classification_path: List[str],
@@ -605,11 +619,19 @@ async def classify_email_tags_hierarchical(
         logger.error(f"Loop finished unexpectedly for {front_conversation_id}. EMAIL_CATEGORIES structure might be invalid at top level. Path: {classification_path}")
         return ["AI: Human review required"] if classification_path else []
         
+    except RetryableOpenAIError:
+        # Let the calling Celery task decide about retries.
+        raise
     except Exception as e:
-        logger.error(f"Unexpected error during hierarchical classification for {front_conversation_id}: {e}", exc_info=True)
+        logger.error(
+            f"Unexpected error during hierarchical classification for {front_conversation_id}: {e}",
+            exc_info=True,
+        )
         review_tag = ["AI: Human review required"]
-        path_info = locals().get('classification_path', []) # Get path if available
-        logger.error(f"Assigning '{review_tag[0]}' due to error. Path: {path_info}")
+        path_info = locals().get("classification_path", [])  # Get path if available
+        logger.error(
+            f"Assigning '{review_tag[0]}' due to error. Path: {path_info}",
+        )
         return review_tag
 
 def _get_all_defined_tags(hierarchy: Dict[str, Any]) -> set:

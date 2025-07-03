@@ -34,6 +34,69 @@ from app.tasks.ocr import send_attachment_to_ocr
 # Import autorespond task from separate module
 from app.tasks.autorespond import perform_autorespond_task
 
+# --------------------
+# Retry helper
+# --------------------
+from app.exceptions import RetryableOpenAIError
+from celery import Task
+
+
+class TaggingTaskWithRetry(Task):
+    """Celery Task base that automatically retries on transient OpenAI failures.
+
+    After exhausting all retries, the email is marked for human review and tagged accordingly.
+    """
+
+    autoretry_for = (RetryableOpenAIError,)
+    retry_backoff = True            # Exponential back-off (2s, 4s, 8s …)
+    retry_backoff_max = 3600        # Cap delay at 1 hour
+    retry_jitter = True             # Add jitter to avoid thundering herd
+    max_retries = 5                 # After 5 attempts, fall through to on_failure
+
+    def on_failure(self, exc, task_id, args, kwargs, einfo):  # noqa: D401 – short description style
+        """Fallback executed once all retries are exhausted."""
+        if isinstance(exc, RetryableOpenAIError):
+            try:
+                email_id = args[0] if args else kwargs.get("email_id")
+                if email_id:
+                    from app.db.session import SessionLocal  # Local import to avoid circular refs
+                    from uuid import UUID
+                    db = SessionLocal()
+                    try:
+                        email_obj = email_crud_sync.get(db, id=UUID(email_id))
+                        if email_obj:
+                            # Mark email for human review
+                            email_crud_sync.update(
+                                db,
+                                db_obj=email_obj,
+                                obj_in=EmailUpdate(
+                                    status="tagging_failed_openai_unavailable",
+                                    is_processed=True,
+                                ),
+                            )
+
+                            # Attempt to tag conversation on Front for visibility
+                            front_conv_id = email_obj.front_conversation_id
+                            if front_conv_id:
+                                try:
+                                    add_conversation_tags(front_conv_id, ["AI: Human review required"])
+                                except Exception as tag_exc:
+                                    logger.error(
+                                        f"Failed to add human-review tag to conversation {front_conv_id}: {tag_exc}",
+                                        exc_info=True,
+                                    )
+                    finally:
+                        if db.is_active:
+                            db.close()
+            except Exception as final_exc:
+                logger.error(
+                    f"Error while executing on_failure fallback for email: {final_exc}",
+                    exc_info=True,
+                )
+
+        # Call base implementation to ensure default behaviour (e.g. logging, signals)
+        super().on_failure(exc, task_id, args, kwargs, einfo)
+
 logger = get_task_logger(__name__)
 
 # Helper function to format conversation history for the agent
@@ -357,8 +420,12 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
             db.close()
 
 
-@celery_app.task(name="app.tasks.email.perform_tagging_task")
-def perform_tagging_task(email_id: str) -> Dict:
+@celery_app.task(
+    bind=True,
+    base=TaggingTaskWithRetry,
+    name="app.tasks.email.perform_tagging_task",
+)
+def perform_tagging_task(self, email_id: str) -> Dict:
     """
     Performs email classification and tagging.
     1. Fetches email and conversation context.
