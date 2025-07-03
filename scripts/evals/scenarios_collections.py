@@ -22,7 +22,6 @@ COLLECTIONS_SCENARIOS = {
             "<p>Thank you,<br>"
             "Kevin Park</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["To Review"]
     },
     "14": {
@@ -43,7 +42,6 @@ COLLECTIONS_SCENARIOS = {
             "<p>Thank you,<br>"
             "Patricia Wong</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Sent payment but not received"]
     }
 } 

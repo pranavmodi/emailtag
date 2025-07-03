@@ -21,6 +21,14 @@ SMTP_PORT = os.getenv("SMTP_PORT")
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
 
+# Optional override for recipient email in all scenarios.
+# Set this variable to a valid address (e.g., "qa.tests@example.com") to route ALL test emails there.
+# If left as None, the script will refuse to send, enforcing explicit configuration and avoiding accidental sends.
+# DEFAULT_RECIPIENT_EMAIL: str | None = 'ai.benchd@gmail.com'
+
+DEFAULT_RECIPIENT_EMAIL: str | None = 'test123abc@mediflow360.com'
+
+
 # Global verbosity flag
 VERBOSE_MODE = False
 
@@ -48,7 +56,13 @@ def send_smtp_email(scenario_details, choice_key, unique_id):
 
     subject = scenario_details['subject']
     body_html = scenario_details['body_html']
-    recipient_email = scenario_details['recipient_email']
+
+    # Determine recipient email (global override only)
+    recipient_email = DEFAULT_RECIPIENT_EMAIL
+
+    if not recipient_email:
+        print("Critical Error: DEFAULT_RECIPIENT_EMAIL is not configured in test_utils.py. Set it to a valid email address before running tests.")
+        return False
 
     # Add unique_id to subject and body
     subject_with_id = f"{subject} (TestID: {unique_id})"

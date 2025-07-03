@@ -21,7 +21,6 @@ MEDICAL_RECORDS_SCENARIOS = {
             "<p>Thank you,<br>"
             "Sarah Johnson</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Release of Records"]
     },
     "6": {
@@ -40,7 +39,6 @@ MEDICAL_RECORDS_SCENARIOS = {
             "<p>Best regards,<br>"
             "Michael Torres</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["CD Requests"]
     },
     "13": {
@@ -61,7 +59,6 @@ MEDICAL_RECORDS_SCENARIOS = {
             "<p>Thank you,<br>"
             "James Miller</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Incorrect patient info", "AI: Human review required"]
     },
     "20": {
@@ -75,7 +72,6 @@ MEDICAL_RECORDS_SCENARIOS = {
             "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Thank you,<br>Emily White</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Incorrect study info", "AI: Human review required"]
     }
 } 

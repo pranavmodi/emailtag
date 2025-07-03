@@ -135,7 +135,7 @@ Example:
     "description": "New test scenario",
     "subject": "Test subject",
     "body_html": "<p>Test body with {UNIQUE_TEST_ID}</p>",
-    "recipient_email": "ai.benchd@gmail.com",
+    "recipient_email": "target@example.com",
     "expected_tags": ["Expected Tag"]
 }
 ```

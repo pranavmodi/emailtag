@@ -25,7 +25,6 @@ CASE_UPDATE_SCENARIOS = {
             "Phone: (555) 987-6543<br>"
             "Email: rmartinez@martinezlegal.com</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["New Attorney", "AI: Human review required"]
     },
     "18": {
@@ -40,7 +39,6 @@ CASE_UPDATE_SCENARIOS = {
             "<p>Thank you,<br>"
             "The Legal Team</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Pending Approval", "AI: Human review required"]
     },
     "19": {
@@ -53,7 +51,6 @@ CASE_UPDATE_SCENARIOS = {
             "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Regards,<br>Former Legal Counsel</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Drop Letter", "AI: Human review required"]
     },
     "23": {
@@ -75,7 +72,6 @@ CASE_UPDATE_SCENARIOS = {
             "Attorney Sarah Johnson<br>"
             "Johnson Legal Associates</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Drop Pending"]
     },
     "24": {
@@ -98,7 +94,6 @@ CASE_UPDATE_SCENARIOS = {
             "Attorney Michael Rodriguez<br>"
             "Rodriguez & Partners LLP</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Promise to send payment"]
     },
     "25": {
@@ -122,7 +117,6 @@ CASE_UPDATE_SCENARIOS = {
             "Attorney Lisa Chen<br>"
             "Chen & Associates</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Waiting to clear liability"]
     },
     "26": {
@@ -146,7 +140,6 @@ CASE_UPDATE_SCENARIOS = {
             "Attorney David Wilson<br>"
             "Wilson Legal Group</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Waiting on settlement check"]
     },
     "27": {
@@ -170,7 +163,6 @@ CASE_UPDATE_SCENARIOS = {
             "Attorney Rebecca Martinez<br>"
             "Martinez Legal Services</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Sent payment but not received"]
     },
     "28": {
@@ -194,7 +186,6 @@ CASE_UPDATE_SCENARIOS = {
             "Attorney James Miller<br>"
             "Miller & Associates Law Firm</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Payment on way"]
     }
 } 

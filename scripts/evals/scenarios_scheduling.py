@@ -5,7 +5,7 @@ Includes scenarios for appointment requests, cancellations, status checks, and R
 
 SCHEDULING_SCENARIOS = {
     "2": {
-        "description": "ACTUAL EMAIL (SMTP) to ai.benchd@gmail.com via Zoho - MRI SCHEDULING",
+        "description": "ACTUAL EMAIL (SMTP) via Zoho - MRI SCHEDULING",
         "subject": "Urgent: MRI Appointment Request",
         "body_html": (
             "<p>Dear Scheduling Department,</p>"
@@ -17,7 +17,6 @@ SCHEDULING_SCENARIOS = {
             "<p>Sincerely,<br>"
             "Prospective Patient (via Test Script)</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Schedule Request"]
     },
     "3": {
@@ -35,7 +34,6 @@ SCHEDULING_SCENARIOS = {
             "<p>Thank you,<br>"
             "Jennifer Martinez</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Order Pending"]
     },
     "4": {
@@ -53,7 +51,6 @@ SCHEDULING_SCENARIOS = {
             "<p>Thanks,<br>"
             "Robert Kim</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Cancelled"]
     },
     "12": {
@@ -72,7 +69,6 @@ SCHEDULING_SCENARIOS = {
             "<p>Thank you,<br>"
             "Nicole Adams</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["No Show"]
     },
     "15": {
@@ -98,7 +94,6 @@ SCHEDULING_SCENARIOS = {
             "<p>Thank you for your help,<br>"
             "Rachel Thompson</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Apt Status Req"]
     },
     "16": {
@@ -116,14 +111,12 @@ SCHEDULING_SCENARIOS = {
             "<p>Thank you,<br>"
             "Alex Patient (via Test Script)</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Apt Status Req"],
         "patient_id": "PRE248509"
     },
     "17": {
         "description": "Multi-email: Appt status check (no ID), then followup with ID",
         "is_multi_step": True,
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Apt Status Req"],
         "patient_id": "PRE248509",
         "steps": [
@@ -167,7 +160,6 @@ SCHEDULING_SCENARIOS = {
             "<p>Thank you,<br>"
             "Potential Patient</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Schedule Request"]
     },
     "29": {
@@ -188,8 +180,6 @@ SCHEDULING_SCENARIOS = {
             "<p>Thank you for your assistance,<br>"
             "Test Patient</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
-        "expected_tags": ["Apt Status Req"],
         "attachments": ["ocr_test_PRE100345.pdf"]
     }
 } 

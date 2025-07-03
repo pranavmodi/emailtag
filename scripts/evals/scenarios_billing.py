@@ -5,7 +5,7 @@ Includes scenarios for bill inquiries, balance requests, liens, and negotiations
 
 BILLING_SCENARIOS = {
     "1": {
-        "description": "ACTUAL EMAIL (SMTP) to ai.benchd@gmail.com via Zoho - BILLING INQUIRY",
+        "description": "ACTUAL EMAIL (SMTP) via Zoho - BILLING INQUIRY",
         "subject": "Urgent: Question about my recent invoice #INV-2024-00123",
         "body_html": (
             "<p>Dear Billing Department,</p>"
@@ -17,7 +17,6 @@ BILLING_SCENARIOS = {
             "<p>Sincerely,<br>"
             "Concerned Customer (via Test Script)</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Bill or balance Request"]
     },
     "7": {
@@ -38,7 +37,6 @@ BILLING_SCENARIOS = {
             "<p>Thank you,<br>"
             "Lisa Chen</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Bill or balance Request"]
     },
     "8": {
@@ -61,7 +59,6 @@ BILLING_SCENARIOS = {
             "Legal Assistant<br>"
             "Johnson & Associates</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Rad Lien"]
     },
     "9": {
@@ -81,7 +78,6 @@ BILLING_SCENARIOS = {
             "<p>Thank you for your consideration,<br>"
             "Thomas Wilson</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Bill Offer", "AI: Human review required"]
     },
     "21": {
@@ -100,7 +96,6 @@ BILLING_SCENARIOS = {
             "<p>Sincerely,<br>"
             "John Doe</p>"
         ),
-        "recipient_email": "ai.benchd@gmail.com",
         "expected_tags": ["Refund Request"]
     }
 } 

@@ -107,9 +107,11 @@ def run_single_scenario(scenario_key: str, scenario_details: Dict[str, Any], ver
 
             email_details = {
                 "subject": subject,
-                "body_html": body_html,
-                "recipient_email": scenario_details["recipient_email"]
+                "body_html": body_html
             }
+            # Include recipient email only if it exists in the scenario (allows global override via DEFAULT_RECIPIENT_EMAIL)
+            if "recipient_email" in scenario_details:
+                email_details["recipient_email"] = scenario_details["recipient_email"]
             success = send_smtp_email(email_details, scenario_key, test_unique_id)
     else:
         # Handle single-step scenarios
