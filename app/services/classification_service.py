@@ -377,16 +377,18 @@ def _call_llm_for_classification(
         raise RetryableOpenAIError(str(e)) from e
 
 def _check_for_conflicting_top_level_topics(
-    client: OpenAI, 
-    conversation_text: str, 
-    sender_info: str, # Note: sender_info might not correspond perfectly to only the last 3 messages
-    message_times: str # Note: message_times might not correspond perfectly to only the last 3 messages
+    client: OpenAI,
+    conversation_id: str,
+    conversation_text: str,
+    sender_info: str,  # Note: sender_info might not correspond perfectly to only the last 3 messages
+    message_times: str  # Note: message_times might not correspond perfectly to only the last 3 messages
 ) -> bool:
     """
     Uses the LLM to check if the last 3 messages of the conversation discuss topics from multiple top-level categories.
 
     Args:
         client: OpenAI client.
+        conversation_id: Front conversation ID – included purely for richer log context.
         conversation_text: The full email text (chronological, cleaned).
         sender_info: Sender information string (for the whole conversation).
         message_times: Timestamp information string (for the whole conversation).
@@ -398,7 +400,18 @@ def _check_for_conflicting_top_level_topics(
     messages = conversation_text.split('\n\n')
     last_three_messages = messages[-3:] # Get last 3 elements (or fewer if less than 3 exist)
     recent_text = "\n\n".join(last_three_messages)
-    # logger.info(f"Extracted last {len(last_three_messages)} messages for conflict check.")
+    # Extra logging to assist with debugging conflict detections
+    logger.info(
+        f"🔍 CONFLICT CHECK INITIATED for {conversation_id}. "
+        f"Inspecting {len(last_three_messages)} most recent message(s) for overlapping top-level topics."
+    )
+
+    for idx, msg in enumerate(last_three_messages, 1):
+        # Trim each message in logs to avoid flooding – adjust 500-char limit if needed
+        logger.debug(
+            f"📄 CONFLICT CHECK – Conversation {conversation_id} – Message {idx}/{len(last_three_messages)} (truncated): "
+            f"{msg[:500]}"
+        )
     # -------------------------------
 
     categories_list_str = "\n- ".join(_TOP_LEVEL_CATEGORIES)
@@ -419,12 +432,15 @@ def _check_for_conflicting_top_level_topics(
     )
 
     try:
-        logger.info(f"🔍 CONFLICT CHECK: Analyzing last {len(last_three_messages)} message(s) for conflicting top-level topics")
-        
-        # Log the prompt being sent for conflict check
-        # logger.info(f"=== START CONFLICT CHECK PROMPT ===")
-        # logger.info(prompt) # Log the full prompt
-        # logger.info(f"=== END CONFLICT CHECK PROMPT ===")
+        logger.info(
+            f"🔍 CONFLICT CHECK: Analyzing last {len(last_three_messages)} message(s) "
+            f"for conflicting top-level topics in conversation {conversation_id}"
+        )
+
+        # Log the outbound prompt at DEBUG level to avoid excessive INFO noise
+        logger.debug("=== START CONFLICT CHECK PROMPT ===")
+        logger.debug(prompt)
+        logger.debug("=== END CONFLICT CHECK PROMPT ===")
 
         response = client.chat.completions.create(
             model=settings.OPENAI_MODEL_VERSION, # Use gpt-4o
@@ -513,7 +529,7 @@ async def classify_email_tags_hierarchical(
 
     # --- PRE-CHECK FOR CONFLICTING TOPICS (remains the same) ---
     try:
-        has_conflicts = _check_for_conflicting_top_level_topics(client, conversation_text, sender_info, message_times)
+        has_conflicts = _check_for_conflicting_top_level_topics(client, front_conversation_id, conversation_text, sender_info, message_times)
         if has_conflicts:
             logger.info(f"🚫 CONFLICT DETECTED for {front_conversation_id}. Assigning human review.")
             return ["AI: Human review required"]
