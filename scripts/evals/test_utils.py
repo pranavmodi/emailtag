@@ -22,11 +22,11 @@ SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
 
 # Optional override for recipient email in all scenarios.
-# Set this variable to a valid address (e.g., "qa.tests@example.com") to route ALL test emails there.
-# If left as None, the script will refuse to send, enforcing explicit configuration and avoiding accidental sends.
-# DEFAULT_RECIPIENT_EMAIL: str | None = 'ai.benchd@gmail.com'
+# Set the environment variable DEFAULT_RECIPIENT_EMAIL (e.g., in your .env file) to a valid address
+# (e.g., "qa.tests@example.com") to route ALL test emails there. If left unset, the script will refuse
+# to send, enforcing explicit configuration and avoiding accidental sends.
 
-DEFAULT_RECIPIENT_EMAIL: str | None = 'test123abc@mediflow360.com'
+DEFAULT_RECIPIENT_EMAIL: str | None = os.getenv("DEFAULT_RECIPIENT_EMAIL")
 
 
 # Global verbosity flag
@@ -61,7 +61,7 @@ def send_smtp_email(scenario_details, choice_key, unique_id):
     recipient_email = DEFAULT_RECIPIENT_EMAIL
 
     if not recipient_email:
-        print("Critical Error: DEFAULT_RECIPIENT_EMAIL is not configured in test_utils.py. Set it to a valid email address before running tests.")
+        print("Critical Error: DEFAULT_RECIPIENT_EMAIL environment variable is not set. Add it to your .env file before running tests.")
         return False
 
     # Add unique_id to subject and body
