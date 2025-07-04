@@ -17,7 +17,7 @@ MEDICAL_RECORDS_SCENARIOS = {
             "Study: Brain MRI with contrast</p>"
             "<p>I need these records for my appointment with a specialist next week. Please let me know what forms I need to complete and any associated fees.</p>"
             "<p>You can reach me at this email or by phone at (555) 123-4567.</p>"
-            "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Thank you,<br>"
             "Sarah Johnson</p>"
         ),
@@ -35,7 +35,7 @@ MEDICAL_RECORDS_SCENARIOS = {
             "Study: Shoulder MRI<br>"
             "Account #: ACC-2024-5567</p>"
             "<p>How quickly can you prepare the CD? I can pick it up or have it mailed if that's an option.</p>"
-            "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Best regards,<br>"
             "Michael Torres</p>"
         ),
@@ -55,7 +55,7 @@ MEDICAL_RECORDS_SCENARIOS = {
             "Study: Lumbar Spine MRI</p>"
             "<p>This is concerning because I need to submit this report to my insurance company and my employer for workers' compensation.</p>"
             "<p>Can you please correct these errors and send me an updated report? I can provide documentation to verify the correct information.</p>"
-            "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Thank you,<br>"
             "James Miller</p>"
         ),
@@ -69,7 +69,7 @@ MEDICAL_RECORDS_SCENARIOS = {
             "<p>I am reviewing the report for my recent scan and it seems to have the wrong study information listed.</p>"
             "<p>My appointment was for a 'Right Knee MRI', but the report says 'Left Shoulder MRI'. This needs to be corrected urgently.</p>"
             "<p>Patient: Emily White<br>Scan Date: March 20, 2024</p>"
-            "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Thank you,<br>Emily White</p>"
         ),
         "expected_tags": ["Incorrect study info", "AI: Human review required"]

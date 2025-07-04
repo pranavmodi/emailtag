@@ -12,7 +12,7 @@ SCHEDULING_SCENARIOS = {
             "<p>I would like to request an MRI appointment as per my doctor's referral.</p>"
             "<p>Please let me know your availability for the earliest possible date.</p>"
             "<p>My preferred contact number is [Your Phone Number Here], or you can reply to this email.</p>"
-            "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Thank you for your prompt assistance.</p>"
             "<p>Sincerely,<br>"
             "Prospective Patient (via Test Script)</p>"
@@ -30,7 +30,7 @@ SCHEDULING_SCENARIOS = {
             "DOB: 03/15/1985<br>"
             "Referring Physician: Dr. Thompson</p>"
             "<p>Could you please let me know if you received the order and when I might expect to hear about scheduling?</p>"
-            "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Thank you,<br>"
             "Jennifer Martinez</p>"
         ),
@@ -47,7 +47,7 @@ SCHEDULING_SCENARIOS = {
             "Appointment: March 22nd, 2:30 PM<br>"
             "Procedure: Knee MRI</p>"
             "<p>Please let me know when I can reschedule for next week.</p>"
-            "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Thanks,<br>"
             "Robert Kim</p>"
         ),
@@ -65,7 +65,7 @@ SCHEDULING_SCENARIOS = {
             "<p>I understand there may be a no-show fee, and I'm prepared to pay that. Could you please let me know what the charge is?</p>"
             "<p>Also, I still need to have this scan done. What's the earliest you can reschedule me?</p>"
             "<p>I promise to be more careful with my calendar going forward.</p>"
-            "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Thank you,<br>"
             "Nicole Adams</p>"
         ),
@@ -90,7 +90,7 @@ SCHEDULING_SCENARIOS = {
             "<li>How long the procedure will take</li>"
             "</ul>"
             "<p>Also, do I need to arrive early for paperwork? I want to make sure I'm fully prepared.</p>"
-            "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Thank you for your help,<br>"
             "Rachel Thompson</p>"
         ),
@@ -107,7 +107,7 @@ SCHEDULING_SCENARIOS = {
             "Patient ID: {PATIENT_ID}<br>"
             "DOB: 01/01/1980</p>"
             "<p>Could you please confirm if an appointment is on file for me and, if so, provide the date, time, and any preparation instructions?</p>"
-            "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Thank you,<br>"
             "Alex Patient (via Test Script)</p>"
         ),
@@ -129,7 +129,7 @@ SCHEDULING_SCENARIOS = {
                     "Patient Name: Alex Patient<br>"
                     "DOB: 01/01/1980</p>"
                     "<p>I do not have my patient ID handy at the moment. Can you please check with my name and date of birth?</p>"
-                    "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+                    "<p>Test ID: {UNIQUE_TEST_ID}</p>"
                     "<p>Thank you,<br>"
                     "Alex Patient (via Test Script)</p>"
                 )
@@ -140,7 +140,7 @@ SCHEDULING_SCENARIOS = {
                     "<p>Hello again,</p>"
                     "<p>I've found my patient ID. It is {PATIENT_ID}.</p>"
                     "<p>Hopefully this helps locate my appointment details.</p>"
-                    "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+                    "<p>Test ID: {UNIQUE_TEST_ID}</p>"
                     "<p>Thanks,<br>"
                     "Alex Patient</p>"
                 ),
@@ -156,7 +156,7 @@ SCHEDULING_SCENARIOS = {
             "<p>I am writing to ask if you provide MRI scans at your facility.</p>"
             "<p>I need to have an MRI done on my knee and I'm looking for a provider in the area.</p>"
             "<p>Please let me know if this is a service you offer.</p>"
-            "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Thank you,<br>"
             "Potential Patient</p>"
         ),
@@ -176,7 +176,7 @@ SCHEDULING_SCENARIOS = {
             "<li>The location where I should arrive</li>"
             "</ul>"
             "<p>I have attached a document containing my patient details for your reference.</p>"
-            "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Thank you for your assistance,<br>"
             "Test Patient</p>"
         ),

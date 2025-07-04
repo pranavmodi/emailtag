@@ -18,7 +18,7 @@ COLLECTIONS_SCENARIOS = {
             "<p>I have documentation showing that my insurance company processed and paid this claim in full on January 15th, 2024.</p>"
             "<p>Could someone please review my account before sending it to collections? I can provide the insurance payment confirmation if needed.</p>"
             "<p>I would appreciate a prompt response as I want to avoid any negative impact on my credit.</p>"
-            "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Thank you,<br>"
             "Kevin Park</p>"
         ),
@@ -38,7 +38,7 @@ COLLECTIONS_SCENARIOS = {
             "<p>I've checked with my bank and the check was cashed on March 8th, 2024.</p>"
             "<p>However, I just received another statement showing the same balance due.</p>"
             "<p>Could you please look into this and update my account? I can provide a copy of the canceled check if needed.</p>"
-            "<p>This email is sent via the Python test script from: {SENDER_EMAIL_PLACEHOLDER}. Test ID: {UNIQUE_TEST_ID}</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Thank you,<br>"
             "Patricia Wong</p>"
         ),
