@@ -80,8 +80,8 @@ def run_single_scenario(scenario_key: str, scenario_details: Dict[str, Any], ver
     print(f"\n--- Testing Scenario {scenario_key}: {scenario_details['description']} ---")
     
     test_unique_id = str(uuid.uuid4())
-    if verbose:
-        print(f"Using TestID: {test_unique_id}")
+    # Always display the TestID so it can be easily referenced, regardless of verbosity.
+    print(f"Using TestID: {test_unique_id}")
 
     success = False
     
