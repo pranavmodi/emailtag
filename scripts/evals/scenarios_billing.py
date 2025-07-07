@@ -14,6 +14,7 @@ BILLING_SCENARIOS = {
             "<p>Could you please provide more details about this charge at your earliest convenience?</p>"
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
             "<p>Thank you for your assistance.</p>"
+            "<p>My patient id is PRE101520</p>"
             "<p>Sincerely,<br>"
             "Concerned Customer (via Test Script)</p>"
         ),
