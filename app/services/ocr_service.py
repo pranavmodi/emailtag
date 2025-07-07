@@ -10,9 +10,8 @@ from app.core.config import settings # Assuming OCR API URL might be added here
 
 logger = logging.getLogger(__name__)
 
-# Consider adding the OCR API URL to your settings for flexibility
-# OCR_API_URL = settings.OCR_API_URL 
-OCR_API_URL = "https://docclassifier1-dev.radflow360.com:4000/all_doc_ocr_process" 
+# OCR API URL from settings
+OCR_API_URL = str(settings.OCR_API_URL) 
 
 def file_to_base64(file_path: str) -> Optional[str]:
     """Reads any file and encodes its content to a base64 string.

@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     MAX_CLASSIFICATION_RETRIES: int = 3
     
     # Service Endpoints
-    OCR_SERVICE_ENDPOINT: HttpUrl = "http://localhost:5000/ocr" # Default, override in .env
+    OCR_API_URL: HttpUrl = "http://localhost:5000/ocr" # Default, override in .env
     MCP_SERVER_URL: HttpUrl = "http://localhost:8001/mcp"
 
     # FrontApp settings
