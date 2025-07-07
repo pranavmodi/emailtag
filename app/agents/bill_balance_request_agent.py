@@ -151,14 +151,13 @@ def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
     return ''.join(html_parts)
 
 def _create_billing_status_table(bill_balance: float, bill_status: Dict[str, Any], study_details: List[Dict[str, Any]]) -> str:
-    """Creates an HTML table for billing status with study information."""
+    """Creates an HTML table for billing status with detailed study information."""
     
     # Create the billing status header
-    bill_date = bill_status.get('lastBilledDate', 'unknown date') if bill_status.get('isBilled') else 'N/A'
-    if bill_balance and bill_balance > 0:
-        billing_header = f"The patient's current bill balance is ${bill_balance:.2f} as of {bill_date}"
+    if bill_balance is not None and bill_balance > 0:
+        billing_header = f"The patient's current bill balance is ${bill_balance:.2f}."
     else:
-        billing_header = "No billing information available yet."
+        billing_header = "No outstanding bill balance found."
     
     # Start building the HTML table
     html_parts = []
@@ -168,38 +167,43 @@ def _create_billing_status_table(bill_balance: float, bill_status: Dict[str, Any
         html_parts.append('<table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-family: Arial, sans-serif; margin: 10px 0; width: 100%;">')
         html_parts.append('<thead>')
         html_parts.append('<tr style="background-color: #f0f0f0; font-weight: bold;">')
-        html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">STUDY DESCRIPTION</th>')
-        html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">STUDY DATE</th>')
-        html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">EXAM STATUS</th>')
-        html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">BILLING STATUS</th>')
+        html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Study Description</th>')
+        html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Study Date</th>')
+        html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Exam Status</th>')
+        html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Billing Status</th>')
+        html_parts.append('<th style="text-align: right; padding: 8px; border: 1px solid #ccc;">Amount</th>')
         html_parts.append('</tr>')
         html_parts.append('</thead>')
         html_parts.append('<tbody>')
         
         for study in study_details:
-            study_description = study.get('study_description', 'Unknown Study')
-            study_date = study.get('appointment_time', 'Unknown Date')
-            exam_status = study.get('status', 'Unknown Status')
-            
-            # Note: Current MCP doesn't provide billing amounts per study
-            # This is a limitation we need to work around
-            if bill_balance and bill_balance > 0 and bill_status.get('isBilled'):
-                # For now, we'll indicate that billing info is available but not per-study breakdown
-                billing_status = f"Part of ${bill_balance:.2f} total - See portal for breakdown"
+            study_description = study.get('studyDescription', 'Unknown Study')
+            study_date_time = study.get('studyDateTime', 'Unknown Date')
+            # Extract just the date part if time is included
+            study_date = study_date_time.split(' ')[0] if ' ' in study_date_time else study_date_time
+
+            exam_status = study.get('examStatus', 'Unknown Status')
+            billing_status_text = study.get('billingStatus', 'N/A')
+            billing_amount = study.get('billingAmount')  # This can be None or 0
+
+            # Format billing amount
+            if billing_amount is not None:
+                amount_str = f"${billing_amount:.2f}"
             else:
-                billing_status = "Not yet billed"
+                amount_str = "N/A"
             
             html_parts.append('<tr>')
             html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{study_description}</td>')
             html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{study_date}</td>')
             html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{exam_status}</td>')
-            html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{billing_status}</td>')
+            html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{billing_status_text}</td>')
+            html_parts.append(f'<td style="text-align: right; padding: 8px; border: 1px solid #ccc;">{amount_str}</td>')
             html_parts.append('</tr>')
         
         html_parts.append('</tbody>')
         html_parts.append('</table>')
     else:
-        html_parts.append('<p>No study information available.</p>')
+        html_parts.append('<p>No study details available.</p>')
     
     return ''.join(html_parts)
 
@@ -303,12 +307,6 @@ async def handle_bill_balance_request(
             arguments={"patient_id": patient_id}
         )
         
-        # Get study details for billing table
-        study_details_response = await call_mcp_tool(
-            tool_name="fetch_study_details",
-            arguments={"patient_id": patient_id}
-        )
-        
         # Then, call the MCP tool to get billing information
         mcp_response = await call_mcp_tool(
             tool_name="get_patient_lien_bill_balance",
@@ -368,21 +366,6 @@ async def handle_bill_balance_request(
                 logger.warning(f"Invalid data structure in patient info response for {patient_id}")
         else:
             logger.warning(f"Invalid or empty patient info response for {patient_id}")
-        
-        # Process study details response for billing table
-        study_details_list = []
-        if study_details_response and isinstance(study_details_response, dict):
-            if study_details_response.get('success'):
-                studies = study_details_response.get('studies', [])
-                if studies and isinstance(studies, list):
-                    study_details_list = studies
-                    logger.info(f"Found {len(study_details_list)} studies for patient {patient_id}")
-                else:
-                    logger.warning(f"No studies found in study details response for patient {patient_id}")
-            else:
-                logger.warning(f"Study details fetch failed for patient {patient_id}: {study_details_response.get('message', 'Unknown error')}")
-        else:
-            logger.warning(f"Invalid study details response for patient {patient_id}")
         
         if not mcp_response or not isinstance(mcp_response, dict):
             logger.error(f"Invalid MCP response for patient {patient_id}: {mcp_response}")
@@ -594,6 +577,7 @@ www.PreciseMRI.com
         patient_bill_balance = result.get('patientBillBalance', 0)
         patient_bill_status = result.get('patientBillStatus', {})
         lien_status_list = result.get('lienStatusList', [])
+        study_details_list = result.get('patientStudyDetails', [])
         
         # Patient data might be at top level or in a nested structure
         patient_data = result.get('patientData', {})
@@ -605,8 +589,16 @@ www.PreciseMRI.com
                 'dateOfInjury': result.get('dateOfInjury', '')
             }
         
-        logger.info(f"Extracted billing data for patient {patient_id}: balance={patient_bill_balance}, status={get_schema_info(patient_bill_status)}, liens={len(lien_status_list)}, studies_from_details={len(study_details_list)}")
+        logger.info(f"Extracted billing data for patient {patient_id}: balance={patient_bill_balance}, status={get_schema_info(patient_bill_status)}, liens={len(lien_status_list)}, studies={len(study_details_list)}")
         
+        # Log study details for debugging
+        if study_details_list:
+            logger.info(f"Found {len(study_details_list)} study details for patient {patient_id}.")
+            for i, study in enumerate(study_details_list):
+                logger.debug(f"Study {i+1}: {study}")
+        else:
+            logger.info(f"No study details found for patient {patient_id}.")
+
         # Log lien status details for debugging
         if lien_status_list:
             for i, lien in enumerate(lien_status_list):
@@ -680,6 +672,10 @@ www.PreciseMRI.com
         billing_status_table = _create_billing_status_table(patient_bill_balance, patient_bill_status, study_details_list)
         lien_status_table = _create_lien_status_table(lien_status_list)
         
+        # Log generated HTML tables for debugging
+        logger.debug(f"Generated billing_status_table HTML for patient {patient_id}: {billing_status_table}")
+        logger.debug(f"Generated lien_status_table HTML for patient {patient_id}: {lien_status_table}")
+        
         # Determine report header and bill attachment line
         report_header = "The available final reports have been attached." if include_reports else ""
         bill_attachment_line = "A copy of the most recent bill is attached." if patient_bill_status.get("isBilled") else ""
@@ -688,7 +684,8 @@ www.PreciseMRI.com
             # Generate Lien Reminder response using new comprehensive template
             reply_body = COMPREHENSIVE_LIEN_REMINDER_TEMPLATE.format(
                 patient_header=patient_header,
-                lien_status_table=lien_status_table
+                lien_status_table=lien_status_table,
+                billing_status_table=billing_status_table
             )
             subject = f"Re: {patient_id} - Lien Signature Required"
         else:
