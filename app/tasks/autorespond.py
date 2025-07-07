@@ -20,6 +20,7 @@ from app.agents.apt_status_req_agent import handle_apt_status_request_agent_sdk
 from app.agents.release_records_autorespond import handle_release_of_records_request
 from app.agents.bill_balance_request_agent import handle_bill_balance_request
 from app.agents.case_updates_agent import handle_case_update_request
+from app.agents.missing_lien_request_agent import handle_missing_lien_request
 
 logger = get_task_logger(__name__)
 
@@ -27,6 +28,7 @@ logger = get_task_logger(__name__)
 APT_STATUS_REQ_TAG_NAME = "Apt Status Req"
 RELEASE_OF_RECORDS_TAG_NAME = "Release of Records"
 BILL_OR_BALANCE_REQUEST_TAG_NAME = "Bill or balance Request"
+MISSING_LIEN_REQUEST_TAG_NAME = "Missing Lien Request"
 
 # Human review tags
 BILL_OFFER_TAG_NAME = "Bill Offer"
@@ -252,6 +254,38 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             else:
                 logger.error(f"Bill/Balance agent call failed to return a result for {front_conversation_id}.")
                 auto_response_details = {"reason": "Bill/Balance agent call failed or returned None."}
+
+        elif MISSING_LIEN_REQUEST_TAG_NAME in applied_tag_names:
+            agent_name_for_status = "missing_lien_request"
+            logger.info(f"Email {email_id} tagged with '{MISSING_LIEN_REQUEST_TAG_NAME}'. Attempting Missing Lien Request agent.")
+
+            agent_result_dict = None
+            async def _run_missing_lien_agent():
+                nonlocal agent_result_dict
+                agent_result_dict = await handle_missing_lien_request(
+                    front_conversation_id=front_conversation_id,
+                    current_email_content=current_email_content,
+                    structured_history_messages=structured_history_messages,
+                    settings_obj=settings
+                )
+            
+            try:
+                asyncio.run(_run_missing_lien_agent())
+            except Exception as e:
+                logger.error(f"Error running Missing Lien Request agent for {email_id}: {e}", exc_info=True)
+                agent_result_dict = {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Agent execution error: {e}"}}
+
+            if agent_result_dict:
+                agent_handled_response = agent_result_dict.get("agent_handled", False)
+                auto_response_processed_flag = agent_result_dict.get("processed_flag", False)
+                auto_response_details = agent_result_dict.get("details", {"reason": "Unknown Missing Lien Request agent processing outcome"})
+                if agent_handled_response:
+                    logger.info(f"Missing Lien Request agent handled response for {front_conversation_id}.")
+                else:
+                    logger.warning(f"Missing Lien Request agent did NOT handle response for {front_conversation_id}.")
+            else:
+                logger.error(f"Missing Lien Request agent call failed to return a result for {front_conversation_id}.")
+                auto_response_details = {"reason": "Missing Lien Request agent call failed or returned None."}
 
         # --- BEGIN: Case Updates Agent Branch ---
         else:
