@@ -1,6 +1,5 @@
 import asyncio
 import os
-import json # Import json for parsing stringified JSON
 import ast # Import ast for literal_eval
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta # Added for time manipulation
@@ -183,7 +182,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
 
         # 3. Transform Study Data for template compatibility
         transformed_studies_for_template = []
-        for study in raw_studies:
+        for i, study in enumerate(raw_studies):
             appointment_datetime_str = "Date/Time N/A"
             arrival_time_str = "N/A"
             
@@ -198,18 +197,49 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                     else:
                         try:
                             parsed_dt = datetime.strptime(service_appt_time_str, "%m/%d/%Y %I:%M:%S %p")
-                        except ValueError:
+                        except ValueError as e1:
                             try:
                                 parsed_time_obj = datetime.strptime(service_appt_time_str, "%I:%M %p").time()
                                 appointment_datetime_str = f"Date N/A @ {parsed_time_obj.strftime('%I:%M %p')}"
-                            except ValueError:
-                                appointment_datetime_str = f"{service_appt_time_str} (Could not parse fully)"
+                            except ValueError as e2:
+                                # Try additional common formats
+                                additional_formats = [
+                                    "%Y-%m-%d %H:%M:%S",  # 2024-01-15 14:30:00
+                                    "%m/%d/%Y %H:%M",     # 01/15/2024 14:30
+                                    "%m/%d/%Y",           # 01/15/2024
+                                    "%Y-%m-%d",           # 2024-01-15
+                                    "%m/%d/%y %I:%M %p",  # 01/15/24 2:30 PM
+                                    "%Y-%m-%d %I:%M %p",  # 2024-01-15 2:30 PM
+                                    "%d %B %Y",           # 23 November 2019
+                                    "%B %d, %Y",          # November 23, 2019
+                                    "%d-%b-%Y",           # 23-Nov-2019
+                                    "%b %d, %Y",          # Nov 23, 2019
+                                    "%Y-%B-%d",           # 2019-November-23
+                                ]
+                                
+                                for fmt in additional_formats:
+                                    try:
+                                        parsed_dt = datetime.strptime(service_appt_time_str, fmt)
+                                        break
+                                    except ValueError as ef:
+                                        continue
+                                
+                                if not parsed_dt:
+                                    appointment_datetime_str = f"{service_appt_time_str} (Could not parse fully)"
+                                    logger.warning(f"Could not parse appointment_time '{service_appt_time_str}' for study {study.get('authorization_number')} - all parsing attempts failed")
 
                     if parsed_dt:
-                        appointment_datetime_str = parsed_dt.strftime("%m/%d/%Y @ %I:%M %p")
-                        pre_arrival_min = study.get("pre_arrival_minutes", 30)
-                        arrival_dt = parsed_dt - timedelta(minutes=pre_arrival_min)
-                        arrival_time_str = arrival_dt.strftime("%I:%M %p")
+                        # Check if we parsed a date-only value (time is 00:00:00)
+                        if parsed_dt.time() == datetime.min.time():
+                            # This is a date-only value, show as date with "Time TBD"
+                            appointment_datetime_str = f"{parsed_dt.strftime('%m/%d/%Y')} @ Time TBD"
+                            arrival_time_str = "Time TBD"
+                        else:
+                            # This has both date and time
+                            appointment_datetime_str = parsed_dt.strftime("%m/%d/%Y @ %I:%M %p")
+                            pre_arrival_min = study.get("pre_arrival_minutes", 30)
+                            arrival_dt = parsed_dt - timedelta(minutes=pre_arrival_min)
+                            arrival_time_str = arrival_dt.strftime("%I:%M %p")
                         
                 except ValueError as e_date:
                     logger.warning(f"Could not parse appointment_time '{service_appt_time_str}' for study {study.get('authorization_number')}: {e_date}")
@@ -219,7 +249,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
             location_display = f"{facility_info.get('facility_name', 'N/A')} - {facility_info.get('address', 'N/A')}".strip(" -")
             if location_display == "N/A - N/A" or not location_display: location_display = "Location N/A"
 
-            transformed_studies_for_template.append({
+            transformed_study = {
                 "study_id": study.get("authorization_number", "N/A"),
                 "exam_description": study.get("study_description", "N/A"),
                 "status": study.get("status", "N/A"),
@@ -228,7 +258,9 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                 "location_name": location_display,
                 "images_available": "No",  # Default, not in service output
                 "report_available": "No"   # Default, not in service output
-            })
+            }
+            
+            transformed_studies_for_template.append(transformed_study)
 
         if not transformed_studies_for_template:
             return {"status": "not_found", "message": f"Patient ID {patient_id} found, studies retrieved, but failed to transform any for display.", "patient_id": patient_id}
