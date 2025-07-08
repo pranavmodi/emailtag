@@ -27,8 +27,19 @@ logger = get_task_logger(__name__)
 # Tag constants for auto-response logic
 APT_STATUS_REQ_TAG_NAME = "Apt Status Req"
 RELEASE_OF_RECORDS_TAG_NAME = "Release of Records"
+IMAGE_REQUEST_TAG_NAME = "Image Request"
+CD_REQUESTS_TAG_NAME = "CD Requests"
+REPORTS_REQUEST_TAG_NAME = "Reports Request"
 BILL_OR_BALANCE_REQUEST_TAG_NAME = "Bill or balance Request"
 MISSING_LIEN_REQUEST_TAG_NAME = "Missing Lien Request"
+
+# Medical Records & Images tags that should use the Release of Records agent
+MEDICAL_RECORDS_TAGS = {
+    RELEASE_OF_RECORDS_TAG_NAME,
+    IMAGE_REQUEST_TAG_NAME,
+    CD_REQUESTS_TAG_NAME,
+    REPORTS_REQUEST_TAG_NAME,
+}
 
 # Human review tags
 BILL_OFFER_TAG_NAME = "Bill Offer"
@@ -185,17 +196,18 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                 logger.error(f"Agent SDK orchestrator call failed to return a result for {front_conversation_id}.")
                 auto_response_details = {"reason": "Agent orchestrator call failed or returned None."}
 
-        elif RELEASE_OF_RECORDS_TAG_NAME in applied_tag_names:
-            agent_name_for_status = "release_of_records"
-            logger.info(f"Email {email_id} tagged with '{RELEASE_OF_RECORDS_TAG_NAME}'. Attempting ROR agent.")
+        elif any(tag in applied_tag_names for tag in MEDICAL_RECORDS_TAGS):
+            matched_medical_records_tags = [tag for tag in applied_tag_names if tag in MEDICAL_RECORDS_TAGS]
+            agent_name_for_status = "medical_records"
+            logger.info(f"Email {email_id} tagged with Medical Records & Images tag(s): {matched_medical_records_tags}. Attempting Medical Records agent.")
             
             email_sender = email_obj.sender
             if not email_sender:
-                logger.error(f"Cannot run Release of Records agent for {email_id}: sender email is missing.")
-                auto_response_details = {"reason": "Sender email missing for ROR agent."}
+                logger.error(f"Cannot run Medical Records agent for {email_id}: sender email is missing.")
+                auto_response_details = {"reason": "Sender email missing for Medical Records agent."}
             else:
                 agent_result_dict = None
-                async def _run_ror_agent():
+                async def _run_medical_records_agent():
                     nonlocal agent_result_dict
                     agent_result_dict = await handle_release_of_records_request(
                         front_conversation_id=front_conversation_id,
@@ -206,22 +218,22 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                     )
                 
                 try:
-                    asyncio.run(_run_ror_agent())
+                    asyncio.run(_run_medical_records_agent())
                 except Exception as e:
-                    logger.error(f"Error running Release of Records agent for {email_id}: {e}", exc_info=True)
+                    logger.error(f"Error running Medical Records agent for {email_id}: {e}", exc_info=True)
                     agent_result_dict = {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Agent execution error: {e}"}}
 
                 if agent_result_dict:
                     agent_handled_response = agent_result_dict.get("agent_handled", False)
                     auto_response_processed_flag = agent_result_dict.get("processed_flag", False)
-                    auto_response_details = agent_result_dict.get("details", {"reason": "Unknown ROR agent processing outcome"})
+                    auto_response_details = agent_result_dict.get("details", {"reason": "Unknown Medical Records agent processing outcome"})
                     if agent_handled_response:
-                        logger.info(f"Release of Records agent handled response for {front_conversation_id}.")
+                        logger.info(f"Medical Records agent handled response for {front_conversation_id}.")
                     else:
-                        logger.warning(f"Release of Records agent did NOT handle response for {front_conversation_id}.")
+                        logger.warning(f"Medical Records agent did NOT handle response for {front_conversation_id}.")
                 else:
-                    logger.error(f"ROR agent call failed to return a result for {front_conversation_id}.")
-                    auto_response_details = {"reason": "ROR agent call failed or returned None."}
+                    logger.error(f"Medical Records agent call failed to return a result for {front_conversation_id}.")
+                    auto_response_details = {"reason": "Medical Records agent call failed or returned None."}
 
         elif BILL_OR_BALANCE_REQUEST_TAG_NAME in applied_tag_names:
             agent_name_for_status = "bill_balance_request"

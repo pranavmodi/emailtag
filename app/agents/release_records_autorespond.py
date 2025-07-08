@@ -1,10 +1,11 @@
 """
-Handles "Release of Records" requests using an AI agent.
+Handles Medical Records & Images requests using an AI agent.
 
 This module contains the logic for an AI agent that processes emails tagged
-as "Release of Records". It verifies the sender's identity against patient records,
-determines the appropriate response based on the sender's role (attorney, doctor, etc.),
-and handles follow-up interactions like HIPAA form submissions.
+with any Medical Records & Images tags: "Release of Records", "Image Request", 
+"CD Requests", and "Reports Request". It verifies the sender's identity against 
+patient records, determines the appropriate response based on the sender's role 
+(attorney, doctor, etc.), and handles follow-up interactions like HIPAA form submissions.
 """
 import asyncio
 import os
@@ -39,7 +40,7 @@ TAG_AI_HUMAN_REVIEW_REQUIRED = "AI: Human review required"
 
 # --- END: Tag Constants ---
 
-# --- BEGIN: Response Templates (for Release of Records) ---
+# --- BEGIN: Response Templates (for Medical Records & Images) ---
 # For simplicity, templates are defined here. They can be moved to a separate file.
 
 TEMPLATE_HIPAA_NEEDED = """
@@ -254,13 +255,14 @@ async def handle_release_of_records_request(
     settings_obj: Any = app_settings_instance
 ) -> Dict[str, Any]:
     """
-    Orchestrates the AI agent to handle a "Release of Records" request.
+    Orchestrates the AI agent to handle Medical Records & Images requests.
+    Handles: "Release of Records", "Image Request", "CD Requests", "Reports Request".
     """
-    logger.info(f"Initiating Release of Records agent for conv ID: {front_conversation_id}")
+    logger.info(f"Initiating Medical Records & Images agent for conv ID: {front_conversation_id}")
 
     # Connect to MCP server
     if not await mcp_client.connect():
-        logger.error("Failed to connect to MCP server for ROR agent.")
+        logger.error("Failed to connect to MCP server for Medical Records agent.")
         await send_fallback_reply_and_tag(
             front_conversation_id,
             "Internal data connection error. A team member will assist you.",
@@ -372,7 +374,7 @@ Full Context:
         # The MCP client is shared, so we don't close it here.
         pass
 
-    logger.info(f"ROR Agent finished for {front_conversation_id}. Outcome: {agent_outcome}")
+    logger.info(f"Medical Records Agent finished for {front_conversation_id}. Outcome: {agent_outcome}")
     return agent_outcome
 
 # --- END: Agent Orchestrator --- 
