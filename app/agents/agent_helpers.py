@@ -65,6 +65,8 @@ async def get_patient_and_study_info(patient_id: str) -> Dict[str, Any]:
 
         patient_result = await mcp_client.call_tool("fetch_patient_by_id", {"patient_id": patient_id})
         study_result = await mcp_client.call_tool("fetch_study_details", {"patient_id": patient_id})
+        logger.info(f"Patient result: {patient_result}")
+        logger.info(f"Study result: {study_result}")
 
         return {
             "patient_result": patient_result,
