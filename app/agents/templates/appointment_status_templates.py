@@ -3,9 +3,9 @@
 TEMPLATE_APPOINTMENT_FOUND_DETAILED = """Patient ID: {patient_id_confirmed}<br/><br/>
 
 Study ID: {first_study_id} - {first_exam_description}<br/>
-I have confirmed that this study has been scheduled.<br/>
-Appointment Date/Time: {first_appointment_datetime_str}. Please arrive 15 minutes before the exam time at {first_arrival_time_str}<br/>
-Appointment Location: {first_location_name}<br/><br/>
+I have information about this study.<br/>
+Study Date/Time: {first_appointment_datetime_str}<br/>
+Study Location: {first_location_name}<br/><br/>
 
 Our direct scheduling phone # is {scheduling_phone} and we can assist with directions, rescheduling, canceling, or any other scheduling-related questions.<br/>
 {no_show_policy}<br/><br/>
@@ -16,7 +16,7 @@ Here is a summary of the patient's exams we currently have entered into our syst
             <th style="border: 1px solid black; padding: 8px; text-align: left;">Study ID</th>
             <th style="border: 1px solid black; padding: 8px; text-align: left;">Exam Description</th>
             <th style="border: 1px solid black; padding: 8px; text-align: left;">Status</th>
-            <th style="border: 1px solid black; padding: 8px; text-align: left;">Study Date</th>
+            <th style="border: 1px solid black; padding: 8px; text-align: left;">Study Date/Time</th>
             <th style="border: 1px solid black; padding: 8px; text-align: left;">Location</th>
             <th style="border: 1px solid black; padding: 8px; text-align: left;">Images Available</th>
             <th style="border: 1px solid black; padding: 8px; text-align: left;">Report Available</th>

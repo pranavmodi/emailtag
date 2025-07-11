@@ -183,11 +183,14 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
 
         # 3. Transform Study Data for template compatibility
         transformed_studies_for_template = []
+        logger.info(f"Processing {len(raw_studies)} studies for patient {patient_id}")
         for i, study in enumerate(raw_studies):
             appointment_datetime_str = "Date/Time N/A"
             arrival_time_str = "N/A"
             
-            service_appt_time_str = study.get("appointment_time", "")
+            service_appt_time_str = study.get("study_date_time", "")
+            study_id_for_date_log = study.get("authorization_number", "Unknown")
+            logger.info(f"Study {study_id_for_date_log}: processing study_date_time '{service_appt_time_str}' for appointment date/time column")
             
             parsed_dt = None
             if service_appt_time_str:
@@ -205,13 +208,14 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                             except ValueError as e2:
                                 # Try additional common formats
                                 additional_formats = [
+                                    "%d %B %Y %I:%M %p",  # 17 April 2018 01:23 PM
+                                    "%d %B %Y",           # 17 April 2018 (date only)
                                     "%Y-%m-%d %H:%M:%S",  # 2024-01-15 14:30:00
                                     "%m/%d/%Y %H:%M",     # 01/15/2024 14:30
                                     "%m/%d/%Y",           # 01/15/2024
                                     "%Y-%m-%d",           # 2024-01-15
                                     "%m/%d/%y %I:%M %p",  # 01/15/24 2:30 PM
                                     "%Y-%m-%d %I:%M %p",  # 2024-01-15 2:30 PM
-                                    "%d %B %Y",           # 23 November 2019
                                     "%B %d, %Y",          # November 23, 2019
                                     "%d-%b-%Y",           # 23-Nov-2019
                                     "%b %d, %Y",          # Nov 23, 2019
@@ -227,7 +231,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                                 
                                 if not parsed_dt:
                                     appointment_datetime_str = f"{service_appt_time_str} (Could not parse fully)"
-                                    logger.warning(f"Could not parse appointment_time '{service_appt_time_str}' for study {study.get('authorization_number')} - all parsing attempts failed")
+                                    logger.warning(f"Could not parse study_date_time '{service_appt_time_str}' for study {study.get('authorization_number')} - all parsing attempts failed")
 
                     if parsed_dt:
                         # Check if we parsed a date-only value (time is 00:00:00)
@@ -243,12 +247,14 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                             arrival_time_str = arrival_dt.strftime("%I:%M %p")
                         
                 except ValueError as e_date:
-                    logger.warning(f"Could not parse appointment_time '{service_appt_time_str}' for study {study.get('authorization_number')}: {e_date}")
+                    logger.warning(f"Could not parse study_date_time '{service_appt_time_str}' for study {study.get('authorization_number')}: {e_date}")
                     appointment_datetime_str = f"{service_appt_time_str} (Unparseable)"
             
             facility_info = study.get("facility", {})
             location_display = f"{facility_info.get('facility_name', 'N/A')} - {facility_info.get('address', 'N/A')}".strip(" -")
             if location_display == "N/A - N/A" or not location_display: location_display = "Location N/A"
+
+            # Note: study_date_time is now used for the main Study Date/Time column (appointment_datetime_str)
 
             transformed_study = {
                 "study_id": study.get("authorization_number", "N/A"),
@@ -261,10 +267,16 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                 "report_available": "No"   # Default, not in service output
             }
             
+            logger.info(f"Study {study_id_for_date_log}: final transformed data - study_date_time='{appointment_datetime_str}'")
             transformed_studies_for_template.append(transformed_study)
 
         if not transformed_studies_for_template:
             return {"status": "not_found", "message": f"Patient ID {patient_id} found, studies retrieved, but failed to transform any for display.", "patient_id": patient_id}
+
+        # Log summary of study_date_time processing
+        studies_with_date_time = sum(1 for study in transformed_studies_for_template if study.get('appointment_datetime_str') not in ['Date/Time N/A', 'N/A'])
+        studies_without_date_time = len(transformed_studies_for_template) - studies_with_date_time
+        logger.info(f"Patient {patient_id}: {studies_with_date_time} studies have valid study_date_time, {studies_without_date_time} do not")
 
         return {
             "status": "success",
