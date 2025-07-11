@@ -187,5 +187,18 @@ CASE_UPDATE_SCENARIOS = {
             "Miller & Associates Law Firm</p>"
         ),
         "expected_tags": ["Payment on way"]
+    },
+    "29": {
+        "description": "Case Update - Settled Cases with Cleared Payments",
+        "subject": "Case settlement update - Servando Zamora DOL cases",
+        "body_html": (
+            "<p>Good afternoon,</p>"
+            "<p>We received an email from RadFlow 360 requesting for an update regarding this case. We already settled this matter with your office and issued payment. I believe your office is confusing both DOL cases. We settled both cases with your office and both checks have cleared in the bank. If you can update your files. If you have any questions please let us know.</p>"
+            "<p>Servando Zamora - DOL 07/27/2023 - $1,150.00 Check #12680<br>"
+            "Servando Zamora - DOL 06/01/2024 - $1,150.00 Check #12843</p>"
+            "<p>Thank you,</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Sent payment but not received"]
     }
 } 

@@ -493,6 +493,80 @@ async def fetch_patient_by_name_dob(first_name: str, last_name: str, birth_date:
             "error": f"Failed to fetch patient data: {str(e)}"
         }
 
+async def fetch_patient_by_name_doi(first_name: str, last_name: str, doi: str) -> Dict[str, Any]:
+    """
+    Fetch patient information by name and date of injury from the RadFlow API.
+    
+    Args:
+        first_name: Patient's first name
+        last_name: Patient's last name
+        doi: Patient's date of injury in MM/DD/YYYY format
+        
+    Returns:
+        Dict[str, Any]: Patient information and status
+    """
+    try:
+        logger.info(f"Fetching patient data for name: {first_name} {last_name}, DOI: {doi}")
+        
+        payload = {
+            "patientId": "",
+            "phone": "",
+            "firstName": first_name,
+            "lastName": last_name,
+            "birthDate": "",
+            "doi": doi,
+            "accessionNumber": "",
+            "requiredField": "Details"
+        }
+        
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+        
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.post(
+                RADFLOW_API_URL,
+                json=payload,
+                headers=headers,
+                timeout=30.0
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"API request failed with status {response.status_code}: {response.text}")
+                return {
+                    "success": False,
+                    "error": f"API request failed with status {response.status_code}"
+                }
+            
+            try:
+                data = response.json()
+                logger.debug("Successfully parsed JSON response")
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON response: {e}\nResponse text: {response.text[:500]}")
+                return {
+                    "success": False,
+                    "error": "Invalid JSON response from API"
+                }
+            
+            logger.info(f"Processing patient data response for name: {first_name} {last_name}, DOI: {doi}")
+            result = process_patient_data(data, "")
+            
+            if result["success"]:
+                logger.info(f"Successfully retrieved patient data: {result['message']}")
+            else:
+                logger.error(f"Failed to process patient data: {result.get('error', 'Unknown error')}")
+            
+            return result
+            
+    except Exception as e:
+        logger.error(f"Unexpected error in fetch_patient_by_name_doi: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return {
+            "success": False,
+            "error": f"Failed to fetch patient data: {str(e)}"
+        }
+
 async def get_patient_by_phone(phone: str) -> Dict[str, Any]:
     """
     Get patient information by phone number from the backend API.
@@ -530,6 +604,20 @@ async def get_patient_by_name_dob(first_name: str, last_name: str, birth_date: s
         Dict[str, Any]: Patient information and status
     """
     return await fetch_patient_by_name_dob(first_name, last_name, birth_date)
+
+async def get_patient_by_name_doi(first_name: str, last_name: str, doi: str) -> Dict[str, Any]:
+    """
+    Get patient information by name and date of injury from the backend API.
+    
+    Args:
+        first_name: Patient's first name
+        last_name: Patient's last name
+        doi: Patient's date of injury in MM/DD/YYYY format
+        
+    Returns:
+        Dict[str, Any]: Patient information and status
+    """
+    return await fetch_patient_by_name_doi(first_name, last_name, doi)
 
 async def get_patient_studies(patient_id: str) -> Dict[str, Any]:
     """

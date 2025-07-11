@@ -9,12 +9,14 @@ common entities like patient IDs, and interacting with external services like Fr
 import asyncio
 import re
 from typing import List, Dict, Optional, Any
+from datetime import datetime
 
 from celery.utils.log import get_task_logger
 from agents import function_tool
 
 from app.services import frontapp_service
-from app.mcp import default_mcp_client as mcp_client
+from app.services.patient import get_patient_by_name_doi
+from app.mcp import default_mcp_client as mcp_client, call_mcp_tool
 
 logger = get_task_logger(__name__)
 
@@ -144,13 +146,134 @@ async def send_reply_to_front_direct(
         return {"status": "error", "message": f"Exception in send_reply_to_front_direct: {str(e)}"}
 
 
+def _extract_patient_names_and_dates_from_email(email_content: str) -> list:
+    """
+    Extract patient names and DOI/DOL from email content.
+    
+    Returns:
+        List of dictionaries containing extracted patient information
+    """
+    extracted_patients = []
+    
+    # More flexible patterns for name and DOI/DOL extraction
+    # Look for patterns like: "Name - DOL MM/DD/YYYY" or "Name DOI: MM/DD/YYYY"
+    
+    # Pattern 1: "FirstName LastName - DOL MM/DD/YYYY" (like the sample email)
+    pattern1 = re.compile(r'([A-Z][a-z]+\s+[A-Z][a-z]+)\s*-\s*DOL?\s*(\d{1,2}\/\d{1,2}\/\d{4})', re.IGNORECASE)
+    
+    # Pattern 2: "FirstName LastName DOI: MM/DD/YYYY"
+    pattern2 = re.compile(r'([A-Z][a-z]+\s+[A-Z][a-z]+).*?DOI:?\s*(\d{1,2}\/\d{1,2}\/\d{4})', re.IGNORECASE)
+    
+    # Pattern 3: "FirstName LastName - DOI MM/DD/YYYY"
+    pattern3 = re.compile(r'([A-Z][a-z]+\s+[A-Z][a-z]+)\s*-\s*DOI\s*(\d{1,2}\/\d{1,2}\/\d{4})', re.IGNORECASE)
+    
+    # Pattern 4: "Patient: FirstName LastName, DOI: MM/DD/YYYY"
+    pattern4 = re.compile(r'Patient:?\s*([A-Z][a-z]+\s+[A-Z][a-z]+),?\s*DOI:?\s*(\d{1,2}\/\d{1,2}\/\d{4})', re.IGNORECASE)
+    
+    # Pattern 5: "FirstName LastName, Date of Injury: MM/DD/YYYY"
+    pattern5 = re.compile(r'([A-Z][a-z]+\s+[A-Z][a-z]+),?\s*Date of (?:Injury|Loss):?\s*(\d{1,2}\/\d{1,2}\/\d{4})', re.IGNORECASE)
+    
+    patterns = [pattern1, pattern2, pattern3, pattern4, pattern5]
+    
+    for pattern in patterns:
+        matches = pattern.findall(email_content)
+        for match in matches:
+            full_name, date_str = match
+            name_parts = full_name.strip().split()
+            if len(name_parts) >= 2:
+                first_name = name_parts[0]
+                last_name = " ".join(name_parts[1:])
+                
+                # Normalize date format to MM/DD/YYYY
+                try:
+                    # Handle various date formats
+                    date_obj = datetime.strptime(date_str, '%m/%d/%Y')
+                    normalized_date = date_obj.strftime('%m/%d/%Y')
+                except ValueError:
+                    try:
+                        date_obj = datetime.strptime(date_str, '%m-%d-%Y')
+                        normalized_date = date_obj.strftime('%m/%d/%Y')
+                    except ValueError:
+                        # If date parsing fails, use as-is
+                        normalized_date = date_str
+                
+                patient_info = {
+                    'first_name': first_name,
+                    'last_name': last_name,
+                    'full_name': full_name.strip(),
+                    'doi': normalized_date
+                }
+                
+                # Avoid duplicates
+                if patient_info not in extracted_patients:
+                    extracted_patients.append(patient_info)
+    
+    return extracted_patients
+
+
+async def _search_patient_by_name_doi_in_helper(first_name: str, last_name: str, doi: str) -> Optional[str]:
+    """
+    Search for patient by name and DOI using available methods.
+    
+    Returns:
+        Patient ID if found, None otherwise
+    """
+    try:
+        # First, try using MCP tool if available (search_patient_by_name_doi)
+        try:
+            mcp_result = await call_mcp_tool(
+                tool_name="search_patient_by_name_doi",
+                arguments={
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "doi": doi
+                }
+            )
+            
+            if mcp_result.get("success") and mcp_result.get("patients"):
+                patients = mcp_result["patients"]
+                if len(patients) == 1:
+                    patient_id = patients[0].get("patient_id")
+                    logger.info(f"Found patient via MCP tool: {patient_id}")
+                    return patient_id
+                elif len(patients) > 1:
+                    logger.warning(f"Multiple patients found via MCP tool for {first_name} {last_name} DOI {doi}: {len(patients)} matches")
+                    return None
+            
+        except Exception as mcp_error:
+            logger.info(f"MCP tool search_patient_by_name_doi not available or failed: {mcp_error}")
+        
+        # Fallback to direct API call
+        logger.info(f"Trying direct API search for {first_name} {last_name} DOI {doi}")
+        result = await get_patient_by_name_doi(first_name, last_name, doi)
+        
+        if result.get("success") and result.get("patients"):
+            patients = result["patients"]
+            if len(patients) == 1:
+                patient_id = patients[0].get("patient_id")
+                logger.info(f"Found patient via direct API: {patient_id}")
+                return patient_id
+            elif len(patients) > 1:
+                logger.warning(f"Multiple patients found via direct API for {first_name} {last_name} DOI {doi}: {len(patients)} matches")
+                return None
+        
+        logger.info(f"No patient found for {first_name} {last_name} DOI {doi}")
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error searching for patient {first_name} {last_name} DOI {doi}: {str(e)}")
+        return None
+
+
 async def extract_patient_id_from_email_logic(email_content: str) -> Optional[str]:
     """
-    Extracts a patient ID from the given email content using regex.
+    Extracts a patient ID from the given email content using regex or by searching for patient names and DOI.
     This is the core logic, designed to be called directly from code.
     Returns the patient ID string or None if not found.
     """
     logger.info("Running patient ID extraction logic...")
+    
+    # First, try direct patient ID extraction using regex patterns
     # This regex handles labeled IDs (e.g., "Patient ID: PRE123456")
     match = re.search(r"(patient id is|Patient ID[:.]?|PID:)\s*([A-Z_]{0,5}\d{5,10})\b", email_content, re.IGNORECASE)
     if match:
@@ -169,7 +292,28 @@ async def extract_patient_id_from_email_logic(email_content: str) -> Optional[st
             logger.info(f"Found potential standalone patient ID: {potential_id}")
             return potential_id
 
-    logger.info("No patient ID found by extraction logic.")
+    # If no direct patient ID found, try extracting names and DOI/DOL
+    logger.info("No direct patient ID found, attempting to extract names and DOI/DOL")
+    extracted_patients = _extract_patient_names_and_dates_from_email(email_content)
+    
+    if extracted_patients:
+        logger.info(f"Found {len(extracted_patients)} potential patients by name and DOI/DOL: {extracted_patients}")
+        
+        for patient_info in extracted_patients:
+            first_name = patient_info['first_name']
+            last_name = patient_info['last_name']
+            doi = patient_info['doi']
+            
+            # Search for patient ID using name and DOI
+            patient_id = await _search_patient_by_name_doi_in_helper(first_name, last_name, doi)
+            
+            if patient_id:
+                logger.info(f"Successfully resolved {first_name} {last_name} DOI {doi} to patient ID {patient_id}")
+                return patient_id
+            else:
+                logger.warning(f"Could not resolve {first_name} {last_name} DOI {doi} to a patient ID")
+    
+    logger.info("No patient ID found by extraction logic or name+DOI search.")
     return None
 
 
