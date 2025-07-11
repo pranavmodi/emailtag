@@ -249,7 +249,7 @@ class MCPClient:
                             return obj
                     
                     raw_response_structure = get_raw_response_keys(final_result)
-                    logger.info(f"MCP tool '{tool_name}' raw response structure: {raw_response_structure}")
+                    # logger.info(f"MCP tool '{tool_name}' raw response structure: {raw_response_structure}")
                     
                     # Log the raw response if the final result isn't a dictionary, as this is usually unexpected.
                     if not isinstance(final_result, dict):

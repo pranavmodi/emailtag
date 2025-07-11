@@ -60,7 +60,7 @@ DEFAULT_PORTAL_LINKS = {
 
 # --- BEGIN: Reply Generation Helper ---
 def _generate_response_from_template(scenario: str, data: Dict[str, Any]) -> str:
-    logger.info(f"Generating reply for scenario: {scenario} with data: {data}")
+    # logger.info(f"Generating reply for scenario: {scenario} with data: {data}")
     if scenario == "appointments_found" and data.get("studies"):
         studies = data.get("studies", [])
         first_study = studies[0]
@@ -183,14 +183,14 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
 
         # 3. Transform Study Data for template compatibility
         transformed_studies_for_template = []
-        logger.info(f"Processing {len(raw_studies)} studies for patient {patient_id}")
+        # logger.info(f"Processing {len(raw_studies)} studies for patient {patient_id}")
         for i, study in enumerate(raw_studies):
             appointment_datetime_str = "Date/Time N/A"
             arrival_time_str = "N/A"
             
             service_appt_time_str = study.get("study_date_time", "")
             study_id_for_date_log = study.get("authorization_number", "Unknown")
-            logger.info(f"Study {study_id_for_date_log}: processing study_date_time '{service_appt_time_str}' for appointment date/time column")
+            # logger.info(f"Study {study_id_for_date_log}: processing study_date_time '{service_appt_time_str}' for appointment date/time column")
             
             parsed_dt = None
             if service_appt_time_str:
@@ -267,7 +267,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                 "report_available": "No"   # Default, not in service output
             }
             
-            logger.info(f"Study {study_id_for_date_log}: final transformed data - study_date_time='{appointment_datetime_str}'")
+            # logger.info(f"Study {study_id_for_date_log}: final transformed data - study_date_time='{appointment_datetime_str}'")
             transformed_studies_for_template.append(transformed_study)
 
         if not transformed_studies_for_template:
