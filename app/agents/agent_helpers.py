@@ -219,32 +219,9 @@ async def _search_patient_by_name_doi_in_helper(first_name: str, last_name: str,
         Patient ID if found, None otherwise
     """
     try:
-        # First, try using MCP tool if available (search_patient_by_name_doi)
-        try:
-            mcp_result = await call_mcp_tool(
-                tool_name="search_patient_by_name_doi",
-                arguments={
-                    "first_name": first_name,
-                    "last_name": last_name,
-                    "doi": doi
-                }
-            )
-            
-            if mcp_result.get("success") and mcp_result.get("patients"):
-                patients = mcp_result["patients"]
-                if len(patients) == 1:
-                    patient_id = patients[0].get("patient_id")
-                    logger.info(f"Found patient via MCP tool: {patient_id}")
-                    return patient_id
-                elif len(patients) > 1:
-                    logger.warning(f"Multiple patients found via MCP tool for {first_name} {last_name} DOI {doi}: {len(patients)} matches")
-                    return None
-            
-        except Exception as mcp_error:
-            logger.info(f"MCP tool search_patient_by_name_doi not available or failed: {mcp_error}")
-        
-        # Fallback to direct API call
-        logger.info(f"Trying direct API search for {first_name} {last_name} DOI {doi}")
+        # Note: search_patient_by_name_doi MCP tool is not available on the MCP server
+        # Going directly to RadFlow API search
+        logger.info(f"Searching for patient via direct API: {first_name} {last_name} DOI {doi}")
         result = await get_patient_by_name_doi(first_name, last_name, doi)
         
         if result.get("success") and result.get("patients"):

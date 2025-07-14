@@ -519,6 +519,9 @@ async def fetch_patient_by_name_doi(first_name: str, last_name: str, doi: str) -
             "requiredField": "Details"
         }
         
+        # Log the exact payload being sent for debugging
+        logger.info(f"API payload for patient search: {json.dumps(payload, indent=2)}")
+        
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json"
@@ -542,6 +545,32 @@ async def fetch_patient_by_name_doi(first_name: str, last_name: str, doi: str) -
             try:
                 data = response.json()
                 logger.debug("Successfully parsed JSON response")
+                
+                # Log response structure for debugging (without sensitive data)
+                response_status = data.get("responseStatus", "Unknown")
+                result_section = data.get("result", {})
+                total_patients = result_section.get("totalPatients", "Unknown")
+                logger.info(f"API response - Status: {response_status}, Total Patients: {total_patients}")
+                
+                # If there's an exception in the response, log it
+                if "exception" in data:
+                    logger.warning(f"API returned exception: {data['exception']}")
+                
+                # Check if result.result exists and log its type/structure
+                if "result" in result_section:
+                    inner_result = result_section["result"]
+                    if isinstance(inner_result, str):
+                        logger.info(f"Inner result is a JSON string of length: {len(inner_result)}")
+                        try:
+                            parsed_inner = json.loads(inner_result)
+                            logger.info(f"Parsed inner result contains {len(parsed_inner) if isinstance(parsed_inner, list) else 'non-list'} items")
+                        except json.JSONDecodeError:
+                            logger.warning("Could not parse inner result as JSON")
+                    elif isinstance(inner_result, list):
+                        logger.info(f"Inner result is a list with {len(inner_result)} items")
+                    else:
+                        logger.info(f"Inner result is of type: {type(inner_result)}")
+                
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse JSON response: {e}\nResponse text: {response.text[:500]}")
                 return {
@@ -556,6 +585,9 @@ async def fetch_patient_by_name_doi(first_name: str, last_name: str, doi: str) -
                 logger.info(f"Successfully retrieved patient data: {result['message']}")
             else:
                 logger.error(f"Failed to process patient data: {result.get('error', 'Unknown error')}")
+                # Log additional context when no patients are found
+                logger.info(f"Search parameters used - First: '{first_name}', Last: '{last_name}', DOI: '{doi}'")
+                logger.info(f"Consider checking: name spelling variations, DOI format (MM/DD/YYYY vs DD/MM/YYYY), or patient existence")
             
             return result
             
