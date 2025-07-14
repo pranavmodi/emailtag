@@ -140,7 +140,7 @@ async def handle_case_update_request(
         }
 
     # --- Begin MCP Logging ---
-    patient_id = await extract_patient_id_from_email_logic(current_email_content)
+    patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id)
     if patient_id:
         logger.info(
             "[CaseUpdatesAgent] Extracted Patient ID: %s for conv %s",

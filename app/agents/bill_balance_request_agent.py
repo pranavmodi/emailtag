@@ -256,7 +256,7 @@ async def handle_bill_balance_request(
     already_asked_for_clarification = _check_if_clarification_request(structured_history_messages)
     
     # Try to extract patient ID from the email
-    patient_id = await extract_patient_id_from_email_logic(f"Subject: \n\n{current_email_content}")
+    patient_id = await extract_patient_id_from_email_logic(f"Subject: \n\n{current_email_content}", front_conversation_id)
     
     if not patient_id:
         if already_asked_for_clarification:

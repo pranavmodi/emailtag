@@ -1159,3 +1159,62 @@ def create_new_conversation_for_split(
 # Make sure to add a new setting FRONT_APP_WEBHOOK_BASE_URL_FOR_SPLIT to your app.core.config.py
 # and your .env file. For example:
 # FRONT_APP_WEBHOOK_BASE_URL_FOR_SPLIT="https://api2.frontapp.com" 
+
+def add_conversation_comment(conversation_id: str, comment_body: str, author_id: Optional[str] = None) -> bool:
+    """
+    Add a comment to a Front conversation.
+    
+    Args:
+        conversation_id (str): The Front conversation ID.
+        comment_body (str): The text content of the comment.
+        author_id (Optional[str]): The teammate ID who is adding the comment.
+                                   If not provided, uses FRONT_BOT_TEAMMATE_ID from settings.
+        
+    Returns:
+        bool: True if comment was added successfully, False on error.
+    """
+    if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
+        logger.error("Missing required Front configuration for adding comment (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
+        return False
+    
+    if not comment_body:
+        logger.warning(f"Comment body is empty for conversation {conversation_id}. Skipping comment addition.")
+        return True  # Consider empty comment as success (no-op)
+    
+    # Use provided author_id or fall back to bot teammate ID
+    effective_author_id = author_id or settings.FRONT_BOT_TEAMMATE_ID
+    if not effective_author_id:
+        logger.error("No author_id provided and FRONT_BOT_TEAMMATE_ID not configured. Cannot add comment.")
+        return False
+
+    auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
+    url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/comments"
+    headers = {
+        "Authorization": auth_header,
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "body": comment_body,
+        "author_id": effective_author_id
+    }
+
+    with httpx.Client(verify=False) as client:
+        try:
+            logger.info(f"Adding comment to conversation {conversation_id}")
+            response = client.post(url, headers=headers, json=payload)
+            
+            if response.status_code >= 400:
+                logger.error(f"Front API error response ({response.status_code}) for {conversation_id} when adding comment: {response.text}")
+                return False
+                
+            logger.info(f"Successfully added comment to conversation {conversation_id}")
+            return True
+            
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTPStatusError adding comment to {conversation_id}: {e.response.status_code} - {e.response.text}", exc_info=True)
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error adding comment to conversation {conversation_id}: {str(e)}", exc_info=True)
+            return False 

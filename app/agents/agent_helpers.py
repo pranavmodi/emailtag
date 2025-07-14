@@ -242,11 +242,15 @@ async def _search_patient_by_name_doi_in_helper(first_name: str, last_name: str,
         return None
 
 
-async def extract_patient_id_from_email_logic(email_content: str) -> Optional[str]:
+async def extract_patient_id_from_email_logic(email_content: str, conversation_id: Optional[str] = None) -> Optional[str]:
     """
     Extracts a patient ID from the given email content using regex or by searching for patient names and DOI.
     This is the core logic, designed to be called directly from code.
     Returns the patient ID string or None if not found.
+    
+    Args:
+        email_content (str): The email content to search for patient ID
+        conversation_id (Optional[str]): The Front conversation ID to add a comment when patient ID is found
     """
     logger.info("Running patient ID extraction logic...")
     
@@ -256,6 +260,11 @@ async def extract_patient_id_from_email_logic(email_content: str) -> Optional[st
     if match:
         extracted_id = match.group(2)
         logger.info(f"Found patient ID via labeled pattern: {extracted_id}")
+        
+        # Add comment to Front conversation if conversation_id is provided
+        if conversation_id:
+            await _add_patient_id_comment_to_front(conversation_id, extracted_id, "labeled pattern")
+        
         return extracted_id
 
     # This regex looks for standalone IDs that might not have a clear label.
@@ -267,6 +276,11 @@ async def extract_patient_id_from_email_logic(email_content: str) -> Optional[st
             logger.info(f"Skipping potential ID '{potential_id}' because it resembles a phone number.")
         else:
             logger.info(f"Found potential standalone patient ID: {potential_id}")
+            
+            # Add comment to Front conversation if conversation_id is provided
+            if conversation_id:
+                await _add_patient_id_comment_to_front(conversation_id, potential_id, "standalone pattern")
+            
             return potential_id
 
     # If no direct patient ID found, try extracting names and DOI/DOL
@@ -286,6 +300,11 @@ async def extract_patient_id_from_email_logic(email_content: str) -> Optional[st
             
             if patient_id:
                 logger.info(f"Successfully resolved {first_name} {last_name} DOI {doi} to patient ID {patient_id}")
+                
+                # Add comment to Front conversation if conversation_id is provided
+                if conversation_id:
+                    await _add_patient_id_comment_to_front(conversation_id, patient_id, f"name/DOI lookup ({first_name} {last_name}, DOI: {doi})")
+                
                 return patient_id
             else:
                 logger.warning(f"Could not resolve {first_name} {last_name} DOI {doi} to a patient ID")
@@ -294,15 +313,47 @@ async def extract_patient_id_from_email_logic(email_content: str) -> Optional[st
     return None
 
 
+async def _add_patient_id_comment_to_front(conversation_id: str, patient_id: str, extraction_method: str):
+    """
+    Add a comment to the Front conversation with the found patient ID.
+    
+    Args:
+        conversation_id (str): The Front conversation ID
+        patient_id (str): The extracted patient ID  
+        extraction_method (str): Description of how the ID was found
+    """
+    try:
+        comment_body = f"🏥 **Patient ID Found:** {patient_id}\n📋 **Extraction Method:** {extraction_method}\n⏰ **Found at:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+        
+        # Use asyncio.to_thread to run the synchronous Front API call
+        success = await asyncio.to_thread(
+            frontapp_service.add_conversation_comment,
+            conversation_id,
+            comment_body
+        )
+        
+        if success:
+            logger.info(f"Successfully added patient ID comment to conversation {conversation_id}: {patient_id}")
+        else:
+            logger.error(f"Failed to add patient ID comment to conversation {conversation_id}: {patient_id}")
+            
+    except Exception as e:
+        logger.error(f"Exception adding patient ID comment to conversation {conversation_id}: {e}", exc_info=True)
+
+
 @function_tool
-async def extract_patient_id_from_email(email_content: str) -> Dict[str, Optional[str]]:
+async def extract_patient_id_from_email(email_content: str, conversation_id: Optional[str] = None) -> Dict[str, Optional[str]]:
     """
     Extracts a patient ID from the given email content.
     Searches for patterns like "Patient ID: XXXX", "PID: XXXX", or a standalone ID.
     This is a FunctionTool for use with agents and returns a dictionary.
+    
+    Args:
+        email_content (str): The email content to search for patient ID
+        conversation_id (Optional[str]): The Front conversation ID to add a comment when patient ID is found
     """
     logger.info(f"Tool 'extract_patient_id_from_email' called...")
-    patient_id = await extract_patient_id_from_email_logic(email_content)
+    patient_id = await extract_patient_id_from_email_logic(email_content, conversation_id)
     return {"patient_id": patient_id}
 
 

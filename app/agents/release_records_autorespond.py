@@ -283,7 +283,7 @@ Full Context:
 
 **Your Task:**
 
-1.  **Find Patient ID**: Call `extract_patient_id_from_email` on the 'Full Context'.
+1.  **Find Patient ID**: Call `extract_patient_id_from_email` on the 'Full Context' with `conversation_id="{front_conversation_id}"`.
     *   If no ID is found, call `generate_formatted_reply` with scenario "request_patient_id" and send it. Your job is done.
 
 2.  **Get Case Info**: If you have a patient ID, call `fetch_patient_and_study_info_tool`.

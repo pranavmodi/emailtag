@@ -187,7 +187,7 @@ async def handle_missing_lien_request(
     already_asked_for_clarification = _check_conversation_history_for_clarification_request(structured_history_messages)
     
     # Extract patient ID from current email
-    patient_id = await extract_patient_id_from_email_logic(current_email_content)
+    patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id)
     
     if not patient_id:
         # Try to extract patient details (name, DOB, DOL) from email if no patient ID

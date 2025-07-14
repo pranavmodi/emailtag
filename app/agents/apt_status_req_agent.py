@@ -363,7 +363,7 @@ async def handle_apt_status_request_agent_sdk(
     instructions = f"""
 You are an AI assistant for a medical imaging company, specializing in appointment status requests.
 Your primary goal is to:
-1.  Search the **'Entire Conversation For Extraction'** text provided below to find the Patient ID. You MUST pass this complete text block to the `extract_patient_id_from_email` tool.
+1.  Search the **'Entire Conversation For Extraction'** text provided below to find the Patient ID. You MUST pass this complete text block to the `extract_patient_id_from_email` tool with the conversation_id parameter.
 2.  Fetch appointment details using `fetch_appointment_details_by_patient_id` with the extracted ID. Also pass the `settings_obj` to this tool.
 3. Based on the outcome of step 2, determine the correct scenario.
 4. Call the `generate_formatted_reply` tool, passing it the determined scenario and the FULL result from `fetch_appointment_details_by_patient_id` (if available), and the `extracted_patient_id` (if available).
@@ -409,6 +409,9 @@ B.  **If `extract_patient_id_from_email` returns NO `patient_id` after searching
         *   Call `generate_formatted_reply` with `scenario="id_missing_second_attempt"`, `fetch_details_result={{}}`, `extracted_patient_id=None`.
         *   Take `reply_text` from its output.
         *   Call `send_reply_to_front` with this `reply_text` and `tags_to_add=["{TAG_AI_HUMAN_REVIEW_REQUIRED}"]`.
+
+**IMPORTANT TOOL USAGE:**
+- When calling `extract_patient_id_from_email`, ALWAYS pass both parameters: `email_content` AND `conversation_id="{front_conversation_id}"`. This ensures found patient IDs are automatically logged as comments in Front.
 
 **IMPORTANT FINAL STEP:** After calling `send_reply_to_front`, your job is to return ONLY the direct JSON output received from that `send_reply_to_front` tool call. Do NOT add any conversational text, summaries, or any other information around it. Your entire response for this run MUST be the JSON object that the `send_reply_to_front` tool gives back.
 
