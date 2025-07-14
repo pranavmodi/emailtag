@@ -1165,56 +1165,43 @@ def add_conversation_comment(conversation_id: str, comment_body: str, author_id:
     Add a comment to a Front conversation.
     
     Args:
-        conversation_id (str): The Front conversation ID.
-        comment_body (str): The text content of the comment.
-        author_id (Optional[str]): The teammate ID who is adding the comment.
-                                   If not provided, uses FRONT_BOT_TEAMMATE_ID from settings.
-        
+        conversation_id: The ID of the conversation to add the comment to
+        comment_body: The text content of the comment
+        author_id: Optional author ID (teammate). If not provided, uses system default
+    
     Returns:
-        bool: True if comment was added successfully, False on error.
+        bool: True if comment was added successfully, False otherwise
     """
-    if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
-        logger.error("Missing required Front configuration for adding comment (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
-        return False
-    
-    if not comment_body:
-        logger.warning(f"Comment body is empty for conversation {conversation_id}. Skipping comment addition.")
-        return True  # Consider empty comment as success (no-op)
-    
-    # Use provided author_id or fall back to bot teammate ID
-    effective_author_id = author_id or settings.FRONT_BOT_TEAMMATE_ID
-    if not effective_author_id:
-        logger.error("No author_id provided and FRONT_BOT_TEAMMATE_ID not configured. Cannot add comment.")
-        return False
-
-    auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
-    url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/comments"
-    headers = {
-        "Authorization": auth_header,
-        "Accept": "application/json",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "body": comment_body,
-        "author_id": effective_author_id
-    }
-
-    with httpx.Client(verify=False) as client:
-        try:
-            logger.info(f"Adding comment to conversation {conversation_id}")
-            response = client.post(url, headers=headers, json=payload)
+    try:
+        headers = {
+            "Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        # Construct the comment payload
+        comment_data = {
+            "body": comment_body
+        }
+        
+        # Add author if provided
+        if author_id:
+            comment_data["author_id"] = author_id
             
-            if response.status_code >= 400:
-                logger.error(f"Front API error response ({response.status_code}) for {conversation_id} when adding comment: {response.text}")
+        # Hey Gofo - Front API endpoint for adding comments to conversations
+        url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/comments"
+        
+        logger.info(f"Adding comment to conversation {conversation_id}: {comment_body}")
+        
+        with httpx.Client(verify=False, timeout=30.0) as client:
+            response = client.post(url, headers=headers, json=comment_data)
+            
+            if response.status_code == 201:
+                logger.info(f"Successfully added comment to conversation {conversation_id}")
+                return True
+            else:
+                logger.error(f"Failed to add comment to conversation {conversation_id}. Status: {response.status_code}, Response: {response.text}")
                 return False
                 
-            logger.info(f"Successfully added comment to conversation {conversation_id}")
-            return True
-            
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTPStatusError adding comment to {conversation_id}: {e.response.status_code} - {e.response.text}", exc_info=True)
-            return False
-        except Exception as e:
-            logger.error(f"Unexpected error adding comment to conversation {conversation_id}: {str(e)}", exc_info=True)
-            return False 
+    except Exception as e:
+        logger.error(f"Exception occurred while adding comment to conversation {conversation_id}: {str(e)}")
+        return False 
