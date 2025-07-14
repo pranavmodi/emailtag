@@ -27,6 +27,7 @@ from scenarios_scheduling import SCHEDULING_SCENARIOS
 from scenarios_medical_records import MEDICAL_RECORDS_SCENARIOS
 from scenarios_case_updates import CASE_UPDATE_SCENARIOS
 from scenarios_collections import COLLECTIONS_SCENARIOS
+from scenarios_client_evals import CLIENT_EVAL_SCENARIOS
 
 
 def combine_all_scenarios() -> Dict[str, Any]:
@@ -39,6 +40,7 @@ def combine_all_scenarios() -> Dict[str, Any]:
     all_scenarios.update(MEDICAL_RECORDS_SCENARIOS)
     all_scenarios.update(CASE_UPDATE_SCENARIOS)
     all_scenarios.update(COLLECTIONS_SCENARIOS)
+    all_scenarios.update(CLIENT_EVAL_SCENARIOS)
     
     return all_scenarios
 
@@ -50,7 +52,8 @@ def display_scenarios_by_category(verbose: bool = False) -> None:
         ("Scheduling & Appointments", SCHEDULING_SCENARIOS),
         ("Medical Records", MEDICAL_RECORDS_SCENARIOS),
         ("Case Updates", CASE_UPDATE_SCENARIOS),
-        ("Collections", COLLECTIONS_SCENARIOS)
+        ("Collections", COLLECTIONS_SCENARIOS),
+        ("Client Evaluations", CLIENT_EVAL_SCENARIOS)
     ]
     
     print("\nAvailable test scenarios by category:")
@@ -292,6 +295,8 @@ def main():
         scenarios_to_run = CASE_UPDATE_SCENARIOS
     elif choice.lower() in ['collections']:
         scenarios_to_run = COLLECTIONS_SCENARIOS
+    elif choice.lower() in ['client', 'client evaluations', 'client_evals']:
+        scenarios_to_run = CLIENT_EVAL_SCENARIOS
     else:
         # Parse comma-separated scenario numbers
         scenario_keys = [key.strip() for key in choice.split(',')]
