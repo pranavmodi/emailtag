@@ -507,59 +507,59 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
         logger.info("Proceeding to TIER 4 (OpenAI extraction)...")
         # Skip to Tier 4 since we need both name and DOI
     else:
-    # Extract date of injury/loss
+        # Extract date of injury/loss
         logger.info("TIER 2B: Extracting date of injury using regex patterns...")
-    doi_patterns = [
-        r'(?:date of injury|injury date|date of loss|doi|dol|injured on):?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
-        r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*(?:injury|accident|incident|loss)',
-        r'on\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*(?:i was|got|had)'
-    ]
-    
-    extracted_doi = None
+        doi_patterns = [
+            r'(?:date of injury|injury date|date of loss|doi|dol|injured on):?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
+            r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*(?:injury|accident|incident|loss)',
+            r'on\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*(?:i was|got|had)'
+        ]
+        
+        extracted_doi = None
         for i, pattern in enumerate(doi_patterns):
             logger.info(f"Testing DOI pattern {i+1}: {pattern}")
-        doi_match = re.search(pattern, email_content, re.IGNORECASE)
-        if doi_match:
-            extracted_doi = doi_match.group(1)
+            doi_match = re.search(pattern, email_content, re.IGNORECASE)
+            if doi_match:
+                extracted_doi = doi_match.group(1)
                 logger.info(f"✅ TIER 2B SUCCESS: Found date of injury with pattern {i+1}: {extracted_doi}")
-            break
+                break
             else:
                 logger.info(f"❌ DOI pattern {i+1} did not match")
-    
-    if not extracted_doi:
+        
+        if not extracted_doi:
             logger.info("❌ TIER 2B FAILED: No date of injury found in email content")
             logger.info("Proceeding to TIER 4 (OpenAI extraction)...")
             # Skip to Tier 4 since we need both name and DOI
         else:
-    # Tier 3: Database lookup by name and DOI
+            # Tier 3: Database lookup by name and DOI
             logger.info("TIER 3: Attempting database lookup...")
             logger.info(f"TIER 3 INPUT: Name='{extracted_name}', DOI='{extracted_doi}'")
-    
-    try:
+            
+            try:
                 logger.info("🔍 API CALL: Calling get_patient_by_name_doi() with regex extracted data...")
-        patient_data = await get_patient_by_name_doi(extracted_name, extracted_doi)
+                patient_data = await get_patient_by_name_doi(extracted_name, extracted_doi)
                 logger.info(f"🔍 API RESPONSE: {patient_data}")
                 
-        if patient_data and patient_data.get('patient_id'):
-            patient_id = patient_data['patient_id']
+                if patient_data and patient_data.get('patient_id'):
+                    patient_id = patient_data['patient_id']
                     logger.info(f"✅ TIER 3 SUCCESS: Found patient ID from database lookup: {patient_id}")
-            
-            # Add comment to Front conversation if conversation_id is provided
-            if conversation_id:
-                comment_text = f"Bot found patient id {patient_id}"
-                try:
-                    frontapp_service.add_conversation_comment(conversation_id, comment_text)
+                    
+                    # Add comment to Front conversation if conversation_id is provided
+                    if conversation_id:
+                        comment_text = f"Bot found patient id {patient_id}"
+                        try:
+                            frontapp_service.add_conversation_comment(conversation_id, comment_text)
                             logger.info(f"✅ Front comment added successfully for conversation {conversation_id}: {comment_text}")
-                except Exception as e:
+                        except Exception as e:
                             logger.error(f"❌ Failed to add comment to conversation {conversation_id}: {str(e)}")
-            
+                    
                     logger.info("=== EXTRACTION COMPLETE (TIER 3) ===")
-            return patient_id
-        else:
+                    return patient_id
+                else:
                     logger.info("❌ TIER 3 FAILED: No patient found in database for the given name and DOI")
                     logger.info("Proceeding to TIER 4 (OpenAI extraction)...")
-            
-    except Exception as e:
+                    
+            except Exception as e:
                 logger.error(f"❌ TIER 3 ERROR: Exception during database lookup: {str(e)}")
                 logger.info("Proceeding to TIER 4 (OpenAI extraction)...")
     

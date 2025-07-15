@@ -34,6 +34,40 @@ RADFLOW_API_URL = os.getenv("RADFLOW_API_URL", "https://app.radflow360.com/chatb
 TIMEOUT_SECONDS = 30.0
 
 
+def convert_date_to_api_format(date_str: str) -> str:
+    """
+    Convert date from MM-DD-YY or MM-DD-YYYY format to YYYY-MM-DD HH:MM:SS format.
+    
+    Args:
+        date_str: Date string in MM-DD-YY or MM-DD-YYYY format (e.g., '06-01-24' or '06-01-2024')
+        
+    Returns:
+        Date string in YYYY-MM-DD HH:MM:SS format (e.g., '2024-06-01 00:00:00')
+        
+    Raises:
+        ValueError: If date format is invalid
+    """
+    if not date_str:
+        return ""
+    
+    try:
+        # Try parsing MM-DD-YY format first
+        if len(date_str.split('-')[2]) == 2:
+            # MM-DD-YY format
+            parsed_date = datetime.strptime(date_str, "%m-%d-%y")
+        else:
+            # MM-DD-YYYY format
+            parsed_date = datetime.strptime(date_str, "%m-%d-%Y")
+        
+        # Convert to YYYY-MM-DD HH:MM:SS format
+        return parsed_date.strftime("%Y-%m-%d 00:00:00")
+        
+    except ValueError as e:
+        print(f"⚠️  Warning: Invalid date format '{date_str}'. Expected MM-DD-YY or MM-DD-YYYY format (e.g., '06-01-24')")
+        print(f"    Using original date string: {date_str}")
+        return date_str
+
+
 class PatientDetailsClient:
     """Client for fetching patient information from RadFlow API."""
     
@@ -75,13 +109,18 @@ class PatientDetailsClient:
         print(f"🔍 Fetching patient information for: {search_description}")
         print(f"🌐 API URL: {self.api_url}")
         
+        # Convert date of injury to API format (YYYY-MM-DD HH:MM:SS)
+        converted_doi = convert_date_to_api_format(date_of_injury)
+        if date_of_injury and converted_doi != date_of_injury:
+            print(f"📅 Converted date format: '{date_of_injury}' → '{converted_doi}'")
+        
         payload = {
             "patientId": patient_id,
             "phone": "",
             "firstName": first_name,
             "lastName": last_name,
             "birthDate": "",
-            "doi": date_of_injury,
+            "doi": converted_doi,
             "accessionNumber": "",
             "requiredField": "Details"
         }
@@ -402,7 +441,7 @@ Examples:
     parser.add_argument(
         "--date-of-injury", 
         type=str, 
-        help="Date of injury in MM-DD-YY or MM-DD-YYYY format (e.g., '06-01-24')"
+        help="Date of injury in MM-DD-YY or MM-DD-YYYY format (e.g., '06-01-24') - will be converted to API format"
     )
     
     parser.add_argument(
