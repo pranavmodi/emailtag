@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-Diagnostic script for testing patient search functionality.
+Diagnostic script for testing patient search functionality using MCP tools.
 Helps debug why specific patient searches are failing.
+
+Updated to use MCP tools for consistency with the main application.
 """
 
 import asyncio
@@ -14,12 +16,12 @@ from typing import Dict, Any
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from app.services.patient import fetch_patient_by_name_doi, get_patient_by_name_doi
+from app.mcp import call_mcp_tool
 
 
 async def test_patient_search(first_name: str, last_name: str, doi: str) -> Dict[str, Any]:
     """
-    Test patient search with detailed logging.
+    Test patient search using MCP tools with detailed logging.
     
     Args:
         first_name: Patient's first name
@@ -30,20 +32,41 @@ async def test_patient_search(first_name: str, last_name: str, doi: str) -> Dict
         Dict with test results
     """
     print(f"\n{'='*60}")
-    print(f"TESTING PATIENT SEARCH")
+    print(f"TESTING PATIENT SEARCH (MCP TOOL)")
     print(f"{'='*60}")
     print(f"Name: {first_name} {last_name}")
     print(f"DOI: {doi}")
+    print(f"MCP Tool: fetch_patient_by_name_and_doi")
     print(f"{'='*60}")
     
     try:
-        result = await fetch_patient_by_name_doi(first_name, last_name, doi)
+        print(f"🔍 Calling MCP tool...")
+        result = await call_mcp_tool(
+            tool_name="fetch_patient_by_name_and_doi",
+            arguments={
+                "firstName": first_name,
+                "lastName": last_name,
+                "doi": doi
+            }
+        )
         
         print(f"\nRESULTS:")
         print(f"Success: {result.get('success', False)}")
         
-        if result.get('success'):
-            patients = result.get('patients', [])
+        if result.get('success') and result.get('data'):
+            data = result.get('data')
+            print(f"MCP Response Data Type: {type(data)}")
+            
+            # Handle different response formats
+            patients = []
+            if isinstance(data, dict):
+                # Single patient response
+                if data.get('patient_id'):
+                    patients = [data]
+            elif isinstance(data, list):
+                # Multiple patients response  
+                patients = data
+            
             print(f"Number of patients found: {len(patients)}")
             
             for i, patient in enumerate(patients, 1):
@@ -54,7 +77,8 @@ async def test_patient_search(first_name: str, last_name: str, doi: str) -> Dict
                 print(f"  DOB: {patient.get('birth_date', 'N/A')}")
                 print(f"  Financial Type: {patient.get('financial_type', 'N/A')}")
         else:
-            print(f"Error: {result.get('error', 'Unknown error')}")
+            error_msg = result.get('error', 'Unknown error') if result else 'Empty response'
+            print(f"Error: {error_msg}")
             
             # Suggest alternative searches
             print(f"\nSUGGESTED TROUBLESHOOTING:")
@@ -81,6 +105,7 @@ async def test_patient_search(first_name: str, last_name: str, doi: str) -> Dict
             print(f"   - Common misspellings")
             
             print(f"3. Verify patient exists in RadFlow system")
+            print(f"4. Check MCP server connectivity")
         
         return result
         
@@ -90,8 +115,8 @@ async def test_patient_search(first_name: str, last_name: str, doi: str) -> Dict
 
 
 async def main():
-    """Main function to run patient search tests."""
-    print("Patient Search Diagnostic Tool")
+    """Main function to run patient search tests using MCP tools."""
+    print("Patient Search Diagnostic Tool (MCP)")
     print("=" * 60)
     
     # Test cases from the log

@@ -493,111 +493,9 @@ async def fetch_patient_by_name_dob(first_name: str, last_name: str, birth_date:
             "error": f"Failed to fetch patient data: {str(e)}"
         }
 
-async def fetch_patient_by_name_doi(first_name: str, last_name: str, doi: str) -> Dict[str, Any]:
-    """
-    Fetch patient information by name and date of injury from the RadFlow API.
-    
-    Args:
-        first_name: Patient's first name
-        last_name: Patient's last name
-        doi: Patient's date of injury in MM/DD/YYYY format
-        
-    Returns:
-        Dict[str, Any]: Patient information and status
-    """
-    try:
-        logger.info(f"Fetching patient data for name: {first_name} {last_name}, DOI: {doi}")
-        
-        payload = {
-            "patientId": "",
-            "phone": "",
-            "firstName": first_name,
-            "lastName": last_name,
-            "birthDate": "",
-            "doi": doi,
-            "accessionNumber": "",
-            "requiredField": "Details"
-        }
-        
-        # Log the exact payload being sent for debugging
-        logger.info(f"API payload for patient search: {json.dumps(payload, indent=2)}")
-        
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json"
-        }
-        
-        async with httpx.AsyncClient(verify=False) as client:
-            response = await client.post(
-                RADFLOW_API_URL,
-                json=payload,
-                headers=headers,
-                timeout=30.0
-            )
-            
-            if response.status_code != 200:
-                logger.error(f"API request failed with status {response.status_code}: {response.text}")
-                return {
-                    "success": False,
-                    "error": f"API request failed with status {response.status_code}"
-                }
-            
-            try:
-                data = response.json()
-                logger.debug("Successfully parsed JSON response")
-                
-                # Log response structure for debugging (without sensitive data)
-                response_status = data.get("responseStatus", "Unknown")
-                result_section = data.get("result", {})
-                total_patients = result_section.get("totalPatients", "Unknown")
-                logger.info(f"API response - Status: {response_status}, Total Patients: {total_patients}")
-                
-                # If there's an exception in the response, log it
-                if "exception" in data:
-                    logger.warning(f"API returned exception: {data['exception']}")
-                
-                # Check if result.result exists and log its type/structure
-                if "result" in result_section:
-                    inner_result = result_section["result"]
-                    if isinstance(inner_result, str):
-                        logger.info(f"Inner result is a JSON string of length: {len(inner_result)}")
-                        try:
-                            parsed_inner = json.loads(inner_result)
-                            logger.info(f"Parsed inner result contains {len(parsed_inner) if isinstance(parsed_inner, list) else 'non-list'} items")
-                        except json.JSONDecodeError:
-                            logger.warning("Could not parse inner result as JSON")
-                    elif isinstance(inner_result, list):
-                        logger.info(f"Inner result is a list with {len(inner_result)} items")
-                    else:
-                        logger.info(f"Inner result is of type: {type(inner_result)}")
-                
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse JSON response: {e}\nResponse text: {response.text[:500]}")
-                return {
-                    "success": False,
-                    "error": "Invalid JSON response from API"
-                }
-            
-            logger.info(f"Processing patient data response for name: {first_name} {last_name}, DOI: {doi}")
-            result = process_patient_data(data, "")
-            
-            if result["success"]:
-                logger.info(f"Successfully retrieved patient data: {result['message']}")
-            else:
-                logger.error(f"Failed to process patient data: {result.get('error', 'Unknown error')}")
-                # Log additional context when no patients are found
-                logger.info(f"Search parameters used - First: '{first_name}', Last: '{last_name}', DOI: '{doi}'")
-                logger.info(f"Consider checking: name spelling variations, DOI format (MM/DD/YYYY vs DD/MM/YYYY), or patient existence")
-            
-            return result
-            
-    except Exception as e:
-        logger.error(f"Unexpected error in fetch_patient_by_name_doi: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return {
-            "success": False,
-            "error": f"Failed to fetch patient data: {str(e)}"
-        }
+# DEPRECATED: The fetch_patient_by_name_doi and get_patient_by_name_doi functions have been 
+# removed as they have been replaced by the MCP tool fetch_patient_by_name_and_doi.
+# All patient search operations now use MCP tools for better standardization and error handling.
 
 async def get_patient_by_phone(phone: str) -> Dict[str, Any]:
     """
@@ -637,19 +535,9 @@ async def get_patient_by_name_dob(first_name: str, last_name: str, birth_date: s
     """
     return await fetch_patient_by_name_dob(first_name, last_name, birth_date)
 
-async def get_patient_by_name_doi(first_name: str, last_name: str, doi: str) -> Dict[str, Any]:
-    """
-    Get patient information by name and date of injury from the backend API.
-    
-    Args:
-        first_name: Patient's first name
-        last_name: Patient's last name
-        doi: Patient's date of injury in MM/DD/YYYY format
-        
-    Returns:
-        Dict[str, Any]: Patient information and status
-    """
-    return await fetch_patient_by_name_doi(first_name, last_name, doi)
+# DEPRECATED: The fetch_patient_by_name_doi and get_patient_by_name_doi functions have been 
+# removed as they have been replaced by the MCP tool fetch_patient_by_name_and_doi.
+# All patient search operations now use MCP tools for better standardization and error handling.
 
 async def get_patient_studies(patient_id: str) -> Dict[str, Any]:
     """

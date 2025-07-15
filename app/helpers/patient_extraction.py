@@ -5,8 +5,8 @@ This module provides patient data extraction capabilities for email processing w
 MCP TOOLS vs DIRECT API USAGE:
 ==============================
 This module follows the same patterns as agent_helpers.py:
-- Uses MCP tools when available (fetch_patient_by_id, fetch_study_details)  
-- Uses direct API calls when no MCP tool exists (name+DOI searches)
+- Uses MCP tools when available (fetch_patient_by_id, fetch_study_details, fetch_patient_by_name_and_doi) ✅ UPDATED!
+- Uses direct API calls only when no MCP tool exists (now rarely needed!)
 - See agent_helpers.py for complete documentation of the MCP/API policy
 """
 
@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud import patient_conversation_data as pcd_crud
 from app.schemas.patient_conversation_data import PatientConversationDataCreate
-from app.services.patient import fetch_patient_by_id, _fetch_patient_study_data, get_patient_by_name_doi
+from app.services.patient import fetch_patient_by_id, _fetch_patient_study_data
 from app.mcp import call_mcp_tool
 
 
@@ -92,9 +92,9 @@ def _extract_patient_names_and_dates(content_text: str) -> list:
 
 async def _search_patient_by_name_doi(first_name: str, last_name: str, doi: str, parent_logger: logging.Logger) -> str:
     """
-    Search for patient by name and DOI using direct API (no MCP tool available).
+    Search for patient by name and DOI using MCP tool (now available!).
     
-    NOTE: This function uses direct API calls since no MCP tool exists for name+DOI search.
+    NOTE: This function now uses the fetch_patient_by_name_and_doi MCP tool.
     See agent_helpers.py for the complete MCP vs direct API usage policy.
     
     Args:
@@ -107,32 +107,47 @@ async def _search_patient_by_name_doi(first_name: str, last_name: str, doi: str,
         Patient ID if found, None otherwise
     """
     try:
-        parent_logger.info(f"🔍 DB SEARCH: Starting patient search via direct API (no MCP tool available)...")
-        parent_logger.info(f"🔍 DB SEARCH INPUT: First='{first_name}', Last='{last_name}', DOI='{doi}'")
-        parent_logger.info("NOTE: Using direct API call since no MCP tool exists for name+DOI search")
+        parent_logger.info(f"🔍 MCP SEARCH: Starting patient search via MCP tool...")
+        parent_logger.info(f"🔍 MCP SEARCH INPUT: First='{first_name}', Last='{last_name}', DOI='{doi}'")
+        parent_logger.info("✅ NOW USING MCP TOOL: fetch_patient_by_name_and_doi")
         
-        parent_logger.info(f"🔍 API CALL: Calling get_patient_by_name_doi() for {first_name} {last_name} DOI {doi}")
-        result = await get_patient_by_name_doi(first_name, last_name, doi)
-        parent_logger.info(f"🔍 API RESPONSE: {result}")
+        parent_logger.info(f"🔍 MCP CALL: Calling fetch_patient_by_name_and_doi for {first_name} {last_name} DOI {doi}")
         
-        if result.get("success") and result.get("patients"):
-            patients = result["patients"]
-            parent_logger.info(f"🔍 DB SEARCH: Found {len(patients)} patient(s) in database")
+        # Call new MCP tool for name+DOI patient lookup
+        result = await call_mcp_tool(
+            tool_name="fetch_patient_by_name_and_doi",
+            arguments={
+                "firstName": first_name,
+                "lastName": last_name,
+                "doi": doi
+            }
+        )
+        parent_logger.info(f"🔍 MCP RESPONSE: {result}")
+        
+        if result and result.get("success") and result.get("data"):
+            data = result["data"]
+            parent_logger.info(f"🔍 MCP SEARCH: Processing MCP response data...")
             
-            if len(patients) == 1:
-                patient_id = patients[0].get("patient_id")
-                parent_logger.info(f"✅ DB SEARCH SUCCESS: Found unique patient via direct API: {patient_id}")
+            if isinstance(data, dict) and data.get("patient_id"):
+                patient_id = data["patient_id"]
+                parent_logger.info(f"✅ MCP SEARCH SUCCESS: Found unique patient via MCP tool: {patient_id}")
                 return patient_id
-            elif len(patients) > 1:
-                parent_logger.warning(f"❌ DB SEARCH ERROR: Multiple patients found via direct API for {first_name} {last_name} DOI {doi}: {len(patients)} matches")
-                parent_logger.warning(f"❌ Multiple patients data: {patients}")
-                return None
+            elif isinstance(data, list) and len(data) > 0:
+                if len(data) == 1 and data[0].get("patient_id"):
+                    patient_id = data[0]["patient_id"]
+                    parent_logger.info(f"✅ MCP SEARCH SUCCESS: Found unique patient via MCP tool (from list): {patient_id}")
+                    return patient_id
+                elif len(data) > 1:
+                    parent_logger.warning(f"❌ MCP SEARCH ERROR: Multiple patients found via MCP tool for {first_name} {last_name} DOI {doi}: {len(data)} matches")
+                    parent_logger.warning(f"❌ Multiple patients data: {data}")
+                    return None
         
-        parent_logger.info(f"❌ DB SEARCH FAILED: No patient found for {first_name} {last_name} DOI {doi}")
+        error_msg = result.get('error', 'Unknown error') if result else 'Empty response'
+        parent_logger.info(f"❌ MCP SEARCH FAILED: No patient found for {first_name} {last_name} DOI {doi} - {error_msg}")
         return None
         
     except Exception as e:
-        parent_logger.error(f"❌ DB SEARCH ERROR: Exception searching for patient {first_name} {last_name} DOI {doi}: {str(e)}")
+        parent_logger.error(f"❌ MCP SEARCH ERROR: Exception searching for patient {first_name} {last_name} DOI {doi}: {str(e)}")
         return None
 
 
