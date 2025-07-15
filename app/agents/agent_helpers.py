@@ -881,9 +881,11 @@ async def send_reply_to_front(
     reply_text: str,
     tags_to_add: Optional[List[str]] = None,
     tags_to_remove: Optional[List[str]] = None
-) -> Dict[str, Any]:
+) -> str:
     """
     Sends a reply message to the specified Front conversation and optionally updates tags.
+    
+    Returns JSON string for compatibility with openai-agents SDK final output parsing.
     """
     logger.info(f"Tool 'send_reply_to_front' called for conv_id {conversation_id}.")
     try:
@@ -893,17 +895,20 @@ async def send_reply_to_front(
             reply_text
         )
         if not reply_sent_successfully:
-            return {"status": "error", "message": "Front API failed to send reply."}
+            result = {"status": "error", "message": "Front API failed to send reply."}
+            return json.dumps(result)
 
         if tags_to_add:
             await asyncio.to_thread(frontapp_service.add_conversation_tags, conversation_id, tags_to_add)
         if tags_to_remove:
             await asyncio.to_thread(frontapp_service.remove_conversation_tags, conversation_id, tags_to_remove)
 
-        return {"status": "success", "message": "Reply sent and tags (if any) updated."}
+        result = {"status": "success", "message": "Reply sent and tags (if any) updated."}
+        return json.dumps(result)
     except Exception as e:
         logger.error(f"Error in 'send_reply_to_front' tool for conversation {conversation_id}: {e}", exc_info=True)
-        return {"status": "error", "message": f"Exception in send_reply_to_front: {str(e)}"} 
+        result = {"status": "error", "message": f"Exception in send_reply_to_front: {str(e)}"}
+        return json.dumps(result)
 
 
 # Test function for the new OpenAI extraction functionality
