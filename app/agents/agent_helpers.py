@@ -223,27 +223,34 @@ async def _search_patient_by_name_doi_in_helper(first_name: str, last_name: str,
     Returns:
         Patient ID if found, None otherwise
     """
+    logger.info(f"🔍 DB SEARCH: Starting patient search via direct API...")
+    logger.info(f"🔍 DB SEARCH INPUT: First='{first_name}', Last='{last_name}', DOI='{doi}'")
+    
     try:
         # Note: search_patient_by_name_doi MCP tool is not available on the MCP server
         # Going directly to RadFlow API search
-        logger.info(f"Searching for patient via direct API: {first_name} {last_name} DOI {doi}")
+        logger.info(f"🔍 DB API CALL: Calling get_patient_by_name_doi() for {first_name} {last_name} DOI {doi}")
         result = await get_patient_by_name_doi(first_name, last_name, doi)
+        logger.info(f"🔍 DB API RESPONSE: {result}")
         
         if result.get("success") and result.get("patients"):
             patients = result["patients"]
+            logger.info(f"🔍 DB SEARCH: Found {len(patients)} patient(s) in database")
+            
             if len(patients) == 1:
                 patient_id = patients[0].get("patient_id")
-                logger.info(f"Found patient via direct API: {patient_id}")
+                logger.info(f"✅ DB SEARCH SUCCESS: Found unique patient via direct API: {patient_id}")
                 return patient_id
             elif len(patients) > 1:
-                logger.warning(f"Multiple patients found via direct API for {first_name} {last_name} DOI {doi}: {len(patients)} matches")
+                logger.warning(f"❌ DB SEARCH ERROR: Multiple patients found via direct API for {first_name} {last_name} DOI {doi}: {len(patients)} matches")
+                logger.warning(f"❌ Multiple patients data: {patients}")
                 return None
         
-        logger.info(f"No patient found for {first_name} {last_name} DOI {doi}")
+        logger.info(f"❌ DB SEARCH FAILED: No patient found for {first_name} {last_name} DOI {doi}")
         return None
         
     except Exception as e:
-        logger.error(f"Error searching for patient {first_name} {last_name} DOI {doi}: {str(e)}")
+        logger.error(f"❌ DB SEARCH ERROR: Exception searching for patient {first_name} {last_name} DOI {doi}: {str(e)}", exc_info=True)
         return None
 
 
@@ -257,8 +264,12 @@ async def _extract_patient_info_with_openai(email_content: str) -> Optional[Dict
     Returns:
         Dict with 'first_name', 'last_name', and 'doi' keys, or None if extraction fails
     """
+    logger.info("🤖 OPENAI EXTRACTION: Starting OpenAI patient info extraction...")
+    logger.info(f"🤖 Email content preview: {email_content[:200]}...")
+    
     try:
         # Create OpenAI client (using same pattern as other agents)
+        logger.info("🤖 OPENAI SETUP: Creating OpenAI client...")
         custom_httpx_client = httpx.AsyncClient(verify=False)
         openai_client = AsyncOpenAI(
             api_key=app_settings_instance.OPENAI_API_KEY if hasattr(app_settings_instance, 'OPENAI_API_KEY') else os.environ.get("OPENAI_API_KEY"),
@@ -298,6 +309,9 @@ IMPORTANT INSTRUCTIONS:
 6. Do not include any explanations, just the JSON response.
 """
 
+        logger.info("🤖 OPENAI API CALL: Making request to OpenAI gpt-4o...")
+        logger.info(f"🤖 Model: gpt-4o, Temperature: 0.1, Max tokens: 150")
+
         # Make the API call
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
@@ -311,11 +325,12 @@ IMPORTANT INSTRUCTIONS:
         
         # Parse the response
         response_text = response.choices[0].message.content.strip()
-        logger.info(f"OpenAI extraction response: {response_text}")
+        logger.info(f"🤖 OPENAI API RESPONSE: Raw response: {response_text}")
         
         # Handle markdown code blocks if present
         json_text = response_text
         if response_text.startswith("```json"):
+            logger.info("🤖 OPENAI PARSING: Detected markdown code block, extracting JSON...")
             # Extract JSON from markdown code block
             lines = response_text.split('\n')
             json_lines = []
@@ -329,19 +344,23 @@ IMPORTANT INSTRUCTIONS:
                 elif in_json_block:
                     json_lines.append(line)
             json_text = '\n'.join(json_lines).strip()
+            logger.info(f"🤖 OPENAI PARSING: Extracted JSON: {json_text}")
         
         # Parse JSON response
         try:
+            logger.info("🤖 OPENAI PARSING: Attempting to parse JSON response...")
             extracted_data = json.loads(json_text)
+            logger.info(f"🤖 OPENAI PARSING: Parsed JSON data: {extracted_data}")
             
             # Check if extraction was successful
             if extracted_data.get("found") == False:
-                logger.info("OpenAI determined no clear patient info could be extracted")
+                logger.info("🤖 OPENAI RESULT: OpenAI determined no clear patient info could be extracted")
                 return None
                 
             # Validate required fields
             if not all(key in extracted_data for key in ["first_name", "last_name", "doi"]):
-                logger.warning("OpenAI response missing required fields")
+                logger.warning("🤖 OPENAI VALIDATION: OpenAI response missing required fields")
+                logger.warning(f"🤖 Available keys: {list(extracted_data.keys())}")
                 return None
                 
             # Validate the extracted data
@@ -349,18 +368,22 @@ IMPORTANT INSTRUCTIONS:
             last_name = extracted_data["last_name"].strip()
             doi = extracted_data["doi"].strip()
             
+            logger.info(f"🤖 OPENAI VALIDATION: Extracted values - First: '{first_name}', Last: '{last_name}', DOI: '{doi}'")
+            
             if not first_name or not last_name or not doi:
-                logger.warning("OpenAI extracted empty values")
+                logger.warning("🤖 OPENAI VALIDATION: OpenAI extracted empty values")
                 return None
                 
             # Validate date format
             try:
+                logger.info(f"🤖 OPENAI VALIDATION: Validating date format for: {doi}")
                 datetime.strptime(doi, '%m/%d/%Y')
+                logger.info("🤖 OPENAI VALIDATION: Date format validation passed")
             except ValueError:
-                logger.warning(f"OpenAI extracted invalid date format: {doi}")
+                logger.warning(f"🤖 OPENAI VALIDATION: OpenAI extracted invalid date format: {doi}")
                 return None
                 
-            logger.info(f"OpenAI successfully extracted: {first_name} {last_name}, DOI: {doi}")
+            logger.info(f"✅ OPENAI SUCCESS: OpenAI successfully extracted: {first_name} {last_name}, DOI: {doi}")
             return {
                 "first_name": first_name,
                 "last_name": last_name,
@@ -368,15 +391,17 @@ IMPORTANT INSTRUCTIONS:
             }
             
         except json.JSONDecodeError as je:
-            logger.error(f"Failed to parse OpenAI JSON response: {je}")
+            logger.error(f"❌ OPENAI ERROR: Failed to parse OpenAI JSON response: {je}")
+            logger.error(f"❌ Raw response that failed to parse: {json_text}")
             return None
             
     except Exception as e:
-        logger.error(f"Error in OpenAI patient extraction: {str(e)}")
+        logger.error(f"❌ OPENAI ERROR: Exception in OpenAI patient extraction: {str(e)}", exc_info=True)
         return None
     finally:
         # Clean up the httpx client
         if 'custom_httpx_client' in locals():
+            logger.info("🤖 OPENAI CLEANUP: Closing HTTP client...")
             await custom_httpx_client.aclose()
 
 
@@ -398,155 +423,198 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
     Returns:
         Optional[str]: The extracted patient ID or None if not found
     """
+    logger.info("=== STARTING PATIENT ID EXTRACTION ===")
+    logger.info(f"Email content length: {len(email_content)} characters")
+    logger.info(f"Conversation ID: {conversation_id}")
+    
     # Tier 1: Direct Patient ID Extraction (Regex-based)
+    logger.info("TIER 1: Attempting direct patient ID extraction...")
     
     # First, try to find labeled patient IDs
+    logger.info("TIER 1A: Searching for labeled patient IDs...")
     labeled_id_pattern = r'(patient id is|Patient ID[:.]?|PID:)\s*([A-Z_]{0,5}\d{5,10})\b'
     labeled_match = re.search(labeled_id_pattern, email_content, re.IGNORECASE)
     
     if labeled_match:
         patient_id = labeled_match.group(2)
-        logger.info(f"Found labeled patient ID: {patient_id}")
+        logger.info(f"✅ TIER 1A SUCCESS: Found labeled patient ID: {patient_id}")
         
         # Add comment to Front conversation if conversation_id is provided
         if conversation_id:
             comment_text = f"Bot found patient id {patient_id}"
             try:
                 frontapp_service.add_conversation_comment(conversation_id, comment_text)
-                logger.info(f"Added comment to conversation {conversation_id}: {comment_text}")
+                logger.info(f"✅ Front comment added successfully for conversation {conversation_id}: {comment_text}")
             except Exception as e:
-                logger.error(f"Failed to add comment to conversation {conversation_id}: {str(e)}")
+                logger.error(f"❌ Failed to add comment to conversation {conversation_id}: {str(e)}")
         
+        logger.info("=== EXTRACTION COMPLETE (TIER 1A) ===")
         return patient_id
+    else:
+        logger.info("❌ TIER 1A: No labeled patient ID found")
     
     # If no labeled ID found, search for standalone alphanumeric patterns
+    logger.info("TIER 1B: Searching for standalone patient IDs...")
     standalone_id_pattern = r'\b([A-Z_]{2,5}\d{5,10}|\d{6,10})\b'
     standalone_matches = re.findall(standalone_id_pattern, email_content)
     
     if standalone_matches:
         # Take the first match that looks like a patient ID
         patient_id = standalone_matches[0]
-        logger.info(f"Found standalone patient ID: {patient_id}")
+        logger.info(f"✅ TIER 1B SUCCESS: Found standalone patient ID: {patient_id}")
+        logger.info(f"All standalone matches found: {standalone_matches}")
         
         # Add comment to Front conversation if conversation_id is provided
         if conversation_id:
             comment_text = f"Bot found patient id {patient_id}"
             try:
                 frontapp_service.add_conversation_comment(conversation_id, comment_text)
-                logger.info(f"Added comment to conversation {conversation_id}: {comment_text}")
+                logger.info(f"✅ Front comment added successfully for conversation {conversation_id}: {comment_text}")
             except Exception as e:
-                logger.error(f"Failed to add comment to conversation {conversation_id}: {str(e)}")
+                logger.error(f"❌ Failed to add comment to conversation {conversation_id}: {str(e)}")
         
+        logger.info("=== EXTRACTION COMPLETE (TIER 1B) ===")
         return patient_id
+    else:
+        logger.info("❌ TIER 1B: No standalone patient ID found")
     
     # Tier 2: Name + DOI Extraction (Search by patient name and date of injury)
-    logger.info("No direct patient ID found. Attempting name + DOI extraction...")
+    logger.info("TIER 2: Attempting name + DOI extraction...")
     
-    # Extract potential patient name (first name + last name)
+    # Extract potential patient name (first name + last name, including hyphenated names)
+    logger.info("TIER 2A: Extracting patient name using regex patterns...")
     name_patterns = [
-        r'(?:patient|my name is|i am|name:?)\s+([A-Z][a-z]+\s+[A-Z][a-z]+)',
-        r'([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s+(?:here|calling|writing))',
-        r'from\s+([A-Z][a-z]+\s+[A-Z][a-z]+)'
+        r'([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s*-\s*[A-Z][a-z]+)*)\s+(?:DOL|DOI)',  # Names before DOL/DOI (highest priority)
+        r'(?:patient name is|my name is|patient:?)\s+([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s*-\s*[A-Z][a-z]+)*)',  # More specific than "i am"
+        r'([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s*-\s*[A-Z][a-z]+)*)(?:\s+(?:here|calling|writing))',
+        r'from\s+([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s*-\s*[A-Z][a-z]+)*)',
+        r'^([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s*-\s*[A-Z][a-z]+)*)',  # Names at beginning of lines
     ]
     
     extracted_name = None
-    for pattern in name_patterns:
+    for i, pattern in enumerate(name_patterns):
+        logger.info(f"Testing name pattern {i+1}: {pattern}")
         name_match = re.search(pattern, email_content, re.IGNORECASE)
         if name_match:
             extracted_name = name_match.group(1)
+            logger.info(f"✅ TIER 2A SUCCESS: Found patient name with pattern {i+1}: {extracted_name}")
             break
+        else:
+            logger.info(f"❌ Name pattern {i+1} did not match")
     
     if not extracted_name:
-        logger.info("No patient name found in email content")
-        return None
-    
-    # Extract date of injury
+        logger.info("❌ TIER 2A FAILED: No patient name found in email content")
+        logger.info("Proceeding to TIER 4 (OpenAI extraction)...")
+        # Skip to Tier 4 since we need both name and DOI
+    else:
+    # Extract date of injury/loss
+        logger.info("TIER 2B: Extracting date of injury using regex patterns...")
     doi_patterns = [
-        r'(?:date of injury|injury date|doi|injured on):?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
-        r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*(?:injury|accident|incident)',
+        r'(?:date of injury|injury date|date of loss|doi|dol|injured on):?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
+        r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*(?:injury|accident|incident|loss)',
         r'on\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*(?:i was|got|had)'
     ]
     
     extracted_doi = None
-    for pattern in doi_patterns:
+        for i, pattern in enumerate(doi_patterns):
+            logger.info(f"Testing DOI pattern {i+1}: {pattern}")
         doi_match = re.search(pattern, email_content, re.IGNORECASE)
         if doi_match:
             extracted_doi = doi_match.group(1)
+                logger.info(f"✅ TIER 2B SUCCESS: Found date of injury with pattern {i+1}: {extracted_doi}")
             break
+            else:
+                logger.info(f"❌ DOI pattern {i+1} did not match")
     
     if not extracted_doi:
-        logger.info("No date of injury found in email content")
-        return None
-    
+            logger.info("❌ TIER 2B FAILED: No date of injury found in email content")
+            logger.info("Proceeding to TIER 4 (OpenAI extraction)...")
+            # Skip to Tier 4 since we need both name and DOI
+        else:
     # Tier 3: Database lookup by name and DOI
-    logger.info(f"Attempting database lookup for name: {extracted_name}, DOI: {extracted_doi}")
+            logger.info("TIER 3: Attempting database lookup...")
+            logger.info(f"TIER 3 INPUT: Name='{extracted_name}', DOI='{extracted_doi}'")
     
     try:
+                logger.info("🔍 API CALL: Calling get_patient_by_name_doi() with regex extracted data...")
         patient_data = await get_patient_by_name_doi(extracted_name, extracted_doi)
+                logger.info(f"🔍 API RESPONSE: {patient_data}")
+                
         if patient_data and patient_data.get('patient_id'):
             patient_id = patient_data['patient_id']
-            logger.info(f"Found patient ID from database lookup: {patient_id}")
+                    logger.info(f"✅ TIER 3 SUCCESS: Found patient ID from database lookup: {patient_id}")
             
             # Add comment to Front conversation if conversation_id is provided
             if conversation_id:
                 comment_text = f"Bot found patient id {patient_id}"
                 try:
                     frontapp_service.add_conversation_comment(conversation_id, comment_text)
-                    logger.info(f"Added comment to conversation {conversation_id}: {comment_text}")
+                            logger.info(f"✅ Front comment added successfully for conversation {conversation_id}: {comment_text}")
                 except Exception as e:
-                    logger.error(f"Failed to add comment to conversation {conversation_id}: {str(e)}")
+                            logger.error(f"❌ Failed to add comment to conversation {conversation_id}: {str(e)}")
             
+                    logger.info("=== EXTRACTION COMPLETE (TIER 3) ===")
             return patient_id
         else:
-            logger.info("No patient found in database for the given name and DOI")
+                    logger.info("❌ TIER 3 FAILED: No patient found in database for the given name and DOI")
+                    logger.info("Proceeding to TIER 4 (OpenAI extraction)...")
             
     except Exception as e:
-        logger.error(f"Error during database lookup: {str(e)}")
+                logger.error(f"❌ TIER 3 ERROR: Exception during database lookup: {str(e)}")
+                logger.info("Proceeding to TIER 4 (OpenAI extraction)...")
     
     # Tier 4: OpenAI-based extraction as final fallback
-    logger.info("No patient ID found through regex or database lookup. Attempting OpenAI extraction as final fallback...")
+    logger.info("TIER 4: Attempting OpenAI extraction as final fallback...")
     
     try:
+        logger.info("🤖 AI CALL: Calling OpenAI for patient info extraction...")
         openai_extracted = await _extract_patient_info_with_openai(email_content)
+        logger.info(f"🤖 AI RESPONSE: {openai_extracted}")
         
         if openai_extracted:
             first_name = openai_extracted["first_name"]
             last_name = openai_extracted["last_name"]
             doi = openai_extracted["doi"]
             
-            logger.info(f"OpenAI extracted patient info: {first_name} {last_name}, DOI: {doi}")
+            logger.info(f"✅ TIER 4A SUCCESS: OpenAI extracted patient info: {first_name} {last_name}, DOI: {doi}")
             
             # Try database lookup with OpenAI extracted data
+            logger.info("TIER 4B: Attempting database lookup with OpenAI extracted data...")
             try:
+                logger.info("🔍 API CALL: Calling get_patient_by_name_doi() with OpenAI extracted data...")
                 patient_data = await get_patient_by_name_doi(first_name, last_name, doi)
+                logger.info(f"🔍 API RESPONSE: {patient_data}")
+                
                 if patient_data and patient_data.get('patient_id'):
                     patient_id = patient_data['patient_id']
-                    logger.info(f"Found patient ID using OpenAI extraction + database lookup: {patient_id}")
+                    logger.info(f"✅ TIER 4B SUCCESS: Found patient ID using OpenAI extraction + database lookup: {patient_id}")
                     
                     # Add comment to Front conversation if conversation_id is provided
                     if conversation_id:
                         comment_text = f"Bot found patient id {patient_id} (via OpenAI extraction)"
                         try:
                             frontapp_service.add_conversation_comment(conversation_id, comment_text)
-                            logger.info(f"Added OpenAI extraction comment to conversation {conversation_id}: {comment_text}")
+                            logger.info(f"✅ Front comment added successfully for conversation {conversation_id}: {comment_text}")
                         except Exception as e:
-                            logger.error(f"Failed to add OpenAI extraction comment to conversation {conversation_id}: {str(e)}")
+                            logger.error(f"❌ Failed to add OpenAI extraction comment to conversation {conversation_id}: {str(e)}")
                     
+                    logger.info("=== EXTRACTION COMPLETE (TIER 4B) ===")
                     return patient_id
                 else:
-                    logger.info(f"OpenAI extracted patient info but no matching patient found in database: {first_name} {last_name}, DOI: {doi}")
+                    logger.info(f"❌ TIER 4B FAILED: OpenAI extracted patient info but no matching patient found in database: {first_name} {last_name}, DOI: {doi}")
                     
             except Exception as db_e:
-                logger.error(f"Error during database lookup with OpenAI extracted data: {str(db_e)}")
+                logger.error(f"❌ TIER 4B ERROR: Exception during database lookup with OpenAI extracted data: {str(db_e)}")
                 
         else:
-            logger.info("OpenAI could not extract patient information from email content")
+            logger.info("❌ TIER 4A FAILED: OpenAI could not extract patient information from email content")
             
     except Exception as openai_e:
-        logger.error(f"Error during OpenAI extraction: {str(openai_e)}")
+        logger.error(f"❌ TIER 4 ERROR: Exception during OpenAI extraction: {str(openai_e)}")
     
     # Final fallback - no patient ID found
-    logger.info("All extraction methods failed. No patient ID found.")
+    logger.info("❌ ALL TIERS FAILED: No patient ID found through any extraction method")
+    logger.info("=== EXTRACTION COMPLETE (NO RESULTS) ===")
     return None
 
 
