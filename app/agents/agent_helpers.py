@@ -7,13 +7,18 @@ common entities like patient IDs, and interacting with external services like Fr
 """
 
 import asyncio
+import os
 import re
+import json
+import httpx
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 
 from celery.utils.log import get_task_logger
 from agents import function_tool
+from openai import AsyncOpenAI
 
+from app.core.config import settings as app_settings_instance
 from app.services import frontapp_service
 from app.services.patient import get_patient_by_name_doi
 from app.mcp import default_mcp_client as mcp_client, call_mcp_tool
@@ -242,11 +247,149 @@ async def _search_patient_by_name_doi_in_helper(first_name: str, last_name: str,
         return None
 
 
+async def _extract_patient_info_with_openai(email_content: str) -> Optional[Dict[str, str]]:
+    """
+    Uses OpenAI to extract patient name and DOI from email content as a fallback method.
+    
+    Args:
+        email_content: The email content to analyze
+        
+    Returns:
+        Dict with 'first_name', 'last_name', and 'doi' keys, or None if extraction fails
+    """
+    try:
+        # Create OpenAI client (using same pattern as other agents)
+        custom_httpx_client = httpx.AsyncClient(verify=False)
+        openai_client = AsyncOpenAI(
+            api_key=app_settings_instance.OPENAI_API_KEY if hasattr(app_settings_instance, 'OPENAI_API_KEY') else os.environ.get("OPENAI_API_KEY"),
+            http_client=custom_httpx_client
+        )
+        
+        prompt = f"""
+You are an expert at extracting patient information from medical emails. 
+
+Please analyze the following email content and extract the patient's name and date of injury (DOI).
+
+Email content:
+{email_content}
+
+IMPORTANT INSTRUCTIONS:
+1. Look for the patient's first name and last name
+2. Look for the date of injury, which may be referred to as:
+   - Date of injury
+   - DOI
+   - Date of loss
+   - DOL
+   - Injury date
+   - Accident date
+   - When the patient was injured
+
+3. Return ONLY a valid JSON object with this exact format:
+{{
+    "first_name": "PatientFirstName",
+    "last_name": "PatientLastName", 
+    "doi": "MM/DD/YYYY"
+}}
+
+4. If you cannot find clear patient name AND date of injury, return: {{"found": false}}
+
+5. Make sure the date is in MM/DD/YYYY format
+
+6. Do not include any explanations, just the JSON response.
+"""
+
+        # Make the API call
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a medical information extraction specialist. Extract patient names and dates of injury from email content and return only valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.1,
+            max_tokens=150
+        )
+        
+        # Parse the response
+        response_text = response.choices[0].message.content.strip()
+        logger.info(f"OpenAI extraction response: {response_text}")
+        
+        # Handle markdown code blocks if present
+        json_text = response_text
+        if response_text.startswith("```json"):
+            # Extract JSON from markdown code block
+            lines = response_text.split('\n')
+            json_lines = []
+            in_json_block = False
+            for line in lines:
+                if line.strip() == "```json":
+                    in_json_block = True
+                    continue
+                elif line.strip() == "```" and in_json_block:
+                    break
+                elif in_json_block:
+                    json_lines.append(line)
+            json_text = '\n'.join(json_lines).strip()
+        
+        # Parse JSON response
+        try:
+            extracted_data = json.loads(json_text)
+            
+            # Check if extraction was successful
+            if extracted_data.get("found") == False:
+                logger.info("OpenAI determined no clear patient info could be extracted")
+                return None
+                
+            # Validate required fields
+            if not all(key in extracted_data for key in ["first_name", "last_name", "doi"]):
+                logger.warning("OpenAI response missing required fields")
+                return None
+                
+            # Validate the extracted data
+            first_name = extracted_data["first_name"].strip()
+            last_name = extracted_data["last_name"].strip()
+            doi = extracted_data["doi"].strip()
+            
+            if not first_name or not last_name or not doi:
+                logger.warning("OpenAI extracted empty values")
+                return None
+                
+            # Validate date format
+            try:
+                datetime.strptime(doi, '%m/%d/%Y')
+            except ValueError:
+                logger.warning(f"OpenAI extracted invalid date format: {doi}")
+                return None
+                
+            logger.info(f"OpenAI successfully extracted: {first_name} {last_name}, DOI: {doi}")
+            return {
+                "first_name": first_name,
+                "last_name": last_name,
+                "doi": doi
+            }
+            
+        except json.JSONDecodeError as je:
+            logger.error(f"Failed to parse OpenAI JSON response: {je}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error in OpenAI patient extraction: {str(e)}")
+        return None
+    finally:
+        # Clean up the httpx client
+        if 'custom_httpx_client' in locals():
+            await custom_httpx_client.aclose()
+
+
 async def extract_patient_id_from_email_logic(email_content: str, conversation_id: Optional[str] = None) -> Optional[str]:
     """
-    Extracts a patient ID from the given email content using regex or by searching for patient names and DOI.
+    Extracts a patient ID from the given email content using a 4-tier approach.
     This is the core logic, designed to be called directly from code.
-    Returns the patient ID string or None if not found.
+    
+    Extraction Tiers:
+    1. Direct Patient ID Extraction (Regex-based): Searches for labeled and standalone patient IDs
+    2. Name + DOI Extraction (Regex-based): Extracts patient name and date of injury using regex
+    3. Database Lookup: Uses extracted name and DOI to search patient database  
+    4. OpenAI Extraction (Fallback): Uses AI to extract patient name and DOI, then searches database
     
     Args:
         email_content: The email content to search for patient ID
@@ -356,11 +499,55 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
             return patient_id
         else:
             logger.info("No patient found in database for the given name and DOI")
-            return None
             
     except Exception as e:
         logger.error(f"Error during database lookup: {str(e)}")
-        return None
+    
+    # Tier 4: OpenAI-based extraction as final fallback
+    logger.info("No patient ID found through regex or database lookup. Attempting OpenAI extraction as final fallback...")
+    
+    try:
+        openai_extracted = await _extract_patient_info_with_openai(email_content)
+        
+        if openai_extracted:
+            first_name = openai_extracted["first_name"]
+            last_name = openai_extracted["last_name"]
+            doi = openai_extracted["doi"]
+            
+            logger.info(f"OpenAI extracted patient info: {first_name} {last_name}, DOI: {doi}")
+            
+            # Try database lookup with OpenAI extracted data
+            try:
+                patient_data = await get_patient_by_name_doi(first_name, last_name, doi)
+                if patient_data and patient_data.get('patient_id'):
+                    patient_id = patient_data['patient_id']
+                    logger.info(f"Found patient ID using OpenAI extraction + database lookup: {patient_id}")
+                    
+                    # Add comment to Front conversation if conversation_id is provided
+                    if conversation_id:
+                        comment_text = f"Bot found patient id {patient_id} (via OpenAI extraction)"
+                        try:
+                            frontapp_service.add_conversation_comment(conversation_id, comment_text)
+                            logger.info(f"Added OpenAI extraction comment to conversation {conversation_id}: {comment_text}")
+                        except Exception as e:
+                            logger.error(f"Failed to add OpenAI extraction comment to conversation {conversation_id}: {str(e)}")
+                    
+                    return patient_id
+                else:
+                    logger.info(f"OpenAI extracted patient info but no matching patient found in database: {first_name} {last_name}, DOI: {doi}")
+                    
+            except Exception as db_e:
+                logger.error(f"Error during database lookup with OpenAI extracted data: {str(db_e)}")
+                
+        else:
+            logger.info("OpenAI could not extract patient information from email content")
+            
+    except Exception as openai_e:
+        logger.error(f"Error during OpenAI extraction: {str(openai_e)}")
+    
+    # Final fallback - no patient ID found
+    logger.info("All extraction methods failed. No patient ID found.")
+    return None
 
 
 async def _add_patient_id_comment_to_front(conversation_id: str, patient_id: str, extraction_method: str):
@@ -435,3 +622,48 @@ async def send_reply_to_front(
     except Exception as e:
         logger.error(f"Error in 'send_reply_to_front' tool for conversation {conversation_id}: {e}", exc_info=True)
         return {"status": "error", "message": f"Exception in send_reply_to_front: {str(e)}"} 
+
+
+# Test function for the new OpenAI extraction functionality
+async def test_openai_patient_extraction():
+    """
+    Test function to demonstrate the new OpenAI-based patient extraction.
+    This can be called manually to test the functionality.
+    """
+    test_email_content = """
+    Hello,
+    
+    I am writing regarding my recent injury. My name is John Smith and I was hurt in a car accident
+    on March 15, 2023. I need to schedule an appointment to review my MRI results.
+    
+    Can you please help me with scheduling?
+    
+    Thank you,
+    John Smith
+    """
+    
+    logger.info("Testing OpenAI patient extraction with sample email...")
+    
+    try:
+        # Test the OpenAI extraction directly
+        openai_result = await _extract_patient_info_with_openai(test_email_content)
+        logger.info(f"OpenAI extraction result: {openai_result}")
+        
+        # Test the full extraction logic
+        patient_id = await extract_patient_id_from_email_logic(test_email_content)
+        logger.info(f"Full extraction result: {patient_id}")
+        
+        return {
+            "openai_extraction": openai_result,
+            "patient_id": patient_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Test failed: {str(e)}")
+        return {"error": str(e)}
+
+
+# Uncomment the lines below to run the test
+# if __name__ == "__main__":
+#     import asyncio
+#     asyncio.run(test_openai_patient_extraction()) 
