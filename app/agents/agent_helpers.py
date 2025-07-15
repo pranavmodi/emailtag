@@ -4,6 +4,33 @@ Shared helper functions and tools for AI agents.
 This module provides common functionalities that can be reused across different
 agent implementations, such as formatting conversation history, extracting
 common entities like patient IDs, and interacting with external services like Front.
+
+MCP TOOLS vs DIRECT API USAGE POLICY:
+====================================
+
+This module follows a specific pattern for patient data retrieval:
+
+1. **USE MCP TOOLS when available and appropriate:**
+   - fetch_patient_by_phone: For phone-based patient lookups
+   - fetch_patient_by_id: For retrieving patient data when ID is known  
+   - fetch_patient_info: For getting patient information by ID
+   - fetch_study_details: For study/appointment information by patient ID
+   - get_patient_lien_bill_balance: For billing information by patient ID
+
+2. **USE DIRECT API CALLS when MCP tools don't exist:**
+   - Name + DOI searches: No MCP tool exists for searching by first name, last name, and date of injury
+   - Legacy compatibility: Some functions still use direct API calls for historical reasons
+
+3. **RATIONALE:**
+   - MCP tools provide standardized error handling and response formatting
+   - MCP tools can be centrally managed and updated
+   - Direct API calls are used only when no suitable MCP tool exists
+   - Future development should prioritize creating new MCP tools over direct API calls
+
+4. **WHEN TO CREATE NEW MCP TOOLS:**
+   - If you find yourself making direct API calls repeatedly
+   - If error handling becomes complex for a specific API endpoint
+   - If response formatting needs to be standardized across agents
 """
 
 import asyncio
@@ -63,6 +90,8 @@ async def get_patient_and_study_info(patient_id: str) -> Dict[str, Any]:
     Fetches raw patient and study details from the MCP server by calling
     the 'fetch_patient_by_id' and 'fetch_study_details' tools and returning their
     combined, raw output.
+    
+    NOTE: This function uses MCP tools since we already have a patient_id.
     """
     logger.info(f"Helper 'get_patient_and_study_info' called for Patient ID: {patient_id}")
     try:
@@ -214,44 +243,6 @@ def _extract_patient_names_and_dates_from_email(email_content: str) -> list:
                     extracted_patients.append(patient_info)
     
     return extracted_patients
-
-
-async def _search_patient_by_name_doi_in_helper(first_name: str, last_name: str, doi: str) -> Optional[str]:
-    """
-    Search for patient by name and DOI using available methods.
-    
-    Returns:
-        Patient ID if found, None otherwise
-    """
-    logger.info(f"🔍 DB SEARCH: Starting patient search via direct API...")
-    logger.info(f"🔍 DB SEARCH INPUT: First='{first_name}', Last='{last_name}', DOI='{doi}'")
-    
-    try:
-        # Note: search_patient_by_name_doi MCP tool is not available on the MCP server
-        # Going directly to RadFlow API search
-        logger.info(f"🔍 DB API CALL: Calling get_patient_by_name_doi() for {first_name} {last_name} DOI {doi}")
-        result = await get_patient_by_name_doi(first_name, last_name, doi)
-        logger.info(f"🔍 DB API RESPONSE: {result}")
-        
-        if result.get("success") and result.get("patients"):
-            patients = result["patients"]
-            logger.info(f"🔍 DB SEARCH: Found {len(patients)} patient(s) in database")
-            
-            if len(patients) == 1:
-                patient_id = patients[0].get("patient_id")
-                logger.info(f"✅ DB SEARCH SUCCESS: Found unique patient via direct API: {patient_id}")
-                return patient_id
-            elif len(patients) > 1:
-                logger.warning(f"❌ DB SEARCH ERROR: Multiple patients found via direct API for {first_name} {last_name} DOI {doi}: {len(patients)} matches")
-                logger.warning(f"❌ Multiple patients data: {patients}")
-                return None
-        
-        logger.info(f"❌ DB SEARCH FAILED: No patient found for {first_name} {last_name} DOI {doi}")
-        return None
-        
-    except Exception as e:
-        logger.error(f"❌ DB SEARCH ERROR: Exception searching for patient {first_name} {last_name} DOI {doi}: {str(e)}", exc_info=True)
-        return None
 
 
 async def _extract_patient_info_with_openai(email_content: str) -> Optional[Dict[str, str]]:
@@ -407,14 +398,15 @@ IMPORTANT INSTRUCTIONS:
 
 async def extract_patient_id_from_email_logic(email_content: str, conversation_id: Optional[str] = None) -> Optional[str]:
     """
-    Extracts a patient ID from the given email content using a 4-tier approach.
+    Extracts a patient ID from the given email content using a 5-tier approach.
     This is the core logic, designed to be called directly from code.
     
     Extraction Tiers:
     1. Direct Patient ID Extraction (Regex-based): Searches for labeled and standalone patient IDs
-    2. Name + DOI Extraction (Regex-based): Extracts patient name and date of injury using regex
-    3. Database Lookup: Uses extracted name and DOI to search patient database  
-    4. OpenAI Extraction (Fallback): Uses AI to extract patient name and DOI, then searches database
+    2. Phone Number Extraction (MCP-based): Extracts phone numbers and uses MCP tools for lookup
+    3. Name + DOI Extraction (Regex-based): Extracts patient name and date of injury using regex
+    4. Database Lookup: Uses extracted name and DOI to search patient database (Direct API - no MCP tool available)
+    5. OpenAI Extraction (Fallback): Uses AI to extract patient name and DOI, then searches database
     
     Args:
         email_content: The email content to search for patient ID
@@ -478,11 +470,148 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
     else:
         logger.info("❌ TIER 1B: No standalone patient ID found")
     
-    # Tier 2: Name + DOI Extraction (Search by patient name and date of injury)
-    logger.info("TIER 2: Attempting name + DOI extraction...")
+    # Tier 2: Phone Number Extraction (MCP-based)
+    logger.info("TIER 2: Attempting phone number extraction and MCP lookup...")
+    
+    # Extract phone numbers from email content
+    logger.info("TIER 2A: Extracting phone numbers using regex patterns...")
+    phone_patterns = [
+        r'\b(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})\b',  # 123-456-7890, 123.456.7890, 123 456 7890
+        r'\b\((\d{3})\)\s*(\d{3})[-.\s]?(\d{4})\b',  # (123) 456-7890
+        r'\b(\d{10})\b',  # 1234567890
+        r'\+1\s*(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})',  # +1 123-456-7890
+    ]
+    
+    extracted_phones = []
+    for i, pattern in enumerate(phone_patterns):
+        logger.info(f"Testing phone pattern {i+1}: {pattern}")
+        phone_matches = re.findall(pattern, email_content)
+        for match in phone_matches:
+            if isinstance(match, tuple):
+                # Handle patterns that create groups
+                if len(match) == 3:  # (123) 456-7890 pattern
+                    phone = f"{match[0]}{match[1]}{match[2]}"
+                else:
+                    phone = ''.join(match)
+            else:
+                phone = str(match)
+            
+            # Clean phone number (remove non-digits)
+            clean_phone = re.sub(r'[^\d]', '', phone)
+            if len(clean_phone) == 10:  # Valid US phone number
+                extracted_phones.append(clean_phone)
+                logger.info(f"✅ TIER 2A: Found phone number: {clean_phone}")
+    
+    # Remove duplicates while preserving order
+    extracted_phones = list(dict.fromkeys(extracted_phones))
+    
+    if extracted_phones:
+        logger.info(f"TIER 2B: Attempting MCP phone lookup for {len(extracted_phones)} phone number(s)...")
+        
+        # Check MCP client connection with retry logic
+        mcp_available = False
+        try:
+            if not mcp_client.is_connected:
+                logger.info("🔌 MCP client not connected, attempting to connect...")
+                mcp_available = await mcp_client.connect()
+                if not mcp_available:
+                    logger.warning("❌ Failed to connect to MCP server, skipping phone lookups")
+            else:
+                mcp_available = True
+                logger.info("🔌 MCP client already connected")
+        except Exception as conn_e:
+            logger.error(f"❌ MCP connection error: {str(conn_e)}")
+            mcp_available = False
+        
+        if not mcp_available:
+            logger.warning("⚠️ MCP services unavailable, skipping phone-based patient lookup")
+            logger.info("Proceeding to TIER 3 (Name + DOI extraction)...")
+        else:
+            # MCP is available, proceed with phone lookups
+            for phone in extracted_phones:
+                try:
+                    logger.info(f"🔍 MCP CALL: Calling fetch_patient_by_phone for phone: {phone}")
+                    
+                    # Call MCP tool for phone-based patient lookup with timeout handling
+                    mcp_response = await call_mcp_tool(
+                        tool_name="fetch_patient_by_phone", 
+                        arguments={"phone": phone}
+                    )
+                    
+                    logger.info(f"🔍 MCP RESPONSE: {mcp_response}")
+                    
+                    if mcp_response and isinstance(mcp_response, dict):
+                        if mcp_response.get("success") and mcp_response.get("data"):
+                            # Extract patient ID from MCP response
+                            data = mcp_response["data"]
+                            if isinstance(data, dict) and data.get("patient_id"):
+                                patient_id = data["patient_id"]
+                                logger.info(f"✅ TIER 2B SUCCESS: Found patient ID via MCP phone lookup: {patient_id}")
+                                
+                                # Add comment to Front conversation if conversation_id is provided
+                                if conversation_id:
+                                    comment_text = f"Bot found patient id {patient_id} (via phone lookup)"
+                                    try:
+                                        frontapp_service.add_conversation_comment(conversation_id, comment_text)
+                                        logger.info(f"✅ Front comment added successfully for conversation {conversation_id}: {comment_text}")
+                                    except Exception as e:
+                                        logger.error(f"❌ Failed to add phone lookup comment to conversation {conversation_id}: {str(e)}")
+                                
+                                logger.info("=== EXTRACTION COMPLETE (TIER 2B) ===")
+                                return patient_id
+                            elif isinstance(data, list) and len(data) > 0 and data[0].get("patient_id"):
+                                # Handle case where data is a list of patients
+                                if len(data) == 1:
+                                    patient_id = data[0]["patient_id"]
+                                    logger.info(f"✅ TIER 2B SUCCESS: Found patient ID via MCP phone lookup (from list): {patient_id}")
+                                    
+                                    # Add comment to Front conversation if conversation_id is provided
+                                    if conversation_id:
+                                        comment_text = f"Bot found patient id {patient_id} (via phone lookup)"
+                                        try:
+                                            frontapp_service.add_conversation_comment(conversation_id, comment_text)
+                                            logger.info(f"✅ Front comment added successfully for conversation {conversation_id}: {comment_text}")
+                                        except Exception as e:
+                                            logger.error(f"❌ Failed to add phone lookup comment to conversation {conversation_id}: {str(e)}")
+                                    
+                                    logger.info("=== EXTRACTION COMPLETE (TIER 2B) ===")
+                                    return patient_id
+                                else:
+                                    logger.warning(f"⚠️ Multiple patients found for phone {phone}: {len(data)} matches. Skipping for safety.")
+                                    continue  # Try next phone number
+                            else:
+                                logger.info(f"❌ MCP phone lookup returned success but no patient_id found for phone: {phone}")
+                        elif mcp_response.get("success") == False:
+                            error_msg = mcp_response.get('error', 'Unknown error')
+                            logger.info(f"❌ MCP phone lookup failed for phone: {phone} - {error_msg}")
+                        else:
+                            logger.info(f"❌ MCP phone lookup returned unexpected response for phone: {phone}")
+                    else:
+                        logger.warning(f"⚠️ Invalid or empty MCP response for phone: {phone}")
+                        
+                except Exception as e:
+                    error_msg = str(e)
+                    if "timeout" in error_msg.lower():
+                        logger.error(f"⏱️ TIER 2B TIMEOUT: MCP phone lookup timed out for {phone}: {error_msg}")
+                    elif "connection" in error_msg.lower():
+                        logger.error(f"🔌 TIER 2B CONNECTION ERROR: MCP connection failed during phone lookup for {phone}: {error_msg}")
+                    else:
+                        logger.error(f"❌ TIER 2B ERROR: Exception during MCP phone lookup for {phone}: {error_msg}")
+                    
+                    # For connection errors, break out of the loop and skip remaining phones
+                    if "connection" in error_msg.lower():
+                        logger.warning("🔌 Connection error detected, skipping remaining phone lookups")
+                        break
+            
+            logger.info("❌ TIER 2B: All phone lookups completed without finding a patient ID")
+    else:
+        logger.info("❌ TIER 2A: No phone numbers found in email content")
+    
+    # Tier 3: Name + DOI Extraction (Regex-based)
+    logger.info("TIER 3: Attempting name + DOI extraction...")
     
     # Extract potential patient name (first name + last name, including hyphenated names)
-    logger.info("TIER 2A: Extracting patient name using regex patterns...")
+    logger.info("TIER 3A: Extracting patient name using regex patterns...")
     name_patterns = [
         r'([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s*-\s*[A-Z][a-z]+)*)\s+(?:DOL|DOI)',  # Names before DOL/DOI (highest priority)
         r'(?:patient name is|my name is|patient:?)\s+([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s*-\s*[A-Z][a-z]+)*)',  # More specific than "i am"
@@ -497,18 +626,18 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
         name_match = re.search(pattern, email_content, re.IGNORECASE)
         if name_match:
             extracted_name = name_match.group(1)
-            logger.info(f"✅ TIER 2A SUCCESS: Found patient name with pattern {i+1}: {extracted_name}")
+            logger.info(f"✅ TIER 3A SUCCESS: Found patient name with pattern {i+1}: {extracted_name}")
             break
         else:
             logger.info(f"❌ Name pattern {i+1} did not match")
     
     if not extracted_name:
-        logger.info("❌ TIER 2A FAILED: No patient name found in email content")
-        logger.info("Proceeding to TIER 4 (OpenAI extraction)...")
-        # Skip to Tier 4 since we need both name and DOI
+        logger.info("❌ TIER 3A FAILED: No patient name found in email content")
+        logger.info("Proceeding to TIER 5 (OpenAI extraction)...")
+        # Skip to Tier 5 since we need both name and DOI
     else:
         # Extract date of injury/loss
-        logger.info("TIER 2B: Extracting date of injury using regex patterns...")
+        logger.info("TIER 3B: Extracting date of injury using regex patterns...")
         doi_patterns = [
             r'(?:date of injury|injury date|date of loss|doi|dol|injured on):?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
             r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*(?:injury|accident|incident|loss)',
@@ -521,19 +650,20 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
             doi_match = re.search(pattern, email_content, re.IGNORECASE)
             if doi_match:
                 extracted_doi = doi_match.group(1)
-                logger.info(f"✅ TIER 2B SUCCESS: Found date of injury with pattern {i+1}: {extracted_doi}")
+                logger.info(f"✅ TIER 3B SUCCESS: Found date of injury with pattern {i+1}: {extracted_doi}")
                 break
             else:
                 logger.info(f"❌ DOI pattern {i+1} did not match")
         
         if not extracted_doi:
-            logger.info("❌ TIER 2B FAILED: No date of injury found in email content")
-            logger.info("Proceeding to TIER 4 (OpenAI extraction)...")
-            # Skip to Tier 4 since we need both name and DOI
+            logger.info("❌ TIER 3B FAILED: No date of injury found in email content")
+            logger.info("Proceeding to TIER 5 (OpenAI extraction)...")
+            # Skip to Tier 5 since we need both name and DOI
         else:
-            # Tier 3: Database lookup by name and DOI
-            logger.info("TIER 3: Attempting database lookup...")
-            logger.info(f"TIER 3 INPUT: Name='{extracted_name}', DOI='{extracted_doi}'")
+            # Tier 4: Database lookup by name and DOI (Direct API - no MCP tool available)
+            logger.info("TIER 4: Attempting database lookup via direct API...")
+            logger.info(f"TIER 4 INPUT: Name='{extracted_name}', DOI='{extracted_doi}'")
+            logger.info("NOTE: Using direct API call since no MCP tool exists for name+DOI search")
             
             try:
                 logger.info("🔍 API CALL: Calling get_patient_by_name_doi() with regex extracted data...")
@@ -542,7 +672,7 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
                 
                 if patient_data and patient_data.get('patient_id'):
                     patient_id = patient_data['patient_id']
-                    logger.info(f"✅ TIER 3 SUCCESS: Found patient ID from database lookup: {patient_id}")
+                    logger.info(f"✅ TIER 4 SUCCESS: Found patient ID from database lookup: {patient_id}")
                     
                     # Add comment to Front conversation if conversation_id is provided
                     if conversation_id:
@@ -553,18 +683,18 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
                         except Exception as e:
                             logger.error(f"❌ Failed to add comment to conversation {conversation_id}: {str(e)}")
                     
-                    logger.info("=== EXTRACTION COMPLETE (TIER 3) ===")
+                    logger.info("=== EXTRACTION COMPLETE (TIER 4) ===")
                     return patient_id
                 else:
-                    logger.info("❌ TIER 3 FAILED: No patient found in database for the given name and DOI")
-                    logger.info("Proceeding to TIER 4 (OpenAI extraction)...")
+                    logger.info("❌ TIER 4 FAILED: No patient found in database for the given name and DOI")
+                    logger.info("Proceeding to TIER 5 (OpenAI extraction)...")
                     
             except Exception as e:
-                logger.error(f"❌ TIER 3 ERROR: Exception during database lookup: {str(e)}")
-                logger.info("Proceeding to TIER 4 (OpenAI extraction)...")
+                logger.error(f"❌ TIER 4 ERROR: Exception during database lookup: {str(e)}")
+                logger.info("Proceeding to TIER 5 (OpenAI extraction)...")
     
-    # Tier 4: OpenAI-based extraction as final fallback
-    logger.info("TIER 4: Attempting OpenAI extraction as final fallback...")
+    # Tier 5: OpenAI-based extraction as final fallback
+    logger.info("TIER 5: Attempting OpenAI extraction as final fallback...")
     
     try:
         logger.info("🤖 AI CALL: Calling OpenAI for patient info extraction...")
@@ -576,10 +706,11 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
             last_name = openai_extracted["last_name"]
             doi = openai_extracted["doi"]
             
-            logger.info(f"✅ TIER 4A SUCCESS: OpenAI extracted patient info: {first_name} {last_name}, DOI: {doi}")
+            logger.info(f"✅ TIER 5A SUCCESS: OpenAI extracted patient info: {first_name} {last_name}, DOI: {doi}")
             
-            # Try database lookup with OpenAI extracted data
-            logger.info("TIER 4B: Attempting database lookup with OpenAI extracted data...")
+            # Try database lookup with OpenAI extracted data (Direct API - no MCP tool available)
+            logger.info("TIER 5B: Attempting database lookup with OpenAI extracted data via direct API...")
+            logger.info("NOTE: Using direct API call since no MCP tool exists for name+DOI search")
             try:
                 logger.info("🔍 API CALL: Calling get_patient_by_name_doi() with OpenAI extracted data...")
                 patient_data = await get_patient_by_name_doi(first_name, last_name, doi)
@@ -587,7 +718,7 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
                 
                 if patient_data and patient_data.get('patient_id'):
                     patient_id = patient_data['patient_id']
-                    logger.info(f"✅ TIER 4B SUCCESS: Found patient ID using OpenAI extraction + database lookup: {patient_id}")
+                    logger.info(f"✅ TIER 5B SUCCESS: Found patient ID using OpenAI extraction + database lookup: {patient_id}")
                     
                     # Add comment to Front conversation if conversation_id is provided
                     if conversation_id:
@@ -598,19 +729,19 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
                         except Exception as e:
                             logger.error(f"❌ Failed to add OpenAI extraction comment to conversation {conversation_id}: {str(e)}")
                     
-                    logger.info("=== EXTRACTION COMPLETE (TIER 4B) ===")
+                    logger.info("=== EXTRACTION COMPLETE (TIER 5B) ===")
                     return patient_id
                 else:
-                    logger.info(f"❌ TIER 4B FAILED: OpenAI extracted patient info but no matching patient found in database: {first_name} {last_name}, DOI: {doi}")
+                    logger.info(f"❌ TIER 5B FAILED: OpenAI extracted patient info but no matching patient found in database: {first_name} {last_name}, DOI: {doi}")
                     
             except Exception as db_e:
-                logger.error(f"❌ TIER 4B ERROR: Exception during database lookup with OpenAI extracted data: {str(db_e)}")
+                logger.error(f"❌ TIER 5B ERROR: Exception during database lookup with OpenAI extracted data: {str(db_e)}")
                 
         else:
-            logger.info("❌ TIER 4A FAILED: OpenAI could not extract patient information from email content")
+            logger.info("❌ TIER 5A FAILED: OpenAI could not extract patient information from email content")
             
     except Exception as openai_e:
-        logger.error(f"❌ TIER 4 ERROR: Exception during OpenAI extraction: {str(openai_e)}")
+        logger.error(f"❌ TIER 5 ERROR: Exception during OpenAI extraction: {str(openai_e)}")
     
     # Final fallback - no patient ID found
     logger.info("❌ ALL TIERS FAILED: No patient ID found through any extraction method")

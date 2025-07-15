@@ -1,4 +1,14 @@
-"""Helper functions for extracting and processing patient information from emails."""
+"""Helper functions for extracting and processing patient information from emails.
+
+This module provides patient data extraction capabilities for email processing workflows.
+
+MCP TOOLS vs DIRECT API USAGE:
+==============================
+This module follows the same patterns as agent_helpers.py:
+- Uses MCP tools when available (fetch_patient_by_id, fetch_study_details)  
+- Uses direct API calls when no MCP tool exists (name+DOI searches)
+- See agent_helpers.py for complete documentation of the MCP/API policy
+"""
 
 import json
 import logging
@@ -82,32 +92,47 @@ def _extract_patient_names_and_dates(content_text: str) -> list:
 
 async def _search_patient_by_name_doi(first_name: str, last_name: str, doi: str, parent_logger: logging.Logger) -> str:
     """
-    Search for patient by name and DOI using available methods.
+    Search for patient by name and DOI using direct API (no MCP tool available).
     
+    NOTE: This function uses direct API calls since no MCP tool exists for name+DOI search.
+    See agent_helpers.py for the complete MCP vs direct API usage policy.
+    
+    Args:
+        first_name: Patient's first name
+        last_name: Patient's last name  
+        doi: Patient's date of injury
+        parent_logger: Logger instance for logging
+        
     Returns:
         Patient ID if found, None otherwise
     """
     try:
-        # Note: search_patient_by_name_doi MCP tool is not available on the MCP server
-        # Going directly to RadFlow API search
-        parent_logger.info(f"Searching for patient via direct API: {first_name} {last_name} DOI {doi}")
+        parent_logger.info(f"🔍 DB SEARCH: Starting patient search via direct API (no MCP tool available)...")
+        parent_logger.info(f"🔍 DB SEARCH INPUT: First='{first_name}', Last='{last_name}', DOI='{doi}'")
+        parent_logger.info("NOTE: Using direct API call since no MCP tool exists for name+DOI search")
+        
+        parent_logger.info(f"🔍 API CALL: Calling get_patient_by_name_doi() for {first_name} {last_name} DOI {doi}")
         result = await get_patient_by_name_doi(first_name, last_name, doi)
+        parent_logger.info(f"🔍 API RESPONSE: {result}")
         
         if result.get("success") and result.get("patients"):
             patients = result["patients"]
+            parent_logger.info(f"🔍 DB SEARCH: Found {len(patients)} patient(s) in database")
+            
             if len(patients) == 1:
                 patient_id = patients[0].get("patient_id")
-                parent_logger.info(f"Found patient via direct API: {patient_id}")
+                parent_logger.info(f"✅ DB SEARCH SUCCESS: Found unique patient via direct API: {patient_id}")
                 return patient_id
             elif len(patients) > 1:
-                parent_logger.warning(f"Multiple patients found via direct API for {first_name} {last_name} DOI {doi}: {len(patients)} matches")
+                parent_logger.warning(f"❌ DB SEARCH ERROR: Multiple patients found via direct API for {first_name} {last_name} DOI {doi}: {len(patients)} matches")
+                parent_logger.warning(f"❌ Multiple patients data: {patients}")
                 return None
         
-        parent_logger.info(f"No patient found for {first_name} {last_name} DOI {doi}")
+        parent_logger.info(f"❌ DB SEARCH FAILED: No patient found for {first_name} {last_name} DOI {doi}")
         return None
         
     except Exception as e:
-        parent_logger.error(f"Error searching for patient {first_name} {last_name} DOI {doi}: {str(e)}")
+        parent_logger.error(f"❌ DB SEARCH ERROR: Exception searching for patient {first_name} {last_name} DOI {doi}: {str(e)}")
         return None
 
 
@@ -161,13 +186,42 @@ async def extract_and_log_patient_info(
                 patient_data_dict = None
                 study_data_dict = None
                 try:
-                    # Fetch patient data
-                    patient_data_dict = await fetch_patient_by_id(patient_id=p_id)
-                    # parent_logger.info(f"Patient data for {p_id}: {json.dumps(patient_data_dict, indent=2)}")
+                    # Fetch patient data using MCP tools (when we have patient_id)
+                    parent_logger.info(f"📡 MCP CALL: Fetching patient info via MCP tools for patient ID: {p_id}")
                     
-                    # Fetch study details
-                    study_data_dict = await _fetch_patient_study_data(patient_id=p_id)
-                    # parent_logger.info(f"Study data for {p_id}: {json.dumps(study_data_dict, indent=2)}")
+                    # Use MCP tools for patient data retrieval since we have a patient_id
+                    patient_mcp_response = await call_mcp_tool(
+                        tool_name="fetch_patient_info",
+                        arguments={"patient_id": p_id}
+                    )
+                    parent_logger.info(f"📡 MCP Patient Response: {patient_mcp_response}")
+                    
+                    # Use MCP tools for study data retrieval
+                    study_mcp_response = await call_mcp_tool(
+                        tool_name="fetch_study_details", 
+                        arguments={"patient_id": p_id}
+                    )
+                    parent_logger.info(f"📡 MCP Study Response: {study_mcp_response}")
+                    
+                    # Process MCP responses for patient data
+                    patient_data_dict = None
+                    if patient_mcp_response and patient_mcp_response.get("success"):
+                        patient_data_dict = patient_mcp_response
+                        parent_logger.info(f"✅ Successfully retrieved patient data via MCP for {p_id}")
+                    else:
+                        parent_logger.warning(f"⚠️ MCP patient data retrieval failed for {p_id}, falling back to direct API")
+                        # Fallback to direct API call
+                        patient_data_dict = await fetch_patient_by_id(patient_id=p_id)
+                    
+                    # Process MCP responses for study data  
+                    study_data_dict = None
+                    if study_mcp_response and study_mcp_response.get("success"):
+                        study_data_dict = study_mcp_response
+                        parent_logger.info(f"✅ Successfully retrieved study data via MCP for {p_id}")
+                    else:
+                        parent_logger.warning(f"⚠️ MCP study data retrieval failed for {p_id}, falling back to direct API")
+                        # Fallback to direct API call
+                        study_data_dict = await _fetch_patient_study_data(patient_id=p_id)
                     
                     # Create PatientConversationData entry with both patient and study information
                     pcd_create = PatientConversationDataCreate(
@@ -175,7 +229,7 @@ async def extract_and_log_patient_info(
                         patient_id=p_id,
                         source_email_id=source_email_id,
                         patient_info=patient_data_dict,
-                        appointment_info=study_data_dict if study_data_dict.get("success") else None
+                        appointment_info=study_data_dict if study_data_dict and study_data_dict.get("success") else None
                     )
                     created_pcd = await pcd_crud.upsert(db=db, obj_in=pcd_create)
                     parent_logger.info(f"Upserted PatientConversationData for {p_id} in conversation {conversation_id}, record ID: {created_pcd.id}")
