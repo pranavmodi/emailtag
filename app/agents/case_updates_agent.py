@@ -1,3 +1,4 @@
+
 """
 Agent for handling Case Update related tags.
 
@@ -77,6 +78,9 @@ CASE_UPDATE_TAG_EVENT_IDS: Dict[str, int] = {
 # this agent.
 SUPPORTED_CASE_UPDATE_TAGS = set(CASE_UPDATE_TAG_TEMPLATES.keys())
 
+# Feature flag to disable autorespond functionality while keeping code intact
+CASE_UPDATE_AUTORESPOND_ENABLED = False
+
 # ---------------------------------------------------------------------------
 # Public orchestrator
 # ---------------------------------------------------------------------------
@@ -142,7 +146,7 @@ async def handle_case_update_request(
             "details": {"reason": "No supported case-update tag present."},
         }
 
-    # --- Begin MCP Logging ---
+    # --- Patient Extraction (Always Performed) ---
     patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id, email_subject)
     if patient_id:
         logger.info(
@@ -150,6 +154,33 @@ async def handle_case_update_request(
             patient_id,
             front_conversation_id,
         )
+    else:
+        logger.info(
+            "[CaseUpdatesAgent] No Patient ID found in conv %s",
+            front_conversation_id,
+        )
+
+    # Check if autorespond (including MCP logging) is enabled via feature flag
+    if not CASE_UPDATE_AUTORESPOND_ENABLED:
+        logger.info(
+            "[CaseUpdatesAgent] Autorespond (including MCP logging) disabled for tag '%s' in conv %s. Patient ID: %s",
+            chosen_tag,
+            front_conversation_id,
+            patient_id or "None",
+        )
+        return {
+            "agent_handled": True,  # Mark as handled since we processed it (just didn't perform actions)
+            "processed_flag": True,
+            "details": {
+                "tag": chosen_tag,
+                "autorespond_disabled": True,
+                "mcp_logging_disabled": True,
+                "patient_id": patient_id,  # Include extracted patient ID in response
+            },
+        }
+
+    # --- Begin MCP Logging ---
+    if patient_id:
         event_id = CASE_UPDATE_TAG_EVENT_IDS.get(chosen_tag)
         if event_id:
             if not mcp_client.is_connected:
@@ -176,7 +207,7 @@ async def handle_case_update_request(
                 payment_sent_date = (datetime.now() - timedelta(days=7)).strftime("%m/%d/%Y")
                 tool_args["payment_date_sent"] = payment_sent_date
                 tool_args["check_number"] = "UNKNOWN"  # Placeholder since we can't extract from email
-                tool_args["check_amount"] = 0.0  # Placeholder since we can't extract from email
+                tool_args["check_amount"] = 1.0  # Placeholder amount (API requires > 0) since we can't extract from email
             elif event_id == 20:  # Promise to send payment or Payment on way
                 # For "Promise to send payment", provide expected payment date
                 # For "Payment on way", provide estimated send date
@@ -211,7 +242,7 @@ async def handle_case_update_request(
             )
     else:
         logger.info(
-            "[CaseUpdatesAgent] No Patient ID found in conv %s. Skipping MCP log.",
+            "[CaseUpdatesAgent] Skipping MCP log for conv %s (no patient ID found earlier).",
             front_conversation_id,
         )
     # --- End MCP Logging ---
@@ -219,6 +250,7 @@ async def handle_case_update_request(
     reply_body = CASE_UPDATE_TAG_TEMPLATES[chosen_tag]
 
     # Send reply via helper (runs the blocking Front call in a thread pool)
+    # Note: Human review tag is added in main tagging flow for all case update emails
     send_result = await send_reply_to_front_direct(
         front_conversation_id,
         reply_body,

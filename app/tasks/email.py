@@ -534,6 +534,23 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                 final_tagging_status = "tagging_completed_applied_tags"
                 # Update status; is_processed defaults to False, allowing subsequent tasks in the chain.
                 email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_tagging_status))
+                
+                # Check if any case update tags were applied and add human review tag
+                case_update_tags = {
+                    "New Attorney", "Drop Letter", "Drop Pending", "Promise to send payment",
+                    "Waiting to clear liability", "Waiting on settlement check", 
+                    "Sent payment but not received", "Refund Request", "Payment on way"
+                }
+                
+                has_case_update_tag = any(tag in case_update_tags for tag in new_tags)
+                if has_case_update_tag:
+                    human_review_success = add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+                    if human_review_success:
+                        logger.info(f"Added human review tag to conversation {front_conversation_id} due to case update tags: {[tag for tag in new_tags if tag in case_update_tags]}")
+                    else:
+                        logger.warning(f"Failed to add human review tag to conversation {front_conversation_id} for case update tags")
+                else:
+                    logger.debug(f"No case update tags found in {new_tags} for conversation {front_conversation_id}")
             else:
                 logger.error(f"Failed to apply tags {new_tags} to conversation {front_conversation_id} on Front.")
                 applied_tags_to_front = False 
@@ -542,6 +559,21 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                 # to prevent retries of perform_tagging_task for Front API issues,
                 # but auto-response will still proceed based on local DB tags.
                 email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_tagging_status, is_processed=True))
+                
+                # Even if main tag application failed, still try to add human review tag for case updates
+                case_update_tags = {
+                    "New Attorney", "Drop Letter", "Drop Pending", "Promise to send payment",
+                    "Waiting to clear liability", "Waiting on settlement check", 
+                    "Sent payment but not received", "Refund Request", "Payment on way"
+                }
+                
+                has_case_update_tag = any(tag in case_update_tags for tag in new_tags)
+                if has_case_update_tag:
+                    human_review_success = add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+                    if human_review_success:
+                        logger.info(f"Added human review tag to conversation {front_conversation_id} due to case update tags (main tagging failed): {[tag for tag in new_tags if tag in case_update_tags]}")
+                    else:
+                        logger.warning(f"Failed to add human review tag to conversation {front_conversation_id} for case update tags (main tagging also failed)")
         
         # Regardless of tagging outcome (unless critical error above), proceed to auto-response.
         perform_autorespond_task.apply_async(args=[email_id], kwargs={'determined_tags': new_tags}, queue='processing')
