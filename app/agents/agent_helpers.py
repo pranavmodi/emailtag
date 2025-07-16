@@ -575,7 +575,7 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
                                 
                                 # Add comment to Front conversation if conversation_id is provided
                                 if conversation_id:
-                                    comment_text = f"Bot found patient id {patient_id} (via OpenAI extraction)"
+                                    comment_text = f"Bot found patient id {patient_id}"
                                     try:
                                         frontapp_service.add_conversation_comment(conversation_id, comment_text)
                                         logger.info(f"✅ Front comment added successfully for conversation {conversation_id}: {comment_text}")
