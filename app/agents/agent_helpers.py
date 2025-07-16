@@ -564,44 +564,32 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
                 )
                 logger.info(f"🔍 MCP RESPONSE: {patient_data}")
                 
-                if patient_data and patient_data.get('success') and patient_data.get('data'):
-                    # Handle MCP response format
-                    data = patient_data['data']
-                    if isinstance(data, dict) and data.get("patient_id"):
-                        patient_id = data["patient_id"]
-                        logger.info(f"✅ TIER 2B SUCCESS: Found patient ID using OpenAI extraction + MCP lookup: {patient_id}")
-                        
-                        # Add comment to Front conversation if conversation_id is provided
-                        if conversation_id:
-                            comment_text = f"Bot found patient id {patient_id} (via OpenAI extraction)"
-                            try:
-                                frontapp_service.add_conversation_comment(conversation_id, comment_text)
-                                logger.info(f"✅ Front comment added successfully for conversation {conversation_id}: {comment_text}")
-                            except Exception as e:
-                                logger.error(f"❌ Failed to add OpenAI extraction comment to conversation {conversation_id}: {str(e)}")
-                        
-                        logger.info("=== EXTRACTION COMPLETE (TIER 2B) ===")
-                        return patient_id
-                    elif isinstance(data, list) and len(data) > 0 and data[0].get("patient_id"):
-                        if len(data) == 1:
-                            patient_id = data[0]["patient_id"]
-                            logger.info(f"✅ TIER 2B SUCCESS: Found patient ID using OpenAI extraction + MCP lookup (from list): {patient_id}")
-                            
-                            # Add comment to Front conversation if conversation_id is provided
-                            if conversation_id:
-                                comment_text = f"Bot found patient id {patient_id} (via OpenAI extraction)"
-                                try:
-                                    frontapp_service.add_conversation_comment(conversation_id, comment_text)
-                                    logger.info(f"✅ Front comment added successfully for conversation {conversation_id}: {comment_text}")
-                                except Exception as e:
-                                    logger.error(f"❌ Failed to add OpenAI extraction comment to conversation {conversation_id}: {str(e)}")
-                            
-                            logger.info("=== EXTRACTION COMPLETE (TIER 2B) ===")
-                            return patient_id
+                if patient_data and patient_data.get('success') and patient_data.get('patients'):
+                    # Handle MCP response format - patients array contains the data
+                    patients = patient_data['patients']
+                    if isinstance(patients, list) and len(patients) > 0:
+                        if len(patients) == 1:
+                            patient_id = patients[0].get("patient_id")
+                            if patient_id:
+                                logger.info(f"✅ TIER 2B SUCCESS: Found patient ID using OpenAI extraction + MCP lookup: {patient_id}")
+                                
+                                # Add comment to Front conversation if conversation_id is provided
+                                if conversation_id:
+                                    comment_text = f"Bot found patient id {patient_id} (via OpenAI extraction)"
+                                    try:
+                                        frontapp_service.add_conversation_comment(conversation_id, comment_text)
+                                        logger.info(f"✅ Front comment added successfully for conversation {conversation_id}: {comment_text}")
+                                    except Exception as e:
+                                        logger.error(f"❌ Failed to add OpenAI extraction comment to conversation {conversation_id}: {str(e)}")
+                                
+                                logger.info("=== EXTRACTION COMPLETE (TIER 2B) ===")
+                                return patient_id
+                            else:
+                                logger.info(f"❌ MCP lookup returned success but patient_id missing for OpenAI extracted {first_name} {last_name} DOI {doi}")
                         else:
-                            logger.warning(f"⚠️ Multiple patients found via OpenAI extraction for {first_name} {last_name} DOI {doi}: {len(data)} matches")
+                            logger.warning(f"⚠️ Multiple patients found via OpenAI extraction for {first_name} {last_name} DOI {doi}: {len(patients)} matches")
                     else:
-                        logger.info(f"❌ MCP lookup returned success but no patient_id found for OpenAI extracted {first_name} {last_name} DOI {doi}")
+                        logger.info(f"❌ MCP lookup returned success but no patients found for OpenAI extracted {first_name} {last_name} DOI {doi}")
                 else:
                     error_msg = patient_data.get('error', 'Unknown error') if patient_data else 'Empty response'
                     logger.info(f"❌ TIER 2B FAILED: OpenAI extracted patient info but MCP lookup failed: {error_msg}")
