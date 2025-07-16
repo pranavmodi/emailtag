@@ -155,7 +155,8 @@ async def handle_missing_lien_request(
     front_conversation_id: str,
     current_email_content: str,
     structured_history_messages: List[Dict[str, Any]],
-    settings_obj: Any = app_settings_instance
+    settings_obj: Any = app_settings_instance,
+    email_subject: str = None
 ) -> Dict[str, Any]:
     """
     Orchestrates the AI agent to handle a "Missing Lien Request".
@@ -187,7 +188,7 @@ async def handle_missing_lien_request(
     already_asked_for_clarification = _check_conversation_history_for_clarification_request(structured_history_messages)
     
     # Extract patient ID from current email
-    patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id)
+    patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id, email_subject)
     
     if not patient_id:
         # Try to extract patient details (name, DOB, DOL) from email if no patient ID

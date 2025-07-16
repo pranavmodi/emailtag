@@ -186,8 +186,8 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         except Exception as e_conv_log:
             logger.error(f"Error logging conversation thread for {conversation_id}: {str(e_conv_log)}")
 
-        # Extract and process patient IDs using the helper function
-        await extract_and_log_patient_info(db, content_text, conversation_id, db_email.id, logger)
+        # Extract and process patient IDs using the helper function (now with subject support)
+        await extract_and_log_patient_info(db, content_text, conversation_id, db_email.id, logger, subject)
 
         # Always queue the main process_email task.
         # The process_email task itself will determine if OCR is needed and dispatch OCR tasks.

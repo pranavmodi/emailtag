@@ -246,7 +246,8 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                     front_conversation_id=front_conversation_id,
                     current_email_content=current_email_content,
                     structured_history_messages=structured_history_messages,
-                    settings_obj=settings
+                    settings_obj=settings,
+                    email_subject=email_obj.subject
                 )
             
             try:
@@ -278,7 +279,8 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                     front_conversation_id=front_conversation_id,
                     current_email_content=current_email_content,
                     structured_history_messages=structured_history_messages,
-                    settings_obj=settings
+                    settings_obj=settings,
+                    email_subject=email_obj.subject
                 )
             
             try:
@@ -317,6 +319,7 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                     agent_result_dict = await handle_case_update_request(
                         front_conversation_id=front_conversation_id,
                         current_email_content=current_email_content,
+                        email_subject=email_obj.subject,
                         applied_case_tags=matching_case_tags,
                         structured_history_messages=structured_history_messages,
                         settings_obj=settings,

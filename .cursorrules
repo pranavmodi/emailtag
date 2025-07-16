@@ -1,5 +1,7 @@
 NEVER use 'gpt-4' model for LLM calls. Always use 'gpt-4o'
 
+do not create new scripts for testing, unless really necessary. Ask before doing so with a reason.
+
 Start every reply with "Long Live your Majesty!"
 This is a Python project for email tagging. Emails from a CRM (FrontApp) are forwarded to a webhook defined by this repo. The system uses AI to tag emails, enabling the right departments at Precise Imaging to view relevant emails.
 

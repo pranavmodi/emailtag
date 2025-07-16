@@ -156,7 +156,8 @@ async def extract_and_log_patient_info(
     content_text: str, 
     conversation_id: str, 
     source_email_id: UUID,
-    parent_logger: logging.Logger
+    parent_logger: logging.Logger,
+    subject: str = None
 ) -> None:
     """
     Extract patient information from email content and store in database.
@@ -167,15 +168,22 @@ async def extract_and_log_patient_info(
         conversation_id: The Front conversation ID
         source_email_id: The ID of the email message
         parent_logger: Logger instance for logging
+        subject: Optional email subject line that may contain patient information
     """
     try:
-        # Find all unique patient IDs (PREXXXXXX) in the text content
-        found_patient_ids = set(re.findall(r"PRE\d{6}", content_text, re.IGNORECASE))
+        # Include subject in content for pattern matching
+        full_content = content_text
+        if subject:
+            full_content = f"Subject: {subject}\n\n{content_text}"
+            parent_logger.info(f"Including email subject in extraction: {subject}")
+
+        # Find all unique patient IDs (PREXXXXXX) in the text content (including subject)
+        found_patient_ids = set(re.findall(r"PRE\d{6}", full_content, re.IGNORECASE))
         
         # If no patient IDs found, try to extract names and DOI/DOL
         if not found_patient_ids:
             parent_logger.info(f"No patient IDs found, attempting to extract names and DOI/DOL from conversation {conversation_id}")
-            extracted_patients = _extract_patient_names_and_dates(content_text)
+            extracted_patients = _extract_patient_names_and_dates(full_content)
             
             if extracted_patients:
                 parent_logger.info(f"Found {len(extracted_patients)} potential patients by name and DOI/DOL: {extracted_patients}")

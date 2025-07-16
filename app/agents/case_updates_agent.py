@@ -85,6 +85,7 @@ async def handle_case_update_request(
     *,
     front_conversation_id: str,
     current_email_content: str,
+    email_subject: str = None,
     applied_case_tags: List[str],
     structured_history_messages: List[Dict[str, Any]],
     settings_obj: Any = app_settings_instance,
@@ -98,6 +99,8 @@ async def handle_case_update_request(
     current_email_content:
         The raw text/html of the triggering email. (Currently unused but kept
         for future context aware replies.)
+    email_subject:
+        The subject line of the triggering email for patient extraction.
     applied_case_tags:
         List of Case-Update tags that were applied during classification.
     structured_history_messages:
@@ -140,7 +143,7 @@ async def handle_case_update_request(
         }
 
     # --- Begin MCP Logging ---
-    patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id)
+    patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id, email_subject)
     if patient_id:
         logger.info(
             "[CaseUpdatesAgent] Extracted Patient ID: %s for conv %s",

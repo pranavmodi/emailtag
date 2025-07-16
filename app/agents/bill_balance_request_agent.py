@@ -241,7 +241,8 @@ async def handle_bill_balance_request(
     front_conversation_id: str,
     current_email_content: str,
     structured_history_messages: List[Dict[str, Any]],
-    settings_obj: Any = app_settings_instance
+    settings_obj: Any = app_settings_instance,
+    email_subject: str = None
 ) -> Dict[str, Any]:
     """
     Main orchestrator for handling "Bill or balance Request" emails.
@@ -256,7 +257,7 @@ async def handle_bill_balance_request(
     already_asked_for_clarification = _check_if_clarification_request(structured_history_messages)
     
     # Try to extract patient ID from the email
-    patient_id = await extract_patient_id_from_email_logic(f"Subject: \n\n{current_email_content}", front_conversation_id)
+    patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id, email_subject)
     
     if not patient_id:
         if already_asked_for_clarification:
