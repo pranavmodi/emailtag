@@ -100,8 +100,12 @@ class Settings(BaseSettings):
     ROBOFLOW_API_KEY: Optional[str] = "your-roboflow-api-key"
     ROBOFLOW_MODEL_ID: Optional[str] = "strikethrough-detection/6"
     
+    # OpenAI Settings for Vision/Multimodal
+    OPENAI_VISION_MODEL: Optional[str] = "gpt-4o"  # Model for image analysis
+    OPENAI_MAX_TOKENS: Optional[int] = 1000  # Max tokens for vision responses
+    
     # Strikethrough Detection Provider
-    STRIKETHROUGH_PROVIDER: Optional[str] = "google"  # google|roboflow
+    STRIKETHROUGH_PROVIDER: Optional[str] = "google"  # google|roboflow|openai
 
     @field_validator("ASYNC_DATABASE_URL", mode="before")
     def assemble_async_db_connection(cls, v: Optional[str], info) -> Any:

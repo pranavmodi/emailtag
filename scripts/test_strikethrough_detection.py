@@ -271,8 +271,8 @@ def main():
     parser.add_argument(
         "--provider",
         type=str,
-        choices=["google", "roboflow"],
-        help="Specify which provider to use (google or roboflow)"
+        choices=["google", "roboflow", "openai"],
+        help="Specify which provider to use (google, roboflow, or openai)"
     )
     parser.add_argument(
         "--provider-status",

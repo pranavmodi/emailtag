@@ -459,6 +459,256 @@ class RoboflowProvider(StrikethroughProvider):
                 pass
 
 
+class OpenAIProvider(StrikethroughProvider):
+    """OpenAI GPT-4o Vision provider for strikethrough detection."""
+    
+    def __init__(self, model: Optional[str] = None, max_tokens: Optional[int] = None):
+        super().__init__()
+        self.model = model or getattr(settings, 'OPENAI_VISION_MODEL', 'gpt-4o')
+        self.max_tokens = max_tokens or getattr(settings, 'OPENAI_MAX_TOKENS', 1000)
+        self.api_key = getattr(settings, 'OPENAI_API_KEY', None)
+        
+        if not self.api_key:
+            logger.error("OPENAI_API_KEY not found in settings. OpenAI provider will not work.")
+        
+        logger.info(f"Initialized OpenAI provider with model: {self.model}")
+    
+    def _convert_pdf_to_images(self, pdf_path: str) -> List[str]:
+        """Convert PDF to images for OpenAI processing."""
+        try:
+            from pdf2image import convert_from_path
+            import tempfile
+            
+            # Convert PDF to images
+            pages = convert_from_path(pdf_path, dpi=300)
+            image_paths = []
+            
+            for i, page in enumerate(pages):
+                # Save each page as a temporary image
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f"_page_{i+1}.jpg")
+                page.save(temp_file.name, 'JPEG')
+                image_paths.append(temp_file.name)
+            
+            return image_paths
+            
+        except ImportError:
+            logger.error("pdf2image library not installed. Install it with: pip install pdf2image")
+            return []
+        except Exception as e:
+            logger.error(f"Error converting PDF to images: {e}")
+            return []
+    
+    def _encode_image_to_base64(self, image_path: str) -> Optional[str]:
+        """Encode image to base64 for OpenAI API."""
+        try:
+            with open(image_path, "rb") as image_file:
+                image_bytes = image_file.read()
+                base64_image = base64.b64encode(image_bytes).decode('utf-8')
+                return base64_image
+        except Exception as e:
+            logger.error(f"Error encoding image {image_path}: {e}")
+            return None
+    
+    def _prepare_vision_prompt(self) -> str:
+        """Prepare the prompt for GPT-4o vision to detect strikethrough text."""
+        return """Analyze this image and detect any text that has been crossed out or has strikethrough formatting. 
+
+Please provide a JSON response with the following structure:
+{
+    "strikethrough_detected": boolean,
+    "strikethrough_instances": [
+        {
+            "text": "the crossed out text (if readable)",
+            "confidence": confidence_score_0_to_1,
+            "location": "description of where it appears",
+            "type": "strikethrough|crossed_out|line_through"
+        }
+    ],
+    "summary": "brief description of findings"
+}
+
+Focus specifically on:
+- Text with horizontal lines through it
+- Text that appears crossed out
+- Any form of strikethrough formatting
+- Handwritten crossing out or strikethrough marks
+
+If no strikethrough text is found, return strikethrough_detected: false and empty strikethrough_instances array."""
+    
+    async def _detect_strikethrough_in_image(self, image_path: str, page_number: int) -> List[Dict[str, Any]]:
+        """Detect strikethrough in a single image using OpenAI GPT-4o Vision."""
+        try:
+            base64_image = self._encode_image_to_base64(image_path)
+            if not base64_image:
+                return []
+            
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}"
+            }
+            
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": self._prepare_vision_prompt()
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "max_tokens": self.max_tokens
+            }
+            
+            async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
+                logger.info(f"Sending image to OpenAI GPT-4o Vision API")
+                response = await client.post(
+                    "https://api.openai.com/v1/chat/completions", 
+                    headers=headers, 
+                    json=payload
+                )
+                response.raise_for_status()
+                
+                result_data = response.json()
+                logger.debug(f"OpenAI response: {result_data}")
+                
+                # Extract the response content
+                content = result_data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                
+                # Try to parse JSON response
+                import json
+                try:
+                    # Look for JSON in the response
+                    start_idx = content.find('{')
+                    end_idx = content.rfind('}') + 1
+                    if start_idx != -1 and end_idx > start_idx:
+                        json_str = content[start_idx:end_idx]
+                        parsed_result = json.loads(json_str)
+                    else:
+                        parsed_result = json.loads(content)
+                except json.JSONDecodeError:
+                    # If JSON parsing fails, create a fallback response
+                    logger.warning(f"Failed to parse JSON from OpenAI response, content: {content}")
+                    # Check for keyword indicators
+                    has_strikethrough = any(keyword in content.lower() for keyword in 
+                                          ['strikethrough', 'crossed out', 'line through', 'strike through'])
+                    parsed_result = {
+                        "strikethrough_detected": has_strikethrough,
+                        "strikethrough_instances": [{
+                            "text": "Detected via text analysis",
+                            "confidence": 0.7,
+                            "location": f"Page {page_number}",
+                            "type": "strikethrough"
+                        }] if has_strikethrough else [],
+                        "summary": content[:200] + "..." if len(content) > 200 else content
+                    }
+                
+                # Convert to our standard format
+                strikethrough_instances = []
+                if parsed_result.get("strikethrough_detected", False):
+                    for instance in parsed_result.get("strikethrough_instances", []):
+                        strikethrough_instances.append({
+                            "text": instance.get("text", "Unknown text"),
+                            "page_number": page_number,
+                            "confidence": instance.get("confidence", 0.8),
+                            "location": instance.get("location", f"Page {page_number}"),
+                            "type": instance.get("type", "strikethrough"),
+                            "provider_data": {
+                                "summary": parsed_result.get("summary", "")
+                            }
+                        })
+                
+                return strikethrough_instances
+                
+        except Exception as e:
+            logger.error(f"Error detecting strikethrough in image {image_path}: {e}")
+            return []
+    
+    async def detect_strikethrough_in_pdf(self, pdf_path: str) -> Dict[str, Any]:
+        """Detect strikethrough text in a PDF file using OpenAI GPT-4o Vision."""
+        logger.info(f"Starting OpenAI GPT-4o strikethrough detection for PDF: {pdf_path}")
+        
+        # Convert PDF to images
+        image_paths = self._convert_pdf_to_images(pdf_path)
+        if not image_paths:
+            return {
+                "success": False,
+                "error": "Failed to convert PDF to images",
+                "strikethrough_text": [],
+                "provider": "openai"
+            }
+        
+        try:
+            all_strikethrough_instances = []
+            
+            # Process each page image
+            for i, image_path in enumerate(image_paths, 1):
+                page_instances = await self._detect_strikethrough_in_image(image_path, i)
+                all_strikethrough_instances.extend(page_instances)
+                
+                # Clean up temporary image file
+                try:
+                    os.unlink(image_path)
+                except:
+                    pass
+            
+            # Calculate summary
+            pages_with_strikethrough = len(set(instance["page_number"] for instance in all_strikethrough_instances))
+            summary = {
+                "total_strikethrough_instances": len(all_strikethrough_instances),
+                "pages_with_strikethrough": pages_with_strikethrough,
+                "total_pages": len(image_paths)
+            }
+            
+            logger.info(f"OpenAI GPT-4o processing complete. Found {len(all_strikethrough_instances)} strikethrough instances.")
+            
+            return {
+                "success": True,
+                "strikethrough_text": all_strikethrough_instances,
+                "provider": "openai",
+                "summary": summary
+            }
+            
+        except Exception as e:
+            logger.error(f"Error during OpenAI GPT-4o processing: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": f"Processing error: {str(e)}",
+                "strikethrough_text": [],
+                "provider": "openai"
+            }
+    
+    async def detect_strikethrough_from_bytes(self, pdf_bytes: bytes) -> Dict[str, Any]:
+        """Detect strikethrough text from PDF bytes using OpenAI GPT-4o Vision."""
+        import tempfile
+        
+        # Save bytes to temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+            temp_file.write(pdf_bytes)
+            temp_path = temp_file.name
+        
+        try:
+            # Process the temporary file
+            result = await self.detect_strikethrough_in_pdf(temp_path)
+            return result
+            
+        finally:
+            # Clean up temporary file
+            try:
+                os.unlink(temp_path)
+            except:
+                pass
+
+
 class PDFStrikethroughDetectionService:
     """Main service for PDF strikethrough detection with multiple provider support."""
     
@@ -467,7 +717,7 @@ class PDFStrikethroughDetectionService:
         Initialize the PDF strikethrough detection service.
         
         Args:
-            provider: Provider to use ('google' or 'roboflow'). If None, uses STRIKETHROUGH_PROVIDER setting.
+            provider: Provider to use ('google', 'roboflow', or 'openai'). If None, uses STRIKETHROUGH_PROVIDER setting.
         """
         self.provider_name = provider or getattr(settings, 'STRIKETHROUGH_PROVIDER', 'google')
         
@@ -475,6 +725,8 @@ class PDFStrikethroughDetectionService:
             self.provider = GoogleDocumentAIProvider()
         elif self.provider_name.lower() == 'roboflow':
             self.provider = RoboflowProvider()
+        elif self.provider_name.lower() == 'openai':
+            self.provider = OpenAIProvider()
         else:
             logger.error(f"Unknown provider: {self.provider_name}. Using Google as default.")
             self.provider = GoogleDocumentAIProvider()
@@ -510,6 +762,17 @@ class PDFStrikethroughDetectionService:
                 "model_id": getattr(settings, 'ROBOFLOW_MODEL_ID', 'strikethrough-detection/6'),
                 "model_performance": "mAP: 93.2%, Precision: 93.8%, Recall: 87.5%"
             }
+        elif self.provider_name == 'openai':
+            return {
+                "provider": "openai",
+                "name": "OpenAI GPT-4o Vision",
+                "status": "Ready to use with multimodal vision capabilities",
+                "requires_setup": "OpenAI API key only",
+                "api_key_type": "OpenAI API Key",
+                "model": getattr(settings, 'OPENAI_VISION_MODEL', 'gpt-4o'),
+                "capabilities": "Multimodal vision analysis, natural language understanding",
+                "advantages": "High accuracy, detailed text extraction, flexible detection"
+            }
         else:
             return {
                 "provider": self.provider_name,
@@ -527,7 +790,7 @@ async def detect_strikethrough_in_pdf_file(pdf_path: str, provider: Optional[str
     
     Args:
         pdf_path: Path to the PDF file
-        provider: Provider to use ('google' or 'roboflow')
+        provider: Provider to use ('google', 'roboflow', or 'openai')
         
     Returns:
         Dictionary containing strikethrough detection results
@@ -542,7 +805,7 @@ async def detect_strikethrough_in_pdf_bytes(pdf_bytes: bytes, provider: Optional
     
     Args:
         pdf_bytes: PDF file content as bytes
-        provider: Provider to use ('google' or 'roboflow')
+        provider: Provider to use ('google', 'roboflow', or 'openai')
         
     Returns:
         Dictionary containing strikethrough detection results
@@ -556,7 +819,7 @@ def is_strikethrough_feature_supported(provider: Optional[str] = None) -> bool:
     Check if strikethrough detection is currently supported by the specified provider.
     
     Args:
-        provider: Provider to check ('google' or 'roboflow')
+        provider: Provider to check ('google', 'roboflow', or 'openai')
         
     Returns:
         True if supported, False otherwise
@@ -567,8 +830,11 @@ def is_strikethrough_feature_supported(provider: Optional[str] = None) -> bool:
         # Google has API structure but feature not yet supported
         return False
     elif provider_name.lower() == 'roboflow':
-        # Roboflow can support it with custom training
-        return True  # Assuming you have trained a model
+        # Roboflow supports it with pre-trained model
+        return True
+    elif provider_name.lower() == 'openai':
+        # OpenAI GPT-4o Vision supports multimodal analysis
+        return True
     else:
         return False
 
@@ -594,6 +860,14 @@ def get_provider_status() -> Dict[str, Any]:
             "setup_required": "Roboflow API key only",
             "model_id": getattr(settings, 'ROBOFLOW_MODEL_ID', 'strikethrough-detection/6'),
             "performance": "mAP: 93.2%, Precision: 93.8%, Recall: 87.5%"
+        },
+        "openai": {
+            "name": "OpenAI GPT-4o Vision",
+            "supported": True,
+            "reason": "Uses multimodal vision capabilities for accurate strikethrough detection",
+            "setup_required": "OpenAI API key only",
+            "model": getattr(settings, 'OPENAI_VISION_MODEL', 'gpt-4o'),
+            "capabilities": "Advanced text recognition, visual analysis, natural language understanding"
         },
         "current_provider": getattr(settings, 'STRIKETHROUGH_PROVIDER', 'google')
     }
