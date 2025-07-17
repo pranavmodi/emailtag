@@ -87,6 +87,23 @@ class Settings(BaseSettings):
 
     # OpenAI
     OPENAI_API_KEY: str
+    
+    # Google API
+    GOOGLE_API_KEY: str
+    
+    # Google Cloud Document AI Settings
+    GOOGLE_CLOUD_PROJECT_ID: Optional[str] = "your-google-cloud-project"
+    GOOGLE_CLOUD_LOCATION: Optional[str] = "us"
+    DOCUMENT_AI_PROCESSOR_ID: Optional[str] = "your-processor-id"
+    
+    # Roboflow Settings
+    ROBOFLOW_API_KEY: Optional[str] = "your-roboflow-api-key"
+    ROBOFLOW_WORKSPACE: Optional[str] = "your-workspace-name"
+    ROBOFLOW_PROJECT: Optional[str] = "your-project-id"
+    ROBOFLOW_VERSION: Optional[int] = 1
+    
+    # Strikethrough Detection Provider
+    STRIKETHROUGH_PROVIDER: Optional[str] = "google"  # google|roboflow
 
     @field_validator("ASYNC_DATABASE_URL", mode="before")
     def assemble_async_db_connection(cls, v: Optional[str], info) -> Any:
