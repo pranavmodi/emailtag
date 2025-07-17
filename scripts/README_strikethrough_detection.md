@@ -15,7 +15,7 @@ A comprehensive multi-provider service for detecting strikethrough text in PDF d
 | Provider | Status | Strikethrough Support | Setup Required |
 |----------|--------|----------------------|----------------|
 | **Google Cloud Document AI** | ⚠️ Not Yet Available | API structure exists but not activated by Google | Google Cloud project, Document AI processor, OAuth2 credentials |
-| **Roboflow** | ✅ Available | Custom model training required | Trained model, Roboflow workspace and project |
+| **Roboflow** | ✅ Ready to Use | Pre-trained model with 93.2% mAP accuracy | Roboflow API key only |
 
 ## 🔧 Configuration
 
@@ -33,11 +33,9 @@ GOOGLE_CLOUD_PROJECT_ID=your-google-cloud-project
 GOOGLE_CLOUD_LOCATION=us
 DOCUMENT_AI_PROCESSOR_ID=your-processor-id
 
-# Roboflow Settings  
+# Roboflow Settings - Pre-trained Strikethrough Detection Model
 ROBOFLOW_API_KEY=your-roboflow-api-key
-ROBOFLOW_WORKSPACE=your-workspace-name
-ROBOFLOW_PROJECT=your-project-id
-ROBOFLOW_VERSION=1
+ROBOFLOW_MODEL_ID=strikethrough-detection/6
 ```
 
 ### Configuration in Code

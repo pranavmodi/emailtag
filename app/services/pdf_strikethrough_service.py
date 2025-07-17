@@ -4,10 +4,10 @@ Multi-provider service for detecting strikethrough text in PDF documents.
 
 Supports both Google Cloud Document AI and Roboflow providers:
 - Google Cloud Document AI: Has strikethrough detection API structure but not yet supported
-- Roboflow: Requires custom model training for strikethrough detection
+- Roboflow: Uses pre-trained strikethrough detection model with 93.2% mAP accuracy
 
 Note: As of current API documentation, Google's strikethrough detection feature 
-is defined but not yet supported. Roboflow requires custom model training.
+is defined but not yet supported. Roboflow uses a high-accuracy pre-trained model.
 """
 
 import os
@@ -28,15 +28,15 @@ logger = logging.getLogger(__name__)
 # Google Cloud Document AI API endpoint
 GOOGLE_DOCUMENT_AI_ENDPOINT = "https://documentai.googleapis.com/v1/projects/{project_id}/locations/{location}/processors/{processor_id}:process"
 
-# Roboflow API endpoint
-ROBOFLOW_DETECTION_ENDPOINT = "https://detect.roboflow.com/{workspace}/{project}/{version}"
+# Roboflow API endpoint - using pre-trained strikethrough detection model
+ROBOFLOW_DETECTION_ENDPOINT = "https://serverless.roboflow.com/strikethrough-detection/6"
 
 # Default values
 DEFAULT_PROJECT_ID = "your-google-cloud-project"
 DEFAULT_LOCATION = "us"
 DEFAULT_PROCESSOR_ID = "your-processor-id"
-DEFAULT_ROBOFLOW_WORKSPACE = "your-workspace-name"
-DEFAULT_ROBOFLOW_PROJECT = "your-project-id"
+# Pre-trained model configuration
+DEFAULT_ROBOFLOW_MODEL_ID = "strikethrough-detection/6"
 
 
 class StrikethroughProvider:
@@ -290,26 +290,17 @@ class GoogleDocumentAIProvider(StrikethroughProvider):
 
 
 class RoboflowProvider(StrikethroughProvider):
-    """Roboflow provider for strikethrough detection using custom trained models."""
+    """Roboflow provider for strikethrough detection using pre-trained model."""
     
-    def __init__(self,
-                 workspace: Optional[str] = None,
-                 project: Optional[str] = None,
-                 version: Optional[int] = None):
+    def __init__(self, model_id: Optional[str] = None):
         super().__init__()
-        self.workspace = workspace or getattr(settings, 'ROBOFLOW_WORKSPACE', DEFAULT_ROBOFLOW_WORKSPACE)
-        self.project = project or getattr(settings, 'ROBOFLOW_PROJECT', DEFAULT_ROBOFLOW_PROJECT)
-        self.version = version or getattr(settings, 'ROBOFLOW_VERSION', 1)
+        self.model_id = model_id or getattr(settings, 'ROBOFLOW_MODEL_ID', DEFAULT_ROBOFLOW_MODEL_ID)
         self.api_key = getattr(settings, 'ROBOFLOW_API_KEY', None)
         
         if not self.api_key:
             logger.error("ROBOFLOW_API_KEY not found in settings. Roboflow provider will not work.")
         
-        # Warn about placeholder configuration values
-        if self.workspace == DEFAULT_ROBOFLOW_WORKSPACE:
-            logger.warning("Using placeholder Roboflow workspace. Update ROBOFLOW_WORKSPACE in .env file.")
-        if self.project == DEFAULT_ROBOFLOW_PROJECT:
-            logger.warning("Using placeholder Roboflow project. Update ROBOFLOW_PROJECT in .env file.")
+        logger.info(f"Initialized Roboflow provider with pre-trained model: {self.model_id}")
     
     def _convert_pdf_to_images(self, pdf_path: str) -> List[str]:
         """Convert PDF to images for Roboflow processing."""
@@ -339,51 +330,42 @@ class RoboflowProvider(StrikethroughProvider):
     def _prepare_headers(self) -> Dict[str, str]:
         """Prepare headers for Roboflow API request."""
         return {
-            "Content-Type": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
         }
     
     async def _detect_strikethrough_in_image(self, image_path: str, page_number: int) -> List[Dict[str, Any]]:
-        """Detect strikethrough in a single image using Roboflow."""
+        """Detect strikethrough in a single image using Roboflow pre-trained model."""
         try:
-            # Prepare endpoint URL
-            endpoint = ROBOFLOW_DETECTION_ENDPOINT.format(
-                workspace=self.workspace,
-                project=self.project,
-                version=self.version
-            )
-            
-            # Add API key as query parameter
-            endpoint += f"?api_key={self.api_key}"
+            # Use the pre-trained model endpoint with API key
+            endpoint = f"{ROBOFLOW_DETECTION_ENDPOINT}?api_key={self.api_key}"
             
             # Encode image to base64
             with open(image_path, "rb") as image_file:
                 image_bytes = image_file.read()
                 base64_image = base64.b64encode(image_bytes).decode('utf-8')
             
-            # Prepare payload
-            payload = {
-                "image": base64_image
-            }
-            
             headers = self._prepare_headers()
             
             async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
-                logger.info(f"Sending image to Roboflow endpoint: {endpoint}")
-                response = await client.post(endpoint, headers=headers, json=payload)
+                logger.info(f"Sending image to Roboflow pre-trained model: {endpoint}")
+                # Send base64 image data directly as per Roboflow API format
+                response = await client.post(endpoint, headers=headers, data=base64_image)
                 response.raise_for_status()
                 
                 result_data = response.json()
+                logger.debug(f"Roboflow response: {result_data}")
                 
                 # Process Roboflow response to extract strikethrough detections
                 strikethrough_instances = []
                 predictions = result_data.get("predictions", [])
                 
                 for prediction in predictions:
-                    # Assuming the model is trained to detect strikethrough text
-                    # and returns bounding boxes with confidence scores
-                    if prediction.get("class") == "strikethrough" or prediction.get("class") == "crossed_out":
+                    # The pre-trained model detects strikethrough as object class
+                    # Check for various possible class names the model might use
+                    pred_class = prediction.get("class", "").lower()
+                    if "strikethrough" in pred_class or "strike" in pred_class or "crossed" in pred_class:
                         strikethrough_instances.append({
-                            "text": prediction.get("text", ""),  # May need OCR post-processing
+                            "text": f"Strikethrough detected (confidence: {prediction.get('confidence', 0.0):.2f})",
                             "page_number": page_number,
                             "bounding_box": {
                                 "x": prediction.get("x", 0),
@@ -391,7 +373,8 @@ class RoboflowProvider(StrikethroughProvider):
                                 "width": prediction.get("width", 0),
                                 "height": prediction.get("height", 0)
                             },
-                            "confidence": prediction.get("confidence", 0.0)
+                            "confidence": prediction.get("confidence", 0.0),
+                            "class": prediction.get("class", "unknown")
                         })
                 
                 return strikethrough_instances
@@ -520,10 +503,12 @@ class PDFStrikethroughDetectionService:
         elif self.provider_name == 'roboflow':
             return {
                 "provider": "roboflow", 
-                "name": "Roboflow Custom Vision",
-                "status": "Requires custom model training for strikethrough detection",
-                "requires_setup": "Custom trained model for strikethrough detection, Roboflow workspace and project",
-                "api_key_type": "Roboflow API Key"
+                "name": "Roboflow Pre-trained Strikethrough Detection",
+                "status": "Ready to use with pre-trained model (93.2% mAP accuracy)",
+                "requires_setup": "Roboflow API key only",
+                "api_key_type": "Roboflow API Key",
+                "model_id": getattr(settings, 'ROBOFLOW_MODEL_ID', 'strikethrough-detection/6'),
+                "model_performance": "mAP: 93.2%, Precision: 93.8%, Recall: 87.5%"
             }
         else:
             return {
@@ -603,10 +588,12 @@ def get_provider_status() -> Dict[str, Any]:
             "setup_required": "Google Cloud project, Document AI processor, OAuth2 credentials"
         },
         "roboflow": {
-            "name": "Roboflow Custom Vision",
+            "name": "Roboflow Pre-trained Strikethrough Detection",
             "supported": True,
-            "reason": "Can train custom models for strikethrough detection",
-            "setup_required": "Custom trained model, Roboflow workspace and project"
+            "reason": "Uses pre-trained model with 93.2% mAP accuracy",
+            "setup_required": "Roboflow API key only",
+            "model_id": getattr(settings, 'ROBOFLOW_MODEL_ID', 'strikethrough-detection/6'),
+            "performance": "mAP: 93.2%, Precision: 93.8%, Recall: 87.5%"
         },
         "current_provider": getattr(settings, 'STRIKETHROUGH_PROVIDER', 'google')
     }

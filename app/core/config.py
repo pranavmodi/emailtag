@@ -96,11 +96,9 @@ class Settings(BaseSettings):
     GOOGLE_CLOUD_LOCATION: Optional[str] = "us"
     DOCUMENT_AI_PROCESSOR_ID: Optional[str] = "your-processor-id"
     
-    # Roboflow Settings
+    # Roboflow Settings - Pre-trained Strikethrough Detection Model
     ROBOFLOW_API_KEY: Optional[str] = "your-roboflow-api-key"
-    ROBOFLOW_WORKSPACE: Optional[str] = "your-workspace-name"
-    ROBOFLOW_PROJECT: Optional[str] = "your-project-id"
-    ROBOFLOW_VERSION: Optional[int] = 1
+    ROBOFLOW_MODEL_ID: Optional[str] = "strikethrough-detection/6"
     
     # Strikethrough Detection Provider
     STRIKETHROUGH_PROVIDER: Optional[str] = "google"  # google|roboflow

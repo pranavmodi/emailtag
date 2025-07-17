@@ -357,13 +357,9 @@ def main():
             else:
                 logger.warning("⚠️ ROBOFLOW_API_KEY is not configured or using placeholder")
             
-            # Check other settings
-            workspace = getattr(settings, 'ROBOFLOW_WORKSPACE', 'your-workspace-name')
-            project = getattr(settings, 'ROBOFLOW_PROJECT', 'your-project-id')
-            if workspace != 'your-workspace-name' and project != 'your-project-id':
-                logger.info(f"✅ Roboflow workspace/project configured: {workspace}/{project}")
-            else:
-                logger.warning("⚠️ Roboflow workspace/project using placeholder values")
+            # Check model configuration
+            model_id = getattr(settings, 'ROBOFLOW_MODEL_ID', 'strikethrough-detection/6')
+            logger.info(f"✅ Roboflow model configured: {model_id} (pre-trained strikethrough detection)")
                 
         except Exception as e:
             logger.error(f"Error checking configuration: {e}")
