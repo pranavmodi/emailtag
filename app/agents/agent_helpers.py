@@ -125,6 +125,7 @@ async def send_fallback_reply_and_tag(
     """
     Sends a fallback reply message to a Front conversation and adds a specified tag.
     This is used for error handling and escalation.
+    Automatically adds "AI handled" tag when a reply is sent.
     """
     logger.info(f"Sending fallback reply for conversation {conversation_id}. Tag: {tag_to_add}")
     try:
@@ -137,13 +138,19 @@ async def send_fallback_reply_and_tag(
         if not reply_sent:
             logger.error(f"Failed to send fallback error reply message for {conversation_id}.")
 
+        # Prepare tags to add, including the "AI handled" tag
+        tags_to_add = [tag_to_add]
+        ai_handled_tag = "AI handled"
+        if ai_handled_tag not in tags_to_add:
+            tags_to_add.append(ai_handled_tag)
+
         tags_added = await asyncio.to_thread(
             frontapp_service.add_conversation_tags,
             conversation_id,
-            [tag_to_add]
+            tags_to_add
         )
         if not tags_added:
-            logger.warning(f"Failed to add error tag {tag_to_add} for {conversation_id}.")
+            logger.warning(f"Failed to add tags {tags_to_add} for {conversation_id}.")
 
     except Exception as ex_fallback:
         logger.error(f"Exception during sending fallback reply/tag for {conversation_id}: {ex_fallback}", exc_info=True)
@@ -158,6 +165,7 @@ async def send_reply_to_front_direct(
     """
     Sends a reply message to the specified Front conversation and optionally updates tags.
     This is a direct helper function (not a FunctionTool) for use in agents.
+    Automatically adds "AI handled" tag when a reply is sent.
     """
     logger.info(f"Helper 'send_reply_to_front_direct' called for conv_id {conversation_id}.")
     try:
@@ -169,8 +177,20 @@ async def send_reply_to_front_direct(
         if not reply_sent_successfully:
             return {"status": "error", "message": "Front API failed to send reply."}
 
-        if tags_to_add:
-            await asyncio.to_thread(frontapp_service.add_conversation_tags, conversation_id, tags_to_add)
+        # Ensure tags_to_add is a list and add "AI handled" tag
+        if tags_to_add is None:
+            tags_to_add = []
+        else:
+            tags_to_add = list(tags_to_add)  # Make a copy to avoid modifying the original
+        
+        # Add "AI handled" tag if it's not already present
+        ai_handled_tag = "AI handled"
+        if ai_handled_tag not in tags_to_add:
+            tags_to_add.append(ai_handled_tag)
+
+        # Always add tags since we now have at least the "AI handled" tag
+        await asyncio.to_thread(frontapp_service.add_conversation_tags, conversation_id, tags_to_add)
+        
         if tags_to_remove:
             await asyncio.to_thread(frontapp_service.remove_conversation_tags, conversation_id, tags_to_remove)
 
@@ -662,6 +682,7 @@ async def send_reply_to_front(
 ) -> str:
     """
     Sends a reply message to the specified Front conversation and optionally updates tags.
+    Automatically adds "AI handled" tag when a reply is sent.
     
     Returns JSON string for compatibility with openai-agents SDK final output parsing.
     """
@@ -676,8 +697,20 @@ async def send_reply_to_front(
             result = {"status": "error", "message": "Front API failed to send reply."}
             return json.dumps(result)
 
-        if tags_to_add:
-            await asyncio.to_thread(frontapp_service.add_conversation_tags, conversation_id, tags_to_add)
+        # Ensure tags_to_add is a list and add "AI handled" tag
+        if tags_to_add is None:
+            tags_to_add = []
+        else:
+            tags_to_add = list(tags_to_add)  # Make a copy to avoid modifying the original
+        
+        # Add "AI handled" tag if it's not already present
+        ai_handled_tag = "AI handled"
+        if ai_handled_tag not in tags_to_add:
+            tags_to_add.append(ai_handled_tag)
+
+        # Always add tags since we now have at least the "AI handled" tag
+        await asyncio.to_thread(frontapp_service.add_conversation_tags, conversation_id, tags_to_add)
+        
         if tags_to_remove:
             await asyncio.to_thread(frontapp_service.remove_conversation_tags, conversation_id, tags_to_remove)
 
