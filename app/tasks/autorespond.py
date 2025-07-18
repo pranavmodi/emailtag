@@ -97,6 +97,10 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             logger.error(f"Email {email_id} not found for auto-response.")
             return {"status": "error", "message": "Email not found"}
 
+        # Debug subject tracking
+        logger.info(f"🔍 DEBUG AUTORESPOND: Retrieved email {email_id} from DB")
+        logger.info(f"🔍 DEBUG AUTORESPOND: email_obj.subject = '{email_obj.subject}' (type: {type(email_obj.subject)})")
+        
         front_conversation_id = email_obj.front_conversation_id
         if not front_conversation_id:
             logger.error(f"Email {email_id} has no Front conversation ID for auto-response.")
@@ -167,7 +171,8 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                     front_conversation_id=front_conversation_id,
                     current_email_content=current_email_content,
                     structured_history_messages=structured_history_messages,
-                    settings_obj=settings # Pass the main settings module
+                    settings_obj=settings,  # Pass the main settings module
+                    email_subject=email_obj.subject  # Pass the email subject from DB
                 )
             
             # Celery tasks are synchronous, so we run the async orchestrator using asyncio.run()

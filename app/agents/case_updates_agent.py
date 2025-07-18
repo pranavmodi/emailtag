@@ -147,6 +147,10 @@ async def handle_case_update_request(
         }
 
     # --- Patient Extraction (Always Performed) ---
+    logger.info(f"🔍 DEBUG CASE_UPDATES: About to call extract_patient_id_from_email_logic")
+    logger.info(f"🔍 DEBUG CASE_UPDATES: email_subject parameter = '{email_subject}' (type: {type(email_subject)})")
+    logger.info(f"🔍 DEBUG CASE_UPDATES: current_email_content length = {len(current_email_content)}")
+    
     patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id, email_subject)
     if patient_id:
         logger.info(

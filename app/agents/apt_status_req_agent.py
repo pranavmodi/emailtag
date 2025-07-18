@@ -331,13 +331,15 @@ async def handle_apt_status_request_agent_sdk(
     front_conversation_id: str,
     current_email_content: str,
     structured_history_messages: List[Dict[str, Any]],
-    settings_obj: Any = app_settings_instance 
+    settings_obj: Any = app_settings_instance,
+    email_subject: str = None  # Add email_subject parameter
 ) -> Dict[str, Any]:
     """
     Handles an "Apt Status Req" using the openai-agents SDK with MCP server integration.
     Returns a dictionary with agent processing results.
     """
     logger.info(f"Initiating openai-agents SDK flow with MCP integration for Apt Status Req - Conv ID: {front_conversation_id}")
+    logger.info(f"🔍 DEBUG APT_STATUS: email_subject parameter = '{email_subject}' (type: {type(email_subject)})")
 
     # Initialize MCP client connection
     mcp_connected = await mcp_client.connect()
@@ -363,7 +365,7 @@ async def handle_apt_status_request_agent_sdk(
     instructions = f"""
 You are an AI assistant for a medical imaging company, specializing in appointment status requests.
 Your primary goal is to:
-1.  Search the **'Entire Conversation For Extraction'** text provided below to find the Patient ID. You MUST pass this complete text block to the `extract_patient_id_from_email` tool with the conversation_id parameter.
+1.  Search the **'Entire Conversation For Extraction'** text provided below to find the Patient ID. You MUST pass this complete text block to the `extract_patient_id_from_email` tool with the conversation_id parameter AND the subject parameter (Email Subject: "{email_subject or 'No subject'}").
 2.  Fetch appointment details using `fetch_appointment_details_by_patient_id` with the extracted ID. Also pass the `settings_obj` to this tool.
 3. Based on the outcome of step 2, determine the correct scenario.
 4. Call the `generate_formatted_reply` tool, passing it the determined scenario and the FULL result from `fetch_appointment_details_by_patient_id` (if available), and the `extracted_patient_id` (if available).
@@ -371,6 +373,7 @@ Your primary goal is to:
 6. Call `send_reply_to_front` with this `reply_text` and add tags ONLY IF the scenario requires escalation to a human.
 
 Conversation ID (use for tool calls): {front_conversation_id}
+Email Subject: "{email_subject or 'No subject'}"
 
 **Entire Conversation For Extraction:**
 ---
@@ -379,7 +382,7 @@ Conversation ID (use for tool calls): {front_conversation_id}
 
 **Scenarios & Tool Usage Flow:**
 
-A.  **If calling `extract_patient_id_from_email` on the 'Entire Conversation For Extraction' text returns a `patient_id` (let's call it `extracted_pid`):**
+A.  **If calling `extract_patient_id_from_email` on the 'Entire Conversation For Extraction' text (WITH subject="{email_subject or 'No subject'}") returns a `patient_id` (let's call it `extracted_pid`):**
     1.  Call `fetch_appointment_details_by_patient_id` with `patient_id=extracted_pid` and `settings_obj=settings_obj` (pass through from orchestrator). Let the result be `fetch_result`.
     2.  **If `fetch_result.status` is "success"** (and `fetch_result.data.studies` is not empty):
         *   Scenario for `generate_formatted_reply`: "appointments_found"
