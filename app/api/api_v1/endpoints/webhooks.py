@@ -187,7 +187,7 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         # Log the entire conversation thread
         try:
             conversation_thread_string = await email_crud.get_conversation_content(db, front_conversation_id=conversation_id)
-            logger.info(f"Current conversation thread for {conversation_id}:\n{conversation_thread_string}")
+            # logger.info(f"Current conversation thread for {conversation_id}:\n{conversation_thread_string}")
         except Exception as e_conv_log:
             logger.error(f"Error logging conversation thread for {conversation_id}: {str(e_conv_log)}")
 

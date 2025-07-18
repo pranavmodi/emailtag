@@ -109,12 +109,12 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
 
         current_email_content = email_obj.content_text or email_obj.content_html or ""
         
-        # DEBUG: Log email content extraction details
-        logger.info(f"EMAIL CONTENT DEBUG - Email ID: {email_id}")
-        logger.info(f"EMAIL CONTENT DEBUG - content_text: {email_obj.content_text}")
-        logger.info(f"EMAIL CONTENT DEBUG - content_html: {email_obj.content_html}")
-        logger.info(f"EMAIL CONTENT DEBUG - final current_email_content: {current_email_content}")
-        logger.info(f"EMAIL CONTENT DEBUG - content length: {len(current_email_content)}")
+        # # DEBUG: Log email content extraction details
+        # logger.info(f"EMAIL CONTENT DEBUG - Email ID: {email_id}")
+        # logger.info(f"EMAIL CONTENT DEBUG - content_text: {email_obj.content_text}")
+        # logger.info(f"EMAIL CONTENT DEBUG - content_html: {email_obj.content_html}")
+        # logger.info(f"EMAIL CONTENT DEBUG - final current_email_content: {current_email_content}")
+        # logger.info(f"EMAIL CONTENT DEBUG - content length: {len(current_email_content)}")
         
         conversation_data = get_conversation_text(front_conversation_id)
         structured_history_messages = []
