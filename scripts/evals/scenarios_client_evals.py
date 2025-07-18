@@ -5,7 +5,7 @@ These scenarios are designed to test real-world client email patterns.
 
 CLIENT_EVAL_SCENARIOS = {
     "1": {
-        "description": "Apt Status Req - Client following up on imaging status",
+        "description": "Edy Posas-Valdes - Apt Status Req - Client following up on imaging status with DOL 04/07/2025",
         "subject": "I am following up to see if our client got imaging's done.",
         "body_html": (
             "<p>I am following up to see if our client got imaging's done.</p>"
@@ -15,7 +15,7 @@ CLIENT_EVAL_SCENARIOS = {
         "expected_tags": ["Apt Status Req"]
     },
     "2": {
-        "description": "Apt Status Req - Client following up on imaging status (Servando Zamora)",
+        "description": "Servando Zamora - Apt Status Req - Client following up on imaging status with DOL 07/27/2023, testing similar phrasing to scenario 1",
         "subject": "I am following up to see if our client got imaging's done.",
         "body_html": (
             "<p>I am following up to see if our client got imaging's done.</p>"
@@ -25,7 +25,7 @@ CLIENT_EVAL_SCENARIOS = {
         "expected_tags": ["Apt Status Req"]
     },
     "3": {
-        "description": "Sent payment but not received - Payment settlement with check details",
+        "description": "Servando Zamora - Sent payment but not received - Complex payment settlement with multiple check details and law firm correspondence",
         "subject": "RE: Servando Zamora, 07/27/2023",
         "body_html": (
             "<p>Good afternoon,</p>"
@@ -44,7 +44,7 @@ CLIENT_EVAL_SCENARIOS = {
         "expected_tags": ["Sent payment but not received"]
     },
     "4": {
-        "description": "Simple sent payment but not received case with clear patient name and DOI for OpenAI extraction testing",
+        "description": "Servando Zamora - Sent payment but not received - Simple case with clear patient name (06/01/2024 DOI) for testing OpenAI patient extraction",
         "subject": "Payment Sent - Servando Zamora",
         "body_html": (
             "<p>Hello,</p>"
@@ -56,7 +56,7 @@ CLIENT_EVAL_SCENARIOS = {
         "expected_tags": ["Sent payment but not received"]
     },
     "5": {
-        "description": "Sent payment but not received with patient details in subject line - subject line extraction test",
+        "description": "Servando Zamora - Sent payment but not received - Patient details in subject line (06/01/2024 DOI) for testing subject line extraction capabilities",
         "subject": "RE: Servando Zamora, 06/01/2024 - Payment Already Sent",
         "body_html": (
             "<p>Good morning,</p>"
@@ -64,6 +64,51 @@ CLIENT_EVAL_SCENARIOS = {
             "<p>Check #7890 was sent on 11/15/2024 in the amount of $1800.00.</p>"
             "<p>Please stop sending statements and update your billing records.</p>"
             "<p>Thank you for your attention to this matter.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Sent payment but not received"]
+    },
+    "6": {
+        "description": "Edy Posas-Valdes - Apt Status Req - Forwarded email from Danny Rackow testing forwarded message parsing and patient extraction with DOL 04/07/2025",
+        "subject": "I am following up to see if our client got imaging's done.",
+        "body_html": (
+            "<p>Danny Rackow<br>"
+            "To: test123abc@mediflow360.com<br>"
+            "Jul 17, 12:21 PM</p>"
+            "<p>———— Forwarded message ————<br>"
+            "From: drackow2008@gmail.com<br>"
+            "Date: July 10, 2025 at 11:24 AM PDT<br>"
+            "Subject: I am following up to see if our client got imaging's done.<br>"
+            "To: test123abc@mediflow360.com</p>"
+            "<p>I am following up to see if our client got imaging's done.</p>"
+            "<p>Edy Posas-Valdes DOL: 04/07/2025</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Apt Status Req"]
+    },
+    "7": {
+        "description": "Servando Zamora - Sent payment but not received - Nested forwarded messages with multiple DOL dates (07/27/2023 & 06/01/2024) testing complex email parsing and payment settlement claims",
+        "subject": "EXTERNAL: RE: Servando Zamora, 07/27/2023",
+        "body_html": (
+            "<p>———— Forwarded message ————<br>"
+            "From: billing@precisemri.com<br>"
+            "Date: July 10, 2025 at 11:12 AM PDT<br>"
+            "Subject: EXTERNAL: RE: Servando Zamora, 07/27/2023<br>"
+            "To: test123abc@mediflow360.com</p>"
+            "<p>- Danny Rackow</p>"
+            "<p>How did I do? ⭐️⭐️⭐️⭐️⭐️</p>"
+            "<p>———— Forwarded message ————<br>"
+            "From: angela@tishbilaw.com<br>"
+            "Date: July 1, 2025 at 11:51 AM PDT<br>"
+            "Subject: EXTERNAL: RE: Servando Zamora, 07/27/2023<br>"
+            "To: negotiation@precisemri.com</p>"
+            "<p>⸻</p>"
+            "<p>Good afternoon,</p>"
+            "<p>We received an email from RadFlow 360 requesting for an update regarding this case. We already settled this matter with your office and issued payment. I believe your office is confusing both DOL cases. We settled both cases with your office and both checks have cleared in the bank. If you can update your files. If you have any questions please let us know.</p>"
+            "<p>Servando Zamora – DOL 07/27/2023 – $1,150.00 Check # 12680<br>"
+            "Servando Zamora – DOL 06/01/2024 – $1,150.00 Check # 12843</p>"
+            "<p>Thank you,</p>"
+            "<p>–</p>"
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": ["Sent payment but not received"]
