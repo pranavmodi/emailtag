@@ -55,25 +55,7 @@ def verify_webhook_signature(
     return hmac.compare_digest(expected_signature, signature)
 
 
-def extract_email_parts(raw_email: str) -> Dict[str, str]:
-    """
-    Extract parts from a raw email using mail-parser.
-    
-    Args:
-        raw_email: Raw email content
-        
-    Returns:
-        Dict[str, str]: Dictionary containing text and html parts
-    """
-    try:
-        parsed_mail = mailparser.parse_from_string(raw_email)
-        return {
-            "text": parsed_mail.body,
-            "html": parsed_mail.body_html or ""
-        }
-    except Exception as e:
-        logger.error(f"Error parsing raw email: {str(e)}")
-        return {"text": "", "html": ""}
+
 
 
 @router.post("/frontapp", status_code=status.HTTP_202_ACCEPTED)
@@ -93,7 +75,6 @@ async def frontapp_webhook(
     """
     # Get the raw request body
     body = await request.body()
-    # logger.info(f"Received raw FrontApp webhook request: {body.decode()}")
     logger.info(f"Received raw FrontApp webhook request")
 
     
@@ -138,13 +119,6 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
     try:
         logger.info(f"Processing inbound message: {webhook_data.id}")
         
-        # Debug: Log the raw webhook structure to understand subject field location
-        # logger.info(f"🔍 DEBUG: Raw webhook data structure:")
-        # logger.info(f"🔍 DEBUG: webhook_data.conversation keys: {list(webhook_data.conversation.keys()) if webhook_data.conversation else 'None'}")
-        # logger.info(f"🔍 DEBUG: webhook_data.target keys: {list(webhook_data.target.keys()) if webhook_data.target else 'None'}")
-        # if webhook_data.target and webhook_data.target.get("data"):
-        #     logger.info(f"🔍 DEBUG: webhook_data.target.data keys: {list(webhook_data.target.get('data', {}).keys())}")
-        
         # Extract conversation data
         conversation_id = webhook_data.conversation.get("id")
         if not conversation_id:
@@ -156,14 +130,10 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         attachments = message.get("attachments", [])
         sender = webhook_data.conversation.get("recipient", {}).get("handle", "unknown@example.com")
         
-        # Debug subject extraction
+        # Extract subject
         message_subject = message.get("subject")
         conversation_subject = webhook_data.conversation.get("subject", "")
-        # logger.info(f"🔍 DEBUG: Message subject from target.data: '{message_subject}' (type: {type(message_subject)})")
-        # logger.info(f"🔍 DEBUG: Conversation subject: '{conversation_subject}' (type: {type(conversation_subject)})")
-        
         subject = message_subject or conversation_subject
-        # logger.info(f"🔍 DEBUG: Final subject after extraction: '{subject}' (type: {type(subject)})")
         
         # Extract recipients
         recipients = []
@@ -175,17 +145,28 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
             elif recipient.get("email"): # Check if email field exists
                 recipients.append(recipient["email"])
         
-        # Extract content
+        # Extract content from the correct FrontApp fields
+        # Different message types may have content in different fields
+        content_body = message.get("body", "")
         content_text = message.get("text", "")
         content_html = message.get("html", "")
         
-        # Debug content extraction
-        # logger.info(f"🔍 DEBUG: Raw message.text: '{content_text}' (length: {len(content_text)})")
-        # logger.info(f"🔍 DEBUG: Raw message.body: '{message.get('body', '')}' (length: {len(message.get('body', ''))})")
-        # if content_html:
-        #     logger.info(f"🔍 DEBUG: Raw message.html length: {len(content_html)}")
+        # Log message type for debugging different content structures
+        message_type = message.get("type", "unknown")
+        is_inbound = message.get("is_inbound", "unknown")
+        logger.info(f"MESSAGE TYPE DEBUG - type: {message_type}, is_inbound: {is_inbound}")
+        logger.info(f"MESSAGE TYPE DEBUG - text field length: {len(content_text)}, body field length: {len(content_body)}")
         
-        # logger.info(f"🔍 DEBUG: Content text preview: '{content_text[:200]}...' (length: {len(content_text)})")
+        # Use the field that actually has content
+        if content_text:
+            final_content_text = content_text
+        else:
+            final_content_text = content_body
+            
+        if content_html:
+            final_content_html = content_html
+        else:
+            final_content_html = content_body
         
         # Create email record with raw webhook data
         email_create = EmailCreate(
@@ -194,17 +175,14 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
             sender=sender,
             recipients=recipients,
             subject=subject,
-            content_text=content_text,
-            content_html=content_html,
+            content_text=final_content_text,
+            content_html=final_content_html,
             has_attachments=bool(attachments),
             raw_data=webhook_data.model_dump()  # Include the complete webhook data
         )
         
-        # logger.info(f"🔍 DEBUG: EmailCreate object subject field: '{email_create.subject}' (type: {type(email_create.subject)})")
-        
         db_email = await email_crud.create(db=db, obj_in=email_create)
         logger.info(f"Created email record with ID: {db_email.id}")
-        # logger.info(f"🔍 DEBUG: Created email record subject: '{db_email.subject}' (type: {type(db_email.subject)})")
         
         # Log the entire conversation thread
         try:
@@ -214,7 +192,7 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
             logger.error(f"Error logging conversation thread for {conversation_id}: {str(e_conv_log)}")
 
         # Extract and process patient IDs using the helper function (now with subject support)
-        await extract_and_log_patient_info(db, content_text, conversation_id, db_email.id, logger, subject)
+        await extract_and_log_patient_info(db, final_content_text, conversation_id, db_email.id, logger, subject)
 
         # Always queue the main process_email task.
         # The process_email task itself will determine if OCR is needed and dispatch OCR tasks.
