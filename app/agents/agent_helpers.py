@@ -348,7 +348,7 @@ IMPORTANT INSTRUCTIONS:
 """
 
         # DEBUG: Log what's being sent to OpenAI
-        logger.info(f"OPENAI DEBUG - Sending to OpenAI: PROMPT={prompt}")
+        # logger.info(f"OPENAI DEBUG - Sending to OpenAI: PROMPT={prompt}")
 
         # Make the API call
         response = await openai_client.chat.completions.create(
