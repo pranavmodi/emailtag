@@ -98,8 +98,8 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             return {"status": "error", "message": "Email not found"}
 
         # Debug subject tracking
-        logger.info(f"🔍 DEBUG AUTORESPOND: Retrieved email {email_id} from DB")
-        logger.info(f"🔍 DEBUG AUTORESPOND: email_obj.subject = '{email_obj.subject}' (type: {type(email_obj.subject)})")
+        # logger.info(f"🔍 DEBUG AUTORESPOND: Retrieved email {email_id} from DB")
+        # logger.info(f"🔍 DEBUG AUTORESPOND: email_obj.subject = '{email_obj.subject}' (type: {type(email_obj.subject)})")
         
         front_conversation_id = email_obj.front_conversation_id
         if not front_conversation_id:

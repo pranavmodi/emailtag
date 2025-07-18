@@ -849,7 +849,7 @@ def send_conversation_reply(conversation_id: str, text: str) -> bool:
             
         # Front API expects just strings in the 'to' array, not objects
         recipients = [recipient_handle]  # Just the email string, not {"handle": email}
-        logger.info(f"🔧 DEBUG: Using recipient for reply: {recipient_handle}")
+        # logger.info(f"🔧 DEBUG: Using recipient for reply: {recipient_handle}")
         
     except Exception as e:
         logger.error(f"Error getting conversation details for {conversation_id}: {e}")

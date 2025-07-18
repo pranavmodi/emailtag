@@ -139,11 +139,11 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         logger.info(f"Processing inbound message: {webhook_data.id}")
         
         # Debug: Log the raw webhook structure to understand subject field location
-        logger.info(f"🔍 DEBUG: Raw webhook data structure:")
-        logger.info(f"🔍 DEBUG: webhook_data.conversation keys: {list(webhook_data.conversation.keys()) if webhook_data.conversation else 'None'}")
-        logger.info(f"🔍 DEBUG: webhook_data.target keys: {list(webhook_data.target.keys()) if webhook_data.target else 'None'}")
-        if webhook_data.target and webhook_data.target.get("data"):
-            logger.info(f"🔍 DEBUG: webhook_data.target.data keys: {list(webhook_data.target.get('data', {}).keys())}")
+        # logger.info(f"🔍 DEBUG: Raw webhook data structure:")
+        # logger.info(f"🔍 DEBUG: webhook_data.conversation keys: {list(webhook_data.conversation.keys()) if webhook_data.conversation else 'None'}")
+        # logger.info(f"🔍 DEBUG: webhook_data.target keys: {list(webhook_data.target.keys()) if webhook_data.target else 'None'}")
+        # if webhook_data.target and webhook_data.target.get("data"):
+        #     logger.info(f"🔍 DEBUG: webhook_data.target.data keys: {list(webhook_data.target.get('data', {}).keys())}")
         
         # Extract conversation data
         conversation_id = webhook_data.conversation.get("id")
@@ -159,11 +159,11 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         # Debug subject extraction
         message_subject = message.get("subject")
         conversation_subject = webhook_data.conversation.get("subject", "")
-        logger.info(f"🔍 DEBUG: Message subject from target.data: '{message_subject}' (type: {type(message_subject)})")
-        logger.info(f"🔍 DEBUG: Conversation subject: '{conversation_subject}' (type: {type(conversation_subject)})")
+        # logger.info(f"🔍 DEBUG: Message subject from target.data: '{message_subject}' (type: {type(message_subject)})")
+        # logger.info(f"🔍 DEBUG: Conversation subject: '{conversation_subject}' (type: {type(conversation_subject)})")
         
         subject = message_subject or conversation_subject
-        logger.info(f"🔍 DEBUG: Final subject after extraction: '{subject}' (type: {type(subject)})")
+        # logger.info(f"🔍 DEBUG: Final subject after extraction: '{subject}' (type: {type(subject)})")
         
         # Extract recipients
         recipients = []
@@ -180,12 +180,12 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         content_html = message.get("html", "")
         
         # Debug content extraction
-        logger.info(f"🔍 DEBUG: Raw message.text: '{content_text}' (length: {len(content_text)})")
-        logger.info(f"🔍 DEBUG: Raw message.body: '{message.get('body', '')}' (length: {len(message.get('body', ''))})")
-        if content_html:
-            logger.info(f"🔍 DEBUG: Raw message.html length: {len(content_html)}")
+        # logger.info(f"🔍 DEBUG: Raw message.text: '{content_text}' (length: {len(content_text)})")
+        # logger.info(f"🔍 DEBUG: Raw message.body: '{message.get('body', '')}' (length: {len(message.get('body', ''))})")
+        # if content_html:
+        #     logger.info(f"🔍 DEBUG: Raw message.html length: {len(content_html)}")
         
-        logger.info(f"🔍 DEBUG: Content text preview: '{content_text[:200]}...' (length: {len(content_text)})")
+        # logger.info(f"🔍 DEBUG: Content text preview: '{content_text[:200]}...' (length: {len(content_text)})")
         
         # Create email record with raw webhook data
         email_create = EmailCreate(
@@ -200,11 +200,11 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
             raw_data=webhook_data.model_dump()  # Include the complete webhook data
         )
         
-        logger.info(f"🔍 DEBUG: EmailCreate object subject field: '{email_create.subject}' (type: {type(email_create.subject)})")
+        # logger.info(f"🔍 DEBUG: EmailCreate object subject field: '{email_create.subject}' (type: {type(email_create.subject)})")
         
         db_email = await email_crud.create(db=db, obj_in=email_create)
         logger.info(f"Created email record with ID: {db_email.id}")
-        logger.info(f"🔍 DEBUG: Created email record subject: '{db_email.subject}' (type: {type(db_email.subject)})")
+        # logger.info(f"🔍 DEBUG: Created email record subject: '{db_email.subject}' (type: {type(db_email.subject)})")
         
         # Log the entire conversation thread
         try:

@@ -339,7 +339,7 @@ async def handle_apt_status_request_agent_sdk(
     Returns a dictionary with agent processing results.
     """
     logger.info(f"Initiating openai-agents SDK flow with MCP integration for Apt Status Req - Conv ID: {front_conversation_id}")
-    logger.info(f"🔍 DEBUG APT_STATUS: email_subject parameter = '{email_subject}' (type: {type(email_subject)})")
+    # logger.info(f"🔍 DEBUG APT_STATUS: email_subject parameter = '{email_subject}' (type: {type(email_subject)})")
 
     # Initialize MCP client connection
     mcp_connected = await mcp_client.connect()
