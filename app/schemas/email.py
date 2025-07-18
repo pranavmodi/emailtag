@@ -38,10 +38,16 @@ class EmailUpdate(BaseModel):
     # ocr_date_of_incident: Optional[str] = None # Removed
     # ocr_metadata: Optional[str] = None # Removed
     ocr_attachments_completed: Optional[int] = None
+    ocr_attachments_total: Optional[int] = None
     # ocr_accession_nums: Optional[List[str]] = None # Removed
     # ocr_study_type: Optional[List[str]] = None # Removed
     ocr_results: Optional[List[Dict[str, Any]]] = None # Added JSONB field
     raw_data: Optional[Dict[str, Any]] = None # Allow updating raw_data if needed
+    
+    # Lien modification detection fields
+    lien_modification_checked: Optional[bool] = None
+    lien_modifications_detected: Optional[bool] = None
+    lien_modification_results: Optional[List[Dict[str, Any]]] = None
 
 
 class EmailInDBBase(EmailBase):

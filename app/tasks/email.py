@@ -492,6 +492,68 @@ def perform_tagging_task(self, email_id: str) -> Dict:
             )
         asyncio.run(_run_hierarchical_classification_async())
 
+        # --- LIEN MODIFICATION DETECTION ---
+        # Check for lien modifications in attachments after initial classification
+        lien_modifications_detected = False
+        lien_modification_results = []
+        
+        if email_obj.has_attachments and new_tags:
+            from app.services.lien_modification_service import should_check_lien_modifications, check_lien_modifications
+            
+            if should_check_lien_modifications(new_tags):
+                logger.info(f"Email {email_id} has lien-related tags and attachments. Checking for modifications.")
+                
+                try:
+                    # Extract attachments data from raw_data
+                    attachments_data = []
+                    if email_obj.raw_data and isinstance(email_obj.raw_data, dict):
+                        target_data = email_obj.raw_data.get('target', {}).get('data', {})
+                        attachments_data = target_data.get('attachments', [])
+                    
+                    if attachments_data:
+                        async def _run_lien_modification_check_async():
+                            nonlocal lien_modifications_detected, lien_modification_results
+                            lien_modifications_detected, lien_modification_results = await check_lien_modifications(
+                                email_tags=new_tags,
+                                attachments_data=attachments_data
+                            )
+                        
+                        asyncio.run(_run_lien_modification_check_async())
+                        
+                        # Update database with lien modification detection results
+                        lien_update_payload = EmailUpdate(
+                            lien_modification_checked=True,
+                            lien_modifications_detected=lien_modifications_detected,
+                            lien_modification_results=lien_modification_results
+                        )
+                        email_crud_sync.update(db, db_obj=email_obj, obj_in=lien_update_payload)
+                        logger.info(f"Updated email {email_id} with lien modification detection results")
+                        
+                        if lien_modifications_detected:
+                            logger.info(f"🔍 LIEN MODIFICATIONS DETECTED for email {email_id}! Overriding tags to 'Lien Modified'.")
+                            
+                            # Determine if this is PSL or ASL based on current tags
+                            if any("PSL" in tag for tag in new_tags):
+                                new_tags = ["Lien Modified"]  # PSL path: PSL -> Lien Modified
+                                logger.info(f"Applied PSL Lien Modified tag for email {email_id}")
+                            elif any("ASL" in tag for tag in new_tags):
+                                new_tags = ["Lien Modified"]  # ASL path: ASL -> Lien Modified  
+                                logger.info(f"Applied ASL Lien Modified tag for email {email_id}")
+                            else:
+                                # Default to Lien Modified if we can't determine PSL/ASL
+                                new_tags = ["Lien Modified"]
+                                logger.info(f"Applied default Lien Modified tag for email {email_id}")
+                        else:
+                            logger.info(f"No lien modifications detected for email {email_id}. Keeping original tags: {new_tags}")
+                    else:
+                        logger.warning(f"Email {email_id} marked as having attachments but no attachment data found for lien modification check.")
+                
+                except Exception as e:
+                    logger.error(f"Error during lien modification detection for email {email_id}: {e}", exc_info=True)
+                    # Continue with original tags if modification detection fails
+                    logger.info(f"Continuing with original tags due to modification detection error: {new_tags}")
+        # --- END LIEN MODIFICATION DETECTION ---
+
         applied_tags_to_front = False
         final_tagging_status = "tagging_error_unknown" # Default status for logging if something unexpected happens
 

@@ -165,6 +165,9 @@ def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
         # Increment completed count - crucial!
         completed_count = (email_obj.ocr_attachments_completed or 0) + 1
         update_payload['ocr_attachments_completed'] = completed_count
+        
+        # IMPORTANT: Preserve ocr_attachments_total to ensure completion check works
+        update_payload['ocr_attachments_total'] = email_obj.ocr_attachments_total
 
         # Update the email record using the sync CRUD helper
         # This now updates ocr_results and ocr_attachments_completed

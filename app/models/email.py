@@ -49,6 +49,11 @@ class Email(Base):
     # e.g., [{"attachment_id": "att_123", "patient_id": "P1", "accession_nums": ["A1"], ...}, ...]
     ocr_results: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSONB, nullable=True)
 
+    # Lien modification detection tracking
+    lien_modification_checked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    lien_modifications_detected: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    lien_modification_results: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSONB, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

@@ -96,7 +96,20 @@ def send_smtp_email(scenario_details, choice_key, unique_id):
     
     # Handle attachments if present
     if 'attachments' in scenario_details:
-        for attachment_file in scenario_details['attachments']:
+        for attachment_item in scenario_details['attachments']:
+            # Handle both old format (string) and new format (dict)
+            if isinstance(attachment_item, str):
+                # Old format: simple file path string
+                attachment_file = attachment_item
+                attachment_filename = os.path.basename(attachment_file)
+            elif isinstance(attachment_item, dict):
+                # New format: dictionary with filepath, filename, content_type
+                attachment_file = attachment_item.get('filepath', attachment_item.get('filename', ''))
+                attachment_filename = attachment_item.get('filename', os.path.basename(attachment_file))
+            else:
+                print(f"Warning: Unknown attachment format: {attachment_item}. Skipping.")
+                continue
+            
             # Try multiple potential paths for the attachment file
             possible_paths = [
                 attachment_file,  # Try the path as-is first
@@ -114,11 +127,11 @@ def send_smtp_email(scenario_details, choice_key, unique_id):
                     encoders.encode_base64(part)
                     part.add_header(
                         'Content-Disposition',
-                        f'attachment; filename= {os.path.basename(attachment_file)}',
+                        f'attachment; filename= {attachment_filename}',
                     )
                     msg.attach(part)
                     if VERBOSE_MODE:
-                        print(f"Attached file: {potential_path}")
+                        print(f"Attached file: {potential_path} as {attachment_filename}")
                     attachment_found = True
                     break
                 except FileNotFoundError:

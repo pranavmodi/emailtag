@@ -105,7 +105,7 @@ class Settings(BaseSettings):
     OPENAI_MAX_TOKENS: Optional[int] = 1000  # Max tokens for vision responses
     
     # Strikethrough Detection Provider
-    STRIKETHROUGH_PROVIDER: Optional[str] = "google"  # google|roboflow|openai
+    STRIKETHROUGH_PROVIDER: Optional[str] = "openai"  # google|roboflow|openai
 
     @field_validator("ASYNC_DATABASE_URL", mode="before")
     def assemble_async_db_connection(cls, v: Optional[str], info) -> Any:

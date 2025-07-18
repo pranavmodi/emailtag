@@ -112,5 +112,51 @@ CLIENT_EVAL_SCENARIOS = {
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": ["Sent payment but not received"]
+    },
+    "8": {
+        "description": "Ramon Cabrera - Lien Modified (Positive) - PSL lien document with crossed out sections, should trigger lien modification detection",
+        "subject": "RE: Ramon Cabrera, PRE1049827 - PSL Lien Documents",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>Please find attached the PSL lien documents for our client Ramon Cabrera (Patient ID: PRE1049827).</p>"
+            "<p>Please review and process the attached lien documentation.</p>"
+            "<p>Let us know if you need any additional information to complete the processing.</p>"
+            "<p>Thank you for your prompt attention to this matter.</p>"
+            "<p>Best regards,<br>"
+            "Attorney Services</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "PRE1049827 – Cabrera, Ramon crossed out liens.pdf",
+                "filepath": "scripts/PRE1049827 – Cabrera, Ramon crossed out liens.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Lien Modified"]
+    },
+    "9": {
+        "description": "Maria Rodriguez - ASL Clean (Negative) - Clean document without modifications, should maintain original ASL tag and not trigger lien modification detection",
+        "subject": "RE: Maria Rodriguez, 03/15/2024 - ASL Lien Submission",
+        "body_html": (
+            "<p>Dear Billing Department,</p>"
+            "<p>Attached please find the completed Attorney Service Lien (ASL) for our client Maria Rodriguez who was injured on 03/15/2024.</p>"
+            "<p>This is a clean, unmodified document as per standard procedures.</p>"
+            "<p>Please review and process the attached ASL lien for radiology services.</p>"
+            "<p>The document is complete and requires no further modifications.</p>"
+            "<p>Thank you for your prompt attention to this matter.</p>"
+            "<p>Sincerely,<br>"
+            "Legal Processing Team<br>"
+            "Rodriguez & Associates</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "OCR APIs Doc Classifier.pdf", 
+                "filepath": "scripts/OCR APIs Doc Classifier.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL"]
     }
 } 
