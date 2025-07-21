@@ -91,11 +91,6 @@ Please make sure to submit a negotiation offer before sending the payment.<br/>
 """
         return TEMPLATE_APPOINTMENT_FOUND_DETAILED.format(
             patient_id_confirmed=data.get("patient_id_confirmed", "N/A"),
-            first_study_id=first_study.get("study_id", "N/A"),
-            first_exam_description=first_study.get("exam_description", "N/A"),
-            first_appointment_datetime_str=first_study.get("appointment_datetime_str", "N/A"),
-            first_arrival_time_str=first_study.get("arrival_time_str", "N/A"),
-            first_location_name=first_study.get("location_name", "N/A"),
             scheduling_phone=data.get("scheduling_phone", "N/A"),
             no_show_policy=data.get("no_show_policy", "N/A"),
             studies_table_rows=studies_table_rows,

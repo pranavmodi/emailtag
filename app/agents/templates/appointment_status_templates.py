@@ -1,16 +1,9 @@
 # app/agents/templates/appointment_status_templates.py
 
 TEMPLATE_APPOINTMENT_FOUND_DETAILED = """Patient ID: {patient_id_confirmed}<br/><br/>
-
-Study ID: {first_study_id} - {first_exam_description}<br/>
-I have information about this study.<br/>
-Study Date/Time: {first_appointment_datetime_str}<br/>
-Study Location: {first_location_name}<br/><br/>
-
 Our direct scheduling phone # is {scheduling_phone} and we can assist with directions, rescheduling, canceling, or any other scheduling-related questions.<br/>
 {no_show_policy}<br/><br/>
-
-Here is a summary of the patient's exams we currently have entered into our system:<br/><table border="1" style="border-collapse: collapse; width: 100%;">
+Here is a summary of the patient's exams we currently have entered into our system:<table border="1" style="border-collapse: collapse; width: 100%;">
     <thead>
         <tr>
             <th style="border: 1px solid black; padding: 8px; text-align: left;">Study ID</th>
