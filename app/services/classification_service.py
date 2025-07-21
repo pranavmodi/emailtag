@@ -422,7 +422,8 @@ def _check_for_conflicting_top_level_topics(
         f"IMPORTANT CONTEXT GUIDELINES:\n"
         f"- Routine requests to 'update records', 'update files', or 'update billing records' in payment/settlement contexts should be considered part of Accounts Receivable, NOT Medical Records & Images\n"
         f"- Only flag Medical Records & Images if there are explicit requests for medical records, imaging files, reports, or clinical documentation\n"
-        f"- Only flag Scheduling if there are explicit requests to schedule, reschedule, or change appointments\n"
+        f"- Questions about appointment scheduling, MRI scheduling, imaging appointments, or appointment status should be considered Scheduling, NOT Medical Records & Images\n"
+        f"- Only flag Scheduling if there are explicit requests to schedule, reschedule, or change appointments, OR inquiries about appointment/scheduling status\n"
         f"- Focus on the PRIMARY business purpose of the communication\n\n"
         f"Respond with ONLY 'Yes' or 'No'.\n\n"
         # Note: Sender/Time info is for the whole conversation, which might be slightly misleading here, but still useful context.
