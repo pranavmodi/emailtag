@@ -91,7 +91,6 @@ Please make sure to submit a negotiation offer before sending the payment.<br/>
 """
         formatted_template = TEMPLATE_APPOINTMENT_FOUND_DETAILED.format(
             patient_id_confirmed=data.get("patient_id_confirmed", "N/A"),
-            scheduling_phone=data.get("scheduling_phone", "N/A"),
             no_show_policy=data.get("no_show_policy", "N/A"),
             studies_table_rows=studies_table_rows,
             personal_injury_info=personal_injury_info_text,

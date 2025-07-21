@@ -447,38 +447,22 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
         full_content = f"Subject: {subject}\n\n{email_content}"
 
     # Tier 1: Direct PRE Patient ID Extraction (Regex-based)
-    # Search for PRE prefix patient IDs (both labeled and standalone)
-    labeled_pre_pattern = r'(?:patient id is|Patient ID[:.]?|PID:)\s*(PRE\d{6})\b'
-    labeled_match = re.search(labeled_pre_pattern, full_content, re.IGNORECASE)
+    # Search for PRE prefix patient IDs with 6, 7, or 8 digits
+    pre_pattern = r'(PRE\d{6,8})'
+    matches = re.findall(pre_pattern, full_content, re.IGNORECASE)
     
-    if labeled_match:
-        patient_id = labeled_match.group(1).upper()  # Ensure uppercase
-        
-        # Add comment to Front conversation if conversation_id is provided
-        if conversation_id:
-            comment_text = f"Bot found patient id {patient_id}"
-            try:
-                frontapp_service.add_conversation_comment(conversation_id, comment_text)
-            except Exception as e:
-                pass
-        
-        return patient_id
-    
-    # Search for standalone PRE prefix patient IDs
-    standalone_pre_pattern = r'\b(PRE\d{6})\b'
-    standalone_matches = re.findall(standalone_pre_pattern, full_content, re.IGNORECASE)
-    
-    if standalone_matches:
+    if matches:
         # Take the first match and ensure uppercase
-        patient_id = standalone_matches[0].upper()
+        patient_id = matches[0].upper()
         
         # Add comment to Front conversation if conversation_id is provided
         if conversation_id:
             comment_text = f"Bot found patient id {patient_id}"
             try:
                 frontapp_service.add_conversation_comment(conversation_id, comment_text)
+                logger.info(f"Added patient ID comment to conversation {conversation_id}: {comment_text}")
             except Exception as e:
-                pass
+                logger.error(f"Failed to add patient ID comment to conversation {conversation_id}: {e}", exc_info=True)
         
         return patient_id
 
