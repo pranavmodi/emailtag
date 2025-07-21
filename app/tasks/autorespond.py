@@ -21,6 +21,7 @@ from app.agents.release_records_autorespond import handle_release_of_records_req
 from app.agents.bill_balance_request_agent import handle_bill_balance_request
 from app.agents.case_updates_agent import handle_case_update_request
 from app.agents.missing_lien_request_agent import handle_missing_lien_request
+from app.agents.agent_helpers import extract_patient_id_from_email_logic
 
 logger = get_task_logger(__name__)
 
@@ -171,9 +172,59 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             agent_name_for_status = "apt_status_req"
             logger.info(f"Email {email_id} (conv: {front_conversation_id}) tagged with '{APT_STATUS_REQ_TAG_NAME}'. Attempting agent SDK via orchestrator.")
             
+            # Extract patient ID before determining next steps
+            async def _extract_patient_id():
+                try:
+                    extracted_patient_id = await extract_patient_id_from_email_logic(
+                        email_content=current_email_content,
+                        conversation_id=front_conversation_id,
+                        subject=email_obj.subject
+                    )
+                    if extracted_patient_id:
+                        logger.info(f"Pre-agent patient ID extraction successful for {email_id}: {extracted_patient_id}")
+                        return extracted_patient_id
+                    else:
+                        logger.info(f"Pre-agent patient ID extraction found no patient ID for {email_id}")
+                        return None
+                except Exception as e:
+                    logger.error(f"Pre-agent patient ID extraction failed for {email_id}: {e}", exc_info=True)
+                    return None
+            
             agent_result_dict = None
             async def _run_agent_sdk_orchestrator():
                 nonlocal agent_result_dict
+                
+                # Run patient ID extraction first
+                extracted_patient_id = await _extract_patient_id()
+                
+                # If no patient ID found, check if we've already asked for patient details
+                if not extracted_patient_id:
+                    # Check conversation history for previous "Please provide" requests
+                    history_text = " ".join([msg.get("body", "") for msg in structured_history_messages])
+                    if "Please provide the patient ID or first name, last name and date of birth" in history_text:
+                        logger.info(f"Patient ID not found for {email_id}, but we've already asked for details. Continuing with agent.")
+                    else:
+                        logger.info(f"Patient ID not found for {email_id}, sending deterministic 'ask for patient details' response.")
+                        # Send deterministic response asking for patient details
+                        from app.agents.templates.shared_templates import TEMPLATE_REQUEST_PATIENT_ID
+                        
+                        # Import the send_reply_to_front function
+                        from app.agents.agent_helpers import send_reply_to_front
+                        
+                        await send_reply_to_front(
+                            conversation_id=front_conversation_id,
+                            reply_text=TEMPLATE_REQUEST_PATIENT_ID,
+                            tags_to_add=None
+                        )
+                        
+                        agent_result_dict = {
+                            "agent_handled": True,
+                            "processed_flag": True,
+                            "details": {"reason": "Deterministic response sent - requested patient details"}
+                        }
+                        return
+                
+                # If we reach here, either patient ID was found OR we've already asked for details
                 agent_result_dict = await handle_apt_status_request_agent_sdk(
                     front_conversation_id=front_conversation_id,
                     current_email_content=current_email_content,

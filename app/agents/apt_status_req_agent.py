@@ -28,7 +28,6 @@ from app.agents.agent_helpers import (
     format_conversation_history_for_agent,
     get_patient_and_study_info,
     send_fallback_reply_and_tag,
-    extract_patient_id_from_email,
     send_reply_to_front
 )
 # --- END: Agent Helper Imports ---
@@ -360,11 +359,16 @@ async def handle_apt_status_request_agent_sdk(
 
     instructions = f"""
 You are an AI assistant for a medical imaging company, specializing in appointment status requests.
+
+**IMPORTANT**: Patient ID extraction has already been performed before you were called. If no patient ID was found, a deterministic "ask for patient details" response would have been sent automatically. You are only called if:
+- A patient ID was found, OR
+- We've already asked for patient details previously and this is a follow-up
+
 Your primary goal is to:
-1.  Search the **'Entire Conversation For Extraction'** text provided below to find the Patient ID. You MUST pass this complete text block to the `extract_patient_id_from_email` tool with the conversation_id parameter AND the subject parameter (Email Subject: "{email_subject or 'No subject'}").
-2.  Fetch appointment details using `fetch_appointment_details_by_patient_id` with the extracted ID. Also pass the `settings_obj` to this tool.
+1. Look for any patient ID in the conversation history or check Front conversation comments for previously extracted patient IDs.
+2. If you can identify a patient ID, fetch appointment details using `fetch_appointment_details_by_patient_id` with that ID. Also pass the `settings_obj` to this tool.
 3. Based on the outcome of step 2, determine the correct scenario.
-4. Call the `generate_formatted_reply` tool, passing it the determined scenario and the FULL result from `fetch_appointment_details_by_patient_id` (if available), and the `extracted_patient_id` (if available).
+4. Call the `generate_formatted_reply` tool, passing it the determined scenario and the FULL result from `fetch_appointment_details_by_patient_id` (if available).
 5. Take the `reply_text` from `generate_formatted_reply`'s output.
 6. Call `send_reply_to_front` with this `reply_text` and add tags ONLY IF the scenario requires escalation to a human.
 
@@ -378,7 +382,7 @@ Email Subject: "{email_subject or 'No subject'}"
 
 **Scenarios & Tool Usage Flow:**
 
-A.  **If calling `extract_patient_id_from_email` on the 'Entire Conversation For Extraction' text (WITH subject="{email_subject or 'No subject'}") returns a `patient_id` (let's call it `extracted_pid`):**
+A.  **If you can find a patient ID in the conversation history or comments (let's call it `extracted_pid`):**
     1.  Call `fetch_appointment_details_by_patient_id` with `patient_id=extracted_pid` and `settings_obj=settings_obj` (pass through from orchestrator). Let the result be `fetch_result`.
     2.  **If `fetch_result.status` is "success"** (and `fetch_result.data.studies` is not empty):
         *   Scenario for `generate_formatted_reply`: "appointments_found"
@@ -396,21 +400,15 @@ A.  **If calling `extract_patient_id_from_email` on the 'Entire Conversation For
         *   Take `reply_text` from its output.
         *   Call `send_reply_to_front` with this `reply_text` and `tags_to_add=["{TAG_AI_HUMAN_REVIEW_REQUIRED}"]`.
 
-B.  **If `extract_patient_id_from_email` returns NO `patient_id` after searching the 'Entire Conversation For Extraction' text:**
-    1.  Review the full conversation again.
-    2.  **If you have NOT asked for a Patient ID before OR the user's response is not yet in history:**
-        *   Scenario for `generate_formatted_reply`: "id_missing_first_attempt"
-        *   Call `generate_formatted_reply` with `scenario="id_missing_first_attempt"`, `fetch_details_result={{}}` (empty dict as no fetch was done), `extracted_patient_id=None`.
-        *   Take `reply_text` from its output.
-        *   Call `send_reply_to_front` with this `reply_text`. (No tag needed for first request).
-    3.  **If you HAVE asked for a Patient ID before, and user STILL did not provide a usable one:**
-        *   Scenario for `generate_formatted_reply`: "id_missing_second_attempt"
-        *   Call `generate_formatted_reply` with `scenario="id_missing_second_attempt"`, `fetch_details_result={{}}`, `extracted_patient_id=None`.
-        *   Take `reply_text` from its output.
-        *   Call `send_reply_to_front` with this `reply_text` and `tags_to_add=["{TAG_AI_HUMAN_REVIEW_REQUIRED}"]`.
+B.  **If you cannot find a patient ID in the conversation history or comments:**
+    *   This means we've already asked for patient details previously and the user has not provided a valid patient ID.
+    *   Scenario for `generate_formatted_reply`: "id_missing_second_attempt"
+    *   Call `generate_formatted_reply` with `scenario="id_missing_second_attempt"`, `fetch_details_result={{}}`, `extracted_patient_id=None`.
+    *   Take `reply_text` from its output.
+    *   Call `send_reply_to_front` with this `reply_text` and `tags_to_add=["{TAG_AI_HUMAN_REVIEW_REQUIRED}"]`.
 
 **IMPORTANT TOOL USAGE:**
-- When calling `extract_patient_id_from_email`, ALWAYS pass both parameters: `email_content` AND `conversation_id="{front_conversation_id}"`. This ensures found patient IDs are automatically logged as comments in Front.
+- Patient ID extraction has already been performed before this agent runs, so you should look for patient IDs that have already been identified in the conversation or comments.
 
 **IMPORTANT FINAL STEP:** After calling `send_reply_to_front`, your job is to return ONLY the direct JSON output received from that `send_reply_to_front` tool call. Do NOT add any conversational text, summaries, or any other information around it. Your entire response for this run MUST be the JSON object that the `send_reply_to_front` tool gives back.
 
@@ -439,7 +437,6 @@ Do not ask for confirmation. Execute the described logic.
                 openai_client=custom_openai_client
             ),
             tools=[
-                extract_patient_id_from_email,
                 fetch_appointment_details_by_patient_id,
                 generate_formatted_reply,
                 send_reply_to_front,

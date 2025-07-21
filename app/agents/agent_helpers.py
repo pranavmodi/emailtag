@@ -451,9 +451,13 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
     pre_pattern = r'(PRE\d{6,8})'
     matches = re.findall(pre_pattern, full_content, re.IGNORECASE)
     
+    logger.info(f"PATIENT_ID_EXTRACTION: Regex search in content: {repr(full_content[:200])}...")
+    logger.info(f"PATIENT_ID_EXTRACTION: Regex pattern '{pre_pattern}' found matches: {matches}")
+    
     if matches:
         # Take the first match and ensure uppercase
         patient_id = matches[0].upper()
+        logger.info(f"PATIENT_ID_EXTRACTION: SUCCESS via REGEX - Patient ID: '{patient_id}'")
         
         # Add comment to Front conversation if conversation_id is provided
         if conversation_id:
@@ -467,13 +471,16 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
         return patient_id
 
     # Tier 2: OpenAI-based extraction as fallback
+    logger.info(f"PATIENT_ID_EXTRACTION: Regex failed, trying OpenAI extraction...")
     try:
         openai_extracted = await _extract_patient_info_with_openai(email_content, subject)
+        logger.info(f"PATIENT_ID_EXTRACTION: OpenAI extracted: {openai_extracted}")
         
         if openai_extracted:
             first_name = openai_extracted["first_name"]
             last_name = openai_extracted["last_name"]
             doi = openai_extracted["doi"]
+            logger.info(f"PATIENT_ID_EXTRACTION: OpenAI extracted name: '{first_name} {last_name}', DOI: '{doi}'")
             
             # Try database lookup with OpenAI extracted data (Now uses MCP tool!)
             try:
@@ -491,12 +498,16 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
                     }
                 )
                 
+                logger.info(f"PATIENT_ID_EXTRACTION: MCP lookup response: {patient_data}")
+                
                 if patient_data and patient_data.get('success') and patient_data.get('patients'):
                     # Handle MCP response format - patients array contains the data
                     patients = patient_data['patients']
+                    logger.info(f"PATIENT_ID_EXTRACTION: MCP found {len(patients)} patients")
                     if isinstance(patients, list) and len(patients) > 0:
                         if len(patients) == 1:
                             patient_id = patients[0].get("patient_id")
+                            logger.info(f"PATIENT_ID_EXTRACTION: SUCCESS via OPENAI+MCP - Patient ID: '{patient_id}'")
                             if patient_id:
                                 # Add comment to Front conversation if conversation_id is provided
                                 if conversation_id:
@@ -515,6 +526,7 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
         pass
     
     # Final fallback - no patient ID found
+    logger.info(f"PATIENT_ID_EXTRACTION: FAILED - No patient ID found using either regex or OpenAI methods")
     return None
 
 
