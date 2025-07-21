@@ -89,7 +89,7 @@ A report containing the findings of the exam will also be sent to the attorney.<
 A bill will be sent to the attorney once both the patient and the attorney sign all pending liens.<br/>
 Please make sure to submit a negotiation offer before sending the payment.<br/>
 """
-        return TEMPLATE_APPOINTMENT_FOUND_DETAILED.format(
+        formatted_template = TEMPLATE_APPOINTMENT_FOUND_DETAILED.format(
             patient_id_confirmed=data.get("patient_id_confirmed", "N/A"),
             scheduling_phone=data.get("scheduling_phone", "N/A"),
             no_show_policy=data.get("no_show_policy", "N/A"),
@@ -98,6 +98,8 @@ Please make sure to submit a negotiation offer before sending the payment.<br/>
             bills_link=data.get("links", {}).get("bills_appointments_liens", "#"),
             reports_link=data.get("links", {}).get("reports_images", "#")
         )
+        # logger.info(f"DEBUG: Generated HTML response: {formatted_template}")
+        return formatted_template
     elif scenario == "id_missing_first_attempt":
         return TEMPLATE_REQUEST_PATIENT_ID
     elif scenario == "id_missing_second_attempt":
