@@ -158,5 +158,15 @@ CLIENT_EVAL_SCENARIOS = {
             }
         ],
         "expected_tags": ["ASL"]
+    },
+    "10": {
+        "description": "Juana Perez Cordero - Apt Status Req - Client inquiry about open MRI scheduling status with Patient ID PRE1063320",
+        "subject": "Is the patient scheduled for an open MRI?",
+        "body_html": (
+            "<p>Is the patient scheduled for an open MRI?</p>"
+            "<p>Patient ID: PRE1063320- JUANA PEREZ CORDERO</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Apt Status Req"]
     }
 } 
