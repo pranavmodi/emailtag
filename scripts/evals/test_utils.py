@@ -110,38 +110,55 @@ def send_smtp_email(scenario_details, choice_key, unique_id):
                 print(f"Warning: Unknown attachment format: {attachment_item}. Skipping.")
                 continue
             
-            # Try multiple potential paths for the attachment file
-            possible_paths = [
-                attachment_file,  # Try the path as-is first
-                os.path.join(os.path.dirname(__file__), attachment_file),  # Relative to this script
-                os.path.join(os.path.dirname(__file__), '..', attachment_file),  # One level up
-            ]
-            
-            attachment_found = False
-            for potential_path in possible_paths:
-                try:
-                    with open(potential_path, "rb") as attachment:
-                        part = MIMEBase('application', 'octet-stream')
-                        part.set_payload(attachment.read())
+            # Handle mock attachments for OCR testing
+            if attachment_file == "mock_attachment":
+                # Create a dummy PDF-like attachment for OCR testing with embedded mock type info
+                mock_ocr_type = attachment_item.get('mock_ocr_type', 'default')
+                mock_content = f"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%MOCK_OCR_TYPE:{mock_ocr_type}%\nxref\n0 1\n0000000000 65535 f \ntrailer\n<< /Size 1 /Root 1 0 R >>\nstartxref\n9\n%%EOF".encode('utf-8')
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(mock_content)
+                encoders.encode_base64(part)
+                part.add_header(
+                    'Content-Disposition',
+                    f'attachment; filename= {attachment_filename}',
+                )
+                msg.attach(part)
+                if VERBOSE_MODE:
+                    print(f"Attached mock file: {attachment_filename} with OCR type: {attachment_item.get('mock_ocr_type', 'default')}")
+                attachment_found = True
+            else:
+                # Try multiple potential paths for the attachment file
+                possible_paths = [
+                    attachment_file,  # Try the path as-is first
+                    os.path.join(os.path.dirname(__file__), attachment_file),  # Relative to this script
+                    os.path.join(os.path.dirname(__file__), '..', attachment_file),  # One level up
+                ]
+                
+                attachment_found = False
+                for potential_path in possible_paths:
+                    try:
+                        with open(potential_path, "rb") as attachment:
+                            part = MIMEBase('application', 'octet-stream')
+                            part.set_payload(attachment.read())
 
-                    encoders.encode_base64(part)
-                    part.add_header(
-                        'Content-Disposition',
-                        f'attachment; filename= {attachment_filename}',
-                    )
-                    msg.attach(part)
-                    if VERBOSE_MODE:
-                        print(f"Attached file: {potential_path} as {attachment_filename}")
-                    attachment_found = True
-                    break
-                except FileNotFoundError:
-                    continue
-                except Exception as e:
-                    print(f"Error attaching file {potential_path}: {e}. Trying next path...")
-                    continue
-            
-            if not attachment_found:
-                print(f"Warning: Attachment file {attachment_file} not found in any expected location. Continuing without attachment.")
+                        encoders.encode_base64(part)
+                        part.add_header(
+                            'Content-Disposition',
+                            f'attachment; filename= {attachment_filename}',
+                        )
+                        msg.attach(part)
+                        if VERBOSE_MODE:
+                            print(f"Attached file: {potential_path} as {attachment_filename}")
+                        attachment_found = True
+                        break
+                    except FileNotFoundError:
+                        continue
+                    except Exception as e:
+                        print(f"Error attaching file {potential_path}: {e}. Trying next path...")
+                        continue
+                
+                if not attachment_found:
+                    print(f"Warning: Attachment file {attachment_file} not found in any expected location. Continuing without attachment.")
 
     try:
         if smtp_port_int == 465:

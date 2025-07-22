@@ -56,11 +56,11 @@ Email_Categories
     │   └── Bill or balance Request
     ├── Liens
     │   ├── Missing Lien Request
-    │   ├── PSL
+    │   ├── PSL (Patient Signed Lien)
     │   │   ├── Rad Lien
     │   │   ├── Tech Lien
     │   │   └── Lien Modified
-    │   └── ASL
+    │   └── ASL (Attorney Signed Lien)
     │       ├── Rad Lien
     │       ├── Tech Lien
     │       └── Lien Modified

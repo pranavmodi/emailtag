@@ -5,6 +5,7 @@ from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
+
 # Mock OCR responses for different document types and scenarios
 MOCK_OCR_RESPONSES = {
     "default": {
@@ -53,10 +54,30 @@ MOCK_OCR_RESPONSES = {
                     "patient_name": "Lien Test Patient",
                     "study_date": "2024-03-01",
                     "body_part": "Knee",
-                    "lien_type": "PSL",
+                    "lien_type": "Rad Lien",
                     "attorney_name": "Smith & Associates",
                     "case_number": "CV-2024-001",
                     "extracted_text": "Personal Services Lien documentation for MRI examination."
+                }
+            }
+        ],
+        "message": "Success"
+    },
+
+    "tech_lien_document": {
+        "data": [
+            {
+                "info": {
+                    "patient_id": "PRE7890123",
+                    "accession_nums": ["ACC789012"],
+                    "study_type": ["CT"],
+                    "patient_name": "Tech Lien Test Patient",
+                    "study_date": "2024-07-01",
+                    "body_part": "Abdomen",
+                    "lien_type": "Tech Lien",
+                    "attorney_name": "Johnson & Partners",
+                    "case_number": "CV-2024-002",
+                    "extracted_text": "Technologist Services Lien documentation for CT examination."
                 }
             }
         ],
@@ -172,31 +193,52 @@ def get_mock_response_for_patient_id(patient_id: str) -> Dict[str, Any]:
     return response
 
 
-def determine_document_type_from_content(content_bytes: bytes) -> str:
+def determine_document_type_from_content(content_bytes: bytes, mock_ocr_type: str = None) -> str:
     """
     Attempt to determine document type from content for better mock responses.
     This is a simple heuristic-based approach for testing.
     
     Args:
         content_bytes: Document content as bytes
+        mock_ocr_type: Optional override for mock OCR type in testing scenarios
         
     Returns:
         Estimated document type string
     """
-    # Convert to lowercase string for keyword matching
+    # If mock_ocr_type is provided (from test scenarios), use it directly
+    if mock_ocr_type:
+        logger.info(f"Using mock OCR type override: {mock_ocr_type}")
+        return mock_ocr_type
+    
+    # Convert to string for parsing
     try:
-        content_str = content_bytes.decode('utf-8', errors='ignore').lower()
+        content_str = content_bytes.decode('utf-8', errors='ignore')
     except:
         return "default"
     
+    # Check for embedded mock OCR type from test scenarios
+    import re
+    mock_type_match = re.search(r'%MOCK_OCR_TYPE:([^%]+)%', content_str)
+    if mock_type_match:
+        embedded_type = mock_type_match.group(1)
+        logger.info(f"Found embedded mock OCR type: {embedded_type}")
+        return embedded_type
+    
+    # Convert to lowercase for keyword matching
+    content_str_lower = content_str.lower()
+    
     # Simple keyword-based detection
-    if any(word in content_str for word in ['invoice', 'bill', 'payment', 'balance']):
+    if any(word in content_str_lower for word in ['invoice', 'bill', 'payment', 'balance']):
         return "billing_document"
-    elif any(word in content_str for word in ['lien', 'attorney', 'legal', 'case']):
-        return "lien_document"
-    elif any(word in content_str for word in ['appointment', 'schedule', 'time', 'date']):
+    elif any(word in content_str_lower for word in ['tech lien', 'technologist lien']):
+        return "tech_lien_document"
+    elif any(word in content_str_lower for word in ['rad lien', 'radiology lien', 'radiologist lien']):
+        return "lien_document"  # This returns "Rad Lien"
+    elif any(word in content_str_lower for word in ['lien', 'attorney', 'legal', 'case']):
+        return "lien_document"  # Default lien type
+    elif any(word in content_str_lower for word in ['appointment', 'schedule', 'time', 'date']):
         return "scheduling_document"
-    elif any(word in content_str for word in ['report', 'findings', 'radiology', 'diagnosis']):
+    elif any(word in content_str_lower for word in ['report', 'findings', 'radiology', 'diagnosis']):
         return "medical_records"
     else:
         return "default"

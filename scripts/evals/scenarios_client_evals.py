@@ -168,5 +168,165 @@ CLIENT_EVAL_SCENARIOS = {
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": ["Apt Status Req"]
+    },
+    "11": {
+        "description": "OCR Rad Lien Override - Email with attachment containing Rad Lien OCR data, should override LLM classification",
+        "subject": "Radiology Lien Documentation - PRE3456789",
+        "body_html": (
+            "<p>Dear Billing Department,</p>"
+            "<p>Attached is the radiology lien documentation for Patient ID PRE3456789.</p>"
+            "<p>Please process the attached lien documentation.</p>"
+            "<p>Thank you.</p>"
+            "<p>Attorney Services</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "radiology_lien_document.pdf",
+                "filepath": "scripts/radiology_lien_document.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Rad Lien"]
+    },
+    "12": {
+        "description": "OCR Tech Lien Override - Email with attachment containing Tech Lien OCR data, should override LLM classification",
+        "subject": "Tech Lien Documentation - PRE7890123",
+        "body_html": (
+            "<p>Dear Billing Department,</p>"
+            "<p>Attached is the tech lien documentation for Patient ID PRE7890123.</p>"
+            "<p>Please process the attached lien documentation.</p>"
+            "<p>Thank you.</p>"
+            "<p>Johnson & Partners</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "tech_lien_document.pdf",
+                "filepath": "scripts/tech_lien_document.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Tech Lien"]
+    },
+    "13": {
+        "description": "OCR No Override - Missing Lien Request should not be overridden by OCR",
+        "subject": "Missing Lien Request - PRE1234567",
+        "body_html": (
+            "<p>Dear Billing Department,</p>"
+            "<p>We need the missing lien documentation for Patient ID PRE1234567.</p>"
+            "<p>Please provide the missing lien documents.</p>"
+            "<p>Thank you.</p>"
+            "<p>Legal Processing Team</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "sample_document.pdf", 
+                "filepath": "scripts/radiology_lien_document.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Missing Lien Request"]
+    },
+    "14": {
+        "description": "OCR No Override - Non-lien email should not be affected by OCR lien data",
+        "subject": "Schedule MRI Appointment - PRE5555555",
+        "body_html": (
+            "<p>Dear Scheduling Team,</p>"
+            "<p>Please schedule an MRI appointment for Patient ID PRE5555555.</p>"
+            "<p>Please provide available time slots for next week.</p>"
+            "<p>Thank you.</p>"
+            "<p>Medical Coordinator</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "irrelevant_document.pdf",
+                "filepath": "scripts/radiology_lien_document.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Schedule Request"]
+    },
+    "15": {
+        "description": "OCR PSL Rad Lien Override - Email classified as PSL with Rad Lien OCR data",
+        "subject": "PSL Radiology Lien Documentation - PRE6666666",
+        "body_html": (
+            "<p>Dear Billing Department,</p>"
+            "<p>Attached is the PSL radiology lien documentation for Patient ID PRE6666666.</p>"
+            "<p>Please process the attached PSL lien documentation.</p>"
+            "<p>Thank you.</p>"
+            "<p>Attorney Services</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "psl_radiology_lien.pdf",
+                "filepath": "scripts/psl_radiology_lien.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Rad Lien"]
+    },
+    "16": {
+        "description": "OCR PSL Tech Lien Override - Email classified as PSL with Tech Lien OCR data",
+        "subject": "PSL Tech Lien Documentation - PRE7777777",
+        "body_html": (
+            "<p>Dear Billing Department,</p>"
+            "<p>Attached is the PSL tech lien documentation for Patient ID PRE7777777.</p>"
+            "<p>Please process the attached PSL lien documentation.</p>"
+            "<p>Thank you.</p>"
+            "<p>Attorney Services</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "psl_tech_lien.pdf",
+                "filepath": "scripts/psl_tech_lien.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Tech Lien"]
+    },
+    "17": {
+        "description": "OCR ASL Rad Lien Override - Email classified as ASL with Rad Lien OCR data",
+        "subject": "ASL Radiology Lien Documentation - PRE8888888",
+        "body_html": (
+            "<p>Dear Billing Department,</p>"
+            "<p>Attached is the ASL radiology lien documentation for Patient ID PRE8888888.</p>"
+            "<p>Please process the attached ASL lien documentation.</p>"
+            "<p>Thank you.</p>"
+            "<p>Attorney Services</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "asl_radiology_lien.pdf",
+                "filepath": "scripts/asl_radiology_lien.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Rad Lien"]
+    },
+    "18": {
+        "description": "OCR ASL Tech Lien Override - Email classified as ASL with Tech Lien OCR data",
+        "subject": "ASL Tech Lien Documentation - PRE9999999",
+        "body_html": (
+            "<p>Dear Billing Department,</p>"
+            "<p>Attached is the ASL tech lien documentation for Patient ID PRE9999999.</p>"
+            "<p>Please process the attached ASL lien documentation.</p>"
+            "<p>Thank you.</p>"
+            "<p>Attorney Services</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "asl_tech_lien.pdf",
+                "filepath": "scripts/asl_tech_lien.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Tech Lien"]
     }
 } 

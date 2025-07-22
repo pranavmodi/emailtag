@@ -492,6 +492,37 @@ def perform_tagging_task(self, email_id: str) -> Dict:
             )
         asyncio.run(_run_hierarchical_classification_async())
 
+        # --- OCR-BASED LIEN CLASSIFICATION OVERRIDE ---
+        # Check if email has OCR results and is classified under Accounts Receivable -> Liens
+        if (email_obj.ocr_results and 
+            new_tags and 
+            any("Accounts Receivable" in str(tag) for tag in new_tags) and
+            not any("Missing Lien Request" in str(tag) for tag in new_tags)):
+            
+            logger.info(f"Email {email_id} has OCR results and is classified under Liens. Checking for OCR-based override.")
+            
+            try:
+                # Check OCR results for lien_type
+                ocr_lien_type = None
+                for ocr_result in email_obj.ocr_results:
+                    if isinstance(ocr_result, dict) and 'lien_type' in ocr_result:
+                        lien_type = ocr_result['lien_type']
+                        if lien_type in ['Rad Lien', 'Tech Lien']:
+                            ocr_lien_type = lien_type
+                            break
+                
+                if ocr_lien_type:
+                    logger.info(f"🔍 OCR LIEN TYPE DETECTED for email {email_id}: {ocr_lien_type}. Overriding LLM classification.")
+                    new_tags = [ocr_lien_type]
+                    logger.info(f"Applied OCR-based lien tag '{ocr_lien_type}' for email {email_id}")
+                else:
+                    logger.info(f"No OCR lien type found in attachment results for email {email_id}. Keeping LLM tags: {new_tags}")
+                    
+            except Exception as e:
+                logger.error(f"Error during OCR lien type check for email {email_id}: {e}", exc_info=True)
+                logger.info(f"Continuing with LLM tags due to OCR check error: {new_tags}")
+        # --- END OCR-BASED LIEN CLASSIFICATION OVERRIDE ---
+
         # --- LIEN MODIFICATION DETECTION ---
         # Check for lien modifications in attachments after initial classification
         lien_modifications_detected = False
