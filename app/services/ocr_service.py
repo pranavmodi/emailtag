@@ -108,6 +108,7 @@ def perform_ocr(file_paths: List[str]) -> Optional[Dict[str, Any]]:
             
             response_data = response.json()
             logger.info("Successfully received and parsed OCR response.")
+            logger.info(f"OCR API response data: {response_data}")
             # You might want to add validation here to ensure the response structure matches expectations
             
             return response_data
@@ -187,6 +188,7 @@ def process_ocr_content(content: bytes) -> Optional[Dict[str, Any]]:
             
             response_data = response.json()
             logger.info("Successfully received and parsed OCR response from content.")
+            logger.info(f"OCR API response data: {response_data}")
             return response_data
 
         except httpx.HTTPStatusError as e:
