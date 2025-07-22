@@ -99,10 +99,13 @@ async def get_patient_and_study_info(patient_id: str) -> Dict[str, Any]:
         if not mcp_client.is_connected:
             await mcp_client.connect()
 
+        logger.info(f"MCP_API_CALL: Calling fetch_patient_by_id for patient_id: {patient_id}")
         patient_result = await mcp_client.call_tool("fetch_patient_by_id", {"patient_id": patient_id})
+        logger.info(f"MCP_API_RESPONSE: fetch_patient_by_id returned: {patient_result}")
+        
+        logger.info(f"MCP_API_CALL: Calling fetch_study_details for patient_id: {patient_id}")
         study_result = await mcp_client.call_tool("fetch_study_details", {"patient_id": patient_id})
-        # logger.info(f"Patient result: {patient_result}")
-        # logger.info(f"Study result: {study_result}")
+        logger.info(f"MCP_API_RESPONSE: fetch_study_details returned: {study_result}")
 
         return {
             "patient_result": patient_result,

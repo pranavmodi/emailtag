@@ -178,14 +178,17 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
 
         # 3. Transform Study Data for template compatibility
         transformed_studies_for_template = []
-        # logger.info(f"Processing {len(raw_studies)} studies for patient {patient_id}")
+        logger.info(f"STUDY_PROCESSING: Processing {len(raw_studies)} studies for patient {patient_id}")
+        logger.info(f"STUDY_PROCESSING: Raw studies data: {raw_studies}")
         for i, study in enumerate(raw_studies):
             appointment_datetime_str = "Date/Time N/A"
             arrival_time_str = "N/A"
             
             service_appt_time_str = study.get("study_date_time", "")
             study_id_for_date_log = study.get("authorization_number", "Unknown")
-            # logger.info(f"Study {study_id_for_date_log}: processing study_date_time '{service_appt_time_str}' for appointment date/time column")
+            study_status = study.get("status", "N/A")
+            logger.info(f"STUDY_PROCESSING: Study {study_id_for_date_log}: Raw data: {study}")
+            logger.info(f"STUDY_PROCESSING: Study {study_id_for_date_log}: status='{study_status}', study_date_time='{service_appt_time_str}'")
             
             parsed_dt = None
             if service_appt_time_str:
@@ -262,7 +265,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                 "report_available": "No"   # Default, not in service output
             }
             
-            # logger.info(f"Study {study_id_for_date_log}: final transformed data - study_date_time='{appointment_datetime_str}'")
+            logger.info(f"STUDY_PROCESSING: Study {study_id_for_date_log}: TRANSFORMED data: {transformed_study}")
             transformed_studies_for_template.append(transformed_study)
 
         if not transformed_studies_for_template:
@@ -327,7 +330,8 @@ async def handle_apt_status_request_agent_sdk(
     current_email_content: str,
     structured_history_messages: List[Dict[str, Any]],
     settings_obj: Any = app_settings_instance,
-    email_subject: str = None  # Add email_subject parameter
+    email_subject: str = None,  # Add email_subject parameter
+    extracted_patient_id: str = None  # Add pre-extracted patient ID parameter
 ) -> Dict[str, Any]:
     """
     Handles an "Apt Status Req" using the openai-agents SDK with MCP server integration.
@@ -360,14 +364,14 @@ async def handle_apt_status_request_agent_sdk(
     instructions = f"""
 You are an AI assistant for a medical imaging company, specializing in appointment status requests.
 
-**IMPORTANT**: Patient ID extraction has already been performed before you were called. If no patient ID was found, a deterministic "ask for patient details" response would have been sent automatically. You are only called if:
-- A patient ID was found, OR
-- We've already asked for patient details previously and this is a follow-up
+**IMPORTANT**: Patient ID extraction has already been performed before you were called. If no patient ID was found, a deterministic "ask for patient details" response would have been sent automatically.
+
+**PRE-EXTRACTED PATIENT ID**: {extracted_patient_id if extracted_patient_id else "None - this is a follow-up case"}
 
 Your primary goal is to:
-1. Look for any patient ID in the conversation history or check Front conversation comments for previously extracted patient IDs.
-2. If you can identify a patient ID, fetch appointment details using `fetch_appointment_details_by_patient_id` with that ID. Also pass the `settings_obj` to this tool.
-3. Based on the outcome of step 2, determine the correct scenario.
+1. If a patient ID was provided above, use it to fetch appointment details using `fetch_appointment_details_by_patient_id`. Also pass the `settings_obj` to this tool.
+2. If no patient ID was provided, this is a follow-up case where we've already asked for patient details but haven't received a valid response.
+3. Based on the outcome, determine the correct scenario.
 4. Call the `generate_formatted_reply` tool, passing it the determined scenario and the FULL result from `fetch_appointment_details_by_patient_id` (if available).
 5. Take the `reply_text` from `generate_formatted_reply`'s output.
 6. Call `send_reply_to_front` with this `reply_text` and add tags ONLY IF the scenario requires escalation to a human.
@@ -382,8 +386,8 @@ Email Subject: "{email_subject or 'No subject'}"
 
 **Scenarios & Tool Usage Flow:**
 
-A.  **If you can find a patient ID in the conversation history or comments (let's call it `extracted_pid`):**
-    1.  Call `fetch_appointment_details_by_patient_id` with `patient_id=extracted_pid` and `settings_obj=settings_obj` (pass through from orchestrator). Let the result be `fetch_result`.
+A.  **If a PRE-EXTRACTED PATIENT ID was provided above:**
+    1.  Call `fetch_appointment_details_by_patient_id` with the provided patient ID and `settings_obj=settings_obj` (pass through from orchestrator). Let the result be `fetch_result`.
     2.  **If `fetch_result.status` is "success"** (and `fetch_result.data.studies` is not empty):
         *   Scenario for `generate_formatted_reply`: "appointments_found"
         *   Call `generate_formatted_reply` with `scenario="appointments_found"`, `fetch_details_result=fetch_result`.
@@ -400,7 +404,7 @@ A.  **If you can find a patient ID in the conversation history or comments (let'
         *   Take `reply_text` from its output.
         *   Call `send_reply_to_front` with this `reply_text` and `tags_to_add=["{TAG_AI_HUMAN_REVIEW_REQUIRED}"]`.
 
-B.  **If you cannot find a patient ID in the conversation history or comments:**
+B.  **If no PRE-EXTRACTED PATIENT ID was provided:**
     *   This means we've already asked for patient details previously and the user has not provided a valid patient ID.
     *   Scenario for `generate_formatted_reply`: "id_missing_second_attempt"
     *   Call `generate_formatted_reply` with `scenario="id_missing_second_attempt"`, `fetch_details_result={{}}`, `extracted_patient_id=None`.
@@ -408,7 +412,7 @@ B.  **If you cannot find a patient ID in the conversation history or comments:**
     *   Call `send_reply_to_front` with this `reply_text` and `tags_to_add=["{TAG_AI_HUMAN_REVIEW_REQUIRED}"]`.
 
 **IMPORTANT TOOL USAGE:**
-- Patient ID extraction has already been performed before this agent runs, so you should look for patient IDs that have already been identified in the conversation or comments.
+- Use the PRE-EXTRACTED PATIENT ID provided above, do NOT attempt to extract patient IDs from the conversation text.
 
 **IMPORTANT FINAL STEP:** After calling `send_reply_to_front`, your job is to return ONLY the direct JSON output received from that `send_reply_to_front` tool call. Do NOT add any conversational text, summaries, or any other information around it. Your entire response for this run MUST be the JSON object that the `send_reply_to_front` tool gives back.
 

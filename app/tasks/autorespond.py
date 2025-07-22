@@ -230,7 +230,8 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                     current_email_content=current_email_content,
                     structured_history_messages=structured_history_messages,
                     settings_obj=settings,  # Pass the main settings module
-                    email_subject=email_obj.subject  # Pass the email subject from DB
+                    email_subject=email_obj.subject,  # Pass the email subject from DB
+                    extracted_patient_id=extracted_patient_id  # Pass the pre-extracted patient ID
                 )
             
             # Celery tasks are synchronous, so we run the async orchestrator using asyncio.run()
