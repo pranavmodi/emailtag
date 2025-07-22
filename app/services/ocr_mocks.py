@@ -48,7 +48,7 @@ MOCK_OCR_RESPONSES = {
         "data": [
             {
                 "info": {
-                    "patient_id": "PRE3456789",
+                    "patient_id": "PRE6666666",
                     "accession_nums": ["ACC345678"],
                     "study_type": ["MRI"],
                     "patient_name": "Lien Test Patient",
@@ -68,7 +68,7 @@ MOCK_OCR_RESPONSES = {
         "data": [
             {
                 "info": {
-                    "patient_id": "PRE7890123",
+                    "patient_id": "PRE7777777",
                     "accession_nums": ["ACC789012"],
                     "study_type": ["CT"],
                     "patient_name": "Tech Lien Test Patient",
@@ -154,25 +154,122 @@ MOCK_OCR_RESPONSES = {
             }
         ],
         "message": "Success"
+    },
+
+    "psl_rad_lien_document": {
+        "data": [
+            {
+                "info": {
+                    "patient_id": "PRE6666666",
+                    "accession_nums": ["ACC111111"],
+                    "study_type": ["MRI"],
+                    "patient_name": "John Smith",
+                    "study_date": "2024-03-01",
+                    "body_part": "Knee",
+                    "lien_type": "Rad Lien",
+                    "document_type": "PSL",
+                    "extracted_text": "Patient Signed Lien for radiology services - MRI examination."
+                }
+            }
+        ],
+        "message": "Success"
+    },
+
+    "psl_tech_lien_document": {
+        "data": [
+            {
+                "info": {
+                    "patient_id": "PRE7777777",
+                    "accession_nums": ["ACC222222"],
+                    "study_type": ["CT"],
+                    "patient_name": "Maria Rodriguez",
+                    "study_date": "2024-04-01",
+                    "body_part": "Abdomen",
+                    "lien_type": "Tech Lien",
+                    "document_type": "PSL",
+                    "extracted_text": "Patient Signed Lien for technologist services - CT examination."
+                }
+            }
+        ],
+        "message": "Success"
+    },
+
+    "asl_rad_lien_document": {
+        "data": [
+            {
+                "info": {
+                    "patient_id": "PRE8888888",
+                    "accession_nums": ["ACC333333"],
+                    "study_type": ["MRI"],
+                    "patient_name": "Client Patient",
+                    "study_date": "2024-05-01",
+                    "body_part": "Shoulder",
+                    "lien_type": "Rad Lien",
+                    "document_type": "ASL",
+                    "attorney_name": "Johnson & Associates Law Firm",
+                    "case_number": "CV-2024-003",
+                    "extracted_text": "Attorney Signed Lien for radiology services - MRI examination."
+                }
+            }
+        ],
+        "message": "Success"
+    },
+
+    "asl_tech_lien_document": {
+        "data": [
+            {
+                "info": {
+                    "patient_id": "PRE9999999",
+                    "accession_nums": ["ACC444444"],
+                    "study_type": ["CT"],
+                    "patient_name": "Client Patient 2",
+                    "study_date": "2024-06-01",
+                    "body_part": "Chest",
+                    "lien_type": "Tech Lien",
+                    "document_type": "ASL",
+                    "attorney_name": "Davis & Partners Law Firm",
+                    "case_number": "CV-2024-004",
+                    "extracted_text": "Attorney Signed Lien for technologist services - CT examination."
+                }
+            }
+        ],
+        "message": "Success"
     }
 }
 
 
 def get_mock_ocr_response(document_type: str = "default") -> Dict[str, Any]:
     """
-    Get a mock OCR response based on document type.
+    Get a mock OCR response - currently returns a fixed hardcoded response.
     
     Args:
-        document_type: Type of document to mock (default, billing_document, 
-                      lien_document, scheduling_document, medical_records, 
-                      error_response, multiple_attachments)
+        document_type: Type of document to mock (ignored for now)
                       
     Returns:
-        Mock OCR response dictionary
+        Fixed mock OCR response dictionary with patient ID and lien type
     """
-    response = MOCK_OCR_RESPONSES.get(document_type, MOCK_OCR_RESPONSES["default"])
-    logger.info(f"Returning mock OCR response for document type: {document_type}")
-    return response
+    # Return fixed hardcoded response for now
+    fixed_response = {
+        "data": [
+            {
+                "info": {
+                    "patient_id": "PRE6666666",
+                    "accession_nums": ["ACC111111"],
+                    "study_type": ["MRI"],
+                    "patient_name": "Test Patient",
+                    "study_date": "2024-03-01",
+                    "body_part": "Knee",
+                    "lien_type": "Rad Lien",
+                    "document_type": "PSL",
+                    "extracted_text": "Fixed mock OCR response for testing patient ID comments and lien classification."
+                }
+            }
+        ],
+        "message": "Success"
+    }
+    
+    logger.info(f"Returning fixed mock OCR response with patient ID: PRE6666666 and lien_type: Rad Lien")
+    return fixed_response
 
 
 def get_mock_response_for_patient_id(patient_id: str) -> Dict[str, Any]:
@@ -230,6 +327,14 @@ def determine_document_type_from_content(content_bytes: bytes, mock_ocr_type: st
     # Simple keyword-based detection
     if any(word in content_str_lower for word in ['invoice', 'bill', 'payment', 'balance']):
         return "billing_document"
+    elif any(word in content_str_lower for word in ['psl_radiology_lien', 'psl radiology', 'patient signed lien radiology']):
+        return "psl_rad_lien_document"
+    elif any(word in content_str_lower for word in ['psl_tech_lien', 'psl tech', 'patient signed lien tech']):
+        return "psl_tech_lien_document"
+    elif any(word in content_str_lower for word in ['asl_radiology_lien', 'asl radiology', 'attorney signed lien radiology']):
+        return "asl_rad_lien_document"
+    elif any(word in content_str_lower for word in ['asl_tech_lien', 'asl tech', 'attorney signed lien tech']):
+        return "asl_tech_lien_document"
     elif any(word in content_str_lower for word in ['tech lien', 'technologist lien']):
         return "tech_lien_document"
     elif any(word in content_str_lower for word in ['rad lien', 'radiology lien', 'radiologist lien']):

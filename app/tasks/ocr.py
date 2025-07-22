@@ -175,6 +175,18 @@ def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
 
         logger.info(f"Updated email {email_id} with OCR result for attachment {attachment_url}. Completed {completed_count}/{updated_email.ocr_attachments_total} attachments.")
 
+        # Add comment to Front conversation if OCR found a patient ID
+        if attachment_ocr_data.get('patient_id') and updated_email.front_conversation_id:
+            patient_id = attachment_ocr_data['patient_id']
+            logger.info(f"OCR found patient ID {patient_id} for email {email_id}, adding comment to conversation.")
+            try:
+                from app.services.frontapp_service import add_conversation_comment
+                comment_text = f"Bot found patient id {patient_id} via OCR"
+                add_conversation_comment(updated_email.front_conversation_id, comment_text)
+                logger.info(f"Added OCR patient ID comment to conversation {updated_email.front_conversation_id}: {comment_text}")
+            except Exception as e:
+                logger.error(f"Failed to add OCR patient ID comment to conversation {updated_email.front_conversation_id}: {e}", exc_info=True)
+
         # Check if all attachments are processed
         if updated_email.ocr_attachments_total is not None and completed_count >= updated_email.ocr_attachments_total:
             # Check if any attachment processing resulted in an error
