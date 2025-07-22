@@ -561,15 +561,15 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                         logger.info(f"Updated email {email_id} with lien modification detection results")
                         
                         if lien_modifications_detected:
-                            logger.info(f"🔍 LIEN MODIFICATIONS DETECTED for email {email_id}! Overriding tags to 'Lien Modified'.")
+                            logger.info(f"🔍 LIEN MODIFICATIONS DETECTED for email {email_id}! Overriding tags to include 'Lien Modified'.")
                             
-                            # Determine if this is PSL or ASL based on current tags
+                            # Preserve PSL/ASL tag along with Lien Modified
                             if any("PSL" in tag for tag in new_tags):
-                                new_tags = ["Lien Modified"]  # PSL path: PSL -> Lien Modified
-                                logger.info(f"Applied PSL Lien Modified tag for email {email_id}")
+                                new_tags = ["PSL", "Lien Modified"]  # Preserve PSL + add Lien Modified
+                                logger.info(f"Applied PSL Lien Modified tags for email {email_id}")
                             elif any("ASL" in tag for tag in new_tags):
-                                new_tags = ["Lien Modified"]  # ASL path: ASL -> Lien Modified  
-                                logger.info(f"Applied ASL Lien Modified tag for email {email_id}")
+                                new_tags = ["ASL", "Lien Modified"]  # Preserve ASL + add Lien Modified
+                                logger.info(f"Applied ASL Lien Modified tags for email {email_id}")
                             else:
                                 # Default to Lien Modified if we can't determine PSL/ASL
                                 new_tags = ["Lien Modified"]

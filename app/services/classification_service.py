@@ -622,6 +622,13 @@ async def classify_email_tags_hierarchical(
 
                 if chosen_final_tag and chosen_final_tag in final_options_in_list:
                     tags_to_return = [chosen_final_tag]
+                    
+                    # Special case for liens: also include PSL/ASL intermediate tag
+                    if len(classification_path) >= 3 and classification_path[1] == "Liens" and classification_path[2] in ["PSL", "ASL"]:
+                        intermediate_tag = classification_path[2]  # PSL or ASL
+                        tags_to_return = [intermediate_tag, chosen_final_tag]
+                        logger.info(f"🎯 LIEN RESULT for {front_conversation_id}. Adding intermediate tag '{intermediate_tag}' for liens classification.")
+                    
                     logger.info(f"🎯 FINAL RESULT for {front_conversation_id}. FULL PATH: {' → '.join(classification_path + [chosen_final_tag])}. TAGS: {tags_to_return}")
                     return tags_to_return
                 else:
@@ -631,6 +638,13 @@ async def classify_email_tags_hierarchical(
             elif isinstance(next_level_structure, str): # Leaf node directly a string tag
                 final_tag = next_level_structure
                 tags_to_return = [final_tag]
+                
+                # Special case for liens: also include PSL/ASL intermediate tag
+                if len(classification_path) >= 3 and classification_path[1] == "Liens" and classification_path[2] in ["PSL", "ASL"]:
+                    intermediate_tag = classification_path[2]  # PSL or ASL
+                    tags_to_return = [intermediate_tag, final_tag]
+                    logger.info(f"🎯 LIEN RESULT for {front_conversation_id}. Adding intermediate tag '{intermediate_tag}' for liens classification.")
+                
                 logger.info(f"🎯 FINAL RESULT for {front_conversation_id}. FULL PATH: {' → '.join(classification_path)}. TAG: {final_tag}. RETURNING TAGS: {tags_to_return}")
                 return tags_to_return
             else:
