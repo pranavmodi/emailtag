@@ -7,6 +7,7 @@ import base64
 import io # Potentially needed if we were handling streams, but bytes are fine directly
 
 from app.core.config import settings # Assuming OCR API URL might be added here
+from app.services.ocr_mocks import get_mock_ocr_response, determine_document_type_from_content
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,11 @@ def perform_ocr(file_paths: List[str]) -> Optional[Dict[str, Any]]:
     if not file_paths:
         logger.warning("No file paths provided for OCR. Skipping.")
         return None
+
+    # Check if we should use mock OCR responses
+    if settings.USE_MOCK_OCR:
+        logger.info("Using mock OCR response for file paths")
+        return get_mock_ocr_response("default")
 
     encoded_strings = []
     for file_path in file_paths:
@@ -144,6 +150,12 @@ def process_ocr_content(content: bytes) -> Optional[Dict[str, Any]]:
     if not content:
         logger.warning("No content provided for OCR. Skipping.")
         return None
+
+    # Check if we should use mock OCR responses
+    if settings.USE_MOCK_OCR:
+        logger.info("Using mock OCR response for content")
+        document_type = determine_document_type_from_content(content)
+        return get_mock_ocr_response(document_type)
 
     # --- Encode Content ---
     try:

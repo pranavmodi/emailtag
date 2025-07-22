@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     
     # Service Endpoints
     OCR_API_URL: HttpUrl = "http://localhost:5000/ocr" # Default, override in .env
+    USE_MOCK_OCR: bool = False # Enable mock OCR responses for testing
     MCP_SERVER_URL: HttpUrl = "http://localhost:8001/mcp"
 
     # FrontApp settings
