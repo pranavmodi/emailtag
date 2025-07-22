@@ -187,6 +187,12 @@ def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
             except Exception as e:
                 logger.error(f"Failed to add OCR patient ID comment to conversation {updated_email.front_conversation_id}: {e}", exc_info=True)
 
+        # Note: OCR lien type tagging is handled in the classification override logic
+        # This ensures lien tags are only applied when email is classified under Accounts Receivable -> Liens
+        if attachment_ocr_data.get('lien_type'):
+            lien_type = attachment_ocr_data['lien_type']
+            logger.info(f"OCR found lien type '{lien_type}' for email {email_id}. This will be processed during classification if the email is lien-related.")
+
         # Check if all attachments are processed
         if updated_email.ocr_attachments_total is not None and completed_count >= updated_email.ocr_attachments_total:
             # Check if any attachment processing resulted in an error
@@ -253,7 +259,8 @@ def _parse_ocr_result(ocr_result: Dict, attachment_url: str, email_id: str) -> D
                 "attachment_url": attachment_url,
                 "patient_id": ocr_info.get("patient_id"),
                 "accession_nums": ocr_info.get("accession_nums", []),
-                "study_type": ocr_info.get("study_type", [])
+                "study_type": ocr_info.get("study_type", []),
+                "lien_type": ocr_info.get("lien_type")  # Add lien_type for OCR override logic
                 # Add any other fields from 'info' you need to store here
                 # e.g., "dob": ocr_info.get("date_of_birth")
             }

@@ -494,9 +494,16 @@ def perform_tagging_task(self, email_id: str) -> Dict:
 
         # --- OCR-BASED LIEN CLASSIFICATION OVERRIDE ---
         # Check if email has OCR results and is classified under Accounts Receivable -> Liens
+        # Look for lien-related tags (PSL, ASL, or any lien tags) instead of "Accounts Receivable" text
+        lien_related_tags = ['PSL', 'ASL', 'Rad Lien', 'Tech Lien', 'Lien Modified']
+        is_lien_related = any(any(lien_tag.lower() in tag.lower() for lien_tag in lien_related_tags) for tag in new_tags)
+        
+        # Store original tags before OCR override for lien modification detection
+        original_classification_tags = new_tags.copy() if new_tags else []
+        
         if (email_obj.ocr_results and 
             new_tags and 
-            any("Accounts Receivable" in str(tag) for tag in new_tags) and
+            is_lien_related and
             not any("Missing Lien Request" in str(tag) for tag in new_tags)):
             
             logger.info(f"Email {email_id} has OCR results and is classified under Liens. Checking for OCR-based override.")
@@ -561,19 +568,29 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                         logger.info(f"Updated email {email_id} with lien modification detection results")
                         
                         if lien_modifications_detected:
-                            logger.info(f"🔍 LIEN MODIFICATIONS DETECTED for email {email_id}! Overriding tags to include 'Lien Modified'.")
+                            logger.info(f"🔍 LIEN MODIFICATIONS DETECTED for email {email_id}! Adding 'Lien Modified' while preserving existing lien tags.")
                             
-                            # Preserve PSL/ASL tag along with Lien Modified
-                            if any("PSL" in tag for tag in new_tags):
-                                new_tags = ["PSL", "Lien Modified"]  # Preserve PSL + add Lien Modified
-                                logger.info(f"Applied PSL Lien Modified tags for email {email_id}")
-                            elif any("ASL" in tag for tag in new_tags):
-                                new_tags = ["ASL", "Lien Modified"]  # Preserve ASL + add Lien Modified
-                                logger.info(f"Applied ASL Lien Modified tags for email {email_id}")
-                            else:
-                                # Default to Lien Modified if we can't determine PSL/ASL
-                                new_tags = ["Lien Modified"]
-                                logger.info(f"Applied default Lien Modified tag for email {email_id}")
+                            # Preserve all existing lien-related tags and add "Lien Modified"
+                            lien_modified_tags = []
+                            
+                            # Keep PSL/ASL tags from original classification (before OCR override)
+                            if any("PSL" in tag for tag in original_classification_tags):
+                                lien_modified_tags.append("PSL")
+                            elif any("ASL" in tag for tag in original_classification_tags):
+                                lien_modified_tags.append("ASL")
+                            
+                            # Keep OCR-derived lien type (Rad Lien, Tech Lien) from current tags
+                            for tag in new_tags:
+                                if tag in ["Rad Lien", "Tech Lien"]:
+                                    lien_modified_tags.append(tag)
+                            
+                            # Always add Lien Modified
+                            lien_modified_tags.append("Lien Modified")
+                            
+                            # Remove duplicates while preserving order
+                            new_tags = list(dict.fromkeys(lien_modified_tags))
+                            logger.info(f"Applied comprehensive lien modification tags for email {email_id}: {new_tags}")
+                            logger.info(f"Original classification: {original_classification_tags}, OCR override: {[tag for tag in new_tags if tag in ['Rad Lien', 'Tech Lien']]}, Final: {new_tags}")
                         else:
                             logger.info(f"No lien modifications detected for email {email_id}. Keeping original tags: {new_tags}")
                     else:

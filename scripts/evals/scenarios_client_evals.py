@@ -331,13 +331,12 @@ CLIENT_EVAL_SCENARIOS = {
     },
     "19": {
         "description": "Lien Modified with Strikethrough - PDF with visual strikethrough effects should trigger lien modification detection",
-        "subject": "Updated Lien Documentation - PRE1049827",
+        "subject": "Lien Documentation - PRE1049827", 
         "body_html": (
             "<p>Dear Precise Imaging,</p>"
-            "<p>Please find attached the updated lien documentation for Patient ID PRE1049827.</p>"
-            "<p>The original lien has been modified per the settlement agreement.</p>"
-            "<p>Please update your records accordingly.</p>"
-            "<p>Thank you for your attention to this matter.</p>"
+            "<p>Please find attached the lien documentation for Patient ID PRE1049827.</p>"
+            "<p>Please process the attached lien documentation.</p>"
+            "<p>Thank you for your prompt attention to this matter.</p>"
             "<p>Best regards,<br>Legal Services Inc.</p>"
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
@@ -348,6 +347,6 @@ CLIENT_EVAL_SCENARIOS = {
                 "content_type": "application/pdf"
             }
         ],
-        "expected_tags": ["Lien Modified"]
+        "expected_tags": ["PSL", "Rad Lien", "Lien Modified"]
     }
 } 
