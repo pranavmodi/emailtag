@@ -158,6 +158,7 @@ def print_test_summary(results: List[Dict[str, Any]]) -> None:
     failed_count = 0
     skipped_count = 0
     email_failed_count = 0
+    sent_only_count = 0
 
     for res in results:
         status = res['status']
@@ -169,6 +170,8 @@ def print_test_summary(results: List[Dict[str, Any]]) -> None:
             skipped_count += 1
         elif "Email sending failed" in status:
             email_failed_count += 1
+        elif "SENT_ONLY" in status:
+            sent_only_count += 1
         else:  # Various FAIL statuses
             failed_count += 1
             print(f"  TestID: {res['unique_id']}")
@@ -179,15 +182,21 @@ def print_test_summary(results: List[Dict[str, Any]]) -> None:
             if "extra_tags" in res and res["extra_tags"]:
                 print(f"  Unexpected Extra: {res['extra_tags']}")
     
-    print(f"\nTotal Client Scenarios Tested: {len(results)}")
+    print(f"\nTotal Client Scenarios Run: {len(results)}")
     print(f"Passed: {passed_count}")
     print(f"Failed (Tagging): {failed_count}")
     print(f"Failed (Email): {email_failed_count}")
+    if sent_only_count > 0:
+        print(f"Sent (validation skipped): {sent_only_count}")
     if skipped_count > 0:
         print(f"Skipped (Front API config): {skipped_count}")
     
-    success_rate = (passed_count / len(results)) * 100 if results else 0
-    print(f"Success Rate: {success_rate:.1f}%")
+    total_validated = passed_count + failed_count
+    if total_validated > 0:
+        success_rate = (passed_count / total_validated) * 100
+        print(f"Success Rate (of validated): {success_rate:.1f}%")
+    else:
+        print("Success Rate: N/A (no scenarios validated)")
 
 
 def main():
@@ -197,14 +206,18 @@ def main():
     
     # Parse command line arguments
     verbose = "--verbose" in sys.argv or "-v" in sys.argv
+    send_only = "--send-only" in sys.argv
     set_verbose_mode(verbose)
     
     if verbose:
         print("Verbose mode enabled.")
+
+    if send_only:
+        print("Send-only mode enabled: emails will be sent, but tags will not be validated.")
     
     # Check Front API configuration
     can_check_tags = check_front_api_config()
-    if not can_check_tags:
+    if not can_check_tags and not send_only:
         print("Warning: Front API variables not set. Will only send emails, cannot validate tags.")
     
     # Display scenarios
@@ -239,7 +252,7 @@ def main():
     for key, scenario in scenarios_to_run.items():
         result = run_single_scenario(key, scenario, verbose)
         
-        if not can_check_tags:
+        if not can_check_tags and not send_only:
             result.update({
                 "status": "SKIPPED (Front API config missing)",
                 "actual_tags": None
@@ -247,14 +260,18 @@ def main():
         
         results.append(result)
     
-    # Validate tags if Front API is configured
-    if can_check_tags:
+    # Validate tags if Front API is configured and not in send-only mode
+    if can_check_tags and not send_only:
         print(f"\nValidating tags for {len(results)} client scenarios...")
         for i, result in enumerate(results):
             if result["status"] == "EMAIL_SENT":
                 print(f"Validating client scenario {result['scenario_key']} ({i+1}/{len(results)})...")
                 results[i] = validate_tags_for_scenario(result, verbose)
-    
+    elif send_only:
+        for result in results:
+            if result['status'] == 'EMAIL_SENT':
+                result['status'] = 'SENT_ONLY (validation skipped)'
+
     # Print summary
     print_test_summary(results)
     
