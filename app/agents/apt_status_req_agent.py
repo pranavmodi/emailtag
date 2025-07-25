@@ -74,6 +74,7 @@ def _generate_response_from_template(scenario: str, data: Dict[str, Any]) -> str
                 f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('status','N/A')}</td>"
                 f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('appointment_datetime_str','N/A')}</td>"
                 f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('location_name','N/A')}</td>"
+                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('mri_type','N/A')}</td>"
                 f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('images_available','N/A')}</td>"
                 f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('report_available','N/A')}</td>"
                 f"</tr>"
@@ -258,6 +259,10 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
             image_count = study.get("image_count", 0)
             images_available = "Yes" if image_count > 0 else "No"
             
+            # Parse resources field for MRI type
+            resources = study.get("resources", "")
+            mri_type = "Open" if "OPEN" in resources.upper() else "N/A" if not resources else "Standard"
+            
             transformed_study = {
                 "study_id": study.get("authorization_number", "N/A"),
                 "exam_description": study.get("study_description", "N/A"),
@@ -265,6 +270,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                 "appointment_datetime_str": appointment_datetime_str,
                 "arrival_time_str": arrival_time_str,
                 "location_name": location_display,
+                "mri_type": mri_type,
                 "images_available": images_available,
                 "report_available": "No"   # Default, not in service output
             }
