@@ -186,9 +186,10 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
             
             service_appt_time_str = study.get("study_date_time", "")
             study_id_for_date_log = study.get("authorization_number", "Unknown")
-            study_status = study.get("status", "N/A")
+            study_status = study.get("ordered_status", "N/A")
+            study_image_count = study.get("image_count", 0)
             logger.info(f"STUDY_PROCESSING: Study {study_id_for_date_log}: Raw data: {study}")
-            logger.info(f"STUDY_PROCESSING: Study {study_id_for_date_log}: status='{study_status}', study_date_time='{service_appt_time_str}'")
+            logger.info(f"STUDY_PROCESSING: Study {study_id_for_date_log}: ordered_status='{study_status}', image_count={study_image_count}, study_date_time='{service_appt_time_str}'")
             
             parsed_dt = None
             if service_appt_time_str:
@@ -254,14 +255,17 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
 
             # Note: study_date_time is now used for the main Study Date/Time column (appointment_datetime_str)
 
+            image_count = study.get("image_count", 0)
+            images_available = "Yes" if image_count > 0 else "No"
+            
             transformed_study = {
                 "study_id": study.get("authorization_number", "N/A"),
                 "exam_description": study.get("study_description", "N/A"),
-                "status": study.get("status", "N/A"),
+                "status": study.get("ordered_status", "N/A"),
                 "appointment_datetime_str": appointment_datetime_str,
                 "arrival_time_str": arrival_time_str,
                 "location_name": location_display,
-                "images_available": "No",  # Default, not in service output
+                "images_available": images_available,
                 "report_available": "No"   # Default, not in service output
             }
             
