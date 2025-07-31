@@ -6,6 +6,7 @@ from uuid import UUID
 import httpx
 
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from celery.utils.log import get_task_logger
 
 from app.core.config import settings
@@ -162,16 +163,27 @@ def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
         # Set the updated list in the payload
         update_payload['ocr_results'] = current_ocr_results
 
-        # Increment completed count - crucial!
-        completed_count = (email_obj.ocr_attachments_completed or 0) + 1
-        update_payload['ocr_attachments_completed'] = completed_count
+        # Use atomic database-level increment to avoid race conditions
+        # First update the completion count atomically, then read the new value
+        db.execute(
+            text("UPDATE email SET ocr_attachments_completed = COALESCE(ocr_attachments_completed, 0) + 1 WHERE id = :email_id"),
+            {"email_id": str(email_uuid)}
+        )
+        db.commit()
         
-        # IMPORTANT: Preserve ocr_attachments_total to ensure completion check works
-        update_payload['ocr_attachments_total'] = email_obj.ocr_attachments_total
-
-        # Update the email record using the sync CRUD helper
-        # This now updates ocr_results and ocr_attachments_completed
-        updated_email = email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(**update_payload))
+        # Now get the updated email object with the correct count
+        updated_email_with_count = email_crud_sync.get(db, id=email_uuid)
+        if not updated_email_with_count:
+            logger.error(f"Email {email_id} not found after atomic count update.")
+            return
+            
+        completed_count = updated_email_with_count.ocr_attachments_completed
+        
+        # Only update OCR results, not the count (already updated atomically)
+        update_payload_without_count = {'ocr_results': current_ocr_results}
+        
+        # Update the email record with OCR results (completion count already updated atomically)
+        updated_email = email_crud_sync.update(db, db_obj=updated_email_with_count, obj_in=EmailUpdate(**update_payload_without_count))
 
         logger.info(f"Updated email {email_id} with OCR result for attachment {attachment_url}. Completed {completed_count}/{updated_email.ocr_attachments_total} attachments.")
 
@@ -193,34 +205,9 @@ def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
             lien_type = attachment_ocr_data['lien_type']
             logger.info(f"OCR found lien type '{lien_type}' for email {email_id}. This will be processed during classification if the email is lien-related.")
 
-        # Check if all attachments are processed
-        if updated_email.ocr_attachments_total is not None and completed_count >= updated_email.ocr_attachments_total:
-            # Check if any attachment processing resulted in an error
-            has_errors = any(result.get('error') for result in updated_email.ocr_results or [])
-            
-            if has_errors:
-                final_status = "ocr_completed_with_errors"
-                logger.warning(f"OCR processing complete for email {email_id} but some attachments had errors. Continuing processing anyway.")
-                # Add a Front tag so humans know review is needed
-                try:
-                    from app.services.frontapp_service import add_conversation_tags
-                    if updated_email.front_conversation_id:
-                        add_conversation_tags(updated_email.front_conversation_id, ["AI: Human review required"])
-                        logger.info(f"Added 'AI: Human review required' tag to conversation {updated_email.front_conversation_id} after OCR error.")
-                except Exception as tag_exc:
-                    logger.error(f"Failed to add AI-review tag for conversation {updated_email.front_conversation_id}: {tag_exc}")
-            else:
-                final_status = "ocr_completed"
-                logger.info(f"OCR processing completed successfully for email {email_id}.")
-            
-            # Update status separately to ensure it happens after field updates
-            email_crud_sync.update(db, db_obj=updated_email, obj_in=EmailUpdate(status=final_status))
-            
-            # IMPORTANT: Always continue processing, even with OCR errors
-            # The classification and tagging should work with or without OCR data
-            from app.tasks.email import orchestrate_post_ocr_processing
-            logger.info(f"OCR phase complete for {email_id} (status: {final_status}), queueing for post-OCR orchestration on 'processing' queue.")
-            orchestrate_post_ocr_processing.apply_async(args=[str(email_uuid)], queue='processing')
+        # Check if all attachments are processed and trigger orchestration if complete
+        logger.info(f"Checking OCR completion for email {email_id}: {completed_count}/{updated_email.ocr_attachments_total}")
+        _check_ocr_completion_and_trigger_orchestration(updated_email, completed_count, email_id, str(email_uuid))
 
         logger.info(f"OCR task completed successfully for email {email_id}, attachment {attachment_url}")
 
@@ -272,6 +259,62 @@ def _parse_ocr_result(ocr_result: Dict, attachment_url: str, email_id: str) -> D
             "attachment_url": attachment_url,
             "error": f"Failed to parse OCR result: {parse_error}"
         }
+
+
+def _check_ocr_completion_and_trigger_orchestration(updated_email, completed_count: int, email_id: str, email_uuid_str: str):
+    """
+    Centralized function to check if all OCR attachments are complete and trigger orchestration.
+    Handles race conditions and ensures orchestration happens exactly once.
+    """
+    if updated_email.ocr_attachments_total is None:
+        logger.warning(f"Email {email_id} has no ocr_attachments_total set. Cannot determine completion.")
+        return
+        
+    if completed_count < updated_email.ocr_attachments_total:
+        logger.info(f"Email {email_id}: OCR progress {completed_count}/{updated_email.ocr_attachments_total} - waiting for more attachments.")
+        return
+        
+    # All attachments are complete
+    logger.info(f"All OCR processing complete for email {email_id} ({completed_count}/{updated_email.ocr_attachments_total})")
+    
+    # Check if any attachment processing resulted in an error
+    has_errors = any(result.get('error') for result in updated_email.ocr_results or [])
+    
+    if has_errors:
+        final_status = "ocr_completed_with_errors"
+        logger.warning(f"OCR processing complete for email {email_id} but some attachments had errors. Continuing processing anyway.")
+        # Add a Front tag so humans know review is needed
+        try:
+            from app.services.frontapp_service import add_conversation_tags
+            if updated_email.front_conversation_id:
+                add_conversation_tags(updated_email.front_conversation_id, ["AI: Human review required"])
+                logger.info(f"Added 'AI: Human review required' tag to conversation {updated_email.front_conversation_id} after OCR error.")
+        except Exception as tag_exc:
+            logger.error(f"Failed to add AI-review tag for conversation {updated_email.front_conversation_id}: {tag_exc}")
+    else:
+        final_status = "ocr_completed"
+        logger.info(f"OCR processing completed successfully for email {email_id}.")
+    
+    # Update status using a separate database transaction to avoid race conditions
+    try:
+        db = SessionLocal()
+        try:
+            email_obj = email_crud_sync.get(db, id=UUID(email_uuid_str))
+            if email_obj and email_obj.status not in ["ocr_completed", "ocr_completed_with_errors"]:
+                email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_status))
+                logger.info(f"Updated email {email_id} status to {final_status}")
+                
+                # IMPORTANT: Always continue processing, even with OCR errors
+                # The classification and tagging should work with or without OCR data
+                from app.tasks.email import orchestrate_post_ocr_processing
+                logger.info(f"OCR phase complete for {email_id} (status: {final_status}), queueing for post-OCR orchestration on 'processing' queue.")
+                orchestrate_post_ocr_processing.apply_async(args=[email_uuid_str], queue='processing')
+            else:
+                logger.info(f"Email {email_id} already marked as OCR complete ({email_obj.status if email_obj else 'not found'}). Skipping duplicate orchestration.")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Error updating status and triggering orchestration for email {email_id}: {e}", exc_info=True)
 
 
 def _update_email_sync(email_uuid: UUID, update_data: dict):
@@ -328,14 +371,24 @@ def _handle_final_ocr_failure(email_uuid: UUID, attachment_url: str, failure_rea
             current_ocr_results = email_obj.ocr_results or []
             current_ocr_results.append(failure_record)
             
-            completed_count = (email_obj.ocr_attachments_completed or 0) + 1
+            # Use atomic increment for completion count to avoid race conditions
+            db.execute(
+                text("UPDATE email SET ocr_attachments_completed = COALESCE(ocr_attachments_completed, 0) + 1 WHERE id = :email_id"),
+                {"email_id": str(email_uuid)}
+            )
+            db.commit()
             
-            update_payload = {
-                'ocr_results': current_ocr_results,
-                'ocr_attachments_completed': completed_count
-            }
+            # Get updated email object with correct count
+            updated_email_state = email_crud_sync.get(db, id=email_uuid)
+            if not updated_email_state:
+                logger.error(f"Email {email_uuid} not found after atomic count update in failure handler.")
+                return
+                
+            completed_count = updated_email_state.ocr_attachments_completed
             
-            updated_email = email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(**update_payload))
+            # Update OCR results only (count already updated)
+            update_payload = {'ocr_results': current_ocr_results}
+            updated_email = email_crud_sync.update(db, db_obj=updated_email_state, obj_in=EmailUpdate(**update_payload))
             
             # Always mark the Front conversation for human review immediately
             try:
@@ -348,28 +401,9 @@ def _handle_final_ocr_failure(email_uuid: UUID, attachment_url: str, failure_rea
             
             logger.info(f"Recorded OCR failure for {email_uuid}. Completed {completed_count}/{updated_email.ocr_attachments_total} attachments.")
             
-            # Check if all attachments are processed (including failures)
-            if updated_email.ocr_attachments_total is not None and completed_count >= updated_email.ocr_attachments_total:
-                # IMPORTANT: Continue processing even with OCR errors
-                # This is the key fix - don't let OCR failures block the entire workflow
-                logger.info(f"All OCR attempts complete for email {email_uuid} (some may have failed). Continuing with email processing...")
-                
-                # Set status to indicate OCR completed with errors, but allow continuation
-                email_crud_sync.update(db, db_obj=updated_email, obj_in=EmailUpdate(status="ocr_completed_with_errors"))
-
-                # Add a Front tag so humans know review is needed
-                try:
-                    from app.services.frontapp_service import add_conversation_tags
-                    if updated_email.front_conversation_id:
-                        add_conversation_tags(updated_email.front_conversation_id, ["AI: Human review required"])
-                        logger.info(f"Added 'AI: Human review required' tag to conversation {updated_email.front_conversation_id} after OCR failure.")
-                except Exception as tag_exc:
-                    logger.error(f"Failed to add AI-review tag for conversation {updated_email.front_conversation_id}: {tag_exc}")
-
-                # Continue to next step in processing pipeline
-                from app.tasks.email import orchestrate_post_ocr_processing
-                logger.info(f"OCR completed (with errors) for {email_uuid}, queueing for post-OCR orchestration on 'processing' queue.")
-                orchestrate_post_ocr_processing.apply_async(args=[str(email_uuid)], queue='processing')
+            # Check if all attachments are processed (including failures)  
+            logger.info(f"Checking OCR completion after failure for email {email_uuid}: {completed_count}/{updated_email.ocr_attachments_total}")
+            _check_ocr_completion_and_trigger_orchestration(updated_email, completed_count, str(email_uuid), str(email_uuid))
         else:
             logger.error(f"Email {email_uuid} not found when handling OCR failure")
     except Exception as db_exc:

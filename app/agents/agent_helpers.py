@@ -444,6 +444,19 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
     Returns:
         Optional[str]: The extracted patient ID or None if not found
     """
+    # Log entry point with detailed information
+    import traceback
+    import datetime
+    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    caller_info = traceback.extract_stack()[-2]  # Get the calling function info
+    
+    logger.info(f"🔍 PATIENT_ID_EXTRACTION CALLED at {current_time}")
+    logger.info(f"🔍 PATIENT_ID_EXTRACTION Called from: {caller_info.filename}:{caller_info.lineno} in {caller_info.name}()")
+    logger.info(f"🔍 PATIENT_ID_EXTRACTION Input - conversation_id: {conversation_id}")
+    logger.info(f"🔍 PATIENT_ID_EXTRACTION Input - subject: '{subject}'")
+    logger.info(f"🔍 PATIENT_ID_EXTRACTION Input - email_content length: {len(email_content)} chars")
+    logger.info(f"🔍 PATIENT_ID_EXTRACTION Input - email_content preview: {repr(email_content[:300])}...")
+    
     # Include subject in content for all extraction methods
     full_content = email_content
     if subject:
@@ -460,7 +473,7 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
     if matches:
         # Take the first match and ensure uppercase
         patient_id = matches[0].upper()
-        logger.info(f"PATIENT_ID_EXTRACTION: SUCCESS via REGEX - Patient ID: '{patient_id}'")
+        logger.info(f"🔍 PATIENT_ID_EXTRACTION: SUCCESS via REGEX - Patient ID: '{patient_id}'")
         
         # Add comment to Front conversation if conversation_id is provided
         if conversation_id:
@@ -471,6 +484,7 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
             except Exception as e:
                 logger.error(f"Failed to add patient ID comment to conversation {conversation_id}: {e}", exc_info=True)
         
+        logger.info(f"🔍 PATIENT_ID_EXTRACTION: FINAL RESULT = SUCCESS (REGEX) - Returning '{patient_id}' to caller")
         return patient_id
 
     # Tier 2: OpenAI-based extraction as fallback
@@ -510,7 +524,7 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
                     if isinstance(patients, list) and len(patients) > 0:
                         if len(patients) == 1:
                             patient_id = patients[0].get("patient_id")
-                            logger.info(f"PATIENT_ID_EXTRACTION: SUCCESS via OPENAI+MCP - Patient ID: '{patient_id}'")
+                            logger.info(f"🔍 PATIENT_ID_EXTRACTION: SUCCESS via OPENAI+MCP - Patient ID: '{patient_id}'")
                             if patient_id:
                                 # Add comment to Front conversation if conversation_id is provided
                                 if conversation_id:
@@ -520,6 +534,7 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
                                     except Exception as e:
                                         pass
                                 
+                                logger.info(f"🔍 PATIENT_ID_EXTRACTION: FINAL RESULT = SUCCESS (OPENAI+MCP) - Returning '{patient_id}' to caller")
                                 return patient_id
                     
             except Exception as db_e:
@@ -529,7 +544,8 @@ async def extract_patient_id_from_email_logic(email_content: str, conversation_i
         pass
     
     # Final fallback - no patient ID found
-    logger.info(f"PATIENT_ID_EXTRACTION: FAILED - No patient ID found using either regex or OpenAI methods")
+    logger.info(f"🔍 PATIENT_ID_EXTRACTION: FINAL RESULT = FAILED - No patient ID found using either regex or OpenAI methods")
+    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Returning None to caller")
     return None
 
 
