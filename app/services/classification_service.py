@@ -508,6 +508,15 @@ async def get_rules_for_classification_step(
 
         if rule_obj and rule_obj.rule:
             logger.info(f"✅ Using rule prompt from DB category '{hierarchical_category_key}'. Length: {len(rule_obj.rule)}")
+            
+            # Log full rule content only if we're already in Scheduling classification path
+            classification_path_str = " → ".join(classification_path) if classification_path else "ROOT"
+            if "Scheduling" in classification_path_str or hierarchical_category_key.startswith("ROOT_SCHEDULING"):
+                logger.info(f"📋 FULL CLASSIFICATION RULE for '{hierarchical_category_key}':")
+                logger.info(f"📋 RULE START:")
+                logger.info(rule_obj.rule)
+                logger.info(f"📋 RULE END")
+            
             return rule_obj.rule, hierarchical_category_key
         else:
             logger.warning(f"⚠️ No rule prompt found in DB for hierarchical category key '{hierarchical_category_key}' for conversation {conversation_id}. Rule object or rule content is missing.")

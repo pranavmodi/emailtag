@@ -172,30 +172,27 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             agent_name_for_status = "apt_status_req"
             logger.info(f"Email {email_id} (conv: {front_conversation_id}) tagged with '{APT_STATUS_REQ_TAG_NAME}'. Attempting agent SDK via orchestrator.")
             
-            # Extract patient ID before determining next steps
-            async def _extract_patient_id():
+            # Use pre-extracted patient IDs from database (extracted before classification)
+            def _get_first_patient_id():
                 try:
-                    extracted_patient_id = await extract_patient_id_from_email_logic(
-                        email_content=current_email_content,
-                        conversation_id=front_conversation_id,
-                        subject=email_obj.subject
-                    )
-                    if extracted_patient_id:
-                        logger.info(f"Pre-agent patient ID extraction successful for {email_id}: {extracted_patient_id}")
+                    if email_obj.extracted_patient_ids and len(email_obj.extracted_patient_ids) > 0:
+                        extracted_patient_id = email_obj.extracted_patient_ids[0]  # Use first patient ID for backward compatibility
+                        logger.info(f"🔍 AUTORESPOND: Using pre-extracted patient ID for {email_id}: {extracted_patient_id}")
+                        logger.info(f"🔍 AUTORESPOND: Full list of extracted patient IDs: {email_obj.extracted_patient_ids}")
                         return extracted_patient_id
                     else:
-                        logger.info(f"Pre-agent patient ID extraction found no patient ID for {email_id}")
+                        logger.info(f"🔍 AUTORESPOND: No pre-extracted patient IDs found for {email_id}")
                         return None
                 except Exception as e:
-                    logger.error(f"Pre-agent patient ID extraction failed for {email_id}: {e}", exc_info=True)
+                    logger.error(f"Error accessing pre-extracted patient IDs for {email_id}: {e}", exc_info=True)
                     return None
             
             agent_result_dict = None
             async def _run_agent_sdk_orchestrator():
                 nonlocal agent_result_dict
                 
-                # Run patient ID extraction first
-                extracted_patient_id = await _extract_patient_id()
+                # Get pre-extracted patient ID from database
+                extracted_patient_id = _get_first_patient_id()
                 
                 # If no patient ID found, check if we've already asked for patient details
                 if not extracted_patient_id:

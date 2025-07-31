@@ -48,6 +48,10 @@ class Email(Base):
     # Each item in the list should be a dict representing one attachment's results
     # e.g., [{"attachment_id": "att_123", "patient_id": "P1", "accession_nums": ["A1"], ...}, ...]
     ocr_results: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSONB, nullable=True)
+    
+    # Store extracted patient IDs (from text extraction, before classification)
+    # Array of patient IDs found in the email content
+    extracted_patient_ids: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String), nullable=True, index=True)
 
     # Lien modification detection tracking
     lien_modification_checked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

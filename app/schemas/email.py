@@ -48,6 +48,9 @@ class EmailUpdate(BaseModel):
     lien_modification_checked: Optional[bool] = None
     lien_modifications_detected: Optional[bool] = None
     lien_modification_results: Optional[List[Dict[str, Any]]] = None
+    
+    # Patient ID extraction field (multiple IDs possible)
+    extracted_patient_ids: Optional[List[str]] = None
 
 
 class EmailInDBBase(EmailBase):

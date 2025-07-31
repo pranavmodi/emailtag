@@ -24,6 +24,7 @@ from app.services.autorespond_service import process_autorespond  # Add this imp
 from app.services.topic_analysis_service import is_new_unresolved_topic_present # Added topic analysis service
 from app.tasks.worker import celery_app
 from app.crud import email as email_crud
+from app.agents.agent_helpers import extract_all_patient_ids_from_email_logic
 from app.models.email import Email # Added for type hinting
 from app.schemas.email import EmailUpdate # Added for type hinting
 from app.services.archiving_service import check_and_archive_conversation # Import the new archiving service
@@ -394,6 +395,38 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
         except Exception as e_archive_check:
             logger.error(f"Error during pre-tagging archive check for {front_conversation_id}: {e_archive_check}", exc_info=True)
             # Proceed with tagging if archive check fails
+
+        # --- PATIENT ID EXTRACTION --- (NEW: Before Classification)
+        # Extract patient IDs from email content and store them for downstream use
+        try:
+            logger.info(f"🔍 EARLY_PATIENT_ID_EXTRACTION: Starting patient ID extraction for email {email_id}")
+            
+            # Get email content for extraction
+            email_content = email_obj.content_text or ""
+            email_subject = email_obj.subject or ""
+            
+            async def _run_patient_id_extraction_async():
+                return await extract_all_patient_ids_from_email_logic(
+                    email_content=email_content,
+                    conversation_id=front_conversation_id,
+                    subject=email_subject
+                )
+            
+            extracted_patient_ids = asyncio.run(_run_patient_id_extraction_async())
+            
+            # Store extracted patient IDs in database
+            if extracted_patient_ids:
+                logger.info(f"🔍 EARLY_PATIENT_ID_EXTRACTION: Found patient IDs: {extracted_patient_ids}")
+                email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(extracted_patient_ids=extracted_patient_ids))
+                logger.info(f"🔍 EARLY_PATIENT_ID_EXTRACTION: Stored patient IDs in database for email {email_id}")
+            else:
+                logger.info(f"🔍 EARLY_PATIENT_ID_EXTRACTION: No patient IDs found for email {email_id}")
+                
+        except Exception as e_patient_extraction:
+            logger.error(f"Error during patient ID extraction for email {email_id}: {e_patient_extraction}", exc_info=True)
+            # Continue with processing even if patient ID extraction fails
+        
+        # --- END PATIENT ID EXTRACTION ---
 
         # If not split and not archived, queue for tagging
         # perform_tagging_task.delay(email_id)
