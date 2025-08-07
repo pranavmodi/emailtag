@@ -33,8 +33,21 @@ async def check_and_archive_conversation(front_conversation_id: str) -> bool:
         return False
 
     logger.info(f"Sending conversation {front_conversation_id} to OpenAI for resolution analysis.")
-    all_questions_resolved = await are_questions_resolved_openai(conversation_text)
-    logger.info(f"OpenAI analysis for {front_conversation_id} completed. Resolved: {all_questions_resolved}")
+    analysis_result = await are_questions_resolved_openai(conversation_text)
+    logger.info(f"OpenAI analysis for {front_conversation_id} completed. Result: {analysis_result}")
+
+    # Handle structured response
+    if not analysis_result.get("success", False):
+        logger.error(f"OpenAI analysis failed for {front_conversation_id}: {analysis_result.get('summary', 'Unknown error')}")
+        return False
+
+    all_questions_resolved = analysis_result.get("resolved", False)
+    unresolved_questions = analysis_result.get("unresolved_questions", [])
+    analysis_summary = analysis_result.get("summary", "No summary provided")
+    
+    logger.info(f"OpenAI analysis summary for {front_conversation_id}: {analysis_summary}")
+    if unresolved_questions:
+        logger.info(f"Unresolved questions found for {front_conversation_id}: {unresolved_questions}")
 
     if all_questions_resolved:
         try:
@@ -50,5 +63,7 @@ async def check_and_archive_conversation(front_conversation_id: str) -> bool:
             logger.error(f"Error during archiving conversation {front_conversation_id} after AI analysis: {e}", exc_info=True)
             return False
     else:
-        logger.info(f"Conversation {front_conversation_id} not archived as OpenAI analysis indicated questions might still be pending or analysis failed.")
+        logger.info(f"Conversation {front_conversation_id} not archived as OpenAI analysis indicated questions might still be pending.")
+        if unresolved_questions:
+            logger.info(f"Specific unresolved questions preventing archival: {unresolved_questions}")
         return False 
