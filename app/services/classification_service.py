@@ -4,6 +4,7 @@ Service to classify email conversations into top-level categories using predefin
 """
 
 import os
+import json
 import functools # Import functools
 from typing import Dict, List, Any, Tuple, Optional
 from dotenv import load_dotenv
@@ -218,16 +219,27 @@ async def classify_email_category(front_conversation_id: str, existing_tags: Lis
         # Any additional context like sender_info, message_times would need placeholders in the DB prompt if desired.
 
         model_version = settings.OPENAI_MODEL_VERSION
-        response = client.chat.completions.create(
-            model=model_version,
-            messages=[
+        
+        # Prepare parameters based on model version
+        classify_api_params = {
+            "model": model_version,
+            "messages": [
                 # The system message can be simpler now as the main instructions are in the user prompt from DB
                 {"role": "system", "content": "You are an expert email classifier. Follow the instructions in the user message carefully."},
                 {"role": "user", "content": final_llm_prompt}
-            ],
-            temperature=0.0,
-            max_tokens=20 # Max_tokens might need adjustment based on category name length
-        )
+            ]
+        }
+        
+        # Add parameters based on model type
+        if "o3-mini" in model_version.lower():
+            classify_api_params["max_completion_tokens"] = 20
+            # Don't add temperature for o3-mini
+        else:
+            # For 4o and other models
+            classify_api_params["temperature"] = 0.0
+            classify_api_params["max_tokens"] = 20  # Max_tokens might need adjustment based on category name length
+        
+        response = client.chat.completions.create(**classify_api_params)
 
         prediction = response.choices[0].message.content.strip().strip("'\"")
         
@@ -293,15 +305,25 @@ def classify_email_subcategory(front_conversation_id: str, top_level_category: s
             "\n\nPredicted Subcategory:"
         )
 
-        response = client.chat.completions.create(
-            model=settings.OPENAI_MODEL_VERSION,
-            messages=[
+        # Prepare parameters based on model version
+        subcat_api_params = {
+            "model": settings.OPENAI_MODEL_VERSION,
+            "messages": [
                 {"role": "system", "content": f"You are an expert email classifier. Classify the email into ONE subcategory of {top_level_category} from the provided list. Respond with ONLY the subcategory name."},
                 {"role": "user", "content": prompt}
-            ],
-            temperature=0.0,
-            max_tokens=20 
-        )
+            ]
+        }
+        
+        # Add parameters based on model type
+        if "o3-mini" in settings.OPENAI_MODEL_VERSION.lower():
+            subcat_api_params["max_completion_tokens"] = 20
+            # Don't add temperature for o3-mini
+        else:
+            # For 4o and other models
+            subcat_api_params["temperature"] = 0.0
+            subcat_api_params["max_tokens"] = 20
+        
+        response = client.chat.completions.create(**subcat_api_params)
 
         prediction = response.choices[0].message.content.strip().strip("'\"")
         if prediction not in valid_subcategories:
@@ -340,21 +362,42 @@ def _call_llm_for_classification(
         f"--- EMAIL CONTENT TO CLASSIFY END ---\n\n"
         f"Chosen Option:"
     )
+    
+    # Log the full prompt being sent for debugging empty responses
+    logger.info(f"🔍 FULL LLM PROMPT for '{classification_level_name}' (first 1000 chars): {final_llm_prompt[:1000]}...")
+    logger.info(f"🔍 FULL LLM PROMPT for '{classification_level_name}' (last 500 chars): ...{final_llm_prompt[-500:]}")
 
     try:
-        # The system message can be very generic as instructions are in the user prompt.
-        response = client.chat.completions.create(
-            model=settings.OPENAI_MODEL_VERSION,
-            messages=[
+        # Prepare parameters based on model version
+        api_params = {
+            "model": settings.OPENAI_MODEL_VERSION,
+            "messages": [
                 {"role": "system", "content": "You are an expert email classifier. Follow the instructions in the user message carefully and respond only with the chosen option name."},
                 {"role": "user", "content": final_llm_prompt}
-            ],
-            temperature=0.0,
-            max_tokens=50 
-        )
+            ]
+        }
+        
+        # Add parameters based on model type
+        if "o3-mini" in settings.OPENAI_MODEL_VERSION.lower():
+            api_params["max_completion_tokens"] = 50
+            # Don't add temperature for o3-mini
+        else:
+            # For 4o and other models
+            api_params["temperature"] = 0.0
+            api_params["max_tokens"] = 50
+        
+        # The system message can be very generic as instructions are in the user prompt.
+        response = client.chat.completions.create(**api_params)
         
         prediction = response.choices[0].message.content.strip().strip("'\"")
         logger.info(f"🤖 LLM PREDICTION for '{classification_level_name}' (path: [{' → '.join(current_path)}]): '{prediction}'")
+        
+        # Log additional details when prediction is empty or invalid
+        if not prediction:
+            logger.error(f"🚨 EMPTY PREDICTION RECEIVED for '{classification_level_name}' (path: [{' → '.join(current_path)}])")
+            logger.error(f"🚨 RAW LLM RESPONSE: '{response.choices[0].message.content}'")
+            logger.error(f"🚨 PROMPT TEMPLATE LENGTH: {len(llm_prompt_template)} characters")
+            logger.error(f"🚨 CONVERSATION TEXT LENGTH: {len(conversation_text)} characters")
 
         # Validation of prediction against options must happen *after* this call,
         # in the calling function (classify_email_tags_hierarchical), as this function
@@ -382,7 +425,7 @@ def _check_for_conflicting_top_level_topics(
     conversation_text: str,
     sender_info: str,  # Note: sender_info might not correspond perfectly to only the last 3 messages
     message_times: str  # Note: message_times might not correspond perfectly to only the last 3 messages
-) -> bool:
+) -> Dict[str, Any]:
     """
     Uses the LLM to check if the last 3 messages of the conversation discuss topics from multiple top-level categories.
 
@@ -394,7 +437,12 @@ def _check_for_conflicting_top_level_topics(
         message_times: Timestamp information string (for the whole conversation).
 
     Returns:
-        True if conflicting topics are detected in the last 3 messages, False otherwise.
+        Dict[str, Any]: Structured response containing:
+            - "has_conflicts": bool - True if conflicting topics are detected
+            - "detected_categories": List[str] - Categories found in the conversation
+            - "reasons": List[str] - Specific reasons for the conflict detection
+            - "summary": str - Brief explanation of the analysis
+            - "success": bool - Whether the analysis was successful
     """
     # --- Extract last 3 messages ---
     messages = conversation_text.split('\n\n')
@@ -417,7 +465,7 @@ def _check_for_conflicting_top_level_topics(
     categories_list_str = "\n- ".join(_TOP_LEVEL_CATEGORIES)
     prompt = (
         f"Analyze ONLY the last {len(last_three_messages)} message(s) of the email conversation provided below. "
-        f"Does this recent part of the conversation *clearly* discuss topics related to MORE THAN ONE of the following main categories?\n"
+        f"Determine if this recent part of the conversation discusses topics related to MORE THAN ONE of the following main categories:\n"
         f"- {categories_list_str}\n\n"
         f"IMPORTANT CONTEXT GUIDELINES:\n"
         f"- Routine requests to 'update records', 'update files', or 'update billing records' in payment/settlement contexts should be considered part of Accounts Receivable, NOT Medical Records & Images\n"
@@ -425,15 +473,17 @@ def _check_for_conflicting_top_level_topics(
         f"- Questions about appointment scheduling, MRI scheduling, imaging appointments, or appointment status should be considered Scheduling, NOT Medical Records & Images\n"
         f"- Only flag Scheduling if there are explicit requests to schedule, reschedule, or change appointments, OR inquiries about appointment/scheduling status\n"
         f"- Focus on the PRIMARY business purpose of the communication\n\n"
-        f"Respond with ONLY 'Yes' or 'No'.\n\n"
+        f"Analyze the conversation and identify:\n"
+        f"1. Which categories are clearly discussed in the recent messages\n"
+        f"2. Whether multiple categories are present (conflicts)\n"
+        f"3. Specific reasons why you detected conflicts (if any)\n\n"
         # Note: Sender/Time info is for the whole conversation, which might be slightly misleading here, but still useful context.
         f"Sender Information (Full Conversation): {sender_info}\n"
         f"Message Timestamps (Full Conversation): {message_times}\n"
         f"Last {len(last_three_messages)} Message(s) Text:\n"
-        '""\n'
-        f"{recent_text[:4000]}...\n" # Use the extracted recent text, still truncated just in case
-        '""\n\n'
-        "Conflicts detected (Yes/No):"
+        f'"""\n'
+        f"{recent_text[:4000]}...\n"  # Use the extracted recent text, still truncated just in case
+        f'"""\n'
     )
 
     try:
@@ -447,28 +497,92 @@ def _check_for_conflicting_top_level_topics(
         logger.debug(prompt)
         logger.debug("=== END CONFLICT CHECK PROMPT ===")
 
-        response = client.chat.completions.create(
-            model=settings.OPENAI_MODEL_VERSION, # Use gpt-4o
-            messages=[
-                {"role": "system", "content": f"Analyze the email content for topic overlap across these categories: {', '.join(_TOP_LEVEL_CATEGORIES)}. Respond ONLY with 'Yes' or 'No' if multiple categories are clearly discussed."}, 
+        # Define the structured output schema for conflict detection
+        conflict_response_schema = {
+            "type": "object",
+            "properties": {
+                "has_conflicts": {
+                    "type": "boolean",
+                    "description": "True if multiple categories are clearly discussed in the recent messages"
+                },
+                "detected_categories": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": _TOP_LEVEL_CATEGORIES
+                    },
+                    "description": "List of categories detected in the conversation"
+                },
+                "reasons": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Specific reasons why conflicts were detected, or explanation of single category"
+                },
+                "summary": {
+                    "type": "string",
+                    "description": "Brief summary of the conflict analysis"
+                }
+            },
+            "required": ["has_conflicts", "detected_categories", "reasons", "summary"],
+            "additionalProperties": False
+        }
+
+        # Prepare parameters based on model version
+        conflict_api_params = {
+            "model": settings.OPENAI_MODEL_VERSION,
+            "messages": [
+                {"role": "system", "content": f"Analyze email conversations for topic overlap across these categories: {', '.join(_TOP_LEVEL_CATEGORIES)}. Provide structured analysis with detected categories and reasoning."}, 
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.0,
-            max_tokens=5 
-        )
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "conflict_analysis",
+                    "strict": True,
+                    "schema": conflict_response_schema
+                }
+            }
+        }
         
-        prediction = response.choices[0].message.content.strip().strip("'\"").lower()
-        logger.info(f"🤖 CONFLICT CHECK PREDICTION: '{prediction}'")
+        # Add temperature only for non-o3-mini models
+        if "o3-mini" not in settings.OPENAI_MODEL_VERSION.lower():
+            conflict_api_params["temperature"] = 0.0
+        
+        response = client.chat.completions.create(**conflict_api_params)
+        
+        ai_response_text = response.choices[0].message.content.strip()
+        logger.info(f"🤖 CONFLICT CHECK RAW RESPONSE: {ai_response_text}")
 
-        if prediction == 'yes':
-            # logger.info(f"✅ CONFLICT DETECTED: LLM identified conflicting top-level topics in recent messages")
-            return True
-        elif prediction == 'no':
-            # logger.info(f"✅ NO CONFLICT: LLM found no conflicting top-level topics in recent messages")
-            return False
-        else:
-            logger.warning(f"❓ UNCLEAR CONFLICT RESPONSE: LLM returned unexpected response '{prediction}'. Assuming no conflict.")
-            return False # Default to no conflict if response is unclear
+        try:
+            # Parse the structured JSON response
+            analysis_result = json.loads(ai_response_text)
+            
+            result = {
+                "has_conflicts": analysis_result["has_conflicts"],
+                "detected_categories": analysis_result["detected_categories"],
+                "reasons": analysis_result["reasons"],
+                "summary": analysis_result["summary"],
+                "success": True
+            }
+            
+            logger.info(f"🤖 CONFLICT CHECK RESULT: Conflicts={result['has_conflicts']}, Categories={result['detected_categories']}")
+            logger.info(f"🤖 CONFLICT CHECK SUMMARY: {result['summary']}")
+            if result['reasons']:
+                logger.info(f"🤖 CONFLICT CHECK REASONS: {result['reasons']}")
+            
+            return result
+            
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error(f"Failed to parse structured conflict check response: {e}. Raw response: {ai_response_text}")
+            return {
+                "has_conflicts": False,  # Default to no conflict on parsing error
+                "detected_categories": [],
+                "reasons": [f"Failed to parse response: {str(e)}"],
+                "summary": "Error occurred during conflict analysis",
+                "success": False
+            }
             
     except openai.OpenAIError as e:
         # Treat OpenAI outages or rate limits as retry-worthy.
@@ -541,12 +655,26 @@ async def classify_email_tags_hierarchical(
     """
     client = get_openai_client()
 
-    # --- PRE-CHECK FOR CONFLICTING TOPICS (remains the same) ---
+    # --- PRE-CHECK FOR CONFLICTING TOPICS ---
     try:
-        has_conflicts = _check_for_conflicting_top_level_topics(client, front_conversation_id, conversation_text, sender_info, message_times)
-        if has_conflicts:
-            logger.info(f"🚫 CONFLICT DETECTED for {front_conversation_id}. Assigning human review.")
+        conflict_result = _check_for_conflicting_top_level_topics(client, front_conversation_id, conversation_text, sender_info, message_times)
+        
+        if conflict_result.get("success", False) and conflict_result.get("has_conflicts", False):
+            detected_categories = conflict_result.get("detected_categories", [])
+            reasons = conflict_result.get("reasons", [])
+            summary = conflict_result.get("summary", "Multiple categories detected")
+            
+            logger.info(f"🚫 CONFLICT DETECTED for {front_conversation_id}. Categories: {detected_categories}")
+            logger.info(f"🚫 CONFLICT REASONS: {reasons}")
+            logger.info(f"🚫 CONFLICT SUMMARY: {summary}")
+            logger.info("Assigning human review due to conflicting topics.")
             return ["AI: Human review required"]
+        elif conflict_result.get("success", False):
+            detected_categories = conflict_result.get("detected_categories", [])
+            logger.info(f"✅ NO CONFLICTS for {front_conversation_id}. Single category focus: {detected_categories}")
+        else:
+            logger.warning(f"Conflict check failed for {front_conversation_id}, but proceeding with classification.")
+            
     except Exception as conflict_check_error:
         logger.error(f"Error during conflict check for {front_conversation_id}: {conflict_check_error}. Proceeding.", exc_info=True)
     # --- END PRE-CHECK ---

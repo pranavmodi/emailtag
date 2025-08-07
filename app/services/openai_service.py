@@ -101,9 +101,12 @@ async def are_questions_resolved_openai(conversation_text: str) -> Dict[str, Any
                 "strict": True,
                 "schema": response_schema
             }
-        },
-        "temperature": 0.0,  # For deterministic output
+        }
     }
+    
+    # Add temperature only for non-o3-mini models (though this function uses gpt-4o by default)
+    if "o3-mini" not in payload["model"].lower():
+        payload["temperature"] = 0.0
 
     try:
         # IMPORTANT: Disabling SSL verification is a security risk and should only be done
