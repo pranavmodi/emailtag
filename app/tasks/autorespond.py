@@ -205,10 +205,10 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                         # Send deterministic response asking for patient details
                         from app.agents.templates.shared_templates import TEMPLATE_REQUEST_PATIENT_ID
                         
-                        # Import the send_reply_to_front function
-                        from app.agents.agent_helpers import send_reply_to_front
+                        # Import the direct helper function (not the FunctionTool)
+                        from app.agents.agent_helpers import send_reply_to_front_direct
                         
-                        await send_reply_to_front(
+                        await send_reply_to_front_direct(
                             conversation_id=front_conversation_id,
                             reply_text=TEMPLATE_REQUEST_PATIENT_ID,
                             tags_to_add=None

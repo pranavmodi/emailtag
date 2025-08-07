@@ -54,12 +54,22 @@ def _call_openai_api(prompt: str) -> str:  # Changed return type to str
         logger.info(f"Making OpenAI request with model: {model}")
         logger.debug(f"Request messages (user prompt snippet): {prompt[:200]}...") 
         
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0.1, # Slightly higher for more natural, less rigid responses
-            max_tokens=1024 
-        )
+        # Prepare parameters based on model version
+        api_params = {
+            "model": model,
+            "messages": messages
+        }
+        
+        # Add parameters based on model type
+        if "o3-mini" in model.lower():
+            api_params["max_completion_tokens"] = 1024
+            # Don't add temperature for o3-mini
+        else:
+            # For gpt-4o and other models
+            api_params["temperature"] = 0.1  # Slightly higher for more natural responses
+            api_params["max_tokens"] = 1024
+        
+        response = client.chat.completions.create(**api_params)
         
         logger.info(f"OpenAI Response model used: {response.model}")
         

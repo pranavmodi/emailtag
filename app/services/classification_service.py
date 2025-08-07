@@ -218,7 +218,8 @@ async def classify_email_category(front_conversation_id: str, existing_tags: Lis
         # Note: The ROOT prompt template should already instruct to choose from top-level categories.
         # Any additional context like sender_info, message_times would need placeholders in the DB prompt if desired.
 
-        model_version = settings.OPENAI_MODEL_VERSION
+        # Use dedicated classification model if available, otherwise fall back to general model
+        model_version = settings.OPENAI_CLASSIFICATION_MODEL or settings.OPENAI_MODEL_VERSION
         
         # Prepare parameters based on model version
         classify_api_params = {
@@ -305,9 +306,12 @@ def classify_email_subcategory(front_conversation_id: str, top_level_category: s
             "\n\nPredicted Subcategory:"
         )
 
+        # Use dedicated classification model if available, otherwise fall back to general model
+        classification_model = settings.OPENAI_CLASSIFICATION_MODEL or settings.OPENAI_MODEL_VERSION
+        
         # Prepare parameters based on model version
         subcat_api_params = {
-            "model": settings.OPENAI_MODEL_VERSION,
+            "model": classification_model,
             "messages": [
                 {"role": "system", "content": f"You are an expert email classifier. Classify the email into ONE subcategory of {top_level_category} from the provided list. Respond with ONLY the subcategory name."},
                 {"role": "user", "content": prompt}
@@ -315,7 +319,7 @@ def classify_email_subcategory(front_conversation_id: str, top_level_category: s
         }
         
         # Add parameters based on model type
-        if "o3-mini" in settings.OPENAI_MODEL_VERSION.lower():
+        if "o3-mini" in classification_model.lower():
             subcat_api_params["max_completion_tokens"] = 20
             # Don't add temperature for o3-mini
         else:
@@ -363,14 +367,15 @@ def _call_llm_for_classification(
         f"Chosen Option:"
     )
     
-    # Log the full prompt being sent for debugging empty responses
-    logger.info(f"🔍 FULL LLM PROMPT for '{classification_level_name}' (first 1000 chars): {final_llm_prompt[:1000]}...")
-    logger.info(f"🔍 FULL LLM PROMPT for '{classification_level_name}' (last 500 chars): ...{final_llm_prompt[-500:]}")
+    # Only log full prompt when there are issues (moved to error logging below)
 
     try:
+        # Use dedicated classification model if available, otherwise fall back to general model
+        classification_model = settings.OPENAI_CLASSIFICATION_MODEL or settings.OPENAI_MODEL_VERSION
+        
         # Prepare parameters based on model version
         api_params = {
-            "model": settings.OPENAI_MODEL_VERSION,
+            "model": classification_model,
             "messages": [
                 {"role": "system", "content": "You are an expert email classifier. Follow the instructions in the user message carefully and respond only with the chosen option name."},
                 {"role": "user", "content": final_llm_prompt}
@@ -378,7 +383,7 @@ def _call_llm_for_classification(
         }
         
         # Add parameters based on model type
-        if "o3-mini" in settings.OPENAI_MODEL_VERSION.lower():
+        if "o3-mini" in classification_model.lower():
             api_params["max_completion_tokens"] = 50
             # Don't add temperature for o3-mini
         else:
@@ -390,14 +395,15 @@ def _call_llm_for_classification(
         response = client.chat.completions.create(**api_params)
         
         prediction = response.choices[0].message.content.strip().strip("'\"")
-        logger.info(f"🤖 LLM PREDICTION for '{classification_level_name}' (path: [{' → '.join(current_path)}]): '{prediction}'")
+        
+        # Essential logging: Only log the prediction result
+        logger.info(f"📊 CLASSIFICATION: '{classification_level_name}' → '{prediction}' (path: [{' → '.join(current_path)}])")
         
         # Log additional details when prediction is empty or invalid
         if not prediction:
-            logger.error(f"🚨 EMPTY PREDICTION RECEIVED for '{classification_level_name}' (path: [{' → '.join(current_path)}])")
-            logger.error(f"🚨 RAW LLM RESPONSE: '{response.choices[0].message.content}'")
-            logger.error(f"🚨 PROMPT TEMPLATE LENGTH: {len(llm_prompt_template)} characters")
-            logger.error(f"🚨 CONVERSATION TEXT LENGTH: {len(conversation_text)} characters")
+            logger.error(f"🚨 EMPTY PREDICTION: '{classification_level_name}' (path: [{' → '.join(current_path)}])")
+            logger.error(f"🚨 Full prompt (first 1000 chars): {final_llm_prompt[:1000]}...")
+            logger.error(f"🚨 RAW RESPONSE: '{response.choices[0].message.content}'")
 
         # Validation of prediction against options must happen *after* this call,
         # in the calling function (classify_email_tags_hierarchical), as this function
@@ -487,15 +493,8 @@ def _check_for_conflicting_top_level_topics(
     )
 
     try:
-        logger.info(
-            f"🔍 CONFLICT CHECK: Analyzing last {len(last_three_messages)} message(s) "
-            f"for conflicting top-level topics in conversation {conversation_id}"
-        )
-
-        # Log the outbound prompt at DEBUG level to avoid excessive INFO noise
-        logger.debug("=== START CONFLICT CHECK PROMPT ===")
-        logger.debug(prompt)
-        logger.debug("=== END CONFLICT CHECK PROMPT ===")
+        # Reduced logging for conflict check - only essential info
+        logger.info(f"🔍 CONFLICT CHECK: Analyzing {len(last_three_messages)} recent messages for {conversation_id}")
 
         # Define the structured output schema for conflict detection
         conflict_response_schema = {
@@ -529,9 +528,12 @@ def _check_for_conflicting_top_level_topics(
             "additionalProperties": False
         }
 
+        # Use dedicated conflict detection model if available, otherwise fall back to classification model, then general model
+        conflict_model = settings.OPENAI_CONFLICT_DETECTION_MODEL or settings.OPENAI_CLASSIFICATION_MODEL or settings.OPENAI_MODEL_VERSION
+        
         # Prepare parameters based on model version
         conflict_api_params = {
-            "model": settings.OPENAI_MODEL_VERSION,
+            "model": conflict_model,
             "messages": [
                 {"role": "system", "content": f"Analyze email conversations for topic overlap across these categories: {', '.join(_TOP_LEVEL_CATEGORIES)}. Provide structured analysis with detected categories and reasoning."}, 
                 {"role": "user", "content": prompt}
@@ -547,13 +549,12 @@ def _check_for_conflicting_top_level_topics(
         }
         
         # Add temperature only for non-o3-mini models
-        if "o3-mini" not in settings.OPENAI_MODEL_VERSION.lower():
+        if "o3-mini" not in conflict_model.lower():
             conflict_api_params["temperature"] = 0.0
         
         response = client.chat.completions.create(**conflict_api_params)
         
         ai_response_text = response.choices[0].message.content.strip()
-        logger.info(f"🤖 CONFLICT CHECK RAW RESPONSE: {ai_response_text}")
 
         try:
             # Parse the structured JSON response
@@ -567,10 +568,11 @@ def _check_for_conflicting_top_level_topics(
                 "success": True
             }
             
-            logger.info(f"🤖 CONFLICT CHECK RESULT: Conflicts={result['has_conflicts']}, Categories={result['detected_categories']}")
-            logger.info(f"🤖 CONFLICT CHECK SUMMARY: {result['summary']}")
-            if result['reasons']:
-                logger.info(f"🤖 CONFLICT CHECK REASONS: {result['reasons']}")
+            # Essential logging: Only log the final conflict result
+            if result['has_conflicts']:
+                logger.info(f"🚫 CONFLICTS DETECTED: {result['detected_categories']} | Reasons: {result['reasons']}")
+            else:
+                logger.info(f"✅ NO CONFLICTS: Single focus on {result['detected_categories']}")
             
             return result
             
@@ -625,11 +627,11 @@ async def get_rules_for_classification_step(
             
             # Log full rule content only if we're already in Scheduling classification path
             classification_path_str = " → ".join(classification_path) if classification_path else "ROOT"
-            if "Scheduling" in classification_path_str or hierarchical_category_key.startswith("ROOT_SCHEDULING"):
-                logger.info(f"📋 FULL CLASSIFICATION RULE for '{hierarchical_category_key}':")
-                logger.info(f"📋 RULE START:")
-                logger.info(rule_obj.rule)
-                logger.info(f"📋 RULE END")
+            # if "Scheduling" in classification_path_str or hierarchical_category_key.startswith("ROOT_SCHEDULING"):
+            #     logger.info(f"📋 FULL CLASSIFICATION RULE for '{hierarchical_category_key}':")
+            #     logger.info(f"📋 RULE START:")
+            #     logger.info(rule_obj.rule)
+            #     logger.info(f"📋 RULE END")
             
             return rule_obj.rule, hierarchical_category_key
         else:
@@ -660,20 +662,10 @@ async def classify_email_tags_hierarchical(
         conflict_result = _check_for_conflicting_top_level_topics(client, front_conversation_id, conversation_text, sender_info, message_times)
         
         if conflict_result.get("success", False) and conflict_result.get("has_conflicts", False):
-            detected_categories = conflict_result.get("detected_categories", [])
-            reasons = conflict_result.get("reasons", [])
-            summary = conflict_result.get("summary", "Multiple categories detected")
-            
-            logger.info(f"🚫 CONFLICT DETECTED for {front_conversation_id}. Categories: {detected_categories}")
-            logger.info(f"🚫 CONFLICT REASONS: {reasons}")
-            logger.info(f"🚫 CONFLICT SUMMARY: {summary}")
-            logger.info("Assigning human review due to conflicting topics.")
+            logger.info(f"🚫 ASSIGNING HUMAN REVIEW: Conflicting topics detected for {front_conversation_id}")
             return ["AI: Human review required"]
-        elif conflict_result.get("success", False):
-            detected_categories = conflict_result.get("detected_categories", [])
-            logger.info(f"✅ NO CONFLICTS for {front_conversation_id}. Single category focus: {detected_categories}")
-        else:
-            logger.warning(f"Conflict check failed for {front_conversation_id}, but proceeding with classification.")
+        elif not conflict_result.get("success", False):
+            logger.warning(f"⚠️ CONFLICT CHECK FAILED for {front_conversation_id}, proceeding with classification")
             
     except Exception as conflict_check_error:
         logger.error(f"Error during conflict check for {front_conversation_id}: {conflict_check_error}. Proceeding.", exc_info=True)
@@ -718,7 +710,8 @@ async def classify_email_tags_hierarchical(
                 logger.warning(f"LLM failed to classify or returned invalid option '{chosen_option}' at level '{level_name_for_logging}' with options {options} for {front_conversation_id}. Path: {classification_path}. Assigning review.")
                 return ["AI: Human review required"] if classification_path else []
 
-            logger.info(f"📍 CLASSIFICATION STEP for {front_conversation_id}: Level '{level_name_for_logging}' (source: {rules_source}) chose '{chosen_option}'")
+            # Essential logging: Classification step result
+            logger.info(f"📍 STEP: {level_name_for_logging} → '{chosen_option}' (path: {' → '.join(classification_path)})")
             classification_path.append(chosen_option)
             
             next_level_structure = current_level_dict[chosen_option]
@@ -764,9 +757,11 @@ async def classify_email_tags_hierarchical(
                     if len(classification_path) >= 3 and classification_path[1] == "Liens" and classification_path[2] in ["PSL", "ASL"]:
                         intermediate_tag = classification_path[2]  # PSL or ASL
                         tags_to_return = [intermediate_tag, chosen_final_tag]
-                        logger.info(f"🎯 LIEN RESULT for {front_conversation_id}. Adding intermediate tag '{intermediate_tag}' for liens classification.")
+                        logger.info(f"🏷️ LIEN TAGS: Added '{intermediate_tag}' + '{chosen_final_tag}'")
                     
-                    logger.info(f"🎯 FINAL RESULT for {front_conversation_id}. FULL PATH: {' → '.join(classification_path + [chosen_final_tag])}. TAGS: {tags_to_return}")
+                    # Final result logging
+                    full_path = ' → '.join(classification_path + [chosen_final_tag])
+                    logger.info(f"🎯 FINAL TAGS: {tags_to_return} | Path: {full_path}")
                     return tags_to_return
                 else:
                     logger.warning(f"LLM failed to choose or returned invalid final tag '{chosen_final_tag}' from list {final_options_in_list} for {front_conversation_id} (path: {classification_path}). Assigning review.")
@@ -780,9 +775,11 @@ async def classify_email_tags_hierarchical(
                 if len(classification_path) >= 3 and classification_path[1] == "Liens" and classification_path[2] in ["PSL", "ASL"]:
                     intermediate_tag = classification_path[2]  # PSL or ASL
                     tags_to_return = [intermediate_tag, final_tag]
-                    logger.info(f"🎯 LIEN RESULT for {front_conversation_id}. Adding intermediate tag '{intermediate_tag}' for liens classification.")
+                    logger.info(f"🏷️ LIEN TAGS: Added '{intermediate_tag}' + '{final_tag}'")
                 
-                logger.info(f"🎯 FINAL RESULT for {front_conversation_id}. FULL PATH: {' → '.join(classification_path)}. TAG: {final_tag}. RETURNING TAGS: {tags_to_return}")
+                # Final result logging
+                full_path = ' → '.join(classification_path)
+                logger.info(f"🎯 FINAL TAGS: {tags_to_return} | Path: {full_path}")
                 return tags_to_return
             else:
                 logger.error(f"Unexpected data type ({type(next_level_structure)}) in EMAIL_CATEGORIES at {classification_path} for {front_conversation_id}. Assigning review.")

@@ -135,9 +135,11 @@ async def are_questions_resolved_openai(conversation_text: str) -> Dict[str, Any
                     "success": True
                 }
                 
-                logger.info(f"OpenAI analysis result - Resolved: {result['resolved']}, Unresolved questions: {len(result['unresolved_questions'])}")
-                if result['unresolved_questions']:
-                    logger.info(f"Unresolved questions for Precise Imaging: {result['unresolved_questions']}")
+                # Essential logging: Archive analysis result
+                if result['resolved']:
+                    logger.info(f"📋 RESOLVED: All questions answered - {result['summary']}")
+                else:
+                    logger.info(f"📋 UNRESOLVED: {len(result['unresolved_questions'])} questions remain - {result['unresolved_questions']}")
                 
                 return result
                 

@@ -17,53 +17,41 @@ async def check_and_archive_conversation(front_conversation_id: str) -> bool:
     Returns:
         bool: True if the conversation was archived, False otherwise.
     """
-    logger.info(f"Checking if conversation {front_conversation_id} can be archived.")
+    logger.info(f"📁 ARCHIVE CHECK: Starting analysis for {front_conversation_id}")
 
     conversation_data = get_conversation_text(front_conversation_id)
     if not conversation_data or not isinstance(conversation_data, dict):
-        logger.error(f"Failed to get conversation data for {front_conversation_id} in archiving check.")
+        logger.error(f"📁 ARCHIVE FAILED: No conversation data for {front_conversation_id}")
         return False
 
     conversation_text = conversation_data.get('text', '')
-    # Consider passing more structured data like `conversation_data.get('senders')` 
-    # or the raw messages if `are_questions_resolved_openai` is adapted for it.
-
     if not conversation_text.strip():
-        logger.info(f"Conversation text for {front_conversation_id} is empty. Skipping OpenAI analysis, not archiving.")
+        logger.info(f"📁 ARCHIVE SKIPPED: Empty conversation {front_conversation_id}")
         return False
 
-    logger.info(f"Sending conversation {front_conversation_id} to OpenAI for resolution analysis.")
     analysis_result = await are_questions_resolved_openai(conversation_text)
-    logger.info(f"OpenAI analysis for {front_conversation_id} completed. Result: {analysis_result}")
 
     # Handle structured response
     if not analysis_result.get("success", False):
-        logger.error(f"OpenAI analysis failed for {front_conversation_id}: {analysis_result.get('summary', 'Unknown error')}")
+        logger.error(f"📁 ARCHIVE ANALYSIS FAILED for {front_conversation_id}: {analysis_result.get('summary', 'Unknown error')}")
         return False
 
     all_questions_resolved = analysis_result.get("resolved", False)
     unresolved_questions = analysis_result.get("unresolved_questions", [])
-    analysis_summary = analysis_result.get("summary", "No summary provided")
     
-    logger.info(f"OpenAI analysis summary for {front_conversation_id}: {analysis_summary}")
-    if unresolved_questions:
-        logger.info(f"Unresolved questions found for {front_conversation_id}: {unresolved_questions}")
-
+    # Essential logging: Archive decision
     if all_questions_resolved:
         try:
-            logger.info(f"Attempting to archive conversation {front_conversation_id} as all questions appear resolved.")
             success = archive_conversation_in_front(front_conversation_id)
             if success:
-                logger.info(f"Successfully archived conversation {front_conversation_id}.")
+                logger.info(f"📁 ARCHIVED: {front_conversation_id} - All questions resolved")
                 return True
             else:
-                logger.error(f"Failed to archive conversation {front_conversation_id} via Front API even after AI indicated resolution.")
+                logger.error(f"📁 ARCHIVE FAILED: Front API error for {front_conversation_id}")
                 return False
         except Exception as e:
-            logger.error(f"Error during archiving conversation {front_conversation_id} after AI analysis: {e}", exc_info=True)
+            logger.error(f"📁 ARCHIVE ERROR: {front_conversation_id} - {e}")
             return False
     else:
-        logger.info(f"Conversation {front_conversation_id} not archived as OpenAI analysis indicated questions might still be pending.")
-        if unresolved_questions:
-            logger.info(f"Specific unresolved questions preventing archival: {unresolved_questions}")
+        logger.info(f"📁 NOT ARCHIVED: {front_conversation_id} - Unresolved: {unresolved_questions}")
         return False 
