@@ -323,179 +323,121 @@ def _extract_patient_names_and_dates_from_email(email_content: str) -> list:
 
 async def _extract_patient_info_with_openai(email_content: str, subject: Optional[str] = None) -> Optional[Dict[str, str]]:
     """
-    Uses OpenAI to extract patient name and DOI from email content as a fallback method.
+    Uses OpenAI to extract patient name and DOI/DOB from email content as a fallback method.
     
     Args:
         email_content: The email content to analyze
         subject: Optional email subject line that may contain patient information
         
     Returns:
-        Dict with 'first_name', 'last_name', and 'doi' keys, or None if extraction fails
+        Dict with 'first_name', 'last_name', 'date', and 'date_type' ('DOI' or 'DOB'), or None
     """
     try:
-        # Create OpenAI client (using same pattern as other agents)
+        # Create OpenAI client
         custom_httpx_client = httpx.AsyncClient(verify=False)
         openai_client = AsyncOpenAI(
             api_key=app_settings_instance.OPENAI_API_KEY if hasattr(app_settings_instance, 'OPENAI_API_KEY') else os.environ.get("OPENAI_API_KEY"),
             http_client=custom_httpx_client
         )
         
-        # Include subject in the email content if provided
-        full_email_content = email_content
-        if subject:
-            full_email_content = f"Subject: {subject}\n\n{email_content}"
+        full_email_content = f"Subject: {subject}\n\n{email_content}" if subject else email_content
         
         prompt = f"""
 You are an expert at extracting patient information from medical and legal emails.
-
-Please analyze the following email content and extract the patient's name and date of injury (DOI).
+Analyze the email and extract the patient's name and their date of injury (DOI) or date of birth (DOB).
 
 Email content:
 {full_email_content}
 
 CRITICAL EXTRACTION PRIORITY:
-
-🔍 **STEP 1: CHECK SUBJECT LINE FIRST**
-- Subject lines often contain the most important patient information
-- Look for patterns like: "RE: FirstName LastName, MM/DD/YYYY"
-- Subject line patient info takes HIGHEST PRIORITY
-
-🔍 **STEP 2: If subject doesn't have complete info, check email body**
+1.  **Check Subject Line First**: Highest priority for patient info.
+2.  **Check Email Body**: If subject is incomplete, check the body.
 
 IMPORTANT INSTRUCTIONS:
+1.  **Patient Name Extraction**:
+    - Find the name of the patient, not staff or attorneys.
+    - Look for patterns like "Patient: John Smith", "our client Jane Doe", etc.
 
-1. PATIENT NAME EXTRACTION:
-   - **PRIORITY 1**: Check subject line for names (e.g., "RE: John Smith, 06/01/2024")
-   - **PRIORITY 2**: Look in email body for names like:
-     * "John Smith Date: MM/DD/YYYY"
-     * "our client John Smith who was injured"
-     * "Patient: John Smith"
-     * "regarding John Smith"
-   - Focus on names that appear to be the subject/patient of the medical case
-   - Ignore staff names, law firm names, or signature names
+2.  **Date Extraction (DOI or DOB)**:
+    - Find any date explicitly labeled as "DOI", "Date of Injury", "DOL", "Date of Loss", or "DOB", "Date of Birth".
+    - **CRITICAL**: You MUST identify whether the date is a DOI or a DOB.
 
-2. DATE OF INJURY (DOI) EXTRACTION:
-   - **PRIORITY 1**: Check subject line for dates (e.g., "RE: Name, MM/DD/YYYY")
-   - **PRIORITY 2**: Look for explicitly labeled dates in body:
-     * "injured on MM/DD/YYYY"
-     * "date of injury: MM/DD/YYYY" 
-     * "DOI: MM/DD/YYYY" or "DOL: MM/DD/YYYY"
-   - **IGNORE**: Payment dates, check dates, settlement dates (these are NOT injury dates)
-   - **Rule**: Injury dates are typically EARLIER than payment dates
-
-3. EXAMPLES OF CORRECT EXTRACTION:
-   - Subject: "RE: Servando Zamora, 06/01/2024" → Name: "Servando", "Zamora", DOI: "06/01/2024"
-   - Body: "our client John Smith who was injured on 03/15/2024" → Name: "John", "Smith", DOI: "03/15/2024"
-   - IGNORE payment info like "Check #1234 sent on 12/01/2024" (this is NOT the injury date)
-
-4. OUTPUT FORMAT:
-   Return ONLY a valid JSON object:
-   {{
+3.  **Output Format**:
+    Return ONLY a valid JSON object with the extracted information.
+    {{
        "first_name": "PatientFirstName",
        "last_name": "PatientLastName", 
-       "doi": "MM/DD/YYYY"
-   }}
+       "date": "MM/DD/YYYY",
+       "date_type": "DOI" 
+    }}
+    - The "date_type" field MUST be either "DOI" or "DOB".
 
-5. If you cannot find BOTH a clear patient name AND date of injury, return: {{"found": false}}
+4.  **Failure Condition**:
+    - If you cannot find BOTH a clear patient name AND a clear date (DOI or DOB), return: {{"found": false}}
 
-6. Ensure the date is in MM/DD/YYYY format.
+5.  **Date Formatting**:
+    - Ensure the date is in MM/DD/YYYY format.
 
-7. Do not include explanations, just the JSON response.
+6.  **No Explanations**:
+    - Do not include any text or explanations outside of the JSON response.
 """
-
-        # DEBUG: Log what's being sent to OpenAI
-        # logger.info(f"OPENAI DEBUG - Sending to OpenAI: PROMPT={prompt}")
-
-        # Use dedicated patient extraction model or fallback to general model
-        patient_extraction_model = app_settings_instance.OPENAI_PATIENT_EXTRACTION_MODEL or app_settings_instance.OPENAI_MODEL_VERSION or "gpt-4o"
+        patient_extraction_model = app_settings_instance.OPENAI_PATIENT_EXTRACTION_MODEL or "gpt-4o"
         
-        # Prepare API parameters based on model type
         api_params = {
             "model": patient_extraction_model,
             "messages": [
-                {"role": "system", "content": "You are a medical information extraction specialist. Extract patient names and dates of injury from email content and return only valid JSON."},
+                {"role": "system", "content": "You are a medical information extraction specialist. Extract patient names, date, and date type (DOI/DOB) and return only valid JSON."},
                 {"role": "user", "content": prompt}
-            ]
+            ],
+            "temperature": 0.1,
+            "max_tokens": 150
         }
         
-        # Add parameters based on model type
-        if "o3-mini" in patient_extraction_model.lower():
-            api_params["max_completion_tokens"] = 150
-            # Don't add temperature for o3-mini
-        else:
-            # For gpt-4o and other models
-            api_params["temperature"] = 0.1
-            api_params["max_tokens"] = 150
-        
         logger.info(f"PATIENT_ID_EXTRACTION: Using OpenAI model: {patient_extraction_model}")
-        
-        # Make the API call
         response = await openai_client.chat.completions.create(**api_params)
-        
-        # Parse the response
         response_text = response.choices[0].message.content.strip()
         logger.info(f"PATIENT_ID_EXTRACTION: OpenAI raw response: '{response_text}'")
         
-        # Handle markdown code blocks if present
         json_text = response_text
         if response_text.startswith("```json"):
-            # Extract JSON from markdown code block
-            lines = response_text.split('\n')
-            json_lines = []
-            in_json_block = False
-            for line in lines:
-                if line.strip() == "```json":
-                    in_json_block = True
-                    continue
-                elif line.strip() == "```" and in_json_block:
-                    break
-                elif in_json_block:
-                    json_lines.append(line)
-            json_text = '\n'.join(json_lines).strip()
-            
+            json_text = response_text.split("```json\n")[1].split("\n```")[0]
+        
         logger.info(f"PATIENT_ID_EXTRACTION: Parsed JSON text: '{json_text}'")
         
-        # Parse JSON response
         try:
             extracted_data = json.loads(json_text)
             
-            # Check if extraction was successful
-            if extracted_data.get("found") == False:
+            if not extracted_data.get("found", True):
                 return None
-                
-            # Validate required fields
-            if not all(key in extracted_data for key in ["first_name", "last_name", "doi"]):
-                return None
-                
-            # Validate the extracted data
-            first_name = extracted_data["first_name"].strip()
-            last_name = extracted_data["last_name"].strip()
-            doi = extracted_data["doi"].strip()
             
-            if not first_name or not last_name or not doi:
+            required_keys = ["first_name", "last_name", "date", "date_type"]
+            if not all(key in extracted_data for key in required_keys):
                 return None
-                
+            
+            date_type = extracted_data["date_type"].upper()
+            if date_type not in ["DOI", "DOB"]:
+                return None
+
             # Validate date format
-            try:
-                datetime.strptime(doi, '%m/%d/%Y')
-            except ValueError:
-                return None
-                
+            datetime.strptime(extracted_data["date"], '%m/%d/%Y')
+
             return {
-                "first_name": first_name,
-                "last_name": last_name,
-                "doi": doi
+                "first_name": extracted_data["first_name"].strip(),
+                "last_name": extracted_data["last_name"].strip(),
+                "date": extracted_data["date"].strip(),
+                "date_type": date_type
             }
             
-        except json.JSONDecodeError as je:
+        except (json.JSONDecodeError, ValueError, KeyError):
             return None
             
-    except Exception as e:
+    except Exception:
         return None
     finally:
-        # Clean up the httpx client
         if 'custom_httpx_client' in locals():
             await custom_httpx_client.aclose()
+
+
 
 
 async def extract_patient_id_from_email_logic(email_content: str, conversation_id: Optional[str] = None, subject: Optional[str] = None) -> Optional[str]:
@@ -584,53 +526,45 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
         if openai_extracted:
             first_name = openai_extracted["first_name"]
             last_name = openai_extracted["last_name"]
-            doi = openai_extracted["doi"]
-            logger.info(f"PATIENT_ID_EXTRACTION: OpenAI extracted name: '{first_name} {last_name}', DOI: '{doi}'")
+            date = openai_extracted["date"]
+            date_type = openai_extracted["date_type"]
             
-            # Try database lookup with OpenAI extracted data (Now uses MCP tool!)
+            logger.info(f"PATIENT_ID_EXTRACTION: OpenAI extracted name: '{first_name} {last_name}', Date: '{date}', Type: '{date_type}'")
+            
             try:
-                # Ensure MCP client is connected
                 if not mcp_client.is_connected:
                     await mcp_client.connect()
                 
-                # Call new MCP tool for name+DOI patient lookup
-                patient_data = await call_mcp_tool(
-                    tool_name="fetch_patient_by_name_and_doi",
-                    arguments={
-                        "firstName": first_name,
-                        "lastName": last_name,
-                        "doi": doi
-                    }
-                )
-                
-                logger.info(f"PATIENT_ID_EXTRACTION: MCP lookup response: {patient_data}")
-                
-                if patient_data and patient_data.get('success') and patient_data.get('patients'):
-                    # Handle MCP response format - patients array contains the data
-                    patients = patient_data['patients']
-                    logger.info(f"PATIENT_ID_EXTRACTION: MCP found {len(patients)} patients")
-                    if isinstance(patients, list) and len(patients) > 0:
-                        if len(patients) >= 1:
+                tool_name = ""
+                arguments = {}
+                if date_type == "DOI":
+                    tool_name = "fetch_patient_by_name_and_doi"
+                    arguments = {"firstName": first_name, "lastName": last_name, "doi": date}
+                elif date_type == "DOB":
+                    tool_name = "fetch_patient_by_name_and_dob"
+                    arguments = {"firstName": first_name, "lastName": last_name, "dob": date}
+
+                if tool_name:
+                    patient_data = await call_mcp_tool(tool_name=tool_name, arguments=arguments)
+                    logger.info(f"PATIENT_ID_EXTRACTION: MCP lookup response: {patient_data}")
+                    
+                    if patient_data and patient_data.get('success') and patient_data.get('patients'):
+                        patients = patient_data['patients']
+                        if isinstance(patients, list) and len(patients) > 0:
                             for patient in patients:
                                 patient_id = patient.get("patient_id")
                                 if patient_id and patient_id not in found_patient_ids:
                                     found_patient_ids.append(patient_id)
                             
-                            logger.info(f"🔍 PATIENT_ID_EXTRACTION: SUCCESS via OPENAI+MCP - Patient IDs: {found_patient_ids}")
-                            
                             if found_patient_ids:
-                                # Add comment to Front conversation if conversation_id is provided
+                                logger.info(f"🔍 PATIENT_ID_EXTRACTION: SUCCESS via OPENAI+MCP - Patient IDs: {found_patient_ids}")
                                 if conversation_id:
                                     comment_text = f"Bot found patient ids {', '.join(found_patient_ids)}"
                                     try:
                                         frontapp_service.add_conversation_comment(conversation_id, comment_text)
-                                    except Exception as e:
-                                        pass
-                                
-                                logger.info(f"🔍 PATIENT_ID_EXTRACTION: FINAL RESULT = SUCCESS (OPENAI+MCP) - Returning {found_patient_ids} to caller")
+                                    except Exception: pass
                                 return found_patient_ids
-                    
-            except Exception as db_e:
+            except Exception:
                 pass
                 
     except Exception as openai_e:
