@@ -39,6 +39,7 @@ import os
 import re
 import json
 import httpx
+import html
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 
@@ -51,6 +52,58 @@ from app.services import frontapp_service
 from app.mcp import default_mcp_client as mcp_client, call_mcp_tool
 
 logger = get_task_logger(__name__)
+
+
+def preprocess_email_content_for_extraction(email_content: str) -> str:
+    """
+    Preprocesses email content to clean HTML entities and formatting issues
+    that might interfere with patient information extraction.
+    
+    Args:
+        email_content: Raw email content with potential HTML entities
+        
+    Returns:
+        Cleaned email content with HTML entities decoded and formatting normalized
+    """
+    if not email_content:
+        return email_content
+    
+    # Decode HTML entities (e.g., &nbsp; -> space, &amp; -> &)
+    cleaned_content = html.unescape(email_content)
+    
+    # Replace common HTML entities that might not be caught by html.unescape
+    html_entities = {
+        '&nbsp;': ' ',
+        '&amp;': '&',
+        '&lt;': '<',
+        '&gt;': '>',
+        '&quot;': '"',
+        '&#39;': "'",
+        '&apos;': "'",
+    }
+    
+    for entity, replacement in html_entities.items():
+        cleaned_content = cleaned_content.replace(entity, replacement)
+    
+    # Normalize excessive whitespace while preserving structure
+    # Replace multiple spaces with single space
+    cleaned_content = re.sub(r' {2,}', ' ', cleaned_content)
+    
+    # Replace multiple newlines with double newlines (preserve paragraph breaks)
+    cleaned_content = re.sub(r'\n{3,}', '\n\n', cleaned_content)
+    
+    # Clean up any remaining whitespace issues around important patterns
+    # Fix spacing around DOB patterns
+    cleaned_content = re.sub(r'DOB\s*:\s*', 'DOB: ', cleaned_content, flags=re.IGNORECASE)
+    cleaned_content = re.sub(r'DOB\s+', 'DOB: ', cleaned_content, flags=re.IGNORECASE)
+    
+    # Fix spacing around email patterns
+    cleaned_content = re.sub(r'Email\s*:\s*', 'Email: ', cleaned_content, flags=re.IGNORECASE)
+    
+    # Remove any remaining invisible characters that might cause issues
+    cleaned_content = re.sub(r'[\u200b-\u200d\ufeff]', '', cleaned_content)
+    
+    return cleaned_content.strip()
 
 
 def format_conversation_history_for_agent(
@@ -353,19 +406,35 @@ IMPORTANT INSTRUCTIONS:
         # DEBUG: Log what's being sent to OpenAI
         # logger.info(f"OPENAI DEBUG - Sending to OpenAI: PROMPT={prompt}")
 
-        # Make the API call
-        response = await openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
+        # Use dedicated patient extraction model or fallback to general model
+        patient_extraction_model = app_settings_instance.OPENAI_PATIENT_EXTRACTION_MODEL or app_settings_instance.OPENAI_MODEL_VERSION or "gpt-4o"
+        
+        # Prepare API parameters based on model type
+        api_params = {
+            "model": patient_extraction_model,
+            "messages": [
                 {"role": "system", "content": "You are a medical information extraction specialist. Extract patient names and dates of injury from email content and return only valid JSON."},
                 {"role": "user", "content": prompt}
-            ],
-            temperature=0.1,
-            max_tokens=150
-        )
+            ]
+        }
+        
+        # Add parameters based on model type
+        if "o3-mini" in patient_extraction_model.lower():
+            api_params["max_completion_tokens"] = 150
+            # Don't add temperature for o3-mini
+        else:
+            # For gpt-4o and other models
+            api_params["temperature"] = 0.1
+            api_params["max_tokens"] = 150
+        
+        logger.info(f"PATIENT_ID_EXTRACTION: Using OpenAI model: {patient_extraction_model}")
+        
+        # Make the API call
+        response = await openai_client.chat.completions.create(**api_params)
         
         # Parse the response
         response_text = response.choices[0].message.content.strip()
+        logger.info(f"PATIENT_ID_EXTRACTION: OpenAI raw response: '{response_text}'")
         
         # Handle markdown code blocks if present
         json_text = response_text
@@ -383,6 +452,8 @@ IMPORTANT INSTRUCTIONS:
                 elif in_json_block:
                     json_lines.append(line)
             json_text = '\n'.join(json_lines).strip()
+            
+        logger.info(f"PATIENT_ID_EXTRACTION: Parsed JSON text: '{json_text}'")
         
         # Parse JSON response
         try:
@@ -466,10 +537,14 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
     logger.info(f"🔍 PATIENT_ID_EXTRACTION Input - email_content length: {len(email_content)} chars")
     logger.info(f"🔍 PATIENT_ID_EXTRACTION Input - email_content preview: {repr(email_content[:300])}...")
     
+    # Preprocess email content to clean HTML entities and formatting issues
+    cleaned_email_content = preprocess_email_content_for_extraction(email_content)
+    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Cleaned content length: {len(cleaned_email_content)} chars (diff: {len(email_content) - len(cleaned_email_content)})")
+    
     # Include subject in content for all extraction methods
-    full_content = email_content
+    full_content = cleaned_email_content
     if subject:
-        full_content = f"Subject: {subject}\n\n{email_content}"
+        full_content = f"Subject: {subject}\n\n{cleaned_email_content}"
 
     # Tier 1: Direct PRE Patient ID Extraction (Regex-based)
     # Search for PRE prefix patient IDs with 6, 7, or 8 digits
@@ -501,8 +576,9 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
 
     # Tier 2: OpenAI-based extraction as fallback
     logger.info(f"PATIENT_ID_EXTRACTION: Regex failed, trying OpenAI extraction...")
+    logger.info(f"PATIENT_ID_EXTRACTION: Sending to OpenAI - Content: '{cleaned_email_content}', Subject: '{subject}'")
     try:
-        openai_extracted = await _extract_patient_info_with_openai(email_content, subject)
+        openai_extracted = await _extract_patient_info_with_openai(cleaned_email_content, subject)
         logger.info(f"PATIENT_ID_EXTRACTION: OpenAI extracted: {openai_extracted}")
         
         if openai_extracted:

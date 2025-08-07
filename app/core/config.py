@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     OPENAI_MODEL_VERSION: Optional[str] = None
     OPENAI_CLASSIFICATION_MODEL: Optional[str] = None
     OPENAI_CONFLICT_DETECTION_MODEL: Optional[str] = None
+    OPENAI_PATIENT_EXTRACTION_MODEL: Optional[str] = None
     AGENT_MODEL: Optional[str] = None
 
     # New settings

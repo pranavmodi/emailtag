@@ -397,17 +397,26 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
             # Proceed with tagging if archive check fails
 
         # --- PATIENT ID EXTRACTION --- (NEW: Before Classification)
-        # Extract patient IDs from email content and store them for downstream use
+        # Extract patient IDs from full conversation content and store them for downstream use
         try:
             logger.info(f"🔍 EARLY_PATIENT_ID_EXTRACTION: Starting patient ID extraction for email {email_id}")
             
-            # Get email content for extraction
-            email_content = email_obj.content_text or ""
+            # Get full conversation content for extraction (same as archive analysis)
+            from app.services.frontapp_service import get_conversation_text
+            conversation_data = get_conversation_text(front_conversation_id)
+            if conversation_data and isinstance(conversation_data, dict):
+                conversation_content = conversation_data.get('text', '')
+            else:
+                # Fallback to individual email content if conversation text unavailable
+                conversation_content = email_obj.content_text or ""
+            
             email_subject = email_obj.subject or ""
+            
+            logger.info(f"🔍 EARLY_PATIENT_ID_EXTRACTION: Using conversation content ({len(conversation_content)} chars) for extraction")
             
             async def _run_patient_id_extraction_async():
                 return await extract_all_patient_ids_from_email_logic(
-                    email_content=email_content,
+                    email_content=conversation_content,
                     conversation_id=front_conversation_id,
                     subject=email_subject
                 )
