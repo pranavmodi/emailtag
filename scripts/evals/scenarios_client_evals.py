@@ -348,5 +348,25 @@ CLIENT_EVAL_SCENARIOS = {
             }
         ],
         "expected_tags": ["PSL", "Rad Lien", "Lien Modified"]
+    },
+    "20": {
+        "description": "Tharanga Chamara Wickramaarachchi - Apt Status Req - Client inquiry with DOB instead of DOL",
+        "subject": "ggjgj",
+        "body_html": (
+            "<p>Good afternoon Team</p>"
+            "<p>May we kindly confirm the appointment date and time for the client below, please?</p>"
+            "<p>Tharanga Chamara Wickramaarachchi</p>"
+            "<p>DOB 08/14/1980</p>"
+            "<p>Thank you for the assistance</p>"
+            "<p>Thanks,</p>"
+            "<p>Enjoying our service? Please share your experience with Google. Thank you for putting your faith in Power Liens!</p>"
+            "<p>Rocky Jay So<br>"
+            "Client Relations</p>"
+            "<p>Email: rocky@powerliens.com<br>"
+            "Web: www.powerliens.com<br>"
+            "Toll-Free: 800.680.5526</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Apt Status Req"]
     }
 } 

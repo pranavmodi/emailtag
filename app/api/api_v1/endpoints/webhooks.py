@@ -75,7 +75,7 @@ async def frontapp_webhook(
     """
     # Get the raw request body
     body = await request.body()
-    logger.info(f"Received raw FrontApp webhook request")
+    # logger.info(f"Received raw FrontApp webhook request")
 
     
     # Verify webhook signature in production
@@ -117,7 +117,7 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         webhook_data: The webhook data from FrontApp
     """
     try:
-        logger.info(f"Processing inbound message: {webhook_data.id}")
+        # logger.info(f"Processing inbound message: {webhook_data.id}")
         
         # Extract conversation data
         conversation_id = webhook_data.conversation.get("id")
@@ -134,6 +134,26 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         message_subject = message.get("subject")
         conversation_subject = webhook_data.conversation.get("subject", "")
         subject = message_subject or conversation_subject
+        
+        # Check if this is an autoresponse email and skip processing
+        def is_autoresponse_email(sender_email: str) -> bool:
+            """Detect if this is an autoresponse email that should be skipped."""
+            # Check if sender matches our bot email addresses from settings
+            bot_emails = []
+            
+            if hasattr(settings, 'DEFAULT_RECIPIENT_EMAIL') and settings.DEFAULT_RECIPIENT_EMAIL:
+                bot_emails.append(settings.DEFAULT_RECIPIENT_EMAIL)
+            
+            if hasattr(settings, 'FRONT_CHANNEL_PRIMARY_EMAIL') and settings.FRONT_CHANNEL_PRIMARY_EMAIL:
+                bot_emails.append(settings.FRONT_CHANNEL_PRIMARY_EMAIL)
+            
+            # Filter out None values and empty strings
+            bot_emails = [email for email in bot_emails if email]
+            
+            # Debug logging
+            logger.debug(f"Autoresponse check: sender='{sender_email}', bot_emails={bot_emails}")
+            
+            return sender_email in bot_emails
         
         # Extract recipients
         recipients = []
@@ -154,8 +174,8 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         # Log message type for debugging different content structures
         message_type = message.get("type", "unknown")
         is_inbound = message.get("is_inbound", "unknown")
-        logger.info(f"MESSAGE TYPE DEBUG - type: {message_type}, is_inbound: {is_inbound}")
-        logger.info(f"MESSAGE TYPE DEBUG - text field length: {len(content_text)}, body field length: {len(content_body)}")
+        # logger.info(f"MESSAGE TYPE DEBUG - type: {message_type}, is_inbound: {is_inbound}")
+        # logger.info(f"MESSAGE TYPE DEBUG - text field length: {len(content_text)}, body field length: {len(content_body)}")
         
         # Use the field that actually has content
         if content_text:
@@ -167,6 +187,13 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
             final_content_html = content_html
         else:
             final_content_html = content_body
+        
+        # Skip processing if this is an autoresponse email
+        if is_autoresponse_email(sender):
+            logger.info(f"🤖 AUTORESPONSE DETECTED: Skipping email from {sender}")
+            return
+        else:
+            logger.debug(f"Processing email from {sender} (not autoresponse)")
         
         # Create email record with raw webhook data
         email_create = EmailCreate(
@@ -182,7 +209,7 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         )
         
         db_email = await email_crud.create(db=db, obj_in=email_create)
-        logger.info(f"Created email record with ID: {db_email.id}")
+        # logger.info(f"Created email record with ID: {db_email.id}")
         
         # Log the entire conversation thread
         try:
@@ -198,7 +225,7 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         # The process_email task itself will determine if OCR is needed and dispatch OCR tasks.
         # process_email.delay(str(db_email.id))
         process_email.apply_async(args=[str(db_email.id)], queue='emails')
-        logger.info(f"Queued email {db_email.id} for initial processing via process_email task to 'emails' queue.")
+        # logger.info(f"Queued email {db_email.id} for initial processing via process_email task to 'emails' queue.")
         
     except Exception as e:
         logger.exception(f"Error processing inbound message: {str(e)}")

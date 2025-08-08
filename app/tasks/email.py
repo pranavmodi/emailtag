@@ -399,10 +399,9 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
         # --- PATIENT ID EXTRACTION --- (NEW: Before Classification)
         # Extract patient IDs from full conversation content and store them for downstream use
         try:
-            logger.info(f"🔍 EARLY_PATIENT_ID_EXTRACTION: Starting patient ID extraction for email {email_id}")
+            # logger.info(f"🔍 EARLY_PATIENT_ID_EXTRACTION: Starting patient ID extraction for email {email_id}")
             
             # Get full conversation content for extraction (same as archive analysis)
-            from app.services.frontapp_service import get_conversation_text
             conversation_data = get_conversation_text(front_conversation_id)
             if conversation_data and isinstance(conversation_data, dict):
                 conversation_content = conversation_data.get('text', '')
@@ -412,7 +411,7 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
             
             email_subject = email_obj.subject or ""
             
-            logger.info(f"🔍 EARLY_PATIENT_ID_EXTRACTION: Using conversation content ({len(conversation_content)} chars) for extraction")
+            # logger.info(f"🔍 EARLY_PATIENT_ID_EXTRACTION: Using conversation content ({len(conversation_content)} chars) for extraction")
             
             async def _run_patient_id_extraction_async():
                 return await extract_all_patient_ids_from_email_logic(
@@ -427,9 +426,9 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
             if extracted_patient_ids:
                 logger.info(f"🔍 EARLY_PATIENT_ID_EXTRACTION: Found patient IDs: {extracted_patient_ids}")
                 email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(extracted_patient_ids=extracted_patient_ids))
-                logger.info(f"🔍 EARLY_PATIENT_ID_EXTRACTION: Stored patient IDs in database for email {email_id}")
-            else:
-                logger.info(f"🔍 EARLY_PATIENT_ID_EXTRACTION: No patient IDs found for email {email_id}")
+                # logger.info(f"🔍 EARLY_PATIENT_ID_EXTRACTION: Stored patient IDs in database for email {email_id}")
+            # else:
+                # logger.info(f"🔍 EARLY_PATIENT_ID_EXTRACTION: No patient IDs found for email {email_id}")
                 
         except Exception as e_patient_extraction:
             logger.error(f"Error during patient ID extraction for email {email_id}: {e_patient_extraction}", exc_info=True)

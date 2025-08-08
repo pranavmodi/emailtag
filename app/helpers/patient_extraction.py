@@ -175,7 +175,7 @@ async def extract_and_log_patient_info(
         full_content = content_text
         if subject:
             full_content = f"Subject: {subject}\n\n{content_text}"
-            parent_logger.info(f"Including email subject in extraction: {subject}")
+            # parent_logger.info(f"Including email subject in extraction: {subject}")
 
         # Find all unique patient IDs (PREXXXXXX) in the text content (including subject)
         found_patient_ids = set(re.findall(r"PRE\d{6}", full_content, re.IGNORECASE))
@@ -203,34 +203,34 @@ async def extract_and_log_patient_info(
                         parent_logger.warning(f"Could not resolve {first_name} {last_name} DOI {doi} to a patient ID")
         
         if found_patient_ids:
-            parent_logger.info(f"Processing patient IDs: {found_patient_ids} in conversation {conversation_id} from email {source_email_id}")
+            # parent_logger.info(f"Processing patient IDs: {found_patient_ids} in conversation {conversation_id} from email {source_email_id}")
             for p_id in found_patient_ids:
-                parent_logger.info(f"Fetching information for patient ID: {p_id}")
+                # parent_logger.info(f"Fetching information for patient ID: {p_id}")
                 patient_data_dict = None
                 study_data_dict = None
                 try:
                     # Fetch patient data using MCP tools (when we have patient_id)
-                    parent_logger.info(f"📡 MCP CALL: Fetching patient info via MCP tools for patient ID: {p_id}")
+                    # parent_logger.info(f"📡 MCP CALL: Fetching patient info via MCP tools for patient ID: {p_id}")
                     
                     # Use MCP tools for patient data retrieval since we have a patient_id
                     patient_mcp_response = await call_mcp_tool(
                         tool_name="fetch_patient_info",
                         arguments={"patient_id": p_id}
                     )
-                    parent_logger.info(f"📡 MCP Patient Response: {patient_mcp_response}")
+                    # parent_logger.info(f"📡 MCP Patient Response: {patient_mcp_response}")
                     
                     # Use MCP tools for study data retrieval
                     study_mcp_response = await call_mcp_tool(
                         tool_name="fetch_study_details", 
                         arguments={"patient_id": p_id}
                     )
-                    parent_logger.info(f"📡 MCP Study Response: {study_mcp_response}")
+                    # parent_logger.info(f"📡 MCP Study Response: {study_mcp_response}")
                     
                     # Process MCP responses for patient data
                     patient_data_dict = None
                     if patient_mcp_response and patient_mcp_response.get("success"):
                         patient_data_dict = patient_mcp_response
-                        parent_logger.info(f"✅ Successfully retrieved patient data via MCP for {p_id}")
+                        # parent_logger.info(f"✅ Successfully retrieved patient data via MCP for {p_id}")
                     else:
                         parent_logger.warning(f"⚠️ MCP patient data retrieval failed for {p_id}, falling back to direct API")
                         # Fallback to direct API call
@@ -240,7 +240,7 @@ async def extract_and_log_patient_info(
                     study_data_dict = None
                     if study_mcp_response and study_mcp_response.get("success"):
                         study_data_dict = study_mcp_response
-                        parent_logger.info(f"✅ Successfully retrieved study data via MCP for {p_id}")
+                        # parent_logger.info(f"✅ Successfully retrieved study data via MCP for {p_id}")
                     else:
                         parent_logger.warning(f"⚠️ MCP study data retrieval failed for {p_id}, falling back to direct API")
                         # Fallback to direct API call
@@ -255,7 +255,7 @@ async def extract_and_log_patient_info(
                         appointment_info=study_data_dict if study_data_dict and study_data_dict.get("success") else None
                     )
                     created_pcd = await pcd_crud.upsert(db=db, obj_in=pcd_create)
-                    parent_logger.info(f"Upserted PatientConversationData for {p_id} in conversation {conversation_id}, record ID: {created_pcd.id}")
+                    # parent_logger.info(f"Upserted PatientConversationData for {p_id} in conversation {conversation_id}, record ID: {created_pcd.id}")
 
                     # Log the final database contents for this patient
                     stored_data = await pcd_crud.get_by_conversation_and_patient_id(
@@ -264,11 +264,12 @@ async def extract_and_log_patient_info(
                         patient_id=p_id
                     )
                     if stored_data:
-                        parent_logger.info(f"Final database contents for patient {p_id}:")
+                        # parent_logger.info(f"Final database contents for patient {p_id}:")
                         # parent_logger.info(f"Patient Info: {json.dumps(stored_data.patient_info, indent=2)}")
                         # parent_logger.info(f"Appointment Info: {json.dumps(stored_data.appointment_info, indent=2)}")
-                        parent_logger.info(f"Record created at: {stored_data.created_at}")
-                        parent_logger.info(f"Record last updated at: {stored_data.updated_at}")
+                        # parent_logger.info(f"Record created at: {stored_data.created_at}")
+                        # parent_logger.info(f"Record last updated at: {stored_data.updated_at}")
+                        pass
                     else:
                         parent_logger.warning(f"Could not retrieve stored data for patient {p_id} after upsert")
 

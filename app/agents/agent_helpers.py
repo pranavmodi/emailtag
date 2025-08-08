@@ -152,13 +152,13 @@ async def get_patient_and_study_info(patient_id: str) -> Dict[str, Any]:
         if not mcp_client.is_connected:
             await mcp_client.connect()
 
-        logger.info(f"MCP_API_CALL: Calling fetch_patient_by_id for patient_id: {patient_id}")
+        # logger.info(f"MCP_API_CALL: Calling fetch_patient_by_id for patient_id: {patient_id}")
         patient_result = await mcp_client.call_tool("fetch_patient_by_id", {"patient_id": patient_id})
-        logger.info(f"MCP_API_RESPONSE: fetch_patient_by_id returned: {patient_result}")
+        # logger.info(f"MCP_API_RESPONSE: fetch_patient_by_id returned: {patient_result}")
         
-        logger.info(f"MCP_API_CALL: Calling fetch_study_details for patient_id: {patient_id}")
+        # logger.info(f"MCP_API_CALL: Calling fetch_study_details for patient_id: {patient_id}")
         study_result = await mcp_client.call_tool("fetch_study_details", {"patient_id": patient_id})
-        logger.info(f"MCP_API_RESPONSE: fetch_study_details returned: {study_result}")
+        # logger.info(f"MCP_API_RESPONSE: fetch_study_details returned: {study_result}")
 
         return {
             "patient_result": patient_result,
@@ -393,16 +393,16 @@ IMPORTANT INSTRUCTIONS:
             "max_tokens": 150
         }
         
-        logger.info(f"PATIENT_ID_EXTRACTION: Using OpenAI model: {patient_extraction_model}")
+        # logger.info(f"PATIENT_ID_EXTRACTION: Using OpenAI model: {patient_extraction_model}")
         response = await openai_client.chat.completions.create(**api_params)
         response_text = response.choices[0].message.content.strip()
-        logger.info(f"PATIENT_ID_EXTRACTION: OpenAI raw response: '{response_text}'")
+        # logger.info(f"PATIENT_ID_EXTRACTION: OpenAI raw response: '{response_text}'")
         
         json_text = response_text
         if response_text.startswith("```json"):
             json_text = response_text.split("```json\n")[1].split("\n```")[0]
         
-        logger.info(f"PATIENT_ID_EXTRACTION: Parsed JSON text: '{json_text}'")
+        # logger.info(f"PATIENT_ID_EXTRACTION: Parsed JSON text: '{json_text}'")
         
         try:
             extracted_data = json.loads(json_text)
@@ -467,21 +467,21 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
         List[str]: List of all extracted patient IDs (empty list if none found)
     """
     # Log entry point with detailed information
-    import traceback
-    import datetime
-    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    caller_info = traceback.extract_stack()[-2]  # Get the calling function info
+    # import traceback
+    # import datetime
+    # current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # caller_info = traceback.extract_stack()[-2]  # Get the calling function info
     
-    logger.info(f"🔍 PATIENT_ID_EXTRACTION CALLED at {current_time}")
-    logger.info(f"🔍 PATIENT_ID_EXTRACTION Called from: {caller_info.filename}:{caller_info.lineno} in {caller_info.name}()")
-    logger.info(f"🔍 PATIENT_ID_EXTRACTION Input - conversation_id: {conversation_id}")
-    logger.info(f"🔍 PATIENT_ID_EXTRACTION Input - subject: '{subject}'")
-    logger.info(f"🔍 PATIENT_ID_EXTRACTION Input - email_content length: {len(email_content)} chars")
-    logger.info(f"🔍 PATIENT_ID_EXTRACTION Input - email_content preview: {repr(email_content[:300])}...")
+    # logger.info(f"🔍 PATIENT_ID_EXTRACTION CALLED at {current_time}")
+    # logger.info(f"🔍 PATIENT_ID_EXTRACTION Called from: {caller_info.filename}:{caller_info.lineno} in {caller_info.name}()")
+    # logger.info(f"🔍 PATIENT_ID_EXTRACTION Input - conversation_id: {conversation_id}")
+    # logger.info(f"🔍 PATIENT_ID_EXTRACTION Input - subject: '{subject}'")
+    # logger.info(f"🔍 PATIENT_ID_EXTRACTION Input - email_content length: {len(email_content)} chars")
+    # logger.info(f"🔍 PATIENT_ID_EXTRACTION Input - email_content preview: {repr(email_content[:300])}...")
     
     # Preprocess email content to clean HTML entities and formatting issues
     cleaned_email_content = preprocess_email_content_for_extraction(email_content)
-    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Cleaned content length: {len(cleaned_email_content)} chars (diff: {len(email_content) - len(cleaned_email_content)})")
+    # logger.info(f"🔍 PATIENT_ID_EXTRACTION: Cleaned content length: {len(cleaned_email_content)} chars (diff: {len(email_content) - len(cleaned_email_content)})")
     
     # Include subject in content for all extraction methods
     full_content = cleaned_email_content
@@ -493,8 +493,8 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
     pre_pattern = r'(PRE\d{6,8})'
     matches = re.findall(pre_pattern, full_content, re.IGNORECASE)
     
-    logger.info(f"PATIENT_ID_EXTRACTION: Regex search in content: {repr(full_content[:200])}...")
-    logger.info(f"PATIENT_ID_EXTRACTION: Regex pattern '{pre_pattern}' found matches: {matches}")
+    # logger.info(f"PATIENT_ID_EXTRACTION: Regex search in content: {repr(full_content[:200])}...")
+    # logger.info(f"PATIENT_ID_EXTRACTION: Regex pattern '{pre_pattern}' found matches: {matches}")
     
     found_patient_ids = []
     
@@ -517,11 +517,11 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
         return found_patient_ids
 
     # Tier 2: OpenAI-based extraction as fallback
-    logger.info(f"PATIENT_ID_EXTRACTION: Regex failed, trying OpenAI extraction...")
-    logger.info(f"PATIENT_ID_EXTRACTION: Sending to OpenAI - Content: '{cleaned_email_content}', Subject: '{subject}'")
+    # logger.info(f"PATIENT_ID_EXTRACTION: Regex failed, trying OpenAI extraction...")
+    # logger.info(f"PATIENT_ID_EXTRACTION: Sending to OpenAI - Content: '{cleaned_email_content}', Subject: '{subject}'")
     try:
         openai_extracted = await _extract_patient_info_with_openai(cleaned_email_content, subject)
-        logger.info(f"PATIENT_ID_EXTRACTION: OpenAI extracted: {openai_extracted}")
+        # logger.info(f"PATIENT_ID_EXTRACTION: OpenAI extracted: {openai_extracted}")
         
         if openai_extracted:
             first_name = openai_extracted["first_name"]
@@ -529,7 +529,7 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
             date = openai_extracted["date"]
             date_type = openai_extracted["date_type"]
             
-            logger.info(f"PATIENT_ID_EXTRACTION: OpenAI extracted name: '{first_name} {last_name}', Date: '{date}', Type: '{date_type}'")
+            # logger.info(f"PATIENT_ID_EXTRACTION: OpenAI extracted name: '{first_name} {last_name}', Date: '{date}', Type: '{date_type}'")
             
             try:
                 if not mcp_client.is_connected:
@@ -546,7 +546,7 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
 
                 if tool_name:
                     patient_data = await call_mcp_tool(tool_name=tool_name, arguments=arguments)
-                    logger.info(f"PATIENT_ID_EXTRACTION: MCP lookup response: {patient_data}")
+                    # logger.info(f"PATIENT_ID_EXTRACTION: MCP lookup response: {patient_data}")
                     
                     if patient_data and patient_data.get('success') and patient_data.get('patients'):
                         patients = patient_data['patients']
@@ -557,7 +557,7 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
                                     found_patient_ids.append(patient_id)
                             
                             if found_patient_ids:
-                                logger.info(f"🔍 PATIENT_ID_EXTRACTION: SUCCESS via OPENAI+MCP - Patient IDs: {found_patient_ids}")
+                                # logger.info(f"🔍 PATIENT_ID_EXTRACTION: SUCCESS via OPENAI+MCP - Patient IDs: {found_patient_ids}")
                                 if conversation_id:
                                     comment_text = f"Bot found patient ids {', '.join(found_patient_ids)}"
                                     try:

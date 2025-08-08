@@ -179,8 +179,6 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
 
         # 3. Transform Study Data for template compatibility
         transformed_studies_for_template = []
-        logger.info(f"STUDY_PROCESSING: Processing {len(raw_studies)} studies for patient {patient_id}")
-        logger.info(f"STUDY_PROCESSING: Raw studies data: {raw_studies}")
         for i, study in enumerate(raw_studies):
             appointment_datetime_str = "Date/Time N/A"
             arrival_time_str = "N/A"
@@ -189,8 +187,6 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
             study_id_for_date_log = study.get("authorization_number", "Unknown")
             study_status = study.get("ordered_status", "N/A")
             study_image_count = study.get("image_count", 0)
-            logger.info(f"STUDY_PROCESSING: Study {study_id_for_date_log}: Raw data: {study}")
-            logger.info(f"STUDY_PROCESSING: Study {study_id_for_date_log}: ordered_status='{study_status}', image_count={study_image_count}, study_date_time='{service_appt_time_str}'")
             
             parsed_dt = None
             if service_appt_time_str:
@@ -275,7 +271,6 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                 "report_available": "No"   # Default, not in service output
             }
             
-            logger.info(f"STUDY_PROCESSING: Study {study_id_for_date_log}: TRANSFORMED data: {transformed_study}")
             transformed_studies_for_template.append(transformed_study)
 
         if not transformed_studies_for_template:
