@@ -225,10 +225,14 @@ async def send_reply_to_front_direct(
     """
     logger.info(f"Helper 'send_reply_to_front_direct' called for conv_id {conversation_id}.")
     try:
+        # Add autoresponse signature to identify our bot emails
+        autoresponse_signature = f"\n\n---\n{app_settings_instance.AUTORESPONSE_SIGNATURE}"
+        final_reply_text = reply_text + autoresponse_signature
+        
         reply_sent_successfully = await asyncio.to_thread(
             frontapp_service.send_conversation_reply,
             conversation_id,
-            reply_text
+            final_reply_text
         )
         if not reply_sent_successfully:
             return {"status": "error", "message": "Front API failed to send reply."}
@@ -635,10 +639,14 @@ async def send_reply_to_front(
     """
     logger.info(f"Tool 'send_reply_to_front' called for conv_id {conversation_id}.")
     try:
+        # Add autoresponse signature to identify our bot emails
+        autoresponse_signature = f"\n\n---\n{app_settings_instance.AUTORESPONSE_SIGNATURE}"
+        final_reply_text = reply_text + autoresponse_signature
+        
         reply_sent_successfully = await asyncio.to_thread(
             frontapp_service.send_conversation_reply,
             conversation_id,
-            reply_text
+            final_reply_text
         )
         if not reply_sent_successfully:
             result = {"status": "error", "message": "Front API failed to send reply."}

@@ -136,24 +136,18 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         subject = message_subject or conversation_subject
         
         # Check if this is an autoresponse email and skip processing
-        def is_autoresponse_email(sender_email: str) -> bool:
+        def is_autoresponse_email(content_text: str, content_body: str) -> bool:
             """Detect if this is an autoresponse email that should be skipped."""
-            # Check if sender matches our bot email addresses from settings
-            bot_emails = []
+            # Check if content contains our autoresponse signature from settings
+            autoresponse_signature = settings.AUTORESPONSE_SIGNATURE
             
-            if hasattr(settings, 'DEFAULT_RECIPIENT_EMAIL') and settings.DEFAULT_RECIPIENT_EMAIL:
-                bot_emails.append(settings.DEFAULT_RECIPIENT_EMAIL)
+            # Check in both text and body content
+            content_to_check = f"{content_text} {content_body}"
             
-            if hasattr(settings, 'FRONT_CHANNEL_PRIMARY_EMAIL') and settings.FRONT_CHANNEL_PRIMARY_EMAIL:
-                bot_emails.append(settings.FRONT_CHANNEL_PRIMARY_EMAIL)
+            is_autoresponse = autoresponse_signature in content_to_check
+            logger.info(f"🔍 Autoresponse signature check: found={is_autoresponse}")
             
-            # Filter out None values and empty strings
-            bot_emails = [email for email in bot_emails if email]
-            
-            # Debug logging
-            logger.debug(f"Autoresponse check: sender='{sender_email}', bot_emails={bot_emails}")
-            
-            return sender_email in bot_emails
+            return is_autoresponse
         
         # Extract recipients
         recipients = []
@@ -189,11 +183,11 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
             final_content_html = content_body
         
         # Skip processing if this is an autoresponse email
-        if is_autoresponse_email(sender):
+        if is_autoresponse_email(final_content_text, content_body):
             logger.info(f"🤖 AUTORESPONSE DETECTED: Skipping email from {sender}")
             return
         else:
-            logger.debug(f"Processing email from {sender} (not autoresponse)")
+            logger.info(f"✅ Processing email from {sender} (not autoresponse)")
         
         # Create email record with raw webhook data
         email_create = EmailCreate(
