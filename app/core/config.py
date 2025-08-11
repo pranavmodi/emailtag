@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     # Service Endpoints
     OCR_API_URL: HttpUrl = "http://localhost:5000/ocr" # Default, override in .env
     USE_MOCK_OCR: bool = False # Enable mock OCR responses for testing
+    OCR_MAX_RETRIES: int = 5 # Maximum number of OCR retries
+    OCR_DEFAULT_RETRY_DELAY: int = 60 # Default retry delay in seconds
+    OCR_MAX_RETRY_DELAY: int = 960 # Maximum retry delay in seconds
     MCP_SERVER_URL: HttpUrl = "http://localhost:8001/mcp"
 
     # FrontApp settings

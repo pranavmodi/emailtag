@@ -22,14 +22,16 @@ logger = get_task_logger(__name__)
 OCR_ERROR_STATUS = "ocr_error"
 
 
-@celery_app.task(name="tasks.send_attachment_to_ocr", bind=True, max_retries=5, default_retry_delay=60)
+@celery_app.task(name="tasks.send_attachment_to_ocr", bind=True, 
+                 max_retries=settings.OCR_MAX_RETRIES, 
+                 default_retry_delay=settings.OCR_DEFAULT_RETRY_DELAY)
 def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
     """
     Downloads an attachment, sends it to the synchronous OCR service,
     and updates the email record directly.
     Now includes improved retry strategy and fallback processing.
     """
-    logger.info(f"Starting OCR processing via service for attachment {attachment_url} for email {email_id} (attempt {self.request.retries + 1}/6)")
+    logger.info(f"Starting OCR processing via service for attachment {attachment_url} for email {email_id} (attempt {self.request.retries + 1}/{settings.OCR_MAX_RETRIES + 1})")
     
     try:
         email_uuid = UUID(email_id)
@@ -39,8 +41,9 @@ def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
 
     # Calculate exponential backoff delay for retries
     def get_retry_delay(retry_count):
-        # Exponential backoff: 60, 120, 240, 480, 960 seconds
-        return min(60 * (2 ** retry_count), 960)
+        # Exponential backoff starting from OCR_DEFAULT_RETRY_DELAY, capped at OCR_MAX_RETRY_DELAY
+        delay = settings.OCR_DEFAULT_RETRY_DELAY * (2 ** retry_count)
+        return min(delay, settings.OCR_MAX_RETRY_DELAY)
 
     # --- Download Attachment ---
     try:
@@ -58,27 +61,27 @@ def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
             _handle_final_ocr_failure(email_uuid, attachment_url, f"HTTP {exc.response.status_code} error downloading attachment")
             return
         # For 5xx errors, retry with exponential backoff
-        if 500 <= exc.response.status_code < 600 and self.request.retries < self.max_retries:
+        if 500 <= exc.response.status_code < 600 and self.request.retries < settings.OCR_MAX_RETRIES:
             retry_delay = get_retry_delay(self.request.retries)
-            logger.warning(f"Retrying download in {retry_delay} seconds due to server error (attempt {self.request.retries + 1}/{self.max_retries + 1})")
+            logger.warning(f"Retrying download in {retry_delay} seconds due to server error (attempt {self.request.retries + 1}/{settings.OCR_MAX_RETRIES + 1})")
             try:
                 self.retry(exc=exc, countdown=retry_delay)
             except Exception as retry_exc:
                 logger.error(f"Retry failed for download error: {retry_exc}")
         else:
-            _handle_final_ocr_failure(email_uuid, attachment_url, f"Download failed after {self.max_retries + 1} attempts: {exc}")
+            _handle_final_ocr_failure(email_uuid, attachment_url, f"Download failed after {settings.OCR_MAX_RETRIES + 1} attempts: {exc}")
         return
     except httpx.RequestError as exc:
         logger.error(f"Request error downloading attachment {attachment_url} for email {email_id}: {exc}")
-        if self.request.retries < self.max_retries:
+        if self.request.retries < settings.OCR_MAX_RETRIES:
             retry_delay = get_retry_delay(self.request.retries)
-            logger.warning(f"Retrying download in {retry_delay} seconds due to request error (attempt {self.request.retries + 1}/{self.max_retries + 1})")
+            logger.warning(f"Retrying download in {retry_delay} seconds due to request error (attempt {self.request.retries + 1}/{settings.OCR_MAX_RETRIES + 1})")
             try:
                 self.retry(exc=exc, countdown=retry_delay)
             except Exception as retry_exc:
                 logger.error(f"Retry failed for download request error: {retry_exc}")
         else:
-            _handle_final_ocr_failure(email_uuid, attachment_url, f"Download request failed after {self.max_retries + 1} attempts: {exc}")
+            _handle_final_ocr_failure(email_uuid, attachment_url, f"Download request failed after {settings.OCR_MAX_RETRIES + 1} attempts: {exc}")
         return
     except Exception as exc:
         logger.exception(f"Unexpected error downloading attachment {attachment_url} for email {email_id}: {exc}")
@@ -106,28 +109,28 @@ def send_attachment_to_ocr(self, email_id: str, attachment_url: str):
             _handle_final_ocr_failure(email_uuid, attachment_url, f"OCR API HTTP {exc.response.status_code} error")
             return
         # For 5xx errors or connection issues, retry with exponential backoff
-        if self.request.retries < self.max_retries:
+        if self.request.retries < settings.OCR_MAX_RETRIES:
             retry_delay = get_retry_delay(self.request.retries)
-            logger.warning(f"Retrying OCR call in {retry_delay} seconds due to server error (attempt {self.request.retries + 1}/{self.max_retries + 1})")
+            logger.warning(f"Retrying OCR call in {retry_delay} seconds due to server error (attempt {self.request.retries + 1}/{settings.OCR_MAX_RETRIES + 1})")
             try:
                 self.retry(exc=exc, countdown=retry_delay)
             except Exception as retry_exc:
                 logger.error(f"Retry failed for OCR service HTTP error: {retry_exc}")
         else:
-            _handle_final_ocr_failure(email_uuid, attachment_url, f"OCR API failed after {self.max_retries + 1} attempts: HTTP {exc.response.status_code}")
+            _handle_final_ocr_failure(email_uuid, attachment_url, f"OCR API failed after {settings.OCR_MAX_RETRIES + 1} attempts: HTTP {exc.response.status_code}")
         return
     except httpx.RequestError as exc:
         # Raised by process_ocr_content for connection/timeout issues
         logger.error(f"Request error from OCR service function for email {email_id}: {exc}")
-        if self.request.retries < self.max_retries:
+        if self.request.retries < settings.OCR_MAX_RETRIES:
             retry_delay = get_retry_delay(self.request.retries)
-            logger.warning(f"Retrying OCR call in {retry_delay} seconds due to connection error (attempt {self.request.retries + 1}/{self.max_retries + 1})")
+            logger.warning(f"Retrying OCR call in {retry_delay} seconds due to connection error (attempt {self.request.retries + 1}/{settings.OCR_MAX_RETRIES + 1})")
             try:
                 self.retry(exc=exc, countdown=retry_delay)
             except Exception as retry_exc:
                 logger.error(f"Retry failed for OCR service request error: {retry_exc}")
         else:
-            _handle_final_ocr_failure(email_uuid, attachment_url, f"OCR connection failed after {self.max_retries + 1} attempts: {exc}")
+            _handle_final_ocr_failure(email_uuid, attachment_url, f"OCR connection failed after {settings.OCR_MAX_RETRIES + 1} attempts: {exc}")
         return
     except Exception as exc:
         # Catch other exceptions from process_ocr_content (e.g., encoding, general exceptions)
