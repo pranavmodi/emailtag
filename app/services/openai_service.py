@@ -116,6 +116,13 @@ async def are_questions_resolved_openai(conversation_text: str) -> Dict[str, Any
         # You might also investigate using the 'certifi' package.
         async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
             logger.info("Sending conversation to OpenAI for resolution analysis...")
+            
+            # Log the raw request for debugging
+            logger.info(f"🔗 OPENAI RAW REQUEST:")
+            logger.info(f"📍 Endpoint: https://api.openai.com/v1/chat/completions")
+            logger.info(f"📋 Headers: {dict(headers)}")
+            logger.info(f"📦 Payload: {json.dumps(payload, indent=2)}")
+            
             response = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
             response.raise_for_status()
             
