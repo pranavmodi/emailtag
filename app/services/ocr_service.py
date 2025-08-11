@@ -160,8 +160,16 @@ def process_ocr_content(content: bytes) -> Optional[Dict[str, Any]]:
 
     # --- Encode Content ---
     try:
-        encoded_content = base64.b64encode(content).decode('utf-8')
-        logger.debug(f"Base64 encoded content. Encoded size: {len(encoded_content)}")
+        if settings.USE_HARDCODED_OCR_PAYLOAD and settings.OCR_TEST_PAYLOAD_FILE:
+            # Read the test PDF file and encode it
+            with open(settings.OCR_TEST_PAYLOAD_FILE, "rb") as f:
+                test_content = f.read()
+            encoded_content = base64.b64encode(test_content).decode('utf-8')
+            logger.info(f"🧪 TESTING: Using hardcoded payload from file {settings.OCR_TEST_PAYLOAD_FILE} (size: {len(encoded_content)})")
+        else:
+            # Normal operation - encode the actual content
+            encoded_content = base64.b64encode(content).decode('utf-8')
+            logger.debug(f"Base64 encoded content. Encoded size: {len(encoded_content)}")
     except Exception as exc:
         logger.exception(f"Error Base64 encoding content: {exc}")
         # Let the caller handle the exception, maybe log and return None?
@@ -178,26 +186,61 @@ def process_ocr_content(content: bytes) -> Optional[Dict[str, Any]]:
     # Reuse client settings from perform_ocr with increased timeout for stability
     with httpx.Client(verify=False, timeout=600.0) as client: # Increased timeout to 10 minutes for large files
         try:
+            # Detailed request logging
+            headers = client.headers
+            logger.info(f"🔗 OCR API REQUEST DETAILS:")
+            logger.info(f"📍 Endpoint: {OCR_API_URL}")
+            logger.info(f"📦 Payload size: {len(str(payload))} chars, content size: {len(content)} bytes")
+            logger.info(f"📋 Headers: {dict(headers)}")
+            logger.info(f"🔍 Payload structure: {{'data': [{{'encoded_string': '[BASE64_DATA...]'}}]}}")
+            
             logger.info(f"Sending encoded content to OCR API: {OCR_API_URL}")
             response = client.post(OCR_API_URL, json=payload) 
             
-            logger.info(f"OCR API response status: {response.status_code}")
+            logger.info(f"📊 OCR API response status: {response.status_code}")
+            logger.info(f"📄 Response headers: {dict(response.headers)}")
+            logger.info(f"📝 Response content preview (first 500 chars): {response.text[:500]}")
 
             # Raise exceptions for 4xx/5xx errors
             response.raise_for_status() 
             
             response_data = response.json()
             logger.info("Successfully received and parsed OCR response from content.")
-            logger.info(f"OCR API response data: {response_data}")
+            
+            # Log response without the large encoded_string field
+            if isinstance(response_data, dict) and 'data' in response_data:
+                sanitized_response = response_data.copy()
+                if isinstance(sanitized_response['data'], list):
+                    sanitized_data = []
+                    for item in sanitized_response['data']:
+                        if isinstance(item, dict):
+                            sanitized_item = item.copy()
+                            if 'encoded_string' in sanitized_item:
+                                encoded_len = len(sanitized_item['encoded_string']) if sanitized_item['encoded_string'] else 0
+                                sanitized_item['encoded_string'] = f"[BASE64_DATA...{encoded_len}_chars]"
+                            sanitized_data.append(sanitized_item)
+                        else:
+                            sanitized_data.append(item)
+                    sanitized_response['data'] = sanitized_data
+                logger.info(f"OCR API response data: {sanitized_response}")
+            else:
+                logger.info(f"OCR API response data: {response_data}")
+            
             return response_data
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error calling OCR API with content: {e.response.status_code} - {e.response.text}")
+            logger.error(f"❌ HTTP error calling OCR API with content: {e.response.status_code} - {e.response.text}")
+            logger.error(f"❌ Failed request details - URL: {OCR_API_URL}")
+            logger.error(f"❌ Failed request payload size: {len(str(payload))} chars")
+            logger.error(f"❌ Response headers: {dict(e.response.headers)}")
             # Re-raise the specific HTTP error for handling upstream (e.g., in Celery task)
             raise 
         except httpx.RequestError as e:
             # Handles connection errors, timeouts, etc.
-            logger.error(f"Request error calling OCR API with content: {str(e)}")
+            logger.error(f"❌ Request error calling OCR API with content: {str(e)}")
+            logger.error(f"❌ Failed connection details - URL: {OCR_API_URL}")
+            logger.error(f"❌ Payload size attempted: {len(str(payload))} chars")
+            logger.error(f"❌ Timeout setting: 600.0 seconds")
             raise Exception(f"Could not connect to OCR API: {str(e)}") from e
         except Exception as e:
             # Catch other potential errors (e.g., JSON decoding)
