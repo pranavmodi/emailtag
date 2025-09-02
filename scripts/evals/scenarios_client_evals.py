@@ -368,5 +368,15 @@ CLIENT_EVAL_SCENARIOS = {
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": ["Apt Status Req"]
+    },
+    "21": {
+        "description": "Generic acknowledgment/thank you - Simple follow-up acknowledgment message",
+        "subject": "Follow-up Response",
+        "body_html": (
+            "<p>Good afternoon Veronica,</p>"
+            "<p>Thank you for following up on this matter.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": []
     }
 } 
