@@ -29,8 +29,8 @@ from app.models.email import Email # Added for type hinting
 from app.schemas.email import EmailUpdate # Added for type hinting
 from app.services.archiving_service import check_and_archive_conversation # Import the new archiving service
 
-# Import OCR task from separate module
-from app.tasks.ocr import send_attachment_to_ocr
+# Import document processing task from separate module
+from app.tasks.document_processing import send_attachment_to_document_processing
 
 # Import autorespond task from separate module
 from app.tasks.autorespond import perform_autorespond_task
@@ -214,7 +214,7 @@ def process_email(email_id: str) -> Dict:
                 if attachment_url:
                     logger.info(f"Queueing OCR for attachment {attachment_url} for email {email_id} to 'ocr' queue")
                     # send_attachment_to_ocr.delay(email_id, attachment_url)
-                    send_attachment_to_ocr.apply_async(args=[email_id, attachment_url], queue='ocr')
+                    send_attachment_to_document_processing.apply_async(args=[email_id, attachment_url], queue='processing')
                 else:
                     logger.warning(f"Attachment for email {email_id} is missing a URL. Decrementing total.")
                     # If an attachment has no URL, we should decrement the total count

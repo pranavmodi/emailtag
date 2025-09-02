@@ -57,13 +57,6 @@ class Settings(BaseSettings):
     MAX_CLASSIFICATION_RETRIES: int = 3
     
     # Service Endpoints
-    OCR_API_URL: HttpUrl = "http://localhost:5000/ocr" # Default, override in .env
-    USE_MOCK_OCR: bool = False # Enable mock OCR responses for testing
-    USE_HARDCODED_OCR_PAYLOAD: bool = False # Use hardcoded test payload for debugging
-    OCR_TEST_PAYLOAD_FILE: Optional[str] = None # Path to test PDF file for hardcoded payload
-    OCR_MAX_RETRIES: int = 5 # Maximum number of OCR retries
-    OCR_DEFAULT_RETRY_DELAY: int = 60 # Default retry delay in seconds
-    OCR_MAX_RETRY_DELAY: int = 960 # Maximum retry delay in seconds
     MCP_SERVER_URL: HttpUrl = "http://localhost:8001/mcp"
 
     # FrontApp settings

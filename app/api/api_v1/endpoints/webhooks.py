@@ -20,7 +20,7 @@ from app.crud import patient_conversation_data as pcd_crud
 from app.db.session import get_db
 from app.schemas.email import EmailCreate, FrontAppWebhook, PreprocessingWebhook, EmailUpdate, Email, FrontOutboundMessageWebhook
 from app.schemas.patient_conversation_data import PatientConversationDataCreate
-from app.tasks.email import process_email, send_attachment_to_ocr
+from app.tasks.email import process_email
 from app.services.patient import fetch_patient_by_id
 from app.helpers.patient_extraction import extract_and_log_patient_info
 

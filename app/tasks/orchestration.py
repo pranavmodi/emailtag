@@ -17,7 +17,7 @@ QUEUE_MAPPINGS = {
     'orchestrate_post_ocr': 'processing', 
     'perform_tagging': 'tagging',
     'perform_autorespond': 'processing',
-    'send_attachment_to_ocr': 'ocr'
+    'send_attachment_to_document_processing': 'processing'
 }
 
 

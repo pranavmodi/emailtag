@@ -92,23 +92,36 @@ class DocumentProcessingService:
             file_ext = Path(filename).suffix.lower()
             if file_ext == '.pdf':
                 # For PDFs, we need to convert to images first
-                from pdf2image import convert_from_bytes
-                pages = convert_from_bytes(file_content, dpi=300)
-                
-                # Process first page for text extraction
-                if pages:
-                    import io
-                    img_buffer = io.BytesIO()
-                    pages[0].save(img_buffer, format='JPEG')
-                    img_bytes = img_buffer.getvalue()
-                    base64_content = base64.b64encode(img_bytes).decode('utf-8')
-                    mime_type = "image/jpeg"
-                else:
-                    return {"success": False, "error": "Could not convert PDF to image"}
+                try:
+                    from pdf2image import convert_from_bytes
+                    pages = convert_from_bytes(file_content, dpi=200)  # Lower DPI for smaller images
+                    
+                    # Process first page for text extraction
+                    if pages:
+                        import io
+                        img_buffer = io.BytesIO()
+                        pages[0].save(img_buffer, format='JPEG', quality=85)  # Compress image
+                        img_bytes = img_buffer.getvalue()
+                        
+                        # Check image size - OpenAI has limits
+                        if len(img_bytes) > 20 * 1024 * 1024:  # 20MB limit
+                            return {"success": False, "error": "Converted image too large for OpenAI API"}
+                        
+                        base64_content = base64.b64encode(img_bytes).decode('utf-8')
+                        mime_type = "image/jpeg"
+                    else:
+                        return {"success": False, "error": "Could not convert PDF to image"}
+                except ImportError:
+                    return {"success": False, "error": "pdf2image library not available"}
+                except Exception as e:
+                    return {"success": False, "error": f"PDF conversion failed: {str(e)}"}
             elif file_ext in ['.png', '.jpg', '.jpeg', '.gif']:
-                mime_type = f"image/{file_ext[1:]}" if file_ext == '.jpg' else f"image/jpeg" if file_ext == '.jpeg' else f"image/{file_ext[1:]}"
+                # Check image size
+                if len(file_content) > 20 * 1024 * 1024:  # 20MB limit
+                    return {"success": False, "error": "Image too large for OpenAI API"}
+                mime_type = "image/jpeg" if file_ext in ['.jpg', '.jpeg'] else f"image/{file_ext[1:]}"
             else:
-                mime_type = "application/octet-stream"
+                return {"success": False, "error": "Unsupported file type for text extraction"}
             
             # Prepare OpenAI request
             headers = {
@@ -138,7 +151,7 @@ class DocumentProcessingService:
                 "max_tokens": 2000
             }
             
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
                 response = await client.post(
                     "https://api.openai.com/v1/chat/completions",
                     headers=headers,
@@ -326,7 +339,7 @@ class DocumentProcessingService:
             "detected_type": doc_type,
             "provider_info": {
                 "strikethrough_provider": self.strikethrough_service.provider_name,
-                "ocr_enabled": hasattr(settings, 'OCR_PROVIDER')
+                "text_extraction_provider": "openai"
             }
         })
         

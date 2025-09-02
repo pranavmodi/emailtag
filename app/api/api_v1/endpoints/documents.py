@@ -157,12 +157,12 @@ async def get_supported_document_types():
     supported_types = {
         "pdf": {
             "description": "Portable Document Format",
-            "capabilities": ["ocr", "strikethrough_detection", "text_extraction"],
+            "capabilities": ["text_extraction", "strikethrough_detection"],
             "supported_extensions": [".pdf"]
         },
         "image": {
             "description": "Image files",
-            "capabilities": ["ocr", "text_extraction"],
+            "capabilities": ["text_extraction"],
             "supported_extensions": [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff"]
         },
         "text": {
@@ -174,13 +174,13 @@ async def get_supported_document_types():
             "description": "Microsoft Word documents",
             "capabilities": ["basic_metadata"],
             "supported_extensions": [".doc", ".docx"],
-            "note": "Limited processing - OCR not supported for Office documents"
+            "note": "Limited processing - text extraction not supported for Office documents"
         },
         "excel_document": {
             "description": "Microsoft Excel spreadsheets",
             "capabilities": ["basic_metadata"],
             "supported_extensions": [".xls", ".xlsx"],
-            "note": "Limited processing - OCR not supported for Office documents"
+            "note": "Limited processing - text extraction not supported for Office documents"
         }
     }
     
@@ -189,6 +189,6 @@ async def get_supported_document_types():
         content={
             "success": True,
             "supported_types": supported_types,
-            "note": "OCR and strikethrough detection primarily work with PDF and image files"
+            "note": "Text extraction and strikethrough detection primarily work with PDF and image files"
         }
     )
