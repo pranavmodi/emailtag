@@ -84,11 +84,24 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
         service = DocumentProcessingService()
         processing_result = asyncio.run(service.process_document(attachment_content, filename))
 
+        logger.info(f"📄 DOCUMENT PROCESSING RESULT for email {email_id}:")
+        logger.info(f"📄 Full result: {processing_result}")
+        
         if not processing_result.get("processing_status") == "completed":
-            logger.warning(f"Document processing incomplete for email {email_id}. Result: {processing_result}")
+            logger.warning(f"Document processing incomplete for email {email_id}. Status: {processing_result.get('processing_status')}")
         else:
-            logger.info(f"Successfully processed document for email {email_id}.")
-            logger.debug(f"Processing result: {processing_result}")
+            logger.info(f"✅ Successfully processed document for email {email_id}")
+            
+            # Log structured analysis results if available
+            doc_analysis = processing_result.get("document_analysis", {})
+            if doc_analysis.get("success"):
+                analysis_data = doc_analysis.get("data", {})
+                logger.info(f"📋 Document Type: {analysis_data.get('document_type', 'unknown')}")
+                logger.info(f"📋 Description: {analysis_data.get('description', 'N/A')}")
+                logger.info(f"📋 Patient ID: {analysis_data.get('patient_id', 'Not found')}")
+                logger.info(f"📋 Confidence: {analysis_data.get('confidence', 0.0):.2f}")
+            else:
+                logger.warning(f"❌ Document analysis failed: {doc_analysis.get('error', 'Unknown error')}")
 
     except Exception as exc:
         logger.exception(f"Unexpected error processing document for email {email_id}: {exc}")
@@ -168,31 +181,26 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
 def _parse_document_processing_result(processing_result: Dict, attachment_url: str, email_id: str) -> Dict:
     """Parse and structure document processing result data."""
     try:
-        # Extract relevant information from document processing result
-        text_extraction = processing_result.get("text_extraction", {})
-        strikethrough_data = processing_result.get("strikethrough_data", {})
+        # Extract relevant information from structured document analysis
+        document_analysis = processing_result.get("document_analysis", {})
         
-        # Try to extract patient ID from text
+        # Extract structured data
         patient_id = None
-        extracted_text = ""
+        doc_type = None
+        description = ""
         
-        if text_extraction.get("success"):
-            extracted_data = text_extraction.get("data", {})
-            extracted_text = extracted_data.get("extracted_text", "")
-            
-            # Simple patient ID extraction (can be enhanced)
-            import re
-            patient_id_match = re.search(r'(?:patient\s*id|id)\s*:?\s*(\w+)', extracted_text, re.IGNORECASE)
-            if patient_id_match:
-                patient_id = patient_id_match.group(1)
+        if document_analysis.get("success"):
+            analysis_data = document_analysis.get("data", {})
+            patient_id = analysis_data.get("patient_id")
+            doc_type = analysis_data.get("document_type")
+            description = analysis_data.get("description", "")
         
         return {
             "attachment_url": attachment_url,
             "patient_id": patient_id,
-            "extracted_text": extracted_text,
-            "text_extraction": text_extraction,
-            "strikethrough_data": strikethrough_data,
-            "document_type": processing_result.get("document_type"),
+            "document_type": doc_type,
+            "description": description,
+            "document_analysis": document_analysis,
             "processing_status": processing_result.get("processing_status")
         }
 

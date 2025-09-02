@@ -2,7 +2,7 @@
 Document processing service for analyzing attachment files and returning structured JSON.
 
 This service handles various document types and provides comprehensive analysis
-including OCR, strikethrough detection, and content extraction.
+including document type identification, patient ID extraction, and content analysis.
 """
 
 import logging
@@ -10,29 +10,31 @@ import tempfile
 import os
 from typing import Dict, Any, Optional, List
 from pathlib import Path
+from pydantic import BaseModel
 
 from app.core.config import settings
-from app.services.pdf_strikethrough_service import PDFStrikethroughDetectionService
 import base64
 import httpx
 
 logger = logging.getLogger(__name__)
 
 
+class DocumentAnalysisResult(BaseModel):
+    """Pydantic model for structured document analysis output."""
+    document_type: str  # "lien", "rx", "prescription", "referral", "medical_record", "insurance", "other"
+    description: str    # One-line description of the document content
+    patient_id: Optional[str] = None  # Patient ID if found
+    confidence: float   # Confidence score 0.0-1.0 for document type classification
+
+
 class DocumentProcessingService:
     """Service for processing documents and extracting structured information."""
     
-    def __init__(self, strikethrough_provider: Optional[str] = None):
+    def __init__(self):
         """
         Initialize the document processing service.
-        
-        Args:
-            strikethrough_provider: Provider for strikethrough detection
         """
-        self.strikethrough_service = PDFStrikethroughDetectionService(
-            provider=strikethrough_provider or getattr(settings, 'STRIKETHROUGH_PROVIDER', 'openai')
-        )
-        logger.info(f"Initialized document processing service with strikethrough provider: {self.strikethrough_service.provider_name}")
+        logger.info("Initialized document processing service with OpenAI structured outputs")
     
     def _determine_document_type(self, file_content: bytes, filename: str) -> str:
         """
@@ -73,16 +75,16 @@ class DocumentProcessingService:
         
         return "unknown"
     
-    async def _extract_text_with_openai(self, file_content: bytes, filename: str) -> Dict[str, Any]:
+    async def _analyze_document_with_structured_output(self, file_content: bytes, filename: str) -> Dict[str, Any]:
         """
-        Extract text content using OpenAI GPT-4o Vision.
+        Analyze document using OpenAI structured outputs to identify document type and extract patient ID.
         
         Args:
             file_content: File content as bytes
             filename: Original filename
             
         Returns:
-            Text extraction results
+            Structured document analysis results
         """
         try:
             # Convert to base64
@@ -90,6 +92,16 @@ class DocumentProcessingService:
             
             # Determine file type for proper data URL
             file_ext = Path(filename).suffix.lower()
+            
+            # If no extension, check content signature
+            if not file_ext:
+                if file_content.startswith(b'%PDF-'):
+                    file_ext = '.pdf'
+                elif file_content.startswith(b'\x89PNG'):
+                    file_ext = '.png'
+                elif file_content.startswith(b'\xff\xd8\xff'):
+                    file_ext = '.jpg'
+            
             if file_ext == '.pdf':
                 # For PDFs, we need to convert to images first
                 try:
@@ -123,21 +135,53 @@ class DocumentProcessingService:
             else:
                 return {"success": False, "error": "Unsupported file type for text extraction"}
             
-            # Prepare OpenAI request
+            # Prepare OpenAI structured outputs request
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {settings.OPENAI_API_KEY}"
+            }
+            
+            # Define the schema for structured output
+            schema = {
+                "type": "object",
+                "properties": {
+                    "document_type": {
+                        "type": "string",
+                        "enum": ["lien", "rx", "prescription", "referral", "medical_record", "insurance", "other"],
+                        "description": "Type of medical document"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "One-line description of the document content"
+                    },
+                    "patient_id": {
+                        "type": ["string", "null"],
+                        "description": "Patient ID if found in the document"
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "minimum": 0.0,
+                        "maximum": 1.0,
+                        "description": "Confidence score for document type classification"
+                    }
+                },
+                "required": ["document_type", "description", "confidence"],
+                "additionalProperties": False
             }
             
             payload = {
                 "model": "gpt-4o",
                 "messages": [
                     {
+                        "role": "system",
+                        "content": "You are a medical document analyzer. Analyze the provided document image and identify:\n1. Document type (lien, rx/prescription, referral, medical_record, insurance, or other)\n2. A brief one-line description\n3. Patient ID if visible\n4. Confidence in your classification\n\nDocument types:\n- lien: Legal lien documents, lien agreements, lien modifications\n- rx/prescription: Prescription forms, medication orders\n- referral: Doctor referrals, appointment requests\n- medical_record: Medical charts, test results, reports\n- insurance: Insurance cards, authorization forms\n- other: Any other document type"
+                    },
+                    {
                         "role": "user",
                         "content": [
                             {
                                 "type": "text",
-                                "text": "Extract all text content from this document. Return the text in a structured JSON format with the following structure: {\"extracted_text\": \"full text content\", \"confidence\": confidence_score_0_to_1, \"pages_processed\": number_of_pages, \"text_regions\": [{\"text\": \"region text\", \"position\": \"description of position\"}]}. Focus on accurate text extraction."
+                                "text": f"Analyze this document (filename: {filename}) and classify it according to the schema."
                             },
                             {
                                 "type": "image_url",
@@ -148,7 +192,15 @@ class DocumentProcessingService:
                         ]
                     }
                 ],
-                "max_tokens": 2000
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "document_analysis",
+                        "strict": True,
+                        "schema": schema
+                    }
+                },
+                "max_tokens": 1000
             }
             
             async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
@@ -160,21 +212,21 @@ class DocumentProcessingService:
                 response.raise_for_status()
                 
                 result_data = response.json()
+                
+                # Check for refusal
+                if result_data.get("choices", [{}])[0].get("message", {}).get("refusal"):
+                    return {"success": False, "error": "OpenAI refused to analyze this document"}
+                
+                # Extract structured output
                 content = result_data.get("choices", [{}])[0].get("message", {}).get("content", "")
                 
-                # Try to parse JSON response
                 import json
                 try:
-                    start_idx = content.find('{')
-                    end_idx = content.rfind('}') + 1
-                    if start_idx != -1 and end_idx > start_idx:
-                        json_str = content[start_idx:end_idx]
-                        parsed_result = json.loads(json_str)
-                        return {"success": True, "data": parsed_result}
-                    else:
-                        return {"success": True, "data": {"extracted_text": content, "confidence": 0.8}}
-                except json.JSONDecodeError:
-                    return {"success": True, "data": {"extracted_text": content, "confidence": 0.8}}
+                    parsed_result = json.loads(content)
+                    return {"success": True, "data": parsed_result}
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse structured output: {e}, content: {content}")
+                    return {"success": False, "error": f"Failed to parse structured output: {str(e)}"}
                     
         except Exception as e:
             logger.error(f"Error extracting text with OpenAI: {e}")
@@ -182,7 +234,7 @@ class DocumentProcessingService:
 
     async def _process_pdf_document(self, file_content: bytes, filename: str) -> Dict[str, Any]:
         """
-        Process PDF document with text extraction and strikethrough detection.
+        Process PDF document with structured analysis.
         
         Args:
             file_content: PDF content as bytes
@@ -192,20 +244,15 @@ class DocumentProcessingService:
             Processing results dictionary
         """
         try:
-            # Run text extraction
-            logger.info(f"Running text extraction on PDF: {filename}")
-            text_result = await self._extract_text_with_openai(file_content, filename)
-            
-            # Run strikethrough detection
-            logger.info(f"Running strikethrough detection on PDF: {filename}")
-            strikethrough_result = await self.strikethrough_service.detect_strikethrough_from_bytes(file_content)
+            # Run structured document analysis
+            logger.info(f"Running structured document analysis on PDF: {filename}")
+            analysis_result = await self._analyze_document_with_structured_output(file_content, filename)
             
             return {
                 "document_type": "pdf",
                 "filename": filename,
                 "file_size": len(file_content),
-                "text_extraction": text_result,
-                "strikethrough_data": strikethrough_result,
+                "document_analysis": analysis_result,
                 "processing_status": "completed"
             }
             
@@ -221,7 +268,7 @@ class DocumentProcessingService:
     
     async def _process_image_document(self, file_content: bytes, filename: str) -> Dict[str, Any]:
         """
-        Process image document with text extraction.
+        Process image document with structured analysis.
         
         Args:
             file_content: Image content as bytes
@@ -231,15 +278,15 @@ class DocumentProcessingService:
             Processing results dictionary
         """
         try:
-            # Run text extraction using OpenAI
-            logger.info(f"Running text extraction on image: {filename}")
-            text_result = await self._extract_text_with_openai(file_content, filename)
+            # Run structured document analysis
+            logger.info(f"Running structured document analysis on image: {filename}")
+            analysis_result = await self._analyze_document_with_structured_output(file_content, filename)
             
             return {
                 "document_type": "image",
                 "filename": filename,
                 "file_size": len(file_content),
-                "text_extraction": text_result,
+                "document_analysis": analysis_result,
                 "processing_status": "completed"
             }
             
@@ -338,8 +385,7 @@ class DocumentProcessingService:
         result.update({
             "detected_type": doc_type,
             "provider_info": {
-                "strikethrough_provider": self.strikethrough_service.provider_name,
-                "text_extraction_provider": "openai"
+                "analysis_provider": "openai_structured_outputs"
             }
         })
         
@@ -389,32 +435,30 @@ class DocumentProcessingService:
 
 
 # Convenience functions
-async def process_single_document(file_content: bytes, filename: str, provider: Optional[str] = None) -> Dict[str, Any]:
+async def process_single_document(file_content: bytes, filename: str) -> Dict[str, Any]:
     """
     Convenience function to process a single document.
     
     Args:
         file_content: Document content as bytes
         filename: Original filename
-        provider: Strikethrough detection provider
         
     Returns:
         Processing results dictionary
     """
-    service = DocumentProcessingService(strikethrough_provider=provider)
+    service = DocumentProcessingService()
     return await service.process_document(file_content, filename)
 
 
-async def process_documents_batch(documents: List[Dict[str, Any]], provider: Optional[str] = None) -> List[Dict[str, Any]]:
+async def process_documents_batch(documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Convenience function to process multiple documents.
     
     Args:
         documents: List of documents with 'content' and 'filename'
-        provider: Strikethrough detection provider
         
     Returns:
         List of processing results
     """
-    service = DocumentProcessingService(strikethrough_provider=provider)
+    service = DocumentProcessingService()
     return await service.process_multiple_documents(documents)
