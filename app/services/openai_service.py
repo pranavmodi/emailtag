@@ -100,8 +100,8 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
             logger.info("STEP 1: Extracting email chain structure...")
             
             # Log raw request
-            logger.info(f"🔗 OPENAI EMAIL EXTRACTION REQUEST:")
-            logger.info(f"📍 Endpoint: https://api.openai.com/v1/chat/completions")
+            # logger.info(f"🔗 OPENAI EMAIL EXTRACTION REQUEST:")
+            # logger.info(f"📍 Endpoint: https://api.openai.com/v1/chat/completions")
             # logger.info(f"📦 Payload: {json.dumps(payload, indent=2)}")
             
             response = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
@@ -116,7 +116,7 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
             
             completion = response.json()
             ai_response_text = completion.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
-            logger.info(f"📧 Email extraction raw response: {ai_response_text}")
+            # logger.info(f"📧 Email extraction raw response: {ai_response_text}")
 
             try:
                 extraction_result = json.loads(ai_response_text)
@@ -291,8 +291,8 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
             
             # Log the raw request for debugging
             logger.info(f"🔗 OPENAI RESOLUTION ANALYSIS REQUEST:")
-            logger.info(f"📍 Endpoint: https://api.openai.com/v1/chat/completions")
-            logger.info(f"📦 Payload: {json.dumps(payload, indent=2)}")
+            # logger.info(f"📍 Endpoint: https://api.openai.com/v1/chat/completions")
+            # logger.info(f"📦 Payload: {json.dumps(payload, indent=2)}")
             
             response = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
             
