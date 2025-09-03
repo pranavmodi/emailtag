@@ -387,7 +387,7 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
                 logger.info(f"Conversation {front_conversation_id} was archived. Orchestration complete for this path.")
                 email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="archived_in_orchestration", is_processed=True))
                 return {"status": "success_archived_orchestration", "email_id": email_id}
-            else:
+                
         except Exception as e_archive_check:
             logger.error(f"Error during pre-tagging archive check for {front_conversation_id}: {e_archive_check}", exc_info=True)
             # Proceed with tagging if archive check fails
