@@ -120,7 +120,6 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
 
             try:
                 extraction_result = json.loads(ai_response_text)
-                logger.info(f"📧 Extracted {extraction_result.get('total_emails', 0)} emails from conversation")
                 
                 return {
                     "success": True,
@@ -157,7 +156,6 @@ async def are_questions_resolved_openai(conversation_text: str) -> Dict[str, Any
             - "email_chain": List[Dict] - Structured emails from step 1
     """
     # STEP 1: Extract email chain structure
-    logger.info("🔍 Starting 2-step archive detection process...")
     email_extraction = await extract_email_chain_openai(conversation_text)
     
     if not email_extraction["success"]:
@@ -181,7 +179,6 @@ async def are_questions_resolved_openai(conversation_text: str) -> Dict[str, Any
             "email_chain": []
         }
 
-    logger.info(f"📧 Step 1 complete: Found {len(emails)} emails in chain")
     
     # STEP 2: Analyze the structured emails for resolution
     return await _analyze_structured_emails_for_resolution(emails, email_extraction)
@@ -287,7 +284,6 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
         # or provide a specific CA bundle path to httpx.AsyncClient(verify=...).
         # You might also investigate using the 'certifi' package.
         async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
-            logger.info("STEP 2: Analyzing structured email chain for resolution status...")
             
             # Log the raw request for debugging
             logger.info(f"🔗 OPENAI RESOLUTION ANALYSIS REQUEST:")

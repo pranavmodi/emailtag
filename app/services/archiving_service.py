@@ -17,7 +17,6 @@ async def check_and_archive_conversation(front_conversation_id: str) -> bool:
     Returns:
         bool: True if the conversation was archived, False otherwise.
     """
-    logger.info(f"📁 ARCHIVE CHECK: Starting analysis for {front_conversation_id}")
 
     conversation_data = get_conversation_text(front_conversation_id)
     if not conversation_data or not isinstance(conversation_data, dict):
