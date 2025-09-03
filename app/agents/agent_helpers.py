@@ -431,17 +431,13 @@ IMPORTANT INSTRUCTIONS:
             "max_tokens": 200
         }
         
-        logger.info(f"🔍 PATIENT_ID_EXTRACTION: Using OpenAI model: {patient_extraction_model} with structured outputs")
         response = await openai_client.chat.completions.create(**api_params)
         response_text = response.choices[0].message.content.strip()
-        logger.info(f"🔍 PATIENT_ID_EXTRACTION: OpenAI structured response: '{response_text}'")
         
         try:
             extracted_data = json.loads(response_text)
-            logger.info(f"🔍 PATIENT_ID_EXTRACTION: Parsed structured data: {extracted_data}")
             
             if not extracted_data.get("found", False):
-                logger.info(f"🔍 PATIENT_ID_EXTRACTION: OpenAI found=false, no patient info extracted")
                 return None
             
             # Validate required name fields
@@ -449,7 +445,6 @@ IMPORTANT INSTRUCTIONS:
             last_name = extracted_data.get("last_name", "").strip()
             
             if not first_name or not last_name:
-                logger.info(f"🔍 PATIENT_ID_EXTRACTION: Missing patient name - first_name: '{first_name}', last_name: '{last_name}'")
                 return None
             
             # Extract and validate dates
@@ -462,20 +457,17 @@ IMPORTANT INSTRUCTIONS:
                 try:
                     datetime.strptime(doi, '%m/%d/%Y')
                     validated_dates["doi"] = doi
-                    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Valid DOI found: {doi}")
-                except ValueError as e:
-                    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Invalid DOI format '{doi}': {e}")
+                except ValueError:
+                    pass
             
             if dob:
                 try:
                     datetime.strptime(dob, '%m/%d/%Y')
                     validated_dates["dob"] = dob
-                    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Valid DOB found: {dob}")
-                except ValueError as e:
-                    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Invalid DOB format '{dob}': {e}")
+                except ValueError:
+                    pass
             
             if not validated_dates:
-                logger.info(f"🔍 PATIENT_ID_EXTRACTION: No valid dates found")
                 return None
 
             result = {
@@ -483,15 +475,12 @@ IMPORTANT INSTRUCTIONS:
                 "last_name": last_name,
                 "dates": validated_dates
             }
-            logger.info(f"🔍 PATIENT_ID_EXTRACTION: Successfully validated extraction result: {result}")
             return result
             
         except (json.JSONDecodeError, ValueError, KeyError) as e:
-            logger.info(f"🔍 PATIENT_ID_EXTRACTION: Failed to parse structured output: {e}")
             return None
             
     except Exception as e:
-        logger.info(f"🔍 PATIENT_ID_EXTRACTION: Exception in OpenAI extraction: {e}")
         return None
     finally:
         if 'custom_httpx_client' in locals():
@@ -553,9 +542,6 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
     pre_pattern = r'(PRE\d{6,8})'
     matches = re.findall(pre_pattern, full_content, re.IGNORECASE)
     
-    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Searching in content (first 500 chars): {repr(full_content[:500])}...")
-    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Using regex pattern '{pre_pattern}' to find patient IDs")
-    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Regex found matches: {matches}")
     
     found_patient_ids = []
     
@@ -563,7 +549,6 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
         # Take ALL matches, ensure uppercase, and remove duplicates
         unique_ids = list(set(match.upper() for match in matches))
         found_patient_ids.extend(unique_ids)
-        logger.info(f"🔍 PATIENT_ID_EXTRACTION: SUCCESS via REGEX - Patient IDs: {unique_ids}")
         
         # Add comment to Front conversation if conversation_id is provided
         if conversation_id:
@@ -574,22 +559,17 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
             except Exception as e:
                 logger.error(f"Failed to add patient ID comment to conversation {conversation_id}: {e}", exc_info=True)
         
-        logger.info(f"🔍 PATIENT_ID_EXTRACTION: FINAL RESULT = SUCCESS (REGEX) - Returning {found_patient_ids} to caller")
         return found_patient_ids
 
     # Tier 2: OpenAI-based extraction as fallback
-    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Regex failed, trying OpenAI extraction...")
-    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Sending to OpenAI - Content length: {len(cleaned_email_content)}, Subject: '{subject}'")
     try:
         openai_extracted = await _extract_patient_info_with_openai(cleaned_email_content, subject)
-        logger.info(f"🔍 PATIENT_ID_EXTRACTION: OpenAI extracted: {openai_extracted}")
         
         if openai_extracted:
             first_name = openai_extracted["first_name"]
             last_name = openai_extracted["last_name"]
             available_dates = openai_extracted["dates"]
             
-            logger.info(f"🔍 PATIENT_ID_EXTRACTION: OpenAI extracted name: '{first_name} {last_name}', Available dates: {available_dates}")
             
             try:
                 if not mcp_client.is_connected:
@@ -609,9 +589,8 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
                             "type": "DOI",
                             "original_date": available_dates["doi"]
                         })
-                        logger.info(f"🔍 PATIENT_ID_EXTRACTION: Prepared DOI lookup with date '{db_doi}'")
-                    except ValueError as e:
-                        logger.info(f"🔍 PATIENT_ID_EXTRACTION: Failed to parse DOI date '{available_dates['doi']}': {e}")
+                    except ValueError:
+                        pass
                 
                 # Prepare DOB lookup if available  
                 if "dob" in available_dates and available_dates["dob"]:
@@ -624,12 +603,10 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
                             "type": "DOB", 
                             "original_date": available_dates["dob"]
                         })
-                        logger.info(f"🔍 PATIENT_ID_EXTRACTION: Prepared DOB lookup with date '{db_dob}'")
-                    except ValueError as e:
-                        logger.info(f"🔍 PATIENT_ID_EXTRACTION: Failed to parse DOB date '{available_dates['dob']}': {e}")
+                    except ValueError:
+                        pass
                 
                 if not lookup_attempts:
-                    logger.info(f"🔍 PATIENT_ID_EXTRACTION: No valid date lookups could be prepared")
                     return None
 
                 # Try all available date lookups - prioritize DOI first, then DOB
@@ -642,60 +619,41 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
                     lookup_type = attempt["type"]
                     original_date = attempt["original_date"]
                     
-                    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Attempting {lookup_type} lookup with tool '{tool_name}' and args: {arguments}")
                     
                     try:
                         patient_data = await call_mcp_tool(tool_name=tool_name, arguments=arguments)
-                        logger.info(f"🔍 PATIENT_ID_EXTRACTION: {lookup_type} lookup response: {patient_data}")
                         
                         # Process successful response
                         if patient_data and patient_data.get('success', False) and patient_data.get('patients'):
                             patients = patient_data['patients']
-                            logger.info(f"🔍 PATIENT_ID_EXTRACTION: {lookup_type} lookup returned {len(patients) if isinstance(patients, list) else 'non-list'} patients")
                             
                             if isinstance(patients, list) and len(patients) > 0:
                                 for idx, patient in enumerate(patients):
                                     patient_id = patient.get("patient_id")
-                                    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Patient #{idx+1} - ID: {patient_id}, Full data: {patient}")
                                     if patient_id and patient_id not in found_patient_ids:
                                         found_patient_ids.append(patient_id)
-                                        logger.info(f"🔍 PATIENT_ID_EXTRACTION: Added patient ID to results: {patient_id}")
                                 
                                 if found_patient_ids:
-                                    logger.info(f"🔍 PATIENT_ID_EXTRACTION: SUCCESS via OPENAI+MCP ({lookup_type}) - Patient IDs: {found_patient_ids}")
+                                    logger.info(f"Patient ID found via {lookup_type} lookup: {', '.join(found_patient_ids)}")
                                     if conversation_id:
                                         comment_text = f"Bot found patient ids {', '.join(found_patient_ids)} (via {lookup_type} lookup)"
                                         try:
                                             frontapp_service.add_conversation_comment(conversation_id, comment_text)
                                         except Exception: pass
                                     return found_patient_ids
-                        else:
-                            # Log why this lookup failed
-                            if not patient_data:
-                                logger.info(f"🔍 PATIENT_ID_EXTRACTION: {lookup_type} lookup returned None/empty response")
-                            elif not patient_data.get('success', False):
-                                error_msg = patient_data.get('error', 'Unknown error')
-                                logger.info(f"🔍 PATIENT_ID_EXTRACTION: {lookup_type} lookup failed with error: {error_msg}")
-                            elif not patient_data.get('patients'):
-                                logger.info(f"🔍 PATIENT_ID_EXTRACTION: {lookup_type} lookup returned success but no 'patients' field")
-                            else:
-                                logger.info(f"🔍 PATIENT_ID_EXTRACTION: {lookup_type} lookup returned no valid patients")
+                        # If this lookup failed, continue to try next method
                     
                     except Exception as e:
-                        logger.info(f"🔍 PATIENT_ID_EXTRACTION: Exception during {lookup_type} lookup: {e}")
                         continue  # Try the next lookup method
                 
-                logger.info(f"🔍 PATIENT_ID_EXTRACTION: All MCP lookup attempts failed")
                 
-            except Exception as e:
-                logger.info(f"🔍 PATIENT_ID_EXTRACTION: Exception during MCP lookup: {e}", exc_info=True)
+            except Exception:
+                pass
                 
-    except Exception as openai_e:
-        logger.info(f"🔍 PATIENT_ID_EXTRACTION: Exception during OpenAI extraction: {openai_e}")
+    except Exception:
+        pass
     
     # Final fallback - no patient ID found
-    logger.info(f"🔍 PATIENT_ID_EXTRACTION: FINAL RESULT = FAILED - No patient IDs found using either regex or OpenAI methods")
-    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Returning empty list to caller")
     return []
 
 
