@@ -165,16 +165,38 @@ class DocumentProcessingService:
                         "description": "Confidence score for document type classification"
                     }
                 },
-                "required": ["document_type", "description", "confidence"],
+                "required": ["document_type", "description", "patient_id", "confidence"],
                 "additionalProperties": False
             }
             
             payload = {
-                "model": "gpt-4o",
+                "model": "gpt-4o-2024-08-06",  # Use specific model version that supports structured outputs
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are a medical document analyzer. Analyze the provided document image and identify:\n1. Document type (lien, rx/prescription, referral, medical_record, insurance, or other)\n2. A brief one-line description\n3. Patient ID if visible\n4. Confidence in your classification\n\nDocument types:\n- lien: Legal lien documents, lien agreements, lien modifications\n- rx/prescription: Prescription forms, medication orders\n- referral: Doctor referrals, appointment requests\n- medical_record: Medical charts, test results, reports\n- insurance: Insurance cards, authorization forms\n- other: Any other document type"
+                        "content": """You are a medical document analyzer for Precise Imaging. Analyze the provided document image and classify it accurately.
+
+DOCUMENT TYPE CLASSIFICATION:
+- rx: Doctor's prescription, order for imaging/scans, referral for tests (MRI, CT, X-ray, ultrasound), physician orders for diagnostic procedures
+- lien: Legal lien documents, attorney lien agreements, lien modifications, lien forms, medical lien paperwork
+- referral: Medical referrals from one doctor to another, consultation requests, physician-to-physician referrals
+- medical_record: Medical charts, test results, lab reports, radiology reports, patient history, discharge summaries
+- insurance: Insurance cards, authorization forms, insurance verification documents, coverage letters
+- other: Any document that doesn't fit the above categories
+
+PATIENT ID EXTRACTION:
+Precise Imaging patient IDs follow this format: PRE followed by 6-8 digits (e.g., PRE123456, PRE1234567, PRE12345678)
+- Look for patterns like "PRE123456" or "Patient ID: PRE1234567" 
+- Patient IDs are always alphanumeric starting with "PRE"
+- If no patient ID is visible or readable, return null
+- Only return patient IDs that clearly match the PRE + 6-8 digits format
+
+ANALYSIS REQUIREMENTS:
+1. Carefully examine all text in the document
+2. Identify the primary purpose of the document
+3. Look for any patient identifiers matching the PRE format
+4. Provide a one-line description of what the document contains
+5. Give a confidence score based on how clearly you can read and classify the document"""
                     },
                     {
                         "role": "user",
@@ -204,11 +226,20 @@ class DocumentProcessingService:
             }
             
             async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
+                logger.info(f"Sending structured analysis request to OpenAI for {filename}")
+                logger.debug(f"Request payload keys: {list(payload.keys())}")
+                logger.debug(f"Schema: {payload['response_format']['json_schema']['schema']}")
+                
                 response = await client.post(
                     "https://api.openai.com/v1/chat/completions",
                     headers=headers,
                     json=payload
                 )
+                
+                if response.status_code != 200:
+                    logger.error(f"OpenAI API error {response.status_code}: {response.text}")
+                    return {"success": False, "error": f"OpenAI API error {response.status_code}: {response.text}"}
+                
                 response.raise_for_status()
                 
                 result_data = response.json()
