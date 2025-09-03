@@ -34,7 +34,6 @@ class DocumentProcessingService:
         """
         Initialize the document processing service.
         """
-        logger.info("Initialized document processing service with OpenAI structured outputs")
     
     def _determine_document_type(self, file_content: bytes, filename: str) -> str:
         """
@@ -226,10 +225,6 @@ ANALYSIS REQUIREMENTS:
             }
             
             async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
-                logger.info(f"Sending structured analysis request to OpenAI for {filename}")
-                logger.debug(f"Request payload keys: {list(payload.keys())}")
-                logger.debug(f"Schema: {payload['response_format']['json_schema']['schema']}")
-                
                 response = await client.post(
                     "https://api.openai.com/v1/chat/completions",
                     headers=headers,
@@ -276,7 +271,6 @@ ANALYSIS REQUIREMENTS:
         """
         try:
             # Run structured document analysis
-            logger.info(f"Running structured document analysis on PDF: {filename}")
             analysis_result = await self._analyze_document_with_structured_output(file_content, filename)
             
             return {
@@ -310,7 +304,6 @@ ANALYSIS REQUIREMENTS:
         """
         try:
             # Run structured document analysis
-            logger.info(f"Running structured document analysis on image: {filename}")
             analysis_result = await self._analyze_document_with_structured_output(file_content, filename)
             
             return {
@@ -396,11 +389,9 @@ ANALYSIS REQUIREMENTS:
         Returns:
             Dictionary containing structured analysis results
         """
-        logger.info(f"Processing document: {filename} ({len(file_content)} bytes)")
         
         # Determine document type
         doc_type = self._determine_document_type(file_content, filename)
-        logger.info(f"Detected document type: {doc_type}")
         
         # Process based on type
         if doc_type == "pdf":
@@ -420,7 +411,6 @@ ANALYSIS REQUIREMENTS:
             }
         })
         
-        logger.info(f"Document processing completed for {filename}: {result.get('processing_status', 'unknown')}")
         return result
     
     async def process_multiple_documents(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -433,7 +423,6 @@ ANALYSIS REQUIREMENTS:
         Returns:
             List of processing results for each document
         """
-        logger.info(f"Processing {len(documents)} documents")
         
         results = []
         for i, doc in enumerate(documents):
@@ -461,7 +450,6 @@ ANALYSIS REQUIREMENTS:
                     "processing_status": "failed"
                 })
         
-        logger.info(f"Completed processing {len(documents)} documents")
         return results
 
 

@@ -30,7 +30,6 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
     Downloads an attachment, processes it with document processing service,
     and updates the email record directly.
     """
-    logger.info(f"Starting document processing for attachment {attachment_url} for email {email_id} (attempt {self.request.retries + 1}/4)")
     
     try:
         email_uuid = UUID(email_id)
@@ -47,11 +46,9 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
     try:
         headers = {"Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}"}
         with httpx.Client(follow_redirects=True, verify=False) as client:
-            logger.info(f"Downloading attachment from {attachment_url}...")
             response = client.get(attachment_url, headers=headers, timeout=120.0)
             response.raise_for_status()
             attachment_content = response.content
-            logger.info(f"Successfully downloaded attachment for email {email_id}. Size: {len(attachment_content)} bytes.")
     except httpx.HTTPStatusError as exc:
         logger.error(f"HTTP error downloading attachment {attachment_url} for email {email_id}: {exc.response.status_code} - {exc.response.text}")
         if 400 <= exc.response.status_code < 500:
@@ -74,8 +71,6 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
 
     # --- Process Document ---
     try:
-        logger.info(f"Processing document for email {email_id}...")
-        
         # Extract filename from URL
         filename = attachment_url.split('/')[-1] if '/' in attachment_url else 'attachment'
         
@@ -147,7 +142,6 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
         # Update with processing results
         updated_email = email_crud_sync.update(db, db_obj=updated_email_with_count, obj_in=EmailUpdate(**update_payload))
 
-        logger.info(f"Updated email {email_id} with document processing result for attachment {attachment_url}. Completed {completed_count}/{updated_email.ocr_attachments_total} attachments.")
 
         # Add comment to Front conversation if patient ID found
         if attachment_data.get('patient_id') and updated_email.front_conversation_id:
@@ -162,10 +156,7 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
                 logger.error(f"Failed to add document processing patient ID comment to conversation {updated_email.front_conversation_id}: {e}", exc_info=True)
 
         # Check if all attachments are processed and trigger orchestration if complete
-        logger.info(f"Checking document processing completion for email {email_id}: {completed_count}/{updated_email.ocr_attachments_total}")
         _check_document_processing_completion_and_trigger_orchestration(updated_email, completed_count, email_id, str(email_uuid))
-
-        logger.info(f"Document processing task completed successfully for email {email_id}, attachment {attachment_url}")
 
     except Exception as db_exc:
         logger.exception(f"Database error processing document result for email {email_id}: {db_exc}")
@@ -221,28 +212,21 @@ def _check_document_processing_completion_and_trigger_orchestration(updated_emai
         return
         
     if completed_count < updated_email.ocr_attachments_total:
-        logger.info(f"Email {email_id}: Document processing progress {completed_count}/{updated_email.ocr_attachments_total} - waiting for more attachments.")
         return
-        
-    # All attachments are complete
-    logger.info(f"All document processing complete for email {email_id} ({completed_count}/{updated_email.ocr_attachments_total})")
     
     # Check if any processing resulted in an error
     has_errors = any(result.get('error') for result in updated_email.ocr_results or [])
     
     if has_errors:
         final_status = "document_processing_completed_with_errors"
-        logger.warning(f"Document processing complete for email {email_id} but some attachments had errors. Continuing processing anyway.")
         try:
             from app.services.frontapp_service import add_conversation_tags
             if updated_email.front_conversation_id:
                 add_conversation_tags(updated_email.front_conversation_id, ["AI: Human review required"])
-                logger.info(f"Added 'AI: Human review required' tag to conversation {updated_email.front_conversation_id} after processing error.")
         except Exception as tag_exc:
             logger.error(f"Failed to add AI-review tag for conversation {updated_email.front_conversation_id}: {tag_exc}")
     else:
         final_status = "document_processing_completed"
-        logger.info(f"Document processing completed successfully for email {email_id}.")
     
     # Update status and trigger next phase
     try:
@@ -251,13 +235,9 @@ def _check_document_processing_completion_and_trigger_orchestration(updated_emai
             email_obj = email_crud_sync.get(db, id=UUID(email_uuid_str))
             if email_obj and email_obj.status not in ["document_processing_completed", "document_processing_completed_with_errors"]:
                 email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_status))
-                logger.info(f"Updated email {email_id} status to {final_status}")
                 
                 from app.tasks.email import orchestrate_post_ocr_processing
-                logger.info(f"Document processing phase complete for {email_id} (status: {final_status}), queueing for post-processing orchestration.")
                 orchestrate_post_ocr_processing.apply_async(args=[email_uuid_str], queue='processing')
-            else:
-                logger.info(f"Email {email_id} already marked as processing complete ({email_obj.status if email_obj else 'not found'}). Skipping duplicate orchestration.")
         finally:
             db.close()
     except Exception as e:
@@ -314,7 +294,6 @@ def _handle_final_document_processing_failure(email_uuid: UUID, attachment_url: 
             except Exception as tag_exc:
                 logger.error(f"Failed to add AI-review tag for conversation {email_obj.front_conversation_id}: {tag_exc}")
             
-            logger.info(f"Recorded document processing failure for {email_uuid}. Completed {completed_count}/{updated_email.ocr_attachments_total} attachments.")
             
             # Check if all attachments are processed
             _check_document_processing_completion_and_trigger_orchestration(updated_email, completed_count, str(email_uuid), str(email_uuid))

@@ -212,7 +212,6 @@ def process_email(email_id: str) -> Dict:
             for attachment in attachments_data:
                 attachment_url = attachment.get("url")
                 if attachment_url:
-                    logger.info(f"Queueing OCR for attachment {attachment_url} for email {email_id} to 'ocr' queue")
                     # send_attachment_to_ocr.delay(email_id, attachment_url)
                     send_attachment_to_document_processing.apply_async(args=[email_id, attachment_url], queue='processing')
                 else:
@@ -261,7 +260,6 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
     3. Performs Archiving Check.
     4. If not split or archived, queues perform_tagging_task.
     """
-    logger.info(f"Orchestrating post-OCR/skipped processing for email {email_id}")
 
     try:
         email_uuid = UUID(email_id)
@@ -292,7 +290,7 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
             if not structured_messages_for_analysis:
                 logger.warning(f"Could not retrieve structured message history for {front_conversation_id} to attempt topic split. Proceeding without split check.")
             elif len(structured_messages_for_analysis) <= 1:
-                logger.info(f"Conversation {front_conversation_id} has only one or no messages. No split check needed.")
+                pass  # No split check needed
             else:
                 history_for_prompt = structured_messages_for_analysis[:-1]
                 transformed_history_for_analysis = []
@@ -380,7 +378,6 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
         # --- Check for archiving before proceeding (if not split and split didn't return) ---
         # (Copied and adapted from tag_email)
         try:
-            logger.info(f"Checking if conversation {front_conversation_id} can be archived before tagging.")
             async def _run_archive_check_async():
                 return await check_and_archive_conversation(front_conversation_id)
             
@@ -391,7 +388,6 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
                 email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="archived_in_orchestration", is_processed=True))
                 return {"status": "success_archived_orchestration", "email_id": email_id}
             else:
-                logger.info(f"Conversation {front_conversation_id} not archived. Proceeding to tagging.")
         except Exception as e_archive_check:
             logger.error(f"Error during pre-tagging archive check for {front_conversation_id}: {e_archive_check}", exc_info=True)
             # Proceed with tagging if archive check fails
