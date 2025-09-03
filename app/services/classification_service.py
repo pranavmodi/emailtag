@@ -347,7 +347,8 @@ def _call_llm_for_classification(
     # For now, the DB prompt template only has {{EMAIL_CONTENT_PLACEHOLDER}}
     llm_prompt_template: str, # This is the full prompt template from the DB
     classification_level_name: str, # For logging
-    current_path: List[str] # For logging
+    current_path: List[str], # For logging
+    document_analysis_results: Optional[List[Dict[str, Any]]] = None
 ) -> Optional[str]:
     """
     Helper function to call the LLM using a pre-fetched and pre-formatted prompt template.
@@ -358,12 +359,37 @@ def _call_llm_for_classification(
     #     logger.error(f"Prompt template for level '{classification_level_name}' (Path: {current_path}) is missing {{EMAIL_CONTENT_PLACEHOLDER}} (single braces). Cannot proceed.")
     #     return None
     
-    # Construct the final prompt by appending email content and cue to the instructions
+    # Construct document analysis section if available
+    document_section = ""
+    if document_analysis_results:
+        document_section = "\n--- ATTACHED DOCUMENTS ANALYSIS ---\n"
+        document_section += "The following documents were attached to this email:\n\n"
+        
+        for i, doc_result in enumerate(document_analysis_results, 1):
+            if doc_result.get("document_analysis", {}).get("success"):
+                analysis_data = doc_result["document_analysis"]["data"]
+                doc_type = analysis_data.get("document_type", "unknown")
+                description = analysis_data.get("description", "No description available")
+                patient_id = analysis_data.get("patient_id")
+                confidence = analysis_data.get("confidence", 0.0)
+                
+                document_section += f"Document {i}:\n"
+                document_section += f"- Type: {doc_type}\n"
+                document_section += f"- Description: {description}\n"
+                document_section += f"- Patient ID: {patient_id if patient_id else 'Not found'}\n"
+                document_section += f"- Analysis Confidence: {confidence:.2f}\n\n"
+            else:
+                document_section += f"Document {i}: Analysis failed - {doc_result.get('document_analysis', {}).get('error', 'Unknown error')}\n\n"
+        
+        document_section += "--- END ATTACHED DOCUMENTS ANALYSIS ---\n"
+
+    # Construct the final prompt by appending email content, document analysis, and cue to the instructions
     final_llm_prompt = (
         f"{llm_prompt_template}\n\n"
         f"--- EMAIL CONTENT TO CLASSIFY START ---\n"
         f"{conversation_text}\n"
-        f"--- EMAIL CONTENT TO CLASSIFY END ---\n\n"
+        f"--- EMAIL CONTENT TO CLASSIFY END ---"
+        f"{document_section}\n"
         f"Chosen Option:"
     )
     
@@ -649,7 +675,8 @@ async def classify_email_tags_hierarchical(
     front_conversation_id: str, 
     conversation_text: str, 
     sender_info: str, 
-    message_times: str
+    message_times: str,
+    document_analysis_results: Optional[List[Dict[str, Any]]] = None
 ) -> List[str]:
     """
     Classifies an email conversation by traversing the EMAIL_CATEGORIES hierarchy,
@@ -703,7 +730,8 @@ async def classify_email_tags_hierarchical(
                 conversation_text, 
                 llm_prompt_template, # Pass the fetched prompt template
                 level_name_for_logging,
-                classification_path
+                classification_path,
+                document_analysis_results
             )
 
             if not chosen_option or chosen_option not in options: # Validate prediction against current options
@@ -747,7 +775,8 @@ async def classify_email_tags_hierarchical(
                     conversation_text,
                     llm_prompt_template_for_list,
                     level_name_for_logging, # Name of the parent that led to this list
-                    classification_path
+                    classification_path,
+                    document_analysis_results
                 )
 
                 if chosen_final_tag and chosen_final_tag in final_options_in_list:
