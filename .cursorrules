@@ -29,7 +29,7 @@ Email_Categories
 │   │   ├── Order Pending
 │   │   ├── Order Entered
 │   │   ├── Incomplete
-│   │   ├── RX Request
+│   │   ├── RX
 │   │   ├── Apt Status Req
 │   │   ├── No Show
 │   │   └── Cash Patient

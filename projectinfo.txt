@@ -41,7 +41,7 @@ The AI will classify and route messages under the correct department and subcate
     * Order Pending
     * Order Entered
     * Incomplete
-    * RX Request
+    * RX
 * Cancel Request
     * Cancelled
 * Reschedule Request

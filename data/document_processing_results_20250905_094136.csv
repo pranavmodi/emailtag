@@ -1,0 +1,10 @@
+filename,file_size,file_extension,detected_type,processing_status,provider,analysis_success,document_type,patient_id,confidence,description
+2025.08.28 - Ref.pdf,202842,.pdf,pdf,completed,openai_structured_outputs,True,rx,Not found,0.95,Radiological studies and physical therapy order from Elite Medical Clinic for patient Joselyn Davalos.
+2025_07_30 - California Sport and Spine - Rx.pdf,240446,.pdf,pdf,completed,openai_structured_outputs,True,rx,Not found,0.95,Doctor's prescription for MRI scans and therapy treatments from California Sports and Spine Center.
+68b86d5e51b45-Pablo-Emilio-Chavarro-Orozco-R.pdf,55412,.pdf,pdf,completed,openai_structured_outputs,True,referral,Not found,0.95,Medical referral form for various specialties and imaging for Pablo Emilio Chavarro Orozco.
+Chiropractic (18).pdf,379373,.pdf,pdf,completed,openai_structured_outputs,True,referral,Not found,0.95,Consultation/Treatment Request from Sabet Chiropractic with patient demographics and services requested.
+Evaristo Serrano-R (1).pdf,142983,.pdf,pdf,completed,openai_structured_outputs,True,referral,Not found,0.95,Medical referral document detailing specialty areas and imaging requests for the patient.
+Order_MRI-Spine_45150.pdf,34547,.pdf,pdf,completed,openai_structured_outputs,True,rx,Not found,0.95,Order for MRI of the spine detailing protocol and medical necessity.
+Order_Plain_X-ray__Outside_Imaging__45149.pdf,34474,.pdf,pdf,completed,openai_structured_outputs,True,rx,Not found,0.95,The document is a doctor's order for a Plain X-ray with specific indications and views listed.
+Order_Plain_X-ray__Outside_Imaging__45152.pdf,34484,.pdf,pdf,completed,openai_structured_outputs,True,rx,Not found,0.95,Order for a plain X-ray of the lumbar spine with specific views and indications.
+RICARDO ALVAREZ TORRES MRI RX (1).pdf,81061,.pdf,pdf,completed,openai_structured_outputs,True,rx,Not found,0.95,MRI order for shoulder and cervical spine from chiropractor.

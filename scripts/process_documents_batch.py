@@ -119,19 +119,86 @@ class DocumentBatchProcessor:
                 'full_result': {'error': str(e)}
             }
     
-    async def process_all_documents(self) -> List[Dict[str, Any]]:
-        """Process all documents in the directory."""
+    def list_and_select_documents(self) -> List[Path]:
+        """List all documents and let user select which ones to process."""
         documents = self.find_documents()
         
         if not documents:
             print(f"📁 No supported documents found in {self.data_dir}")
             return []
         
-        print(f"🔍 Found {len(documents)} documents to process")
+        print(f"🔍 Found {len(documents)} documents:")
+        print("=" * 60)
+        
+        # Display numbered list of documents
+        for i, doc_path in enumerate(documents, 1):
+            file_size = doc_path.stat().st_size
+            file_size_kb = file_size / 1024
+            print(f"  {i:2d}. {doc_path.name:<40} ({file_size_kb:8.1f} KB)")
+        
+        print("=" * 60)
+        print("\n📋 Select documents to process:")
+        print("  • Enter numbers separated by commas (e.g., 1,3,5)")
+        print("  • Enter 'all' to process all documents")
+        print("  • Press Enter to cancel")
+        
+        while True:
+            try:
+                user_input = input("\n👉 Your selection: ").strip()
+                
+                if not user_input:
+                    print("❌ No selection made. Exiting.")
+                    return []
+                
+                if user_input.lower() == 'all':
+                    print(f"✅ Selected all {len(documents)} documents for processing.")
+                    return documents
+                
+                # Parse comma-separated numbers
+                selected_numbers = []
+                for part in user_input.split(','):
+                    part = part.strip()
+                    if part.isdigit():
+                        num = int(part)
+                        if 1 <= num <= len(documents):
+                            selected_numbers.append(num)
+                        else:
+                            print(f"⚠️  Number {num} is out of range (1-{len(documents)})")
+                    else:
+                        print(f"⚠️  '{part}' is not a valid number")
+                
+                if not selected_numbers:
+                    print("❌ No valid documents selected. Please try again.")
+                    continue
+                
+                # Remove duplicates and sort
+                selected_numbers = sorted(set(selected_numbers))
+                selected_docs = [documents[i-1] for i in selected_numbers]
+                
+                print(f"✅ Selected {len(selected_docs)} document(s) for processing:")
+                for doc in selected_docs:
+                    print(f"   📄 {doc.name}")
+                
+                return selected_docs
+                
+            except KeyboardInterrupt:
+                print("\n❌ Cancelled by user.")
+                return []
+            except Exception as e:
+                print(f"❌ Error processing selection: {e}")
+                continue
+
+    async def process_selected_documents(self, selected_documents: List[Path]) -> List[Dict[str, Any]]:
+        """Process the selected documents."""
+        if not selected_documents:
+            return []
+        
+        print(f"\n🚀 Processing {len(selected_documents)} selected document(s)...")
         print("=" * 60)
         
         results = []
-        for doc_path in documents:
+        for i, doc_path in enumerate(selected_documents, 1):
+            print(f"[{i}/{len(selected_documents)}]", end=" ")
             result = await self.process_document(doc_path)
             results.append(result)
         
@@ -266,9 +333,16 @@ async def main():
     print(f"📁 Processing documents from: {data_dir}")
     print(f"💾 Output directory: {output_dir}")
     
-    # Create processor and run
+    # Create processor and let user select documents
     processor = DocumentBatchProcessor(data_dir)
-    results = await processor.process_all_documents()
+    selected_documents = processor.list_and_select_documents()
+    
+    if not selected_documents:
+        print("👋 No documents selected. Goodbye!")
+        return
+    
+    # Process selected documents
+    results = await processor.process_selected_documents(selected_documents)
     
     if results:
         # Print results table

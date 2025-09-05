@@ -1,0 +1,41 @@
+PRECISE IMAGING CENTER
+PATIENT MEDICAL RECORD
+
+Date: September 5, 2025
+Patient: Emily Johnson
+DOB: 05/14/1975
+Patient ID: PRE3456789
+MRN: MR-2025-0905
+
+IMAGING STUDY REPORT
+Study Date: September 3, 2025
+Study Type: MRI Lumbar Spine
+Referring Physician: Dr. Sarah Martinez, MD
+
+CLINICAL HISTORY:
+Patient presents with chronic lower back pain following motor vehicle accident on 06/20/2024. Previous conservative treatments have been unsuccessful. Physician requests MRI to evaluate for disc herniation or nerve compression.
+
+TECHNIQUE:
+MRI of the lumbar spine was performed using multiplanar T1 and T2-weighted sequences in sagittal and axial planes.
+
+FINDINGS:
+1. L4-L5 level shows mild disc bulging without significant neural compression
+2. L5-S1 level demonstrates moderate disc degeneration with loss of disc height
+3. No evidence of spinal stenosis or nerve root compression
+4. Normal alignment of vertebral bodies
+5. No abnormal signal intensity in the bone marrow
+
+IMPRESSION:
+Mild degenerative disc disease at L4-L5 and L5-S1 levels. No significant neural compression identified.
+
+RECOMMENDATIONS:
+1. Continue conservative management
+2. Physical therapy evaluation
+3. Follow-up with referring physician
+4. Repeat imaging in 6 months if symptoms worsen
+
+Radiologist: Dr. Alexander Grimm, MD
+Dictated: September 3, 2025, 4:30 PM
+Transcribed: September 3, 2025, 4:45 PM
+
+This report has been reviewed and electronically signed.
