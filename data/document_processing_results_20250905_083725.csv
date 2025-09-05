@@ -1,2 +1,0 @@
-filename,file_size,file_extension,detected_type,processing_status,provider,analysis_success,document_type,patient_id,confidence,description
-Chiropractic (18).pdf,379373,.pdf,pdf,completed,openai_structured_outputs,True,lien,Not found,0.95,Consultation/treatment request document related to a PI lien for chiropractic services.
