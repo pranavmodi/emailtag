@@ -146,7 +146,7 @@ class DocumentProcessingService:
                 "properties": {
                     "document_type": {
                         "type": "string",
-                        "enum": ["lien", "rx", "prescription", "referral", "medical_record", "insurance", "other"],
+                        "enum": ["lien", "rx", "medical_record", "insurance", "other"],
                         "description": "Type of medical document"
                     },
                     "description": {
@@ -176,9 +176,8 @@ class DocumentProcessingService:
                         "content": """You are a medical document analyzer for Precise Imaging. Analyze the provided document image and classify it accurately.
 
 DOCUMENT TYPE CLASSIFICATION:
-- rx: Doctor's prescription, order for imaging/scans, referral for tests (MRI, CT, X-ray, ultrasound), physician orders for diagnostic procedures
+- rx: Doctor's prescriptions, orders for imaging/scans, referrals for tests (MRI, CT, X-ray, ultrasound), physician orders for diagnostic procedures, medical referrals from one doctor to another, consultation requests, medication orders
 - lien: Legal lien documents, attorney lien agreements, lien modifications, lien forms, medical lien paperwork
-- referral: Medical referrals from one doctor to another, consultation requests, physician-to-physician referrals
 - medical_record: Medical charts, test results, lab reports, radiology reports, patient history, discharge summaries
 - insurance: Insurance cards, authorization forms, insurance verification documents, coverage letters
 - other: Any document that doesn't fit the above categories
