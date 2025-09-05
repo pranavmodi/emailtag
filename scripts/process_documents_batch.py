@@ -348,11 +348,6 @@ async def main():
         # Print results table
         processor.print_results_table(results)
         
-        # Save to CSV with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        csv_file = output_dir / f"document_processing_results_{timestamp}.csv"
-        processor.save_results_to_csv(results, csv_file)
-        
         print(f"\n✅ Batch processing completed! Processed {len(results)} documents.")
     else:
         print("\n⚠️  No documents were processed.")
