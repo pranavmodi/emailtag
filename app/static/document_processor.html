@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Processing Evaluation - Precise Imaging</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .upload-section {
+            border: 2px dashed #3498db;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            background-color: #f8f9fa;
+        }
+        
+        .file-input {
+            margin: 20px 0;
+        }
+        
+        .file-input input[type="file"] {
+            display: none;
+        }
+        
+        .file-input label {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #3498db;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        
+        .file-input label:hover {
+            background-color: #2980b9;
+        }
+        
+        .process-btn {
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: background-color 0.3s;
+        }
+        
+        .process-btn:hover {
+            background-color: #219a52;
+        }
+        
+        .process-btn:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .results-section {
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .result-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        
+        .result-header {
+            background-color: #34495e;
+            color: white;
+            padding: 15px;
+            font-weight: bold;
+        }
+        
+        .result-content {
+            padding: 20px;
+        }
+        
+        .json-display {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .metadata {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .metadata-item {
+            background-color: #ecf0f1;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        .metadata-item strong {
+            display: block;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .error-message {
+            background-color: #e74c3c;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            display: none;
+        }
+        
+        .success-message {
+            background-color: #27ae60;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            display: none;
+        }
+        
+        .document-types {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .doc-type-badge {
+            padding: 8px 12px;
+            border-radius: 20px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .doc-type-lien { background-color: #e74c3c; color: white; }
+        .doc-type-rx { background-color: #3498db; color: white; }
+        .doc-type-prescription { background-color: #9b59b6; color: white; }
+        .doc-type-referral { background-color: #f39c12; color: white; }
+        .doc-type-medical_record { background-color: #27ae60; color: white; }
+        .doc-type-insurance { background-color: #2c3e50; color: white; }
+        .doc-type-other { background-color: #95a5a6; color: white; }
+        
+        .selected-files {
+            margin-top: 15px;
+            text-align: left;
+        }
+        
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            background-color: #ecf0f1;
+            margin: 5px 0;
+            border-radius: 5px;
+        }
+        
+        .file-item .filename {
+            flex-grow: 1;
+            margin-left: 10px;
+        }
+        
+        .file-item .filesize {
+            color: #7f8c8d;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📄 Document Processing Evaluation Tool</h1>
+        <p style="text-align: center; color: #7f8c8d;">Upload medical documents to test our AI-powered classification and patient ID extraction</p>
+        
+        <div class="upload-section">
+            <h3>Upload Documents</h3>
+            <p>Supported formats: PDF, PNG, JPG, JPEG, GIF</p>
+            
+            <div class="file-input">
+                <label for="fileInput">
+                    📁 Choose Files
+                </label>
+                <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg,.gif">
+            </div>
+            
+            <div class="selected-files" id="selectedFiles"></div>
+            
+            <button class="process-btn" id="processBtn" disabled>🔍 Process Documents</button>
+        </div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Processing documents with AI...</p>
+        </div>
+        
+        <div class="error-message" id="errorMessage"></div>
+        <div class="success-message" id="successMessage"></div>
+        
+        <div class="results-section" id="resultsSection">
+            <h2>📊 Processing Results</h2>
+            <div id="resultsContainer"></div>
+        </div>
+        
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #7f8c8d;">
+            <h3>Document Type Reference</h3>
+            <div class="document-types">
+                <div class="doc-type-badge doc-type-lien">Lien</div>
+                <div class="doc-type-badge doc-type-rx">RX/Order</div>
+                <div class="doc-type-badge doc-type-prescription">Prescription</div>
+                <div class="doc-type-badge doc-type-referral">Referral</div>
+                <div class="doc-type-badge doc-type-medical_record">Medical Record</div>
+                <div class="doc-type-badge doc-type-insurance">Insurance</div>
+                <div class="doc-type-badge doc-type-other">Other</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const selectedFiles = document.getElementById('selectedFiles');
+        const processBtn = document.getElementById('processBtn');
+        const loading = document.getElementById('loading');
+        const errorMessage = document.getElementById('errorMessage');
+        const successMessage = document.getElementById('successMessage');
+        const resultsSection = document.getElementById('resultsSection');
+        const resultsContainer = document.getElementById('resultsContainer');
+        
+        let uploadedFiles = [];
+        
+        fileInput.addEventListener('change', function(e) {
+            uploadedFiles = Array.from(e.target.files);
+            displaySelectedFiles();
+            processBtn.disabled = uploadedFiles.length === 0;
+        });
+        
+        function displaySelectedFiles() {
+            if (uploadedFiles.length === 0) {
+                selectedFiles.innerHTML = '';
+                return;
+            }
+            
+            const html = uploadedFiles.map(file => {
+                const sizeKB = (file.size / 1024).toFixed(1);
+                return `
+                    <div class="file-item">
+                        <span>📄</span>
+                        <span class="filename">${file.name}</span>
+                        <span class="filesize">${sizeKB} KB</span>
+                    </div>
+                `;
+            }).join('');
+            
+            selectedFiles.innerHTML = html;
+        }
+        
+        processBtn.addEventListener('click', async function() {
+            if (uploadedFiles.length === 0) return;
+            
+            hideMessages();
+            showLoading(true);
+            processBtn.disabled = true;
+            resultsSection.style.display = 'none';
+            
+            try {
+                const formData = new FormData();
+                uploadedFiles.forEach(file => {
+                    formData.append('files', file);
+                });
+                
+                const response = await fetch('/api/v1/documents/process-batch', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const results = await response.json();
+                displayResults(results);
+                showSuccess('Documents processed successfully!');
+                
+            } catch (error) {
+                console.error('Processing error:', error);
+                showError('Error processing documents: ' + error.message);
+            } finally {
+                showLoading(false);
+                processBtn.disabled = false;
+            }
+        });
+        
+        function displayResults(results) {
+            if (!Array.isArray(results) || results.length === 0) {
+                resultsContainer.innerHTML = '<p>No results to display.</p>';
+                return;
+            }
+            
+            const html = results.map((result, index) => {
+                const filename = result.filename || `Document ${index + 1}`;
+                const docAnalysis = result.document_analysis;
+                
+                return `
+                    <div class="result-card">
+                        <div class="result-header">
+                            📄 ${filename}
+                        </div>
+                        <div class="result-content">
+                            ${generateMetadataDisplay(result)}
+                            ${generateAnalysisDisplay(docAnalysis)}
+                            <h4>📋 Full API Response</h4>
+                            <div class="json-display">${JSON.stringify(result, null, 2)}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            resultsContainer.innerHTML = html;
+            resultsSection.style.display = 'block';
+        }
+        
+        function generateMetadataDisplay(result) {
+            const fileSize = result.file_size ? `${(result.file_size / 1024).toFixed(1)} KB` : 'Unknown';
+            const detectedType = result.detected_type || 'Unknown';
+            const status = result.processing_status || 'Unknown';
+            
+            return `
+                <div class="metadata">
+                    <div class="metadata-item">
+                        <strong>File Size</strong>
+                        ${fileSize}
+                    </div>
+                    <div class="metadata-item">
+                        <strong>Detected Type</strong>
+                        ${detectedType}
+                    </div>
+                    <div class="metadata-item">
+                        <strong>Processing Status</strong>
+                        ${status}
+                    </div>
+                    <div class="metadata-item">
+                        <strong>Analysis Provider</strong>
+                        ${result.provider_info?.analysis_provider || 'Unknown'}
+                    </div>
+                </div>
+            `;
+        }
+        
+        function generateAnalysisDisplay(analysis) {
+            if (!analysis || !analysis.success) {
+                const error = analysis?.error || 'Analysis failed';
+                return `
+                    <div style="background-color: #ffe6e6; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                        <h4 style="color: #d32f2f;">❌ Analysis Failed</h4>
+                        <p>${error}</p>
+                    </div>
+                `;
+            }
+            
+            const data = analysis.data;
+            if (!data) {
+                return `
+                    <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                        <h4 style="color: #856404;">⚠️ No Analysis Data</h4>
+                        <p>Analysis completed but no data returned.</p>
+                    </div>
+                `;
+            }
+            
+            const docType = data.document_type || 'unknown';
+            const confidence = data.confidence ? (data.confidence * 100).toFixed(1) + '%' : 'N/A';
+            const patientId = data.patient_id || 'Not found';
+            const description = data.description || 'No description';
+            
+            return `
+                <div style="background-color: #e8f5e8; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                    <h4 style="color: #2e7d32;">✅ AI Analysis Results</h4>
+                    <div class="metadata">
+                        <div class="metadata-item">
+                            <strong>Document Type</strong>
+                            <span class="doc-type-badge doc-type-${docType}">${docType.toUpperCase()}</span>
+                        </div>
+                        <div class="metadata-item">
+                            <strong>Confidence</strong>
+                            ${confidence}
+                        </div>
+                        <div class="metadata-item">
+                            <strong>Patient ID</strong>
+                            ${patientId}
+                        </div>
+                        <div class="metadata-item" style="grid-column: 1/-1;">
+                            <strong>Description</strong>
+                            ${description}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function showLoading(show) {
+            loading.style.display = show ? 'block' : 'none';
+        }
+        
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+        }
+        
+        function showSuccess(message) {
+            successMessage.textContent = message;
+            successMessage.style.display = 'block';
+        }
+        
+        function hideMessages() {
+            errorMessage.style.display = 'none';
+            successMessage.style.display = 'none';
+        }
+    </script>
+</body>
+</html>

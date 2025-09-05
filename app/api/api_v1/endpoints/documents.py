@@ -35,7 +35,7 @@ async def process_document(
         logger.info(f"Processing uploaded document: {filename} ({len(file_content)} bytes)")
         
         # Process the document
-        service = DocumentProcessingService(strikethrough_provider=provider)
+        service = DocumentProcessingService()
         result = await service.process_document(file_content, filename)
         
         return JSONResponse(
@@ -95,16 +95,12 @@ async def process_documents_batch(
             })
         
         # Process all documents
-        service = DocumentProcessingService(strikethrough_provider=provider)
+        service = DocumentProcessingService()
         results = await service.process_multiple_documents(documents)
         
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content={
-                "success": True,
-                "total_documents": len(files),
-                "data": results
-            }
+            content=results
         )
         
     except HTTPException:

@@ -1,0 +1,4 @@
+filename,file_size,file_extension,detected_type,processing_status,provider,analysis_success,document_type,patient_id,confidence,description
+sample_insurance_card.txt,440,.txt,text,completed,openai_structured_outputs,False,failed,Error,0.0,Error: No analysis data
+sample_lien_document.txt,849,.txt,text,completed,openai_structured_outputs,False,failed,Error,0.0,Error: No analysis data
+sample_rx_document.txt,614,.txt,text,completed,openai_structured_outputs,False,failed,Error,0.0,Error: No analysis data
