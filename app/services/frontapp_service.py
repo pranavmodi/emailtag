@@ -451,7 +451,6 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> bool:
                 "Content-Type": "application/json"
             }
             
-            logger.info(f"Sending tag request to Front API for conversation {conversation_id} with tags: {tag_ids_to_add}")
             response = client.post(url, headers=headers, json=payload)
             
             if response.status_code >= 400:
@@ -460,7 +459,6 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> bool:
                 return False
                 
             added_tag_names = [name for name, tag_id_val in tag_name_to_id_map.items() if tag_id_val in tag_ids_to_add]
-            logger.info(f"Successfully added tags {', '.join(added_tag_names)} (IDs: {tag_ids_to_add}) to conversation {conversation_id}")
             return True
             
     except httpx.HTTPStatusError as e:

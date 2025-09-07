@@ -379,7 +379,7 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
         # (Copied and adapted from tag_email)
         try:
             async def _run_archive_check_async():
-                return await check_and_archive_conversation(front_conversation_id)
+                return await check_and_archive_conversation(front_conversation_id, email_obj)
             
             was_archived = asyncio.run(_run_archive_check_async())
 
@@ -661,7 +661,6 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                 tag_obj = tag_crud_sync.get_or_create(db, name=tag_name)
                 tag_objects.append(tag_obj)
             email_obj.tags = tag_objects # This updates the email_obj.tags relationship in the current session
-            logger.info(f"Updated determined tags {new_tags} in database for email {email_id}")
             # Note: The actual commit that saves this relationship change will happen
             # during the subsequent email_crud_sync.update() calls for status updates.
 
@@ -679,7 +678,6 @@ def perform_tagging_task(self, email_id: str) -> Dict:
 
             apply_success = add_conversation_tags(front_conversation_id, new_tags)
             if apply_success:
-                logger.info(f"Successfully applied tags {new_tags} to conversation {front_conversation_id} on Front.")
                 applied_tags_to_front = True
                 final_tagging_status = "tagging_completed_applied_tags"
                 # Update status; is_processed defaults to False, allowing subsequent tasks in the chain.
@@ -727,7 +725,6 @@ def perform_tagging_task(self, email_id: str) -> Dict:
         
         # Regardless of tagging outcome (unless critical error above), proceed to auto-response.
         perform_autorespond_task.apply_async(args=[email_id], kwargs={'determined_tags': new_tags}, queue='processing')
-        logger.info(f"Queued email {email_id} for auto-response on 'processing' queue.")
         return {"status": "queued_for_autorespond", "email_id": email_id, "tags_applied_to_front": applied_tags_to_front, "determined_tags": new_tags}
 
     except Exception as e:

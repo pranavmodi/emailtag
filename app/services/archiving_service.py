@@ -7,16 +7,35 @@ from app.services.openai_service import are_questions_resolved_openai # Import O
 
 logger = logging.getLogger(__name__)
 
-async def check_and_archive_conversation(front_conversation_id: str) -> bool:
+async def check_and_archive_conversation(front_conversation_id: str, email_obj=None) -> bool:
     """
     Checks if a conversation can be archived and archives it if all questions are resolved.
 
     Args:
         front_conversation_id: The Front conversation ID.
+        email_obj: Optional email object with document processing results.
 
     Returns:
         bool: True if the conversation was archived, False otherwise.
     """
+
+    # Check for document processing results that prevent archiving
+    if email_obj and hasattr(email_obj, 'document_processing_results'):
+        doc_results = email_obj.document_processing_results
+        if doc_results:
+            for result in doc_results:
+                if isinstance(result, dict):
+                    doc_analysis = result.get('document_analysis', {})
+                    if doc_analysis.get('success') and doc_analysis.get('data'):
+                        doc_data = doc_analysis['data']
+                        doc_type = doc_data.get('document_type')
+                        confidence = doc_data.get('confidence', 0.0)
+                        
+                        # Prevent archiving for actionable document types
+                        actionable_doc_types = ['rx', 'lien', 'medical_record']
+                        if doc_type in actionable_doc_types and confidence > 0.7:
+                            logger.info(f"📁 ARCHIVE PREVENTED: {front_conversation_id} - Found {doc_type} document (confidence: {confidence:.2f})")
+                            return False
 
     conversation_data = get_conversation_text(front_conversation_id)
     if not conversation_data or not isinstance(conversation_data, dict):

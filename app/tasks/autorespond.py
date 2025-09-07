@@ -81,9 +81,8 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
     2. Agent orchestration for specific tag types
     3. Final status determination
     """
-    logger.info(f"Performing auto-response check for email {email_id}")
     if determined_tags is not None:
-        logger.info(f"Received determined tags: {determined_tags}")
+        pass
 
     try:
         email_uuid = UUID(email_id)
@@ -136,7 +135,6 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
 
         applied_tag_names = []
         if determined_tags is not None:
-            logger.info(f"Using determined_tags passed from tagging task: {determined_tags}")
             applied_tag_names = determined_tags
         else:
             logger.warning("determined_tags not passed to autorespond task. Reading from DB, which may be stale.")
