@@ -12,20 +12,12 @@ import openai
 from openai import OpenAI
 import httpx
 import logging
-from sqlalchemy.orm import Session # Keep for classify_email_category if it still uses sync SessionLocal
-from sqlalchemy.ext.asyncio import AsyncSession
-from celery import Celery # Should not be in classification_service.py
-from celery.utils.log import get_task_logger # Should not be in classification_service.py
 
 from app.core.config import settings
 from app.services.frontapp_service import get_conversation_text
 from app.services.frontapp_service import remove_conversation_tags
-from app.services.classification_rules_service import ClassificationRulesService # Corrected import
-from app.db.session import SessionLocal, AsyncSessionLocal # Keep SessionLocal if used elsewhere
-
-# New service for hierarchical rules
-from app.services.hierarchical_rules_service import HierarchicalRulesService, get_hierarchical_rules_service
-from app.models.hierarchical_classification_rule import HierarchicalClassificationRule # For type hinting
+# File-based rules service (replaces database-based hierarchical rules)
+from app.services.file_based_rules_service import get_file_based_rules_service
 
 # Load environment variables if needed (though settings should handle this)
 load_dotenv()
@@ -56,35 +48,32 @@ def get_openai_client() -> OpenAI:
             raise
     return _openai_client
 
-async def get_classification_rules_for_category(category_name: str) -> str:
+def get_classification_rules_for_category(category_name: str) -> str:
     """
-    Load active classification rules from the database for a specific category.
+    Load active classification rules from file for a specific category.
 
     Args:
         category_name (str): The name of the category for which to fetch rules.
 
     Returns:
-        str: The combined content of active classification rules for the category.
+        str: The content of classification rules for the category.
              Returns an empty string if no rules are found or an error occurs.
     """
-    async_db_session: AsyncSession = AsyncSessionLocal()
     try:
-        rules_service = ClassificationRulesService(async_db_session) # Initialize with AsyncSession
-        category_rules = await rules_service.get_combined_rules_content(category_name)
+        rules_service = get_file_based_rules_service()
+        rule_key = f"ROOT_{category_name.upper().replace(' ', '_').replace('&', '_AND_')}"
+        category_rules = rules_service.get_rule_content(rule_key)
         if not category_rules:
-            logger.warning(f"No specific classification rules found in DB for category: {category_name}")
+            logger.warning(f"No classification rules found in file for category: {category_name} (key: {rule_key})")
             return ""
-        # logger.info(f"Successfully loaded classification rules for category '{category_name}' from database.")
         return category_rules
     except Exception as e:
-        logger.exception(f"Error loading classification rules for category '{category_name}' from database: {e}")
+        logger.exception(f"Error loading classification rules for category '{category_name}' from file: {e}")
         return "" # Return empty string on error to allow flow to continue
-    finally:
-        await async_db_session.close()
 
-async def get_hierarchical_rule_prompt_by_category(hierarchical_category_key: str) -> Optional[str]:
+def get_hierarchical_rule_prompt_by_category(hierarchical_category_key: str) -> Optional[str]:
     """
-    Load a specific hierarchical classification rule (LLM prompt) from the database.
+    Load a specific hierarchical classification rule (LLM prompt) from file.
 
     Args:
         hierarchical_category_key (str): The hierarchical category key (e.g., "ROOT", "ROOT_SCHEDULING").
@@ -92,27 +81,24 @@ async def get_hierarchical_rule_prompt_by_category(hierarchical_category_key: st
     Returns:
         Optional[str]: The LLM prompt template, or None if not found.
     """
-    async_db_session: AsyncSession = AsyncSessionLocal()
     try:
-        rules_service = HierarchicalRulesService(async_db_session)
-        rule_obj = await rules_service.get_rule_by_hierarchical_category(hierarchical_category_key) # Assuming this method will be added to service
-        if not rule_obj:
-            logger.warning(f"No hierarchical rule found in DB for category key: {hierarchical_category_key}")
+        rules_service = get_file_based_rules_service()
+        rule_content = rules_service.get_rule_content(hierarchical_category_key)
+        if not rule_content:
+            logger.warning(f"No hierarchical rule found in file for category key: {hierarchical_category_key}")
             return None
         logger.info(f"Successfully loaded hierarchical rule for category key '{hierarchical_category_key}'.")
-        return rule_obj.rule # This is the LLM prompt template
+        return rule_content
     except Exception as e:
         logger.exception(f"Error loading hierarchical rule for category key '{hierarchical_category_key}': {e}")
         return None
-    finally:
-        await async_db_session.close()
 
-async def load_rules_for_top_level_decision() -> str:
+def load_rules_for_top_level_decision() -> str:
     """
     Load classification rule prompt for differentiating the top-level categories.
-    This corresponds to the "ROOT" category in the hierarchical_classification_rules table.
+    This corresponds to the "ROOT" category in the file-based rules.
     """
-    prompt_template = await get_hierarchical_rule_prompt_by_category("ROOT")
+    prompt_template = get_hierarchical_rule_prompt_by_category("ROOT")
     if prompt_template:
         logger.info(f"Successfully loaded rule prompt for top-level category differentiation (ROOT). Length: {len(prompt_template)}")
         return prompt_template
@@ -121,20 +107,20 @@ async def load_rules_for_top_level_decision() -> str:
         return ""
 
 # This function's purpose is now to fetch the ROOT rules, as it's used by the non-hierarchical classifier.
-async def load_combined_rules_for_all_top_categories() -> str:
+def load_combined_rules_for_all_top_categories() -> str:
     """
     Loads the rule prompt from the 'ROOT' category, which is used for classifying
     among the main top-level categories.
     This is used by the classify_email_category function (non-hierarchical initial classification).
     """
     logger.info("Attempting to load 'ROOT' rules for broad top-category classification.")
-    return await load_rules_for_top_level_decision()
+    return load_rules_for_top_level_decision()
 
 
-async def load_initial_classification_rules() -> str: 
+def load_initial_classification_rules() -> str: 
     """DEPRECATED. Use load_rules_for_top_level_decision() or specific hierarchical lookups."""
     logger.warning("DEPRECATION WARNING: load_initial_classification_rules() is called. It now loads 'ROOT' rules.")
-    return await load_rules_for_top_level_decision()
+    return load_rules_for_top_level_decision()
 
 
 def create_classification_prompt(rules: str, conversation_text: str, sender_info: str, message_times: str) -> str:
@@ -144,7 +130,7 @@ def create_classification_prompt(rules: str, conversation_text: str, sender_info
     # For now, let's assume the 'rules' passed to this specific function might still be older style text.
     # If 'rules' becomes a prompt template, this function needs to inject content into it.
 
-    # IF `rules` is a prompt template like the ones from hierarchical_classification_rules:
+    # IF `rules` is a prompt template like the ones from file-based rules:
     if "{{EMAIL_CONTENT_PLACEHOLDER}}" in rules:
         prompt = rules.replace("{{EMAIL_CONTENT_PLACEHOLDER}}", conversation_text)
         # Potentially add sender_info and message_times if placeholders exist or append them.
@@ -180,7 +166,7 @@ def create_classification_prompt(rules: str, conversation_text: str, sender_info
     )
     return prompt
 
-async def classify_email_category(front_conversation_id: str, existing_tags: List[str]) -> Tuple[Optional[str], float]:
+def classify_email_category(front_conversation_id: str, existing_tags: List[str]) -> Tuple[Optional[str], float]:
     """
     Classify an email conversation's category using predefined rules with OpenAI, based on its Front ID.
     This is the NON-HIERARCHICAL classifier. It now uses the 'ROOT' rule prompt.
@@ -188,8 +174,8 @@ async def classify_email_category(front_conversation_id: str, existing_tags: Lis
     try:
         client = get_openai_client()
         
-        # This now fetches the 'ROOT' prompt template from hierarchical_classification_rules
-        llm_prompt_template = await load_combined_rules_for_all_top_categories() 
+        # This now fetches the 'ROOT' prompt template from file-based rules
+        llm_prompt_template = load_combined_rules_for_all_top_categories() 
 
         if not llm_prompt_template:
             logger.error(f"Failed to load ROOT prompt template for non-hierarchical classification of {front_conversation_id}. Cannot classify.")
@@ -625,13 +611,13 @@ def _check_for_conflicting_top_level_topics(
         )
         raise RetryableOpenAIError(str(e)) from e
 
-async def get_rules_for_classification_step(
+def get_rules_for_classification_step(
     classification_path: List[str],
     conversation_id: str # For logging
 ) -> Optional[Tuple[str, str]]: # (llm_prompt_template, rules_source_description)
     """
     Get the appropriate LLM prompt template for the current step in the hierarchy
-    by querying the hierarchical_classification_rules table.
+    by loading from file-based rules.
     """
     hierarchical_category_key: str
     if not classification_path:
@@ -642,36 +628,23 @@ async def get_rules_for_classification_step(
     
     logger.info(f"Attempting to fetch rule prompt for hierarchical category key: '{hierarchical_category_key}' for conversation {conversation_id}")
     
-    async_db_session: AsyncSession = AsyncSessionLocal()
     try:
-        h_rules_service = HierarchicalRulesService(async_db_session) 
-        
-        rule_obj = await h_rules_service.get_rule_by_hierarchical_category(hierarchical_category_key)
+        rules_service = get_file_based_rules_service()
+        rule_content = rules_service.get_rule_content(hierarchical_category_key)
 
-        if rule_obj and rule_obj.rule:
-            logger.info(f"✅ Using rule prompt from DB category '{hierarchical_category_key}'. Length: {len(rule_obj.rule)}")
-            
-            # Log full rule content only if we're already in Scheduling classification path
-            classification_path_str = " → ".join(classification_path) if classification_path else "ROOT"
-            # if "Scheduling" in classification_path_str or hierarchical_category_key.startswith("ROOT_SCHEDULING"):
-            #     logger.info(f"📋 FULL CLASSIFICATION RULE for '{hierarchical_category_key}':")
-            #     logger.info(f"📋 RULE START:")
-            #     logger.info(rule_obj.rule)
-            #     logger.info(f"📋 RULE END")
-            
-            return rule_obj.rule, hierarchical_category_key
+        if rule_content:
+            logger.info(f"✅ Using rule prompt from file '{hierarchical_category_key}.txt'. Length: {len(rule_content)}")
+            return rule_content, hierarchical_category_key
         else:
-            logger.warning(f"⚠️ No rule prompt found in DB for hierarchical category key '{hierarchical_category_key}' for conversation {conversation_id}. Rule object or rule content is missing.")
+            logger.warning(f"⚠️ No rule prompt found in file for hierarchical category key '{hierarchical_category_key}' for conversation {conversation_id}.")
             return None # Explicitly return None
             
     except Exception as e:
-        logger.error(f"Error loading rule prompt for DB category '{hierarchical_category_key}' for conversation {conversation_id}: {e}", exc_info=True)
+        logger.error(f"Error loading rule prompt for file category '{hierarchical_category_key}' for conversation {conversation_id}: {e}", exc_info=True)
         return None # Explicitly return None on error
-    finally:
-        await async_db_session.close()
 
 
-async def classify_email_tags_hierarchical(
+def classify_email_tags_hierarchical(
     front_conversation_id: str, 
     conversation_text: str, 
     sender_info: str, 
@@ -680,7 +653,7 @@ async def classify_email_tags_hierarchical(
 ) -> List[str]:
     """
     Classifies an email conversation by traversing the EMAIL_CATEGORIES hierarchy,
-    using rules from the hierarchical_classification_rules table.
+    using rules from file-based storage.
     """
     client = get_openai_client()
 
@@ -710,7 +683,7 @@ async def classify_email_tags_hierarchical(
                 return ["AI: Human review required"] if classification_path else []
 
             # Get the LLM prompt template for this classification step
-            rules_result = await get_rules_for_classification_step(
+            rules_result = get_rules_for_classification_step(
                 classification_path, 
                 front_conversation_id
             )
@@ -755,7 +728,7 @@ async def classify_email_tags_hierarchical(
 
                 # Get LLM prompt template for choosing from this list.
                 # The classification_path already includes the parent that led to this list.
-                list_rules_result = await get_rules_for_classification_step(
+                list_rules_result = get_rules_for_classification_step(
                     classification_path, 
                     front_conversation_id
                 )

@@ -518,19 +518,15 @@ def perform_tagging_task(self, email_id: str) -> Dict:
             current_front_tags = []
 
         # Classify using the hierarchical service (Adapted from tag_email)
-        new_tags: List[str] = []
-        async def _run_hierarchical_classification_async():
-            nonlocal new_tags
-            # Include document processing results if available
-            document_results = email_obj.ocr_results if hasattr(email_obj, 'ocr_results') and email_obj.ocr_results else None
-            new_tags = await classify_email_tags_hierarchical(
-                front_conversation_id=front_conversation_id,
-                conversation_text=conversation_text,
-                sender_info=sender_info,
-                message_times=message_times,
-                document_analysis_results=document_results
-            )
-        asyncio.run(_run_hierarchical_classification_async())
+        # Include document processing results if available
+        document_results = email_obj.ocr_results if hasattr(email_obj, 'ocr_results') and email_obj.ocr_results else None
+        new_tags = classify_email_tags_hierarchical(
+            front_conversation_id=front_conversation_id,
+            conversation_text=conversation_text,
+            sender_info=sender_info,
+            message_times=message_times,
+            document_analysis_results=document_results
+        )
 
         # --- OCR-BASED LIEN CLASSIFICATION OVERRIDE ---
         # Check if email has OCR results and is classified under Accounts Receivable -> Liens

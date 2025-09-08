@@ -1,0 +1,20 @@
+Sub-Classification Rules for Accounts Receivable - Case Updates Category
+===============================================================
+**Sub-Categories:** New Attorney, Drop Letter, Drop Pending, Promise to send payment, Waiting to clear liability, Waiting on settlement check, Sent payment but not received, Refund Request, Payment on way.
+
+Please use the following rules to sub-classify the provided email content, already identified as 'Accounts Receivable - Case Updates', into one of the above sub-categories.
+
+--- START Case Updates Sub-Classification RULES ---
+
+1. **Nature of the Update**: Based on the email content, determine the specific nature of the case update and classify as follows:
+   - If the email indicates the involvement of a **new legal representative** (e.g., new attorney, law firm change), classify as 'New Attorney'.
+   - If the email is a **formal notification to drop a case or patient**, or a request to do so, classify as 'Drop Letter'.
+   - If the email discusses that a **case or patient drop has been initiated but is not yet finalized** or is pending confirmation, classify as 'Drop Pending'.
+   - If the email states a **commitment or promise to send a payment soon**, classify as 'Promise to send payment'.
+   - If the email mentions that payment is **pending the resolution of liability issues** (e.g., waiting for insurance to determine fault), classify as 'Waiting to clear liability'.
+   - If the email indicates an **anticipation of receiving payment from a settlement**, classify as 'Waiting on settlement check'.
+   - If the email states that **payment was sent but has not yet been received or confirmed** by the recipient, classify as 'Sent payment but not received'.
+   - If the email is a **request for money to be returned** (e.g., overpayment, incorrect charge), classify as 'Refund Request'.
+   - If the email confirms that a **payment is currently en route or has just been dispatched**, classify as 'Payment on way'.
+
+--- END Case Updates Sub-Classification RULES --- 

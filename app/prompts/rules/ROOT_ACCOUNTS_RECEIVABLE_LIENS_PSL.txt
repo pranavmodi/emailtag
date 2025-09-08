@@ -1,0 +1,14 @@
+Sub-Classification Rules for Accounts Receivable - Liens - PSL Category
+=====================================================================
+**Sub-Categories:** Rad Lien, Tech Lien, Lien Modified.
+
+Please use the following rules to sub-classify the provided email content, already identified as 'Accounts Receivable - Liens - PSL', into one of the above sub-categories.
+
+--- START PSL Sub-Classification RULES ---
+
+1. **PSL Lien Type or Status**: Based on the email content, determine the specific type or status of the Prescription Service Lien (PSL) and classify as follows:
+   - If the email pertains to a **lien specifically for radiology services**, classify as 'Rad Lien'.
+   - If the email pertains to a **lien specifically for technologist services**, classify as 'Tech Lien'.
+   - If the email indicates that an **existing PSL has been changed, updated, or amended**, classify as 'Lien Modified'.
+
+--- END PSL Sub-Classification RULES --- 

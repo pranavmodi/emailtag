@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Hierarchical Classification Rules Management CLI
+Simple Classification Rules Manager CLI
 
-This script provides a command-line interface for navigating and managing 
+This script provides a straightforward interface for viewing and managing 
 hierarchical classification rules used by the email tagging system.
 
 Features:
-- Navigate hierarchy tree structure
-- View rule content with syntax highlighting
+- List all rules with numbered selection
+- View rule content
 - Update rule names and content
-- Search rules by category or name
-- Export/import rules for backup
+- Search rules
+- Export/import rules
 """
 
 import os
@@ -18,12 +18,11 @@ import sys
 import asyncio
 import json
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 import uuid
 import tempfile
 import subprocess
-from dataclasses import dataclass
 
 # Add the project root to Python path
 project_root = Path(__file__).parent.parent
@@ -34,128 +33,56 @@ from app.services.hierarchical_rules_service import HierarchicalRulesService
 from app.models.hierarchical_classification_rule import HierarchicalClassificationRule
 
 
-@dataclass
-class RuleNode:
-    """Represents a rule node in the hierarchy tree."""
-    category: str
-    name: str
-    rule_id: str
-    children: List['RuleNode']
-    level: int
-    has_content: bool
-
-
-class HierarchicalRulesManager:
-    """CLI manager for hierarchical classification rules."""
+class SimpleRulesManager:
+    """Simple CLI manager for hierarchical classification rules."""
     
     def __init__(self):
-        self.rules_cache: List[HierarchicalClassificationRule] = []
-        self.hierarchy_tree: List[RuleNode] = []
-        self.current_path: List[str] = []
+        self.rules: List[HierarchicalClassificationRule] = []
         
     async def initialize(self):
         """Initialize the manager and load rules from database."""
         async with AsyncSessionLocal() as db:
             service = HierarchicalRulesService(db)
-            self.rules_cache = await service.get_all_hierarchical_rules(include_rule_content=True)
-            self._build_hierarchy_tree()
-            
-    def _build_hierarchy_tree(self):
-        """Build the hierarchy tree from flat rule list."""
-        # Group rules by their hierarchy levels
-        rules_by_category = {rule.category: rule for rule in self.rules_cache}
-        
-        # Build tree structure
-        self.hierarchy_tree = []
-        processed = set()
-        
-        def build_node(category: str, level: int = 0) -> Optional[RuleNode]:
-            if category in processed:
-                return None
-                
-            rule = rules_by_category.get(category)
-            if not rule:
-                return None
-                
-            processed.add(category)
-            
-            node = RuleNode(
-                category=category,
-                name=rule.name,
-                rule_id=str(rule.id),
-                children=[],
-                level=level,
-                has_content=bool(rule.rule.strip())
-            )
-            
-            # Find children (categories that start with this category + "_")
-            prefix = category + "_" if category != "ROOT" else "ROOT_"
-            for child_category in rules_by_category.keys():
-                if child_category != category and child_category.startswith(prefix):
-                    # Make sure it's a direct child (no additional underscores)
-                    remaining = child_category[len(prefix):]
-                    if "_" not in remaining:
-                        child_node = build_node(child_category, level + 1)
-                        if child_node:
-                            node.children.append(child_node)
-            
-            return node
-        
-        # Start with ROOT and build tree
-        root_node = build_node("ROOT")
-        if root_node:
-            self.hierarchy_tree = [root_node]
-            
-        # Add any other top-level categories that don't start with ROOT
-        for category in rules_by_category.keys():
-            if not category.startswith("ROOT") and category not in processed:
-                node = build_node(category)
-                if node:
-                    self.hierarchy_tree.append(node)
+            self.rules = await service.get_all_hierarchical_rules(include_rule_content=True)
+            # Sort rules by category for consistent ordering
+            self.rules.sort(key=lambda r: r.category)
     
-    def _print_tree(self, nodes: List[RuleNode], show_ids: bool = False, highlight_category: str = None):
-        """Print the hierarchy tree with visual formatting."""
-        for i, node in enumerate(nodes):
-            is_last = i == len(nodes) - 1
-            prefix = "└── " if is_last else "├── "
+    def display_rules_list(self):
+        """Display numbered list of all rules."""
+        if not self.rules:
+            print("⚪ No rules found in database.")
+            return
             
-            # Add indentation for nested levels
-            indent = "    " * node.level
+        print(f"\n📋 CLASSIFICATION RULES ({len(self.rules)} total)")
+        print("="*80)
+        
+        for i, rule in enumerate(self.rules, 1):
+            content_icon = "📝" if rule.rule.strip() else "⚪"
             
-            # Formatting
-            name_color = "\033[92m" if highlight_category == node.category else "\033[94m"  # Green if highlighted, blue otherwise
-            reset_color = "\033[0m"
-            content_indicator = " 📝" if node.has_content else " ⚪"
-            id_text = f" [{node.rule_id[:8]}]" if show_ids else ""
+            # Truncate long names for better display
+            name_display = rule.name[:50] + "..." if len(rule.name) > 50 else rule.name
+            category_display = rule.category[:30] + "..." if len(rule.category) > 30 else rule.category
             
-            print(f"{indent}{prefix}{name_color}{node.name}{reset_color}{content_indicator}{id_text}")
-            print(f"{indent}    Category: {node.category}")
+            print(f"{i:3d}. {content_icon} {name_display}")
+            print(f"      Category: {category_display}")
+            print(f"      Updated: {rule.updated_at.strftime('%Y-%m-%d %H:%M')}")
             
-            if node.children:
-                self._print_tree(node.children, show_ids, highlight_category)
+        print("="*80)
     
-    def _find_node_by_category(self, category: str, nodes: List[RuleNode] = None) -> Optional[RuleNode]:
-        """Find a node by its category key."""
-        if nodes is None:
-            nodes = self.hierarchy_tree
-            
-        for node in nodes:
-            if node.category == category:
-                return node
-            if node.children:
-                result = self._find_node_by_category(category, node.children)
-                if result:
-                    return result
+    def find_rule_by_number(self, num: int) -> Optional[HierarchicalClassificationRule]:
+        """Find rule by its display number."""
+        if 1 <= num <= len(self.rules):
+            return self.rules[num - 1]
         return None
     
-    def _find_rule_by_id(self, rule_id: str) -> Optional[HierarchicalClassificationRule]:
-        """Find a rule by its ID."""
-        for rule in self.rules_cache:
+    def find_rule_by_id(self, rule_id: str) -> Optional[HierarchicalClassificationRule]:
+        """Find a rule by its ID (supports partial matches)."""
+        for rule in self.rules:
             if str(rule.id) == rule_id or str(rule.id).startswith(rule_id):
                 return rule
         return None
     
-    def _format_rule_content(self, content: str, max_width: int = 100) -> str:
+    def format_rule_content(self, content: str, max_width: int = 100) -> str:
         """Format rule content for display."""
         lines = content.split('\n')
         formatted_lines = []
@@ -173,74 +100,10 @@ class HierarchicalRulesManager:
                     
         return '\n'.join(formatted_lines)
     
-    async def show_tree(self, show_ids: bool = False):
-        """Display the complete hierarchy tree."""
+    def view_rule(self, rule: HierarchicalClassificationRule):
+        """Display rule content."""
         print("\n" + "="*80)
-        print("📋 HIERARCHICAL CLASSIFICATION RULES TREE")
-        print("="*80)
-        print("Legend: 📝 = Has content, ⚪ = No content\n")
-        
-        if self.hierarchy_tree:
-            self._print_tree(self.hierarchy_tree, show_ids)
-        else:
-            print("No rules found in database.")
-        print()
-    
-    async def navigate_to_category(self, category: str):
-        """Navigate to a specific category."""
-        node = self._find_node_by_category(category)
-        if node:
-            self.current_path = [category]
-            print(f"\n📍 Navigated to: {node.name} ({category})")
-            await self.show_current_context()
-        else:
-            print(f"❌ Category '{category}' not found.")
-    
-    async def show_current_context(self):
-        """Show current location and available options."""
-        if not self.current_path:
-            await self.show_tree()
-            return
-            
-        current_category = self.current_path[-1]
-        node = self._find_node_by_category(current_category)
-        
-        if not node:
-            print("❌ Current location invalid.")
-            self.current_path = []
-            return
-            
-        print(f"\n📍 Current Location: {node.name}")
-        print(f"   Category: {current_category}")
-        print(f"   Level: {node.level}")
-        print(f"   Has Content: {'Yes 📝' if node.has_content else 'No ⚪'}")
-        
-        if node.children:
-            print(f"\n🌳 Children ({len(node.children)}):")
-            for child in node.children:
-                content_icon = "📝" if child.has_content else "⚪"
-                print(f"   • {child.name} ({child.category}) {content_icon}")
-        else:
-            print("\n🍃 No children (leaf node)")
-    
-    async def view_rule_content(self, identifier: str):
-        """View the content of a rule by category or ID."""
-        rule = None
-        
-        # Try to find by category first
-        node = self._find_node_by_category(identifier)
-        if node:
-            rule = self._find_rule_by_id(node.rule_id)
-        else:
-            # Try to find by ID
-            rule = self._find_rule_by_id(identifier)
-        
-        if not rule:
-            print(f"❌ Rule not found: {identifier}")
-            return
-        
-        print("\n" + "="*80)
-        print(f"📝 RULE CONTENT: {rule.name}")
+        print(f"📝 RULE: {rule.name}")
         print("="*80)
         print(f"Category: {rule.category}")
         print(f"ID: {rule.id}")
@@ -249,93 +112,71 @@ class HierarchicalRulesManager:
         print("-"*80)
         
         if rule.rule.strip():
-            formatted_content = self._format_rule_content(rule.rule)
+            formatted_content = self.format_rule_content(rule.rule)
             print(formatted_content)
         else:
             print("⚪ No content defined for this rule.")
         
         print("="*80)
     
-    async def update_rule(self, identifier: str, field: str = None):
+    async def update_rule(self, rule: HierarchicalClassificationRule):
         """Update a rule's name or content."""
-        rule = None
-        
-        # Find the rule
-        node = self._find_node_by_category(identifier)
-        if node:
-            rule = self._find_rule_by_id(node.rule_id)
-        else:
-            rule = self._find_rule_by_id(identifier)
-        
-        if not rule:
-            print(f"❌ Rule not found: {identifier}")
-            return
-        
-        print(f"\n📝 Updating Rule: {rule.name}")
+        print(f"\n📝 UPDATING RULE: {rule.name}")
         print(f"Category: {rule.category}")
-        print(f"Current Name: {rule.name}")
         
-        # Determine what to update
-        update_name = False
-        update_content = False
+        print("\nWhat would you like to update?")
+        print("1. Name only")
+        print("2. Content only") 
+        print("3. Both name and content")
+        print("0. Cancel")
         
-        if field == "name":
-            update_name = True
-        elif field == "content":
-            update_content = True
-        else:
-            # Interactive mode - ask user
-            print("\nWhat would you like to update?")
-            print("1. Name")
-            print("2. Content")
-            print("3. Both")
-            
-            choice = input("Enter choice (1-3): ").strip()
-            if choice == "1":
-                update_name = True
-            elif choice == "2":
-                update_content = True
-            elif choice == "3":
-                update_name = True
-                update_content = True
-            else:
-                print("❌ Invalid choice.")
-                return
+        choice = input("\nEnter choice (0-3): ").strip()
         
         new_name = None
         new_content = None
         
-        # Get new name
-        if update_name:
-            new_name = input(f"Enter new name (current: {rule.name}): ").strip()
+        if choice == "0":
+            print("❌ Update cancelled.")
+            return
+        
+        # Update name
+        if choice in ["1", "3"]:
+            print(f"\nCurrent name: {rule.name}")
+            new_name = input("Enter new name (or press Enter to keep current): ").strip()
             if not new_name:
                 new_name = None
                 print("⚠️  Name unchanged.")
         
-        # Get new content
-        if update_content:
+        # Update content  
+        if choice in ["2", "3"]:
             print(f"\nCurrent content preview:")
             preview = rule.rule[:200] + "..." if len(rule.rule) > 200 else rule.rule
-            print(f"  {preview}")
+            if preview.strip():
+                print(f"  {preview}")
+            else:
+                print("  ⚪ No current content")
             
             print("\nChoose content update method:")
-            print("1. Enter content directly")
+            print("1. Type content directly")
             print("2. Edit in external editor")
+            print("0. Skip content update")
             
-            method = input("Enter choice (1-2): ").strip()
+            content_choice = input("Enter choice (0-2): ").strip()
             
-            if method == "1":
-                print("Enter new content (press Enter twice when done):")
+            if content_choice == "1":
+                print("\nEnter new content (press Ctrl+D when done, or type '###END###' on a line by itself):")
                 lines = []
-                while True:
-                    line = input()
-                    if line == "" and lines and lines[-1] == "":
-                        lines.pop()  # Remove the last empty line
-                        break
-                    lines.append(line)
+                try:
+                    while True:
+                        line = input()
+                        if line.strip() == "###END###":
+                            break
+                        lines.append(line)
+                except EOFError:
+                    pass  # Ctrl+D pressed
                 new_content = '\n'.join(lines)
                 
-            elif method == "2":
+            elif content_choice == "2":
                 # Use external editor
                 with tempfile.NamedTemporaryFile(mode='w+', suffix='.txt', delete=False) as f:
                     f.write(rule.rule)
@@ -346,13 +187,19 @@ class HierarchicalRulesManager:
                     subprocess.run([editor, temp_file], check=True)
                     with open(temp_file, 'r') as f:
                         new_content = f.read()
+                except subprocess.CalledProcessError:
+                    print("❌ Editor failed. Content not updated.")
+                except FileNotFoundError:
+                    print(f"❌ Editor '{editor}' not found. Set EDITOR environment variable.")
                 finally:
-                    os.unlink(temp_file)
-            else:
-                print("❌ Invalid choice.")
-                return
+                    try:
+                        os.unlink(temp_file)
+                    except:
+                        pass
+            elif content_choice == "0":
+                print("⚠️  Content update skipped.")
         
-        # Perform the update
+        # Perform the update if we have changes
         if new_name or new_content:
             try:
                 async with AsyncSessionLocal() as db:
@@ -364,8 +211,21 @@ class HierarchicalRulesManager:
                     )
                     
                     if updated_rule:
-                        print("✅ Rule updated successfully!")
-                        # Refresh cache
+                        print("\n✅ Rule updated successfully!")
+                        
+                        # Show what changed
+                        changes = []
+                        if new_name:
+                            changes.append(f"Name: '{rule.name}' → '{new_name}'")
+                        if new_content is not None:
+                            content_preview = new_content[:50] + "..." if len(new_content) > 50 else new_content
+                            changes.append(f"Content updated ({len(new_content)} characters)")
+                        
+                        print("Changes made:")
+                        for change in changes:
+                            print(f"  • {change}")
+                        
+                        # Refresh our local copy
                         await self.initialize()
                     else:
                         print("❌ Failed to update rule.")
@@ -375,26 +235,25 @@ class HierarchicalRulesManager:
         else:
             print("⚠️  No changes made.")
     
-    async def search_rules(self, query: str):
-        """Search rules by name or category."""
+    def search_rules(self, query: str):
+        """Search rules by name, category, or content."""
         query_lower = query.lower()
         matches = []
         
-        for rule in self.rules_cache:
+        for i, rule in enumerate(self.rules, 1):
             if (query_lower in rule.name.lower() or 
                 query_lower in rule.category.lower() or
                 query_lower in rule.rule.lower()):
-                matches.append(rule)
+                matches.append((i, rule))
         
         if matches:
             print(f"\n🔍 Found {len(matches)} matching rules:")
             print("-" * 80)
             
-            for rule in matches:
+            for num, rule in matches:
                 content_icon = "📝" if rule.rule.strip() else "⚪"
-                print(f"{content_icon} {rule.name}")
-                print(f"   Category: {rule.category}")
-                print(f"   ID: {str(rule.id)[:8]}")
+                print(f"{num:3d}. {content_icon} {rule.name}")
+                print(f"      Category: {rule.category}")
                 
                 # Show content preview if query matches content
                 if query_lower in rule.rule.lower():
@@ -402,10 +261,9 @@ class HierarchicalRulesManager:
                     for i, line in enumerate(lines):
                         if query_lower in line:
                             original_line = rule.rule.split('\n')[i]
-                            preview = original_line[:100] + "..." if len(original_line) > 100 else original_line
-                            print(f"   Content preview: ...{preview}...")
+                            preview = original_line[:80] + "..." if len(original_line) > 80 else original_line
+                            print(f"      Preview: ...{preview}...")
                             break
-                
                 print()
         else:
             print(f"❌ No rules found matching '{query}'")
@@ -414,10 +272,10 @@ class HierarchicalRulesManager:
         """Export all rules to JSON file."""
         if not output_file:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_file = f"hierarchical_rules_export_{timestamp}.json"
+            output_file = f"rules_export_{timestamp}.json"
         
         rules_data = []
-        for rule in self.rules_cache:
+        for rule in self.rules:
             rules_data.append({
                 "id": str(rule.id),
                 "name": rule.name,
@@ -427,66 +285,68 @@ class HierarchicalRulesManager:
                 "updated_at": rule.updated_at.isoformat()
             })
         
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(rules_data, f, indent=2, ensure_ascii=False)
-        
-        print(f"✅ Exported {len(rules_data)} rules to {output_file}")
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(rules_data, f, indent=2, ensure_ascii=False)
+            
+            print(f"✅ Exported {len(rules_data)} rules to {output_file}")
+        except Exception as e:
+            print(f"❌ Export failed: {e}")
     
     def print_help(self):
         """Print help information."""
         help_text = """
-📋 Hierarchical Classification Rules Manager - Commands:
+📋 Simple Classification Rules Manager - Commands:
 
-NAVIGATION:
-  tree [--ids]              - Show complete hierarchy tree
-  nav <category>            - Navigate to specific category
-  context                   - Show current location and context
-  
-VIEWING:
-  view <category|id>        - View rule content
-  search <query>            - Search rules by name/category/content
-  
-UPDATING:
-  update <category|id>      - Update rule interactively
-  update <category|id> name - Update rule name only
-  update <category|id> content - Update rule content only
+BASIC COMMANDS:
+  <number>                 - Select rule by number (interactive menu)
+  list                     - Show numbered list of all rules
+  view <number>            - View content of rule by number
+  update <number>          - Update rule by number
+  search <query>           - Search rules by name/category/content
   
 MANAGEMENT:
-  export [filename]         - Export all rules to JSON
-  reload                    - Reload rules from database
-  stats                     - Show statistics
+  export [filename]        - Export all rules to JSON
+  reload                   - Reload rules from database
+  stats                    - Show statistics
   
 OTHER:
-  help                      - Show this help
-  quit, exit, q             - Exit the program
+  help                     - Show this help
+  quit, exit, q            - Exit the program
 
 EXAMPLES:
-  tree --ids                           # Show tree with rule IDs
-  nav ROOT_SCHEDULING_RX              # Navigate to RX scheduling rules
-  view ROOT_SCHEDULING_RX             # View RX scheduling rule content
-  search "medical records"            # Search for rules containing "medical records"
-  update a1b2c3d4 content            # Update content for rule with ID a1b2c3d4
-  export my_rules_backup.json        # Export rules to specific file
+  1                        # Select rule #1 (shows interactive menu)
+  list                     # Show all rules with numbers
+  view 5                   # View content of rule #5 directly
+  update 5                 # Update rule #5 directly
+  search "scheduling"      # Find rules containing "scheduling"
+  export backup.json       # Export to specific file
+  
+TIPS:
+  • Use 'list' first to see all rules with their numbers
+  • Rule numbers correspond to the list order
+  • Content can be edited in external editor (set EDITOR env var)
+  • Type '###END###' on its own line to finish direct content entry
 """
         print(help_text)
 
 
 async def main():
     """Main CLI loop."""
-    print("🚀 Hierarchical Classification Rules Manager")
+    print("🚀 Simple Classification Rules Manager")
     print("=" * 60)
     
-    manager = HierarchicalRulesManager()
+    manager = SimpleRulesManager()
     
     try:
         print("Loading rules from database...")
         await manager.initialize()
-        print(f"✅ Loaded {len(manager.rules_cache)} rules")
+        print(f"✅ Loaded {len(manager.rules)} rules")
         
-        # Show initial tree
-        await manager.show_tree()
+        # Show initial list
+        manager.display_rules_list()
         
-        print("\nType 'help' for available commands, 'quit' to exit.")
+        print(f"\n🎯 Type 'help' for commands, or start with 'view <number>' to view a rule!")
         
         while True:
             try:
@@ -505,27 +365,34 @@ async def main():
                 elif cmd == 'help':
                     manager.print_help()
                 
-                elif cmd == 'tree':
-                    show_ids = '--ids' in parts
-                    await manager.show_tree(show_ids)
-                
-                elif cmd == 'nav' and len(parts) > 1:
-                    await manager.navigate_to_category(parts[1])
-                
-                elif cmd == 'context':
-                    await manager.show_current_context()
+                elif cmd == 'list':
+                    manager.display_rules_list()
                 
                 elif cmd == 'view' and len(parts) > 1:
-                    await manager.view_rule_content(parts[1])
+                    try:
+                        num = int(parts[1])
+                        rule = manager.find_rule_by_number(num)
+                        if rule:
+                            manager.view_rule(rule)
+                        else:
+                            print(f"❌ Invalid rule number: {num}. Use 'list' to see available numbers.")
+                    except ValueError:
+                        print("❌ Invalid number. Use 'view <number>'")
+                
+                elif cmd == 'update' and len(parts) > 1:
+                    try:
+                        num = int(parts[1])
+                        rule = manager.find_rule_by_number(num)
+                        if rule:
+                            await manager.update_rule(rule)
+                        else:
+                            print(f"❌ Invalid rule number: {num}. Use 'list' to see available numbers.")
+                    except ValueError:
+                        print("❌ Invalid number. Use 'update <number>'")
                 
                 elif cmd == 'search' and len(parts) > 1:
                     query = ' '.join(parts[1:])
-                    await manager.search_rules(query)
-                
-                elif cmd == 'update' and len(parts) > 1:
-                    identifier = parts[1]
-                    field = parts[2] if len(parts) > 2 else None
-                    await manager.update_rule(identifier, field)
+                    manager.search_rules(query)
                 
                 elif cmd == 'export':
                     filename = parts[1] if len(parts) > 1 else None
@@ -534,21 +401,50 @@ async def main():
                 elif cmd == 'reload':
                     print("Reloading rules from database...")
                     await manager.initialize()
-                    print(f"✅ Reloaded {len(manager.rules_cache)} rules")
+                    print(f"✅ Reloaded {len(manager.rules)} rules")
+                    manager.display_rules_list()
                 
                 elif cmd == 'stats':
-                    total_rules = len(manager.rules_cache)
-                    rules_with_content = sum(1 for r in manager.rules_cache if r.rule.strip())
-                    categories = len(set(r.category for r in manager.rules_cache))
+                    total_rules = len(manager.rules)
+                    rules_with_content = sum(1 for r in manager.rules if r.rule.strip())
+                    categories = len(set(r.category for r in manager.rules))
                     
                     print(f"\n📊 Statistics:")
                     print(f"  Total rules: {total_rules}")
                     print(f"  Rules with content: {rules_with_content}")
                     print(f"  Empty rules: {total_rules - rules_with_content}")
-                    print(f"  Categories: {categories}")
+                    print(f"  Unique categories: {categories}")
+                    
+                    if total_rules > 0:
+                        avg_content_length = sum(len(r.rule) for r in manager.rules) / total_rules
+                        print(f"  Average content length: {avg_content_length:.0f} characters")
                 
                 else:
-                    print("❌ Unknown command. Type 'help' for available commands.")
+                    # Check if it's just a number (direct rule selection)
+                    try:
+                        num = int(cmd)
+                        rule = manager.find_rule_by_number(num)
+                        if rule:
+                            print(f"\n🎯 Selected rule #{num}: {rule.name}")
+                            print("What would you like to do?")
+                            print("1. View content")
+                            print("2. Update rule")
+                            print("0. Back to main menu")
+                            
+                            action = input("Enter choice (0-2): ").strip()
+                            
+                            if action == "1":
+                                manager.view_rule(rule)
+                            elif action == "2":
+                                await manager.update_rule(rule)
+                            elif action == "0":
+                                print("↩️  Back to main menu.")
+                            else:
+                                print("❌ Invalid choice.")
+                        else:
+                            print(f"❌ Invalid rule number: {num}. Use 'list' to see available numbers.")
+                    except ValueError:
+                        print("❌ Unknown command. Type 'help' for available commands.")
                     
             except KeyboardInterrupt:
                 print("\n👋 Goodbye!")
