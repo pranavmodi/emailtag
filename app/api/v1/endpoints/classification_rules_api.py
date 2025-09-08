@@ -1,316 +1,376 @@
-"""API Endpoints for managing classification rules."""
+"""API Endpoints for managing file-based classification rules."""
 
 import logging
-from typing import List
-import os # Added for path manipulation
-import asyncio # Added for to_thread
+from typing import List, Dict, Any
+import os
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, Path
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.orm import Session # Keep Session for type hinting if used elsewhere, or remove if not
-from sqlalchemy.ext.asyncio import AsyncSession # Corrected import
-import uuid # For rule_id type conversion
 
-from app.db.session import get_db
-from app.services.classification_rules_service import (
-    ClassificationRulesService,
-    get_classification_rules_service,
-)
-from app.models.classification_rule import ClassificationRule as ClassificationRuleModel
-from app.services.classification_rule_parser import parse_default_rules, DEFAULT_RULES_FILE_PATH
-from scripts.populate_default_rules import (
-    PRIMARY_RULE_NAME, 
-    ROOT_CATEGORY_NAME, 
-    create_or_update_rule,
-    populate_hierarchical_rules
-)
-
-from app.services.hierarchical_rules_service import (
-    HierarchicalRulesService,
-    get_hierarchical_rules_service,
-)
-from app.models.hierarchical_classification_rule import HierarchicalClassificationRule # For type hinting if needed
+from app.services.file_based_rules_service import get_file_based_rules_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 # Setup templates
-# Ensure you have a 'templates' directory in your project root or adjust path
-# You might need to create this directory and an HTML file within it.
-# For example, create a templates/classification_rules.html file
 templates = Jinja2Templates(directory="app/templates")
-
-# Schema for API responses (optional, but good practice with Pydantic)
-# from pydantic import BaseModel
-# class ClassificationRuleResponse(BaseModel):
-#     id: str
-#     category: str
-#     name: str
-#     content: str
-#     is_active: bool
-#     version: int
-#     created_by: Optional[str]
-#     updated_by: Optional[str]
-#     class Config:
-#         orm_mode = True
 
 
 @router.get("/rules", response_class=HTMLResponse, name="view_classification_rules_ui")
-async def view_rules_ui(
-    request: Request, 
-    # Old service, comment out or remove if no longer used by this specific endpoint
-    # rules_service: ClassificationRulesService = Depends(get_classification_rules_service)
-    # New service for hierarchical rules
-    hierarchical_rules_service: HierarchicalRulesService = Depends(get_hierarchical_rules_service)
-):
-    """Display the UI for managing classification rules. Now uses hierarchical rules."""
+async def view_rules_ui(request: Request):
+    """Display the UI for managing file-based classification rules."""
     try:
-        # Fetch hierarchical rules. Decide if you want to include full rule content on the main page.
-        # For performance, if rules are very long, you might set include_rule_content=False
-        # and have a separate view/edit page that loads the full content.
-        # For now, let's assume we want it for the display.
-        all_hier_rules = await hierarchical_rules_service.get_all_hierarchical_rules(include_rule_content=True)
+        rules_service = get_file_based_rules_service()
+        all_rules = rules_service.list_all_rules()
         
-        # The concepts of 'all_categories' and 'top_level_categories' as previously fetched
-        # from the old ClassificationRulesService might need to be re-evaluated or removed
-        # if they don't directly apply or are sourced differently with the new table.
-        # For now, I will comment them out to avoid errors if they are not needed by the new template.
-        # all_categories = await rules_service.get_all_categories()
-        # top_level_categories = ["Scheduling", "Medical Records & Images", "Accounts Receivable"]
-
-        logger.info(f"Fetched {len(all_hier_rules)} hierarchical rules for UI.")
+        logger.info(f"Fetched {len(all_rules)} file-based rules for UI.")
         return templates.TemplateResponse(
-            "hierarchical_rules.html", # New template name
+            "file_based_rules.html",
             {
                 "request": request, 
-                "rules": all_hier_rules, # Pass the new rules data
-                # "categories": all_categories, # Commented out
-                # "top_level_categories": top_level_categories # Commented out
+                "rules": all_rules,
+                "total_rules": len(all_rules),
+                "rules_with_content": sum(1 for r in all_rules if r['has_content']),
+                "total_chars": sum(r['content_length'] for r in all_rules)
             }
         )
     except Exception as e:
-        logger.error(f"Error fetching hierarchical rules for UI: {e}", exc_info=True)
+        logger.error(f"Error fetching file-based rules for UI: {e}", exc_info=True)
         return HTMLResponse(content=f"<html><body><h1>Error loading rules: {e}</h1></body></html>", status_code=500)
+
+
+@router.get("/rules/api/list")
+async def list_rules_api():
+    """API endpoint to list all rules as JSON."""
+    try:
+        rules_service = get_file_based_rules_service()
+        all_rules = rules_service.list_all_rules()
+        
+        # Convert datetime objects to strings for JSON serialization
+        for rule in all_rules:
+            rule['modified_time'] = rule['modified_time'].isoformat()
+            
+        return JSONResponse(content={
+            "success": True,
+            "rules": all_rules,
+            "total": len(all_rules)
+        })
+    except Exception as e:
+        logger.error(f"Error in list rules API: {e}", exc_info=True)
+        return JSONResponse(content={
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
+@router.get("/rules/api/get/{rule_key}")
+async def get_rule_api(rule_key: str):
+    """API endpoint to get a specific rule's content."""
+    try:
+        rules_service = get_file_based_rules_service()
+        content = rules_service.get_rule_content(rule_key)
+        
+        if content is None:
+            return JSONResponse(content={
+                "success": False,
+                "error": f"Rule '{rule_key}' not found"
+            }, status_code=404)
+            
+        return JSONResponse(content={
+            "success": True,
+            "rule_key": rule_key,
+            "content": content,
+            "length": len(content)
+        })
+    except Exception as e:
+        logger.error(f"Error getting rule {rule_key}: {e}", exc_info=True)
+        return JSONResponse(content={
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
+@router.post("/rules/api/save/{rule_key}")
+async def save_rule_api(
+    rule_key: str,
+    request: Request
+):
+    """API endpoint to save rule content."""
+    try:
+        body = await request.json()
+        content = body.get('content', '')
+        
+        rules_service = get_file_based_rules_service()
+        success = rules_service.save_rule_content(rule_key, content)
+        
+        if success:
+            return JSONResponse(content={
+                "success": True,
+                "message": f"Rule '{rule_key}' saved successfully",
+                "rule_key": rule_key,
+                "length": len(content)
+            })
+        else:
+            return JSONResponse(content={
+                "success": False,
+                "error": f"Failed to save rule '{rule_key}'"
+            }, status_code=500)
+            
+    except Exception as e:
+        logger.error(f"Error saving rule {rule_key}: {e}", exc_info=True)
+        return JSONResponse(content={
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
 
 @router.post("/rules/add", name="add_classification_rule")
 async def add_rule(
     request: Request,
-    category: str = Form(...),
-    name: str = Form(...),
-    content: str = Form(...),
-    created_by: str = Form(None), # Or get from logged-in user
-    rules_service: ClassificationRulesService = Depends(get_classification_rules_service)
+    rule_key: str = Form(...),
+    content: str = Form(...)
 ):
     """Add a new classification rule via form submission."""
     try:
-        await rules_service.create_rule(category, name, content, created_by)
-        # Redirect to the rules UI page after adding
-        # Use the route name for url_for to be robust against path changes
-        return RedirectResponse(url=request.url_for("view_classification_rules_ui"), status_code=303)
+        rules_service = get_file_based_rules_service()
+        
+        # Check if rule already exists
+        if rules_service.rule_exists(rule_key):
+            return HTMLResponse(
+                content=f"<html><body><h1>Error: Rule '{rule_key}' already exists</h1>"
+                f"<a href='{request.url_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", 
+                status_code=400
+            )
+        
+        success = rules_service.save_rule_content(rule_key, content)
+        
+        if success:
+            return RedirectResponse(url=request.url_for("view_classification_rules_ui"), status_code=303)
+        else:
+            return HTMLResponse(
+                content=f"<html><body><h1>Error: Failed to create rule '{rule_key}'</h1>"
+                f"<a href='{request.url_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", 
+                status_code=500
+            )
+            
     except Exception as e:
         logger.error(f"Error adding rule: {e}", exc_info=True)
-        # Handle error, maybe show form again with error message
-        # For simplicity, just redirecting back or showing a basic error
-        return HTMLResponse(content=f"<html><body><h1>Error adding rule: {e}</h1><a href='{request.url_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", status_code=500)
+        return HTMLResponse(
+            content=f"<html><body><h1>Error adding rule: {e}</h1>"
+            f"<a href='{request.url_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", 
+            status_code=500
+        )
 
-@router.post("/rules/update/{rule_id}", name="update_classification_rule")
+
+@router.post("/rules/update/{rule_key}", name="update_classification_rule")
 async def update_rule_form(
-    rule_id: str, 
+    rule_key: str, 
     request: Request, 
-    name: str = Form(...),
-    content: str = Form(...),
-    updated_by: str = Form(None), # Or get from logged-in user
-    rules_service: ClassificationRulesService = Depends(get_classification_rules_service)
+    content: str = Form(...)
 ):
     """Update an existing rule via form submission."""
     try:
-        rule = await rules_service.update_rule(rule_id, name, content, updated_by)
-        if not rule:
-            raise HTTPException(status_code=404, detail="Rule not found")
-        return RedirectResponse(url=request.url_for("view_classification_rules_ui"), status_code=303)
-    except HTTPException:
-        raise # Re-raise HTTPExceptions to let FastAPI handle them
-    except Exception as e:
-        logger.error(f"Error updating rule {rule_id}: {e}", exc_info=True)
-        return HTMLResponse(content=f"<html><body><h1>Error updating rule: {e}</h1><a href='{request.url_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", status_code=500)
-
-@router.post("/rules/deactivate/{rule_id}", name="deactivate_classification_rule")
-async def deactivate_rule_form(
-    rule_id: str, 
-    request: Request, 
-    updated_by: str = Form(None), # Or get from logged-in user
-    rules_service: ClassificationRulesService = Depends(get_classification_rules_service)
-):
-    """Deactivate a rule via form submission."""
-    try:
-        success = await rules_service.deactivate_rule(rule_id, updated_by)
-        if not success:
-            raise HTTPException(status_code=404, detail="Rule not found or already inactive")
-        return RedirectResponse(url=request.url_for("view_classification_rules_ui"), status_code=303)
+        rules_service = get_file_based_rules_service()
+        
+        # Check if rule exists
+        if not rules_service.rule_exists(rule_key):
+            raise HTTPException(status_code=404, detail=f"Rule '{rule_key}' not found")
+        
+        success = rules_service.save_rule_content(rule_key, content)
+        
+        if success:
+            return RedirectResponse(url=request.url_for("view_classification_rules_ui"), status_code=303)
+        else:
+            return HTMLResponse(
+                content=f"<html><body><h1>Error: Failed to update rule '{rule_key}'</h1>"
+                f"<a href='{request.url_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", 
+                status_code=500
+            )
+            
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deactivating rule {rule_id}: {e}", exc_info=True)
-        return HTMLResponse(content=f"<html><body><h1>Error deactivating rule: {e}</h1><a href='{request.url_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", status_code=500)
+        logger.error(f"Error updating rule {rule_key}: {e}", exc_info=True)
+        return HTMLResponse(
+            content=f"<html><body><h1>Error updating rule: {e}</h1>"
+            f"<a href='{request.url_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", 
+            status_code=500
+        )
 
-# You might want an endpoint to view/edit a single rule in a dedicated form
-@router.get("/rules/edit/{rule_id}", response_class=HTMLResponse, name="edit_classification_rule_ui")
+
+@router.post("/rules/delete/{rule_key}", name="delete_classification_rule")
+async def delete_rule_form(
+    rule_key: str, 
+    request: Request
+):
+    """Delete a rule via form submission."""
+    try:
+        rules_service = get_file_based_rules_service()
+        
+        # Check if rule exists
+        if not rules_service.rule_exists(rule_key):
+            raise HTTPException(status_code=404, detail=f"Rule '{rule_key}' not found")
+        
+        success = rules_service.delete_rule(rule_key)
+        
+        if success:
+            return RedirectResponse(url=request.url_for("view_classification_rules_ui"), status_code=303)
+        else:
+            return HTMLResponse(
+                content=f"<html><body><h1>Error: Failed to delete rule '{rule_key}'</h1>"
+                f"<a href='{request.url_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", 
+                status_code=500
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting rule {rule_key}: {e}", exc_info=True)
+        return HTMLResponse(
+            content=f"<html><body><h1>Error deleting rule: {e}</h1>"
+            f"<a href='{request.url_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", 
+            status_code=500
+        )
+
+
+@router.get("/rules/edit/{rule_key}", response_class=HTMLResponse, name="edit_classification_rule_ui")
 async def edit_rule_ui(
-    rule_id: str,
-    request: Request,
-    rules_service: ClassificationRulesService = Depends(get_classification_rules_service)
+    rule_key: str,
+    request: Request
 ):
     """Display UI to edit a single classification rule."""
-    rule = await rules_service.get_rule_by_id(rule_id)
-    if not rule:
-        raise HTTPException(status_code=404, detail="Rule not found")
-    return templates.TemplateResponse(
-        "edit_classification_rule.html", 
-        {"request": request, "rule": rule}
-    )
+    try:
+        rules_service = get_file_based_rules_service()
+        
+        if not rules_service.rule_exists(rule_key):
+            raise HTTPException(status_code=404, detail=f"Rule '{rule_key}' not found")
+        
+        content = rules_service.get_rule_content(rule_key) or ""
+        
+        # Get rule info from the list
+        all_rules = rules_service.list_all_rules()
+        rule_info = next((r for r in all_rules if r['rule_key'] == rule_key), None)
+        
+        if not rule_info:
+            raise HTTPException(status_code=404, detail=f"Rule '{rule_key}' not found")
+        
+        return templates.TemplateResponse(
+            "edit_file_based_rule.html", 
+            {
+                "request": request, 
+                "rule_key": rule_key,
+                "content": content,
+                "rule_info": rule_info
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading edit UI for rule {rule_key}: {e}", exc_info=True)
+        return HTMLResponse(
+            content=f"<html><body><h1>Error loading rule: {e}</h1>"
+            f"<a href='{request.url_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", 
+            status_code=500
+        )
 
-# Add more CRUD endpoints as needed (e.g., GET rule by ID API, activate rule)
+
+@router.post("/rules/export", name="export_classification_rules")
+async def export_rules(request: Request):
+    """Export all rules to JSON format."""
+    try:
+        rules_service = get_file_based_rules_service()
+        all_rules = rules_service.list_all_rules()
+        
+        export_data = {}
+        for rule_info in all_rules:
+            rule_key = rule_info['rule_key']
+            content = rules_service.get_rule_content(rule_key) or ""
+            export_data[rule_key] = {
+                "content": content,
+                "file_path": rule_info['file_path'],
+                "content_length": len(content),
+                "modified_time": rule_info['modified_time'].isoformat()
+            }
+        
+        return JSONResponse(content={
+            "success": True,
+            "exported_rules": len(export_data),
+            "rules": export_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error exporting rules: {e}", exc_info=True)
+        return JSONResponse(content={
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
+@router.get("/rules/stats")
+async def get_rules_stats():
+    """Get statistics about the rules."""
+    try:
+        rules_service = get_file_based_rules_service()
+        all_rules = rules_service.list_all_rules()
+        
+        total_rules = len(all_rules)
+        rules_with_content = sum(1 for r in all_rules if r['has_content'])
+        total_chars = sum(r['content_length'] for r in all_rules)
+        avg_length = total_chars / total_rules if total_rules > 0 else 0
+        
+        return JSONResponse(content={
+            "success": True,
+            "stats": {
+                "total_rules": total_rules,
+                "rules_with_content": rules_with_content,
+                "empty_rules": total_rules - rules_with_content,
+                "total_characters": total_chars,
+                "average_length": round(avg_length, 1)
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting rules stats: {e}", exc_info=True)
+        return JSONResponse(content={
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
 
 @router.post("/rules/revert_default", name="revert_to_default_rules")
-async def revert_to_default_rules_endpoint(
-    request: Request,
-    db: AsyncSession = Depends(get_db) 
-):
-    """Reverts all classification rules to the default set defined by classification_rules.txt and EMAIL_CATEGORIES."""
-    logger.info("Attempting to revert to default classification rules structure.")
-    
-    from scripts.populate_default_rules import (
-        PRIMARY_RULE_NAME, 
-        ROOT_CATEGORY_NAME, 
-        create_or_update_rule,
-        populate_hierarchical_rules
-    )
-    from app.services.classification_rule_parser import parse_default_rules, DEFAULT_RULES_FILE_PATH
-    from app.services.classification_rules_service import ClassificationRulesService
-    import json 
-    import os
-
-    rules_service = ClassificationRulesService(db)
-
+async def revert_to_default_rules_endpoint(request: Request):
+    """Reset rules to default structure by copying from classification_rules.txt."""
     try:
-        # 0. Deactivate all existing rules first
-        logger.info("Deactivating all existing rules before revert.")
-        all_db_rules = await rules_service.get_all_rules(include_inactive=True)
-        deactivated_count = 0
-        for rule in all_db_rules:
-            if rule.is_active:
-                # Use the service method for deactivation if it handles versioning/updated_by correctly
-                # or update directly if simpler and service method is too complex for this bulk op.
-                # For now, direct update for simplicity in bulk:
-                rule.is_active = False
-                rule.updated_by = "system_revert_to_default_deactivation"
-                # rule.version += 1 # If direct, manage version
-                db.add(rule) # Re-add to session if making direct changes
-                deactivated_count += 1
+        from app.core.config import settings
+        import shutil
+        from pathlib import Path
         
-        if deactivated_count > 0:
-            await db.commit() # Commit deactivations
-            logger.info(f"Deactivated {deactivated_count} rules.")
-        else:
-            logger.info("No active rules found to deactivate.")
-            # Important: if commit was not called, rollback previous (if any) uncommitted changes from session
-            # or ensure session is clean. For safety, a rollback here if no commit happened.
-            await db.rollback()
-
-
-        # 1. Populate the Primary Classification Rule
-        logger.info(f"Parsing primary rules from: {DEFAULT_RULES_FILE_PATH}")
-        try:
-            primary_rules_content = await asyncio.to_thread(parse_default_rules, DEFAULT_RULES_FILE_PATH)
-        except Exception as e:
-            logger.error(f"Failed to parse primary rules file during revert: {e}")
-            back_url = request.url_for("view_classification_rules_ui")
-            return HTMLResponse(content=f"<html><body><h1>Error parsing default rules file: {e}</h1><a href='{back_url}'>Back to rules</a></body></html>", status_code=500)
-
-        primary_rule_description = "Primary rules for classifying an incoming email into one of the top-level categories: Scheduling, Medical Records & Images, or Accounts Receivable. This is the first stage of classification."
-
-        await create_or_update_rule(
-            rules_service,
-            name=PRIMARY_RULE_NAME,
-            category=ROOT_CATEGORY_NAME,
-            content=primary_rules_content,
-            description=primary_rule_description,
-            created_by="system_revert_to_default"
-        )
+        # Copy the main classification_rules.txt to ROOT.txt
+        source_file = Path("/app/prompts/classification_rules.txt")
+        rules_dir = Path("/app/prompts/rules")
+        root_file = rules_dir / "ROOT.txt"
         
-        # 2. Populate Hierarchical Rules from EMAIL_CATEGORIES
-        email_categories_json = os.getenv("EMAIL_CATEGORIES")
-        if not email_categories_json:
-            logger.error("EMAIL_CATEGORIES environment variable not set. Cannot populate hierarchical rules during revert.")
-            back_url = request.url_for("view_classification_rules_ui")
-            return HTMLResponse(content=f"<html><body><h1>EMAIL_CATEGORIES not set. Hierarchical rules not populated.</h1><a href='{back_url}'>Back to rules</a></body></html>", status_code=500)
+        if source_file.exists():
+            # Ensure rules directory exists
+            rules_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Copy classification_rules.txt to ROOT.txt
+            shutil.copy2(source_file, root_file)
+            logger.info("Copied classification_rules.txt to ROOT.txt")
+            
+            return RedirectResponse(url=request.url_for("view_classification_rules_ui"), status_code=303)
         else:
-            try:
-                email_categories_dict = json.loads(email_categories_json)
-                logger.info("Successfully parsed EMAIL_CATEGORIES JSON during revert.")
-                
-                await populate_hierarchical_rules(rules_service, email_categories_dict, PRIMARY_RULE_NAME)
-
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse EMAIL_CATEGORIES JSON during revert: {e}")
-                back_url = request.url_for("view_classification_rules_ui")
-                return HTMLResponse(content=f"<html><body><h1>Error parsing EMAIL_CATEGORIES: {e}</h1><a href='{back_url}'>Back to rules</a></body></html>", status_code=500)
-            except Exception as e:
-                logger.error(f"An unexpected error occurred during hierarchical rule population in revert: {e}", exc_info=True)
-                back_url = request.url_for("view_classification_rules_ui")
-                return HTMLResponse(content=f"<html><body><h1>Unexpected error during rule population: {e}</h1><a href='{back_url}'>Back to rules</a></body></html>", status_code=500)
-
-        await db.commit()
-        logger.info("Successfully reverted to default rules structure.")
-        return RedirectResponse(url=request.url_for("view_classification_rules_ui"), status_code=303)
-
+            return HTMLResponse(
+                content=f"<html><body><h1>Error: Source file {source_file} not found</h1>"
+                f"<a href='{request.url_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", 
+                status_code=500
+            )
+            
     except Exception as e:
         logger.error(f"Error reverting to default rules: {e}", exc_info=True)
-        await db.rollback()
-        back_url = request.url_for("view_classification_rules_ui")
-        return HTMLResponse(content=f"<html><body><h1>Error reverting to default rules: {e}</h1><a href='{back_url}'>Back to rules</a></body></html>", status_code=500) 
-
-# --- Endpoints for Hierarchical Rules Edit --- 
-
-@router.get("/rules/edit_hierarchical/{rule_id}", response_class=HTMLResponse, name="edit_hierarchical_rule_ui")
-async def edit_hierarchical_rule_ui_form(
-    request: Request,
-    rule_id: uuid.UUID = Path(..., title="The ID of the hierarchical rule to edit"),
-    hierarchical_rules_service: HierarchicalRulesService = Depends(get_hierarchical_rules_service)
-):
-    """Display UI to edit a single hierarchical classification rule."""
-    rule = await hierarchical_rules_service.get_hierarchical_rule_by_id(rule_id)
-    if not rule:
-        raise HTTPException(status_code=404, detail=f"Hierarchical rule with ID {rule_id} not found")
-    return templates.TemplateResponse(
-        "edit_hierarchical_rule.html", 
-        {"request": request, "rule": rule}
-    )
-
-@router.post("/rules/update_hierarchical/{rule_id}", name="update_hierarchical_rule_form")
-async def handle_update_hierarchical_rule_form(
-    request: Request, 
-    rule_id: uuid.UUID = Path(..., title="The ID of the hierarchical rule to update"),
-    name: str = Form(...),
-    rule_content: str = Form(...),
-    hierarchical_rules_service: HierarchicalRulesService = Depends(get_hierarchical_rules_service)
-):
-    """Update an existing hierarchical rule via form submission."""
-    updated_rule = await hierarchical_rules_service.update_hierarchical_rule(
-        rule_id=rule_id, 
-        name=name, 
-        rule_content=rule_content
-    )
-    if not updated_rule:
-        # This could happen if the service returns None (e.g., rule not found during update attempt)
-        # Consider how the service signals this - raising an exception there might be cleaner.
-        # For now, assume service handles logging and we show a generic error or re-raise.
-        raise HTTPException(status_code=404, detail=f"Hierarchical rule with ID {rule_id} not found or failed to update.")
-    
-    # Redirect to the main rules UI page after updating
-    # The main rules UI is still named view_classification_rules_ui, which is fine.
-    return RedirectResponse(url=request.url_for("view_classification_rules_ui"), status_code=303)
-
-# These old endpoints still operate on the ClassificationRulesService and old table.
-# They would need to be refactored or removed if the old system is fully deprecated. 
+        return HTMLResponse(
+            content=f"<html><body><h1>Error reverting to default rules: {e}</h1>"
+            f"<a href='{request.url_for('view_classification_rules_ui')}'>Back to rules</a></body></html>", 
+            status_code=500
+        )

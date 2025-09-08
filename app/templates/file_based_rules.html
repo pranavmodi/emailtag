@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage File-Based Classification Rules</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        h1, h2 { color: #333; }
+        .stats { 
+            background-color: #e8f4fd; 
+            padding: 15px; 
+            border-radius: 8px; 
+            margin-bottom: 20px; 
+            border-left: 4px solid #007bff;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .stat-item {
+            background-color: white;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stat-number { font-size: 1.5em; font-weight: bold; color: #007bff; }
+        .stat-label { font-size: 0.9em; color: #666; }
+        
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; word-wrap: break-word; }
+        th { background-color: #e8e8e8; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        
+        .rule-key { 
+            font-family: monospace; 
+            font-weight: bold; 
+            color: #2563eb;
+            font-size: 0.9em;
+        }
+        .file-path { 
+            font-family: monospace; 
+            font-size: 0.8em; 
+            color: #666; 
+        }
+        .content-info {
+            font-size: 0.85em;
+            color: #666;
+        }
+        .modified-time {
+            font-size: 0.8em;
+            color: #888;
+        }
+        .status-icon {
+            font-size: 1.2em;
+            margin-right: 5px;
+        }
+        .has-content { color: #28a745; }
+        .no-content { color: #dc3545; }
+        
+        .actions {
+            white-space: nowrap;
+        }
+        .actions a {
+            text-decoration: none;
+            padding: 5px 10px;
+            margin: 2px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            display: inline-block;
+        }
+        .btn-edit { background-color: #007bff; color: white; }
+        .btn-delete { background-color: #dc3545; color: white; }
+        .btn-edit:hover { background-color: #0056b3; }
+        .btn-delete:hover { background-color: #c82333; }
+        
+        .add-rule-form {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #dee2e6;
+        }
+        .form-row {
+            display: flex;
+            gap: 10px;
+            align-items: end;
+            margin-bottom: 10px;
+        }
+        .form-group {
+            flex: 1;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .form-group textarea {
+            height: 80px;
+            resize: vertical;
+            font-family: monospace;
+        }
+        .btn-primary {
+            background-color: #28a745;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn-primary:hover {
+            background-color: #218838;
+        }
+        
+        .toolbar {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .toolbar button {
+            padding: 8px 15px;
+            border: 1px solid #ddd;
+            background-color: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .toolbar button:hover {
+            background-color: #f8f9fa;
+        }
+    </style>
+    <script>
+        async function exportRules() {
+            try {
+                const response = await fetch('/admin/rules/export', { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    // Create download link
+                    const blob = new Blob([JSON.stringify(data.rules, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `classification_rules_${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    alert(`Exported ${data.exported_rules} rules successfully!`);
+                } else {
+                    alert(`Export failed: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Export error: ${error.message}`);
+            }
+        }
+        
+        function confirmDelete(ruleKey) {
+            return confirm(`Are you sure you want to delete rule "${ruleKey}"? This action cannot be undone.`);
+        }
+        
+        function toggleAddForm() {
+            const form = document.getElementById('add-rule-form');
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>📁 File-Based Classification Rules</h1>
+        
+        <div class="stats">
+            <h3>📊 Rules Statistics</h3>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-number">{{ total_rules }}</div>
+                    <div class="stat-label">Total Rules</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">{{ rules_with_content }}</div>
+                    <div class="stat-label">Rules with Content</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">{{ total_rules - rules_with_content }}</div>
+                    <div class="stat-label">Empty Rules</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">{{ "{:,}".format(total_chars) }}</div>
+                    <div class="stat-label">Total Characters</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="toolbar">
+            <button onclick="toggleAddForm()">➕ Add New Rule</button>
+            <button onclick="exportRules()">📤 Export All Rules</button>
+            <form method="post" action="{{ url_for('revert_to_default_rules') }}" style="display: inline;">
+                <button type="submit" onclick="return confirm('This will reset ROOT.txt from classification_rules.txt. Continue?')">
+                    🔄 Reset ROOT Rule
+                </button>
+            </form>
+        </div>
+
+        <div id="add-rule-form" class="add-rule-form" style="display: none;">
+            <h3>Add New Classification Rule</h3>
+            <form method="post" action="{{ url_for('add_classification_rule') }}">
+                <div class="form-row">
+                    <div class="form-group" style="flex: 2;">
+                        <label for="rule_key">Rule Key:</label>
+                        <input type="text" id="rule_key" name="rule_key" placeholder="e.g., ROOT_NEW_CATEGORY" required>
+                    </div>
+                    <div class="form-group" style="flex: 0 0 auto;">
+                        <button type="submit" class="btn-primary">Create Rule</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="content">Content:</label>
+                    <textarea id="content" name="content" placeholder="Enter rule content..." required></textarea>
+                </div>
+            </form>
+        </div>
+
+        <h2>📋 Classification Rules ({{ total_rules }} files)</h2>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 30px;">#</th>
+                    <th style="width: 250px;">Rule Key</th>
+                    <th>File Info</th>
+                    <th style="width: 120px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rule in rules %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>
+                        <div class="rule-key">
+                            <span class="status-icon {% if rule.has_content %}has-content{% else %}no-content{% endif %}">
+                                {% if rule.has_content %}📝{% else %}⚪{% endif %}
+                            </span>
+                            {{ rule.rule_key }}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="file-path">{{ rule.file_path }}</div>
+                        <div class="content-info">
+                            Content: {{ "{:,}".format(rule.content_length) }} characters
+                            | Size: {{ "{:,}".format(rule.file_size) }} bytes
+                        </div>
+                        <div class="modified-time">
+                            Modified: {{ rule.modified_time.strftime('%Y-%m-%d %H:%M:%S') }}
+                        </div>
+                    </td>
+                    <td class="actions">
+                        <a href="{{ url_for('edit_classification_rule_ui', rule_key=rule.rule_key) }}" class="btn-edit">✏️ Edit</a>
+                        <form method="post" action="{{ url_for('delete_classification_rule', rule_key=rule.rule_key) }}" style="display: inline;">
+                            <button type="submit" class="btn-delete" onclick="return confirmDelete('{{ rule.rule_key }}')">
+                                🗑️ Delete
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div style="margin-top: 20px; padding: 15px; background-color: #e8f4fd; border-radius: 8px;">
+            <h4>💡 About File-Based Rules</h4>
+            <p>
+                Rules are stored as individual <code>.txt</code> files in <code>/app/prompts/rules/</code>.
+                Each rule key maps directly to a filename (e.g., <code>ROOT</code> → <code>ROOT.txt</code>).
+                This makes rules easy to version control and edit directly.
+            </p>
+            <p>
+                <strong>Rule Key Format:</strong> Use hierarchical keys like <code>ROOT_SCHEDULING_RX</code> 
+                for sub-classification rules.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Rule: {{ rule_key }}</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; margin-bottom: 20px; }
+        .rule-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .info-item {
+            font-size: 0.9em;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #666;
+        }
+        .info-value {
+            color: #333;
+            font-family: monospace;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: monospace;
+            background-color: #f8f9fa;
+        }
+        .form-group textarea {
+            width: 100%;
+            min-height: 400px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: 'Courier New', Consolas, monospace;
+            font-size: 14px;
+            line-height: 1.4;
+            resize: vertical;
+            background-color: #fdfdfd;
+        }
+        
+        .buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+            font-size: 14px;
+        }
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #0056b3;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #545b62;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
+        
+        .character-count {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .preview-section {
+            margin-top: 20px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+        }
+        .preview-header {
+            padding: 10px 15px;
+            border-bottom: 1px solid #dee2e6;
+            background-color: #e9ecef;
+            font-weight: bold;
+        }
+        .preview-content {
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 0.85em;
+        }
+    </style>
+    <script>
+        function updateCharacterCount() {
+            const textarea = document.getElementById('content');
+            const countDiv = document.getElementById('char-count');
+            const length = textarea.value.length;
+            countDiv.textContent = `${length.toLocaleString()} characters`;
+            
+            // Update preview
+            const preview = document.getElementById('preview-content');
+            const content = textarea.value;
+            if (content.length > 0) {
+                const truncated = content.length > 500 ? content.substring(0, 500) + '...' : content;
+                preview.textContent = truncated;
+            } else {
+                preview.textContent = '(No content)';
+            }
+        }
+        
+        function confirmDelete() {
+            return confirm(`Are you sure you want to delete the rule "${document.getElementById('rule_key').value}"? This action cannot be undone.`);
+        }
+        
+        // Auto-resize textarea
+        function autoResize(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.max(400, textarea.scrollHeight) + 'px';
+        }
+        
+        window.onload = function() {
+            updateCharacterCount();
+            const textarea = document.getElementById('content');
+            autoResize(textarea);
+            
+            // Update character count as user types
+            textarea.addEventListener('input', function() {
+                updateCharacterCount();
+                autoResize(this);
+            });
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>✏️ Edit Classification Rule</h1>
+        
+        <div class="rule-info">
+            <h3>📋 Rule Information</h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Rule Key:</div>
+                    <div class="info-value">{{ rule_key }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">File Path:</div>
+                    <div class="info-value">{{ rule_info.file_path }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">File Size:</div>
+                    <div class="info-value">{{ "{:,}".format(rule_info.file_size) }} bytes</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Last Modified:</div>
+                    <div class="info-value">{{ rule_info.modified_time.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+                </div>
+            </div>
+        </div>
+        
+        <form method="post" action="{{ url_for('update_classification_rule', rule_key=rule_key) }}">
+            <div class="form-group">
+                <label for="rule_key">Rule Key (read-only):</label>
+                <input type="text" id="rule_key" name="rule_key" value="{{ rule_key }}" readonly>
+            </div>
+            
+            <div class="form-group">
+                <label for="content">Rule Content:</label>
+                <textarea id="content" name="content" placeholder="Enter the classification rule content...">{{ content }}</textarea>
+                <div class="character-count" id="char-count"></div>
+            </div>
+            
+            <div class="preview-section">
+                <div class="preview-header">📖 Content Preview (first 500 chars)</div>
+                <div class="preview-content" id="preview-content"></div>
+            </div>
+            
+            <div class="buttons">
+                <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+                <a href="{{ url_for('view_classification_rules_ui') }}" class="btn btn-secondary">❌ Cancel</a>
+                <form method="post" action="{{ url_for('delete_classification_rule', rule_key=rule_key) }}" style="display: inline;">
+                    <button type="submit" class="btn btn-danger" onclick="return confirmDelete()">
+                        🗑️ Delete Rule
+                    </button>
+                </form>
+            </div>
+        </form>
+        
+        <div style="margin-top: 30px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px;">
+            <h4>💡 Editing Tips</h4>
+            <ul>
+                <li>Rules should provide clear instructions for the AI classifier</li>
+                <li>Use specific examples when possible to improve accuracy</li>
+                <li>For hierarchical rules, include the available sub-categories</li>
+                <li>Test your rules after making changes</li>
+                <li>Rule keys follow the pattern: ROOT → ROOT_CATEGORY → ROOT_CATEGORY_SUBCATEGORY</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
