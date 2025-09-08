@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "EmailTag"
     VERSION: str = "0.1.0"
     DEBUG: bool = False
+    
+    # Classification Debugging
+    CLASSIFICATION_DEBUG: bool = False  # Enable detailed classification logging with raw prompts
 
     # SSL/TLS Settings
     SSL_ENABLED: bool = True

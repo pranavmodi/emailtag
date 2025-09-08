@@ -12,6 +12,7 @@ import openai
 from openai import OpenAI
 import httpx
 import logging
+import os
 
 from app.core.config import settings
 from app.services.frontapp_service import get_conversation_text
@@ -30,6 +31,27 @@ _TOP_LEVEL_CATEGORIES = ["Scheduling", "Medical Records & Images", "Accounts Rec
 _TOP_LEVEL_RULES_CATEGORY_NAME = "ROOT" # Changed to use ROOT which contains top-level differentiation rules
 
 logger = logging.getLogger(__name__)
+
+# Create a separate logger for detailed classification debugging
+debug_logger = logging.getLogger(f"{__name__}.debug")
+
+# Check if detailed classification debugging is enabled
+CLASSIFICATION_DEBUG = getattr(settings, 'CLASSIFICATION_DEBUG', False) or settings.DEBUG
+
+# Set up separate file handler for classification debug logs if enabled
+if CLASSIFICATION_DEBUG:
+    debug_log_file = os.path.join(os.path.dirname(__file__), '../../logs/classification_debug.log')
+    os.makedirs(os.path.dirname(debug_log_file), exist_ok=True)
+    
+    debug_handler = logging.FileHandler(debug_log_file)
+    debug_handler.setLevel(logging.DEBUG)
+    debug_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    debug_handler.setFormatter(debug_formatter)
+    debug_logger.addHandler(debug_handler)
+    debug_logger.setLevel(logging.DEBUG)
+    debug_logger.propagate = False  # Don't propagate to parent loggers to avoid duplication
 
 from app.exceptions import RetryableOpenAIError
 
@@ -379,7 +401,45 @@ def _call_llm_for_classification(
         f"Chosen Option:"
     )
     
-    # Only log full prompt when there are issues (moved to error logging below)
+    # 🔍 DETAILED DEBUGGING: Log complete classification input and context
+    if CLASSIFICATION_DEBUG:
+        debug_logger.debug("="*80)
+        debug_logger.debug(f"🔍 CLASSIFICATION DEBUG for '{classification_level_name}' (path: [{' → '.join(current_path)}])")
+        debug_logger.debug("="*80)
+        debug_logger.debug(f"🔍 Rule template length: {len(llm_prompt_template)} chars")
+        debug_logger.debug(f"🔍 Email content length: {len(conversation_text)} chars")
+        debug_logger.debug(f"🔍 Has document analysis: {'YES' if document_analysis_results else 'NO'}")
+        
+        if document_analysis_results:
+            debug_logger.debug(f"🔍 Document analysis count: {len(document_analysis_results)}")
+            for i, doc_result in enumerate(document_analysis_results, 1):
+                if doc_result.get("document_analysis", {}).get("success"):
+                    analysis_data = doc_result["document_analysis"]["data"]
+                    doc_type = analysis_data.get("document_type", "unknown")
+                    confidence = analysis_data.get("confidence", 0.0)
+                    debug_logger.debug(f"🔍   Doc {i}: {doc_type} (confidence: {confidence:.3f})")
+                else:
+                    debug_logger.debug(f"🔍   Doc {i}: FAILED - {doc_result.get('document_analysis', {}).get('error', 'Unknown error')}")
+        
+        debug_logger.debug(f"🔍 Final prompt length: {len(final_llm_prompt)} chars")
+        
+        # Log the first few lines of the rule template to verify correct rule loading
+        rule_preview = llm_prompt_template.split('\n')[:3]
+        debug_logger.debug(f"🔍 Rule template preview: {' | '.join(rule_preview)}")
+        
+        # Log email content preview (first 200 chars)
+        email_preview = conversation_text.replace('\n', ' ').strip()[:200]
+        debug_logger.debug(f"🔍 Email content preview: {email_preview}{'...' if len(conversation_text) > 200 else ''}")
+        
+        # 🚨 RAW PROMPT LOGGING - The complete prompt sent to OpenAI
+        debug_logger.debug("🚨 FULL RAW PROMPT SENT TO OPENAI:")
+        debug_logger.debug("-" * 40 + " PROMPT START " + "-" * 40)
+        debug_logger.debug(final_llm_prompt)
+        debug_logger.debug("-" * 40 + " PROMPT END " + "-" * 42)
+    
+    # Always log basic summary info to regular logs
+    doc_summary = f" | {len(document_analysis_results)} docs" if document_analysis_results else ""
+    logger.info(f"🔍 CLASSIFYING '{classification_level_name}': rule={len(llm_prompt_template)}chars, email={len(conversation_text)}chars{doc_summary}")
 
     try:
         # Use dedicated classification model if available, otherwise fall back to general model
@@ -403,19 +463,38 @@ def _call_llm_for_classification(
             api_params["temperature"] = 0.0
             api_params["max_tokens"] = 50
         
+        # Log API call details 
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug(f"🔍 Making API call with model: {classification_model}")
+            debug_logger.debug(f"🔍 API params: temperature={api_params.get('temperature', 'N/A')}, max_tokens={api_params.get('max_tokens', api_params.get('max_completion_tokens', 'N/A'))}")
+            debug_logger.debug("🔍 Full API request:")
+            debug_logger.debug(f"Model: {api_params['model']}")
+            debug_logger.debug(f"Messages: {api_params['messages']}")
+        
         # The system message can be very generic as instructions are in the user prompt.
         response = client.chat.completions.create(**api_params)
         
-        prediction = response.choices[0].message.content.strip().strip("'\"")
+        # 🔍 DETAILED RESPONSE DEBUG
+        raw_response = response.choices[0].message.content
+        prediction = raw_response.strip().strip("'\"") if raw_response else ""
         
-        # Essential logging: Only log the prediction result
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug("🚨 FULL LLM RESPONSE:")
+            debug_logger.debug("-" * 40 + " RESPONSE START " + "-" * 38)
+            debug_logger.debug(f"RAW RESPONSE: '{raw_response}'")
+            debug_logger.debug(f"CLEANED PREDICTION: '{prediction}'")
+            debug_logger.debug(f"USAGE: {response.usage.completion_tokens if response.usage else 'N/A'} completion tokens, {response.usage.prompt_tokens if response.usage else 'N/A'} prompt tokens")
+            debug_logger.debug(f"MODEL: {response.model if hasattr(response, 'model') else 'N/A'}")
+            debug_logger.debug("-" * 40 + " RESPONSE END " + "-" * 40)
+        
+        # Essential logging: Classification result
         logger.info(f"📊 CLASSIFICATION: '{classification_level_name}' → '{prediction}' (path: [{' → '.join(current_path)}])")
         
         # Log additional details when prediction is empty or invalid
         if not prediction:
             logger.error(f"🚨 EMPTY PREDICTION: '{classification_level_name}' (path: [{' → '.join(current_path)}])")
             logger.error(f"🚨 Full prompt (first 1000 chars): {final_llm_prompt[:1000]}...")
-            logger.error(f"🚨 RAW RESPONSE: '{response.choices[0].message.content}'")
+            logger.error(f"🚨 RAW RESPONSE: '{raw_response}'")
 
         # Validation of prediction against options must happen *after* this call,
         # in the calling function (classify_email_tags_hierarchical), as this function
