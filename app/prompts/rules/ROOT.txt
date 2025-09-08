@@ -5,6 +5,9 @@ Classification Rules for Email Categories
 
 Please use the following rules to classify the provided email content into one of the above categories.
 
+**⚠️ PRIORITY RULE - ATTACHMENT-BASED CLASSIFICATION:**
+If there is ANY attachment with document type "rx" (prescription/referral), ALWAYS classify as 'Scheduling' regardless of email content. This takes absolute priority over all other rules below.
+
 --- START SCHEDULING RULES ---
 
 Classification Rules for Scheduling:
