@@ -121,32 +121,10 @@
 </head>
 <body>
     <div class="container">
-        <h1>📁 Classification Rules</h1>
         
-        <div class="stats">
-            <h3>📊 Rules Statistics</h3>
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <div class="stat-number">{{ total_rules }}</div>
-                    <div class="stat-label">Total Rules</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-number">{{ rules_with_content }}</div>
-                    <div class="stat-label">Rules with Content</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-number">{{ total_rules - rules_with_content }}</div>
-                    <div class="stat-label">Empty Rules</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-number">{{ "{:,}".format(total_chars) }}</div>
-                    <div class="stat-label">Total Characters</div>
-                </div>
-            </div>
-        </div>
         
 
-        <h2>📋 Classification Rules ({{ total_rules }} files)</h2>
+        <h2>📋 Classification Rules</h2>
         
         <table>
             <thead>
