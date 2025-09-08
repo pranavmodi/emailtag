@@ -94,13 +94,6 @@
         .btn-secondary:hover {
             background-color: #545b62;
         }
-        .btn-danger {
-            background-color: #dc3545;
-            color: white;
-        }
-        .btn-danger:hover {
-            background-color: #c82333;
-        }
         
         .character-count {
             font-size: 0.85em;
@@ -108,26 +101,6 @@
             margin-top: 5px;
         }
         
-        .preview-section {
-            margin-top: 20px;
-            background-color: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-        }
-        .preview-header {
-            padding: 10px 15px;
-            border-bottom: 1px solid #dee2e6;
-            background-color: #e9ecef;
-            font-weight: bold;
-        }
-        .preview-content {
-            padding: 15px;
-            max-height: 200px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            font-family: monospace;
-            font-size: 0.85em;
-        }
     </style>
     <script>
         function updateCharacterCount() {
@@ -135,21 +108,8 @@
             const countDiv = document.getElementById('char-count');
             const length = textarea.value.length;
             countDiv.textContent = `${length.toLocaleString()} characters`;
-            
-            // Update preview
-            const preview = document.getElementById('preview-content');
-            const content = textarea.value;
-            if (content.length > 0) {
-                const truncated = content.length > 500 ? content.substring(0, 500) + '...' : content;
-                preview.textContent = truncated;
-            } else {
-                preview.textContent = '(No content)';
-            }
         }
         
-        function confirmDelete() {
-            return confirm(`Are you sure you want to delete the rule "${document.getElementById('rule_key').value}"? This action cannot be undone.`);
-        }
         
         // Auto-resize textarea
         function autoResize(textarea) {
@@ -172,6 +132,11 @@
 </head>
 <body>
     <div class="container">
+        <div style="margin-bottom: 20px;">
+            <a href="{{ url_for('view_classification_rules_ui') }}" class="btn btn-secondary">
+                ← Back to Rules List
+            </a>
+        </div>
         <h1>✏️ Edit Classification Rule</h1>
         
         <div class="rule-info">
@@ -180,14 +145,6 @@
                 <div class="info-item">
                     <div class="info-label">Rule Key:</div>
                     <div class="info-value">{{ rule_key }}</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">File Path:</div>
-                    <div class="info-value">{{ rule_info.file_path }}</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">File Size:</div>
-                    <div class="info-value">{{ "{:,}".format(rule_info.file_size) }} bytes</div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Last Modified:</div>
@@ -208,19 +165,10 @@
                 <div class="character-count" id="char-count"></div>
             </div>
             
-            <div class="preview-section">
-                <div class="preview-header">📖 Content Preview (first 500 chars)</div>
-                <div class="preview-content" id="preview-content"></div>
-            </div>
             
             <div class="buttons">
                 <button type="submit" class="btn btn-primary">💾 Save Changes</button>
                 <a href="{{ url_for('view_classification_rules_ui') }}" class="btn btn-secondary">❌ Cancel</a>
-                <form method="post" action="{{ url_for('delete_classification_rule', rule_key=rule_key) }}" style="display: inline;">
-                    <button type="submit" class="btn btn-danger" onclick="return confirmDelete()">
-                        🗑️ Delete Rule
-                    </button>
-                </form>
             </div>
         </form>
         
