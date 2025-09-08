@@ -361,7 +361,7 @@ async def handle_apt_status_request_agent_sdk(
         }
 
     formatted_history = format_conversation_history_for_agent(structured_history_messages)
-    logger.info(f"Formatted conversation history: {formatted_history}")
+    # logger.info(f"Formatted conversation history: {formatted_history}")
     
     # Combine history and current email for a complete context for extraction
     full_conversation_text = f"Conversation History:\n{formatted_history}\n\nLatest User Email:\n{current_email_content}"
