@@ -2,11 +2,37 @@
 
 import json
 import logging
+import os
 import httpx
 from typing import Dict, List, Any
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Create a separate logger for detailed archival debugging (shared with archiving_service)
+debug_logger = logging.getLogger(f"{__name__}.debug")
+
+# Check if detailed classification debugging is enabled
+CLASSIFICATION_DEBUG = getattr(settings, 'CLASSIFICATION_DEBUG', False) or settings.DEBUG
+
+# Set up separate file handler for classification debug logs if enabled
+if CLASSIFICATION_DEBUG:
+    debug_log_file = os.path.join(os.path.dirname(__file__), '../../logs/classification_debug.log')
+    os.makedirs(os.path.dirname(debug_log_file), exist_ok=True)
+    
+    debug_handler = logging.FileHandler(debug_log_file)
+    debug_handler.setLevel(logging.DEBUG)
+    debug_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    debug_handler.setFormatter(debug_formatter)
+    
+    # Only add handler if it doesn't exist (to prevent duplicates)
+    if not any(isinstance(h, logging.FileHandler) and h.baseFilename == debug_handler.baseFilename 
+               for h in debug_logger.handlers):
+        debug_logger.addHandler(debug_handler)
+        debug_logger.setLevel(logging.DEBUG)
+        debug_logger.propagate = False  # Prevent duplicate logs
 
 async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
     """
@@ -18,12 +44,20 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
     Returns:
         Dict containing structured list of emails in chronological order
     """
+    if CLASSIFICATION_DEBUG:
+        debug_logger.debug("🔍 EMAIL EXTRACTION START")
+        debug_logger.debug(f"🔍 EMAIL EXTRACTION: Input conversation text ({len(conversation_text)} chars): {conversation_text[:500]}{'...' if len(conversation_text) > 500 else ''}")
+    
     if not settings.OPENAI_API_KEY:
         logger.error("OPENAI_API_KEY not configured. Cannot extract email chain.")
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug("🔍 EMAIL EXTRACTION ERROR: No OpenAI API key configured")
         return {"success": False, "emails": [], "error": "OpenAI API key not configured"}
 
     if not conversation_text.strip():
         logger.warning("Conversation text is empty.")
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug("🔍 EMAIL EXTRACTION: Empty conversation text provided")
         return {"success": True, "emails": [], "message": "Empty conversation"}
 
     prompt = (
@@ -41,6 +75,12 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
         f"- Email signature separators like '⸻', '---', etc.\n\n"
         f"Conversation text:\n{conversation_text[:15000]}"
     )
+    
+    if CLASSIFICATION_DEBUG:
+        debug_logger.debug("🔍 EMAIL EXTRACTION: Generated OpenAI prompt:")
+        debug_logger.debug("-" * 50 + " PROMPT START " + "-" * 50)
+        debug_logger.debug(prompt)
+        debug_logger.debug("-" * 51 + " PROMPT END " + "-" * 51)
 
     # Schema for extracting email chain
     email_schema = {
@@ -99,10 +139,9 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
         async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
             logger.info("STEP 1: Extracting email chain structure...")
             
-            # Log raw request
-            # logger.info(f"🔗 OPENAI EMAIL EXTRACTION REQUEST:")
-            # logger.info(f"📍 Endpoint: https://api.openai.com/v1/chat/completions")
-            # logger.info(f"📦 Payload: {json.dumps(payload, indent=2)}")
+            if CLASSIFICATION_DEBUG:
+                debug_logger.debug("🔍 EMAIL EXTRACTION: Sending request to OpenAI API")
+                debug_logger.debug(f"🔍 EMAIL EXTRACTION: Request payload: {json.dumps(payload, indent=2)}")
             
             response = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
             
@@ -111,41 +150,63 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
                 logger.error(f"❌ OpenAI API Error - Status: {response.status_code}")
                 logger.error(f"❌ Response headers: {dict(response.headers)}")
                 logger.error(f"❌ Response body: {response.text}")
+                if CLASSIFICATION_DEBUG:
+                    debug_logger.debug(f"🔍 EMAIL EXTRACTION ERROR: API Status {response.status_code}, Body: {response.text}")
             
             response.raise_for_status()
             
             completion = response.json()
             ai_response_text = completion.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
-            # logger.info(f"📧 Email extraction raw response: {ai_response_text}")
+            
+            if CLASSIFICATION_DEBUG:
+                debug_logger.debug("🔍 EMAIL EXTRACTION: Raw OpenAI response:")
+                debug_logger.debug("-" * 50 + " RESPONSE START " + "-" * 50)
+                debug_logger.debug(ai_response_text)
+                debug_logger.debug("-" * 51 + " RESPONSE END " + "-" * 51)
 
             try:
                 extraction_result = json.loads(ai_response_text)
                 
-                return {
+                if CLASSIFICATION_DEBUG:
+                    debug_logger.debug(f"🔍 EMAIL EXTRACTION: Parsed {len(extraction_result.get('emails', []))} emails from response")
+                    for i, email in enumerate(extraction_result.get('emails', []), 1):
+                        debug_logger.debug(f"🔍 EMAIL EXTRACTION: Email {i} - From: {email.get('sender', 'N/A')}, Subject: {email.get('subject', 'N/A')}")
+                
+                final_result = {
                     "success": True,
                     "emails": extraction_result.get("emails", []),
                     "total_emails": extraction_result.get("total_emails", 0),
                     "parsing_notes": extraction_result.get("parsing_notes", "")
                 }
                 
+                if CLASSIFICATION_DEBUG:
+                    debug_logger.debug(f"🔍 EMAIL EXTRACTION: Final result: {final_result}")
+                
+                return final_result
+                
             except (json.JSONDecodeError, KeyError) as e:
                 logger.error(f"Failed to parse email extraction response: {e}")
+                if CLASSIFICATION_DEBUG:
+                    debug_logger.debug(f"🔍 EMAIL EXTRACTION JSON ERROR: {e}, Raw response: {ai_response_text}")
                 return {"success": False, "emails": [], "error": f"Parsing error: {e}"}
                 
     except Exception as e:
         logger.error(f"Error extracting email chain: {e}")
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug(f"🔍 EMAIL EXTRACTION EXCEPTION: {e}")
         return {"success": False, "emails": [], "error": str(e)}
 
 
-async def are_questions_resolved_openai(conversation_text: str) -> Dict[str, Any]:
+async def are_questions_resolved_openai(conversation_text: str, structured_messages: List[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     STEP 2: Uses structured email chain to analyze if all questions have been addressed.
     This is a 2-step process:
-    1. Extract individual emails in chronological order
+    1. Extract individual emails in chronological order (or use provided structured messages)
     2. Analyze the structured emails for resolution status
 
     Args:
         conversation_text: The full text of the conversation.
+        structured_messages: Optional list of structured message data from Front API.
 
     Returns:
         Dict[str, Any]: Structured response containing:
@@ -155,11 +216,53 @@ async def are_questions_resolved_openai(conversation_text: str) -> Dict[str, Any
             - "success": bool - Whether the analysis was successful
             - "email_chain": List[Dict] - Structured emails from step 1
     """
-    # STEP 1: Extract email chain structure
-    email_extraction = await extract_email_chain_openai(conversation_text)
+    if CLASSIFICATION_DEBUG:
+        debug_logger.debug("🔍 RESOLUTION ANALYSIS START")
+        debug_logger.debug(f"🔍 RESOLUTION: Input conversation text ({len(conversation_text)} chars): {conversation_text[:300]}{'...' if len(conversation_text) > 300 else ''}")
+        if structured_messages:
+            debug_logger.debug(f"🔍 RESOLUTION: Provided {len(structured_messages)} structured messages from Front API")
+    
+    # STEP 1: Extract email chain structure or use provided structured messages
+    if structured_messages:
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug("🔍 RESOLUTION: Using structured messages instead of OpenAI extraction")
+        
+        # Convert structured messages to email chain format
+        emails = []
+        for i, msg in enumerate(structured_messages, 1):
+            email = {
+                "sequence_number": i,
+                "sender": msg.get('author_email') or msg.get('author_handle') or msg.get('author_name', 'unknown@example.com'),
+                "date": msg.get('created_at', ''),
+                "subject": f"Message {i}",  # Front doesn't provide subject per message
+                "recipients_to": [],  # Not available in structured messages
+                "recipients_cc": [],
+                "body": msg.get('body', ''),
+                "is_forwarded_message": False
+            }
+            emails.append(email)
+        
+        email_extraction = {
+            "success": True,
+            "emails": emails,
+            "total_emails": len(emails),
+            "parsing_notes": f"Used structured messages from Front API instead of text parsing ({len(emails)} messages)"
+        }
+        
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug(f"🔍 RESOLUTION: Converted {len(emails)} structured messages to email format")
+    else:
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug("🔍 RESOLUTION: No structured messages provided, using OpenAI extraction")
+        email_extraction = await extract_email_chain_openai(conversation_text)
+    
+    if CLASSIFICATION_DEBUG:
+        debug_logger.debug(f"🔍 RESOLUTION: Email extraction result: {email_extraction}")
     
     if not email_extraction["success"]:
         logger.error(f"Step 1 failed: {email_extraction.get('error', 'Unknown error')}")
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug(f"🔍 RESOLUTION ERROR: Email extraction failed: {email_extraction.get('error', 'Unknown error')}")
         return {
             "resolved": False,
             "unresolved_questions": [],
@@ -171,6 +274,8 @@ async def are_questions_resolved_openai(conversation_text: str) -> Dict[str, Any
     emails = email_extraction["emails"]
     if not emails:
         logger.warning("No emails found in conversation.")
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug("🔍 RESOLUTION: No emails found in conversation")
         return {
             "resolved": True,
             "unresolved_questions": [],
@@ -178,6 +283,9 @@ async def are_questions_resolved_openai(conversation_text: str) -> Dict[str, Any
             "success": True,
             "email_chain": []
         }
+
+    if CLASSIFICATION_DEBUG:
+        debug_logger.debug(f"🔍 RESOLUTION: Processing {len(emails)} extracted emails for resolution analysis")
 
     
     # STEP 2: Analyze the structured emails for resolution

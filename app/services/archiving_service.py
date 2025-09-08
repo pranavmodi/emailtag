@@ -84,17 +84,26 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
         return False
 
     conversation_text = conversation_data.get('text', '')
-    if not conversation_text.strip():
+    structured_messages = conversation_data.get('_structured_messages', [])
+    
+    if CLASSIFICATION_DEBUG:
+        debug_logger.debug(f"🔍 ARCHIVAL: Retrieved conversation data:")
+        debug_logger.debug(f"🔍 ARCHIVAL: - Stripped text ({len(conversation_text)} chars): {conversation_text[:200]}{'...' if len(conversation_text) > 200 else ''}")
+        debug_logger.debug(f"🔍 ARCHIVAL: - Structured messages count: {len(structured_messages)}")
+        for i, msg in enumerate(structured_messages):
+            debug_logger.debug(f"🔍 ARCHIVAL: - Message {i+1}: ID={msg.get('id')}, Author={msg.get('author_email', msg.get('author_name', 'Unknown'))}, Body='{msg.get('body', '')[:100]}{'...' if len(msg.get('body', '')) > 100 else ''}'")
+    
+    if not conversation_text.strip() and not structured_messages:
         logger.info(f"📁 ARCHIVE SKIPPED: Empty conversation {front_conversation_id}")
         if CLASSIFICATION_DEBUG:
-            debug_logger.debug(f"🔍 ARCHIVAL SKIPPED: Empty conversation text for {front_conversation_id}")
+            debug_logger.debug(f"🔍 ARCHIVAL SKIPPED: Empty conversation text and no structured messages for {front_conversation_id}")
         return False
 
     if CLASSIFICATION_DEBUG:
-        debug_logger.debug(f"🔍 ARCHIVAL: Conversation text retrieved ({len(conversation_text)} chars)")
         debug_logger.debug(f"🔍 ARCHIVAL: Sending to OpenAI for resolution analysis...")
 
-    analysis_result = await are_questions_resolved_openai(conversation_text)
+    # Pass both stripped text and structured messages to OpenAI service
+    analysis_result = await are_questions_resolved_openai(conversation_text, structured_messages)
 
     if CLASSIFICATION_DEBUG:
         debug_logger.debug(f"🔍 ARCHIVAL: OpenAI analysis result: {analysis_result}")
