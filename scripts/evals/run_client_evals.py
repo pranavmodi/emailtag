@@ -29,12 +29,6 @@ from test_utils import (
 
 # Import client eval scenarios
 from scenarios_client_evals import CLIENT_EVAL_SCENARIOS
-try:
-    # Use OpenAI helper tailored for scenario creation
-    from app.services.openai_service import generate_eval_scenario_summary
-except Exception as e:
-    print(f"WARNING: Failed to import generate_eval_scenario_summary: {e}")
-    generate_eval_scenario_summary = None  # Fallback if import fails
 
 
 
@@ -132,6 +126,93 @@ def _download_attachments_for_conversation(conversation_id: str, messages: List[
                 print(f"Warning: Failed to download attachment {filename} from {url}: {e}")
 
     return attachments
+
+
+async def _maybe_generate_scenario_summary(conversation_text: str, structured_messages: List[Dict[str, Any]], verbose: bool = False) -> Dict[str, Any]:
+    """
+    Try using the project's OpenAI service for scenario summary; if unavailable,
+    fall back to direct OpenAI API call via requests.
+    """
+    # Attempt lazy import of the service (may fail if httpx not installed)
+    try:
+        from app.services.openai_service import generate_eval_scenario_summary  # type: ignore
+        return await generate_eval_scenario_summary(conversation_text=conversation_text, structured_messages=structured_messages)
+    except Exception as e:
+        if verbose:
+            print(f"Info: Falling back to direct OpenAI call for summary: {e}")
+
+    # Fallback using requests
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return {"success": False, "description": None, "clean_body": None, "subject_suggestion": None, "notes": "OPENAI_API_KEY not configured"}
+
+    # Build prompt similar to service
+    chain_lines: List[str] = []
+    if structured_messages:
+        for i, msg in enumerate(structured_messages, 1):
+            author = msg.get("author_email") or msg.get("author_handle") or msg.get("author_name") or "unknown@example.com"
+            body = (msg.get("body") or "").strip()
+            chain_lines.append(f"[{i}] From: {author}\n{body}\n---")
+    else:
+        chain_lines.append(conversation_text[:15000])
+
+    joined_chain = "\n".join(chain_lines)[:20000]
+
+    system_msg = (
+        "You generate clean eval scenarios from email threads.\n"
+        "Return a concise description (<= 200 chars) for a scenario list and a clean, readable plain-text body for the LATEST inbound email.\n"
+        "The body must be human-readable with signatures/footers minimized. Do not include HTML."
+    )
+    user_msg = (
+        "Create a concise one-line description and a clean body for the latest inbound email.\n"
+        "If a clearer subject is apparent, propose one.\n\n"
+        "EMAIL CHAIN (chronological):\n"
+        f"{joined_chain}"
+    )
+
+    response_schema = {
+        "type": "object",
+        "properties": {
+            "description": {"type": "string"},
+            "clean_body": {"type": "string"},
+            "subject_suggestion": {"type": ["string", "null"]},
+            "notes": {"type": ["string", "null"]},
+        },
+        "required": ["description", "clean_body", "subject_suggestion", "notes"],
+        "additionalProperties": False,
+    }
+
+    payload = {
+        "model": "gpt-4o",
+        "messages": [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": "eval_scenario_summary", "strict": True, "schema": response_schema},
+        },
+        "temperature": 0.0,
+    }
+
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    try:
+        resp = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=60)
+        resp.raise_for_status()
+        completion = resp.json()
+        content = completion.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        data = json.loads(content)
+        desc = (data.get("description") or "").strip()
+        body = (data.get("clean_body") or "").strip()
+        subj = (data.get("subject_suggestion") or None)
+        notes = (data.get("notes") or None)
+        if len(desc) > 200:
+            desc = desc[:200].rstrip()
+        return {"success": True, "description": desc, "clean_body": body, "subject_suggestion": subj, "notes": notes}
+    except Exception as e:
+        if verbose:
+            print(f"Warning: OpenAI fallback summary failed: {e}")
+        return {"success": False, "description": None, "clean_body": None, "subject_suggestion": None, "notes": str(e)}
 
 
 async def _fetch_front_conversation_and_build_scenario(conversation_id: str, verbose: bool = False) -> Optional[Dict[str, Any]]:
@@ -247,14 +328,13 @@ async def _fetch_front_conversation_and_build_scenario(conversation_id: str, ver
     scenario_description = f"Imported from Front conversation {resolved_conversation_id}"
     try:
         if verbose:
-            print(f"DEBUG: generate_eval_scenario_summary = {generate_eval_scenario_summary}")
             print(f"DEBUG: structured_messages count = {len(structured_messages) if structured_messages else 0}")
             print(f"DEBUG: chosen_body_html length = {len(chosen_body_html) if chosen_body_html else 0}")
-        if generate_eval_scenario_summary and (structured_messages or chosen_body_html):
+        if structured_messages or chosen_body_html:
             if verbose:
                 print(f"Generating OpenAI description for conversation {resolved_conversation_id}...")
             conversation_text = "\n\n".join([msg.get("body", "") for msg in structured_messages])
-            scen = await generate_eval_scenario_summary(conversation_text=conversation_text, structured_messages=structured_messages)
+            scen = await _maybe_generate_scenario_summary(conversation_text, structured_messages, verbose=verbose)
             if verbose:
                 print(f"OpenAI response: {scen}")
             if isinstance(scen, dict) and scen.get("success"):
@@ -276,6 +356,18 @@ async def _fetch_front_conversation_and_build_scenario(conversation_id: str, ver
     except Exception as e:
         if verbose:
             print(f"Warning: OpenAI scenario summary failed: {e}")
+
+    # Fallback: If no AI description produced, derive a concise one from subject/body
+    if scenario_description.startswith("Imported from Front conversation"):
+        # Prefer subject, else first line of body
+        candidate = (chosen_subject or "").strip()
+        if not candidate:
+            text_preview = re.sub(r"\s+", " ", (chosen_body_html or "").strip())
+            candidate = text_preview[:180] if text_preview else f"Imported conversation {resolved_conversation_id}"
+        # Trim overly long subject lines
+        if len(candidate) > 200:
+            candidate = candidate[:200].rstrip()
+        scenario_description = candidate
 
     # Ensure the body contains the test ID placeholder like other scenarios (in plain text)
     if "{UNIQUE_TEST_ID}" not in (chosen_body_html or ""):
@@ -584,7 +676,7 @@ async def main():
     if not can_check_tags and not send_only:
         print("Warning: Front API variables not set. Will only send emails, cannot validate tags.")
     
-    # If a Front conversation ID is provided, import it as a scenario before displaying
+    # If a Front conversation ID is provided, import it as a scenario and exit (no execution prompt)
     if from_conv:
         # Check if this conversation was already imported
         existing_key = _find_existing_scenario_by_conversation(from_conv, CLIENT_EVAL_SCENARIOS)
@@ -593,6 +685,7 @@ async def main():
             existing_scenario = CLIENT_EVAL_SCENARIOS[existing_key]
             print(f"Existing scenario: {existing_scenario['description']}")
             print("Skipping import to avoid duplicates. Use --force to override.")
+            return
         else:
             if existing_key and force_import:
                 print(f"Conversation {from_conv} already exists as scenario {existing_key}.")
@@ -610,7 +703,9 @@ async def main():
                 is_update = existing_key and force_import
                 _persist_scenario_to_file(target_key, imported, verbose=verbose, is_update=is_update)
             else:
-                print("Failed to import conversation; continuing without adding a scenario.")
+                print("Failed to import conversation; no scenario added.")
+            # Exit after import per requirement (no scenario execution prompt)
+            return
 
     # Display scenarios (now including any imported one)
     display_client_scenarios(verbose)
