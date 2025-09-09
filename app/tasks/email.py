@@ -579,9 +579,10 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                     
                     # Map barcode lien type to standardized format
                     if barcode_lien_type:
-                        if barcode_lien_type.upper() == 'RAD':
+                        barcode_upper = barcode_lien_type.upper()
+                        if barcode_upper in ['RAD', 'RADIOLOGY']:
                             determined_tags.append('Rad Lien')
-                        elif barcode_lien_type.upper() == 'TECH':
+                        elif barcode_upper in ['TECH', 'TC', 'TECHNOLOGIST']:
                             determined_tags.append('Tech Lien')
                         logger.info(f"🔍 BARCODE LIEN TYPE DETECTED: {barcode_lien_type} -> {determined_tags[-1] if determined_tags else 'None'}")
                     

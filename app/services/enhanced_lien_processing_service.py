@@ -152,29 +152,69 @@ class EnhancedLienProcessingService:
             
             # Convert bytes to PIL Image
             pil_image = Image.open(io.BytesIO(image_data))
+            logger.info(f"🔍 BARCODE DETECTION: Image size: {pil_image.size}, mode: {pil_image.mode}")
             
             # Convert to OpenCV format
             cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
             
             # Convert to grayscale for better barcode detection
             gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+            logger.info(f"🔍 BARCODE DETECTION: Converted to grayscale image shape: {gray.shape}")
             
-            # Detect barcodes
+            # Try different preprocessing techniques for better barcode detection
+            # 1. Original grayscale
             barcodes = pyzbar.decode(gray)
+            logger.info(f"🔍 BARCODE DETECTION: Found {len(barcodes)} barcodes in original image")
+            
+            # 2. If no barcodes found, try with contrast enhancement
+            if not barcodes:
+                enhanced = cv2.equalizeHist(gray)
+                barcodes = pyzbar.decode(enhanced)
+                logger.info(f"🔍 BARCODE DETECTION: Found {len(barcodes)} barcodes in enhanced image")
+            
+            # 3. If still no barcodes, try with morphological operations
+            if not barcodes:
+                kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+                morphed = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel)
+                barcodes = pyzbar.decode(morphed)
+                logger.info(f"🔍 BARCODE DETECTION: Found {len(barcodes)} barcodes in morphed image")
             
             if not barcodes:
-                logger.info("🔍 BARCODE DETECTION: No barcodes found")
+                logger.info("🔍 BARCODE DETECTION: No barcodes found after all preprocessing attempts")
                 return {
                     "barcode_found": False,
                     "parsed_data": None
                 }
             
-            # Process first barcode found
-            barcode = barcodes[0]
-            barcode_data = barcode.data.decode('utf-8')
-            barcode_type = barcode.type
+            # Process all barcodes found (take the first one)
+            all_barcodes = []
+            for i, barcode in enumerate(barcodes):
+                try:
+                    barcode_data = barcode.data.decode('utf-8')
+                    barcode_type = barcode.type
+                    logger.info(f"🔍 BARCODE DETECTION: Barcode {i+1}: {barcode_type} = '{barcode_data}'")
+                    all_barcodes.append({
+                        "type": barcode_type,
+                        "data": barcode_data,
+                        "rect": barcode.rect._asdict()
+                    })
+                except Exception as decode_error:
+                    logger.warning(f"🔍 BARCODE DETECTION: Error decoding barcode {i+1}: {decode_error}")
             
-            logger.info(f"🔍 BARCODE DETECTION: Found {barcode_type} barcode: {barcode_data}")
+            if not all_barcodes:
+                logger.warning("🔍 BARCODE DETECTION: Barcodes found but all failed to decode")
+                return {
+                    "barcode_found": False,
+                    "parsed_data": None,
+                    "decode_error": "All barcodes failed to decode"
+                }
+            
+            # Use the first successfully decoded barcode
+            first_barcode = all_barcodes[0]
+            barcode_data = first_barcode["data"]
+            barcode_type = first_barcode["type"]
+            
+            logger.info(f"🔍 BARCODE DETECTION: Using barcode: {barcode_type} = '{barcode_data}'")
             
             # Parse barcode data
             parsed_data = self._parse_barcode_value(barcode_data)
@@ -183,11 +223,12 @@ class EnhancedLienProcessingService:
                 "barcode_found": True,
                 "barcode_type": barcode_type,
                 "raw_value": barcode_data,
-                "parsed_data": parsed_data
+                "parsed_data": parsed_data,
+                "all_barcodes": all_barcodes  # Include all found barcodes for debugging
             }
             
         except Exception as e:
-            logger.error(f"Error in barcode detection: {e}")
+            logger.error(f"Error in barcode detection: {e}", exc_info=True)
             return {
                 "barcode_found": False,
                 "error": str(e)
@@ -328,7 +369,11 @@ Provide a structured analysis of the signatures found."""
             # Parse the structured response
             signature_data = json.loads(content)
             
-            logger.info(f"🔍 SIGNATURE DETECTION: {signature_data}")
+            logger.info(f"🔍 SIGNATURE DETECTION RESULTS:")
+            logger.info(f"    Patient signature present: {signature_data.get('patient_signature_present')}")
+            logger.info(f"    Attorney signature present: {signature_data.get('attorney_signature_present')}")
+            logger.info(f"    Lien signature type: {signature_data.get('lien_signature_type')}")
+            logger.info(f"    Analysis: {signature_data.get('signature_analysis')}")
             
             return {
                 "success": True,
