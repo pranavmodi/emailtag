@@ -487,4 +487,129 @@ Precise Imaging Disclaimer: This email message, its contents and any attachments
             }
         ]
     }
+,
+    "23": {
+        "description": "Imported from Front conversation cnv_1glofq8r",
+        "subject": "Fw: EXTERNAL: Bertha Delgado DOL 01/21/2024",
+        "body_html": (
+            """
+
+
+----------- Forwarded message -----------
+From: 
+scheduling@precisemri.com
+Date: August 17, 2025 at 1:47 AM GMT+5:30
+Subject: EXTERNAL: Bertha Delgado DOL 01/21/2024
+To: 
+test123abc@mediflow360.com
+
+
+
+
+
+
+
+----------- Forwarded message -----------
+From: 
+pischeduling.mmc@gmail.com
+Date: August 16, 2025 at 9:21 AM PDT
+Subject: EXTERNAL: Bertha Delgado DOL 01/21/2024
+To: 
+scheduling@precisemri.com
+
+
+Good morning
+
+
+Please schedule a client for MRI's near her home.
+
+
+Bertha Delgado
+DOL: 01/21/2024
+DOB: 11/20/1967
+
+
+Address: 19257 Farallon Rd , Madera CA 93638
+
+
+Phone: 559-871-2370
+
+
+
+
+Let me know the date, time and location.
+
+
+Once completed please refer to me.
+
+
+Attorney info:
+Shelby Ganuza-case manager
+866-4my-ally
+shelby@saidianlaw.com
+5990 Sepulveda Blvd Ste 250 Van Nuys, Ca 91411
+
+
+Thank you
+
+
+Jesse Rodriguez 
+
+
+
+
+
+
+Precise Imaging Scheduling & Orders
+
+Scheduling Department
+
+
+
+
+Quick Access
+📋 Upload RX
+
+🏥 Provider Portal 
+⚖️ Attorney Portal 
+👤 Patient Portal 
+📍 View Locations 
+Contact
+
+📞 
+800-558-2223
+
+✉️ 
+scheduling@precisemri.com
+
+🌐 
+www.PreciseMRI.com
+
+
+
+
+📍
+Find Your Nearest Location
+Multiple convenient locations near you 
+
+Precise Imaging Disclaimer: This email message, its contents and any attachments hereto, are for the sole use of the intended recipient(s) and may contain confidential and privileged information.
+Any unauthorized review, use, disclosure or distribution is prohibited. Notwithstanding the Uniform Electronic Transactions Act or the applicability of any other law of similar substance or effect, absent an express statement to the contrary hereinabove, this
+e-mail communication, its contents and any attachments hereto, are not intended to represent an offer or acceptance to enter into a contract and are not otherwise intended to bind the sender, any of its clients, or any other person or entity.
+
+Test ID: {UNIQUE_TEST_ID}"""
+        ),
+        "expected_tags": [],
+        "attachments": [
+            {
+                "filename": "Delgado, Bertha_Dr. Abeles_Order_MRI Shoulder_05-22-2025.pdf",
+                "filepath": "data/documents/Delgado, Bertha_Dr. Abeles_Order_MRI Shoulder_05-22-2025.pdf",
+                "content_type": "application/pdf"
+            },
+            {
+                "filename": "Delgado, Bertha_Dr. Abeles_Order_MRI Wrist_05-22-2025.pdf",
+                "filepath": "data/documents/Delgado, Bertha_Dr. Abeles_Order_MRI Wrist_05-22-2025.pdf",
+                "content_type": "application/pdf"
+            }
+        ]
+    }
 }

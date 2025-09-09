@@ -521,10 +521,10 @@ async def generate_eval_scenario_summary(
         "properties": {
             "description": {"type": "string"},
             "clean_body": {"type": "string"},
-            "subject_suggestion": {"type": "string", "nullable": True},
-            "notes": {"type": "string", "nullable": True},
+            "subject_suggestion": {"type": ["string", "null"]},
+            "notes": {"type": ["string", "null"]},
         },
-        "required": ["description", "clean_body"],
+        "required": ["description", "clean_body", "subject_suggestion", "notes"],
         "additionalProperties": False,
     }
 

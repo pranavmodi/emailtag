@@ -15,6 +15,8 @@ from pathlib import Path
 
 # Add the scripts/evals directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add the project root directory to path for app imports
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 
 # Import test utilities
 from test_utils import (
@@ -30,7 +32,8 @@ from scenarios_client_evals import CLIENT_EVAL_SCENARIOS
 try:
     # Use OpenAI helper tailored for scenario creation
     from app.services.openai_service import generate_eval_scenario_summary
-except Exception:
+except Exception as e:
+    print(f"WARNING: Failed to import generate_eval_scenario_summary: {e}")
     generate_eval_scenario_summary = None  # Fallback if import fails
 
 
@@ -131,7 +134,7 @@ def _download_attachments_for_conversation(conversation_id: str, messages: List[
     return attachments
 
 
-def _fetch_front_conversation_and_build_scenario(conversation_id: str, verbose: bool = False) -> Optional[Dict[str, Any]]:
+async def _fetch_front_conversation_and_build_scenario(conversation_id: str, verbose: bool = False) -> Optional[Dict[str, Any]]:
     """
     Fetch a Front conversation and messages, assemble a single-step scenario dict.
     """
@@ -243,21 +246,33 @@ def _fetch_front_conversation_and_build_scenario(conversation_id: str, verbose: 
     # Use OpenAI to generate a concise description/summary for the scenario
     scenario_description = f"Imported from Front conversation {resolved_conversation_id}"
     try:
+        if verbose:
+            print(f"DEBUG: generate_eval_scenario_summary = {generate_eval_scenario_summary}")
+            print(f"DEBUG: structured_messages count = {len(structured_messages) if structured_messages else 0}")
+            print(f"DEBUG: chosen_body_html length = {len(chosen_body_html) if chosen_body_html else 0}")
         if generate_eval_scenario_summary and (structured_messages or chosen_body_html):
+            if verbose:
+                print(f"Generating OpenAI description for conversation {resolved_conversation_id}...")
             conversation_text = "\n\n".join([msg.get("body", "") for msg in structured_messages])
-            async def _run_summary():
-                return await generate_eval_scenario_summary(conversation_text=conversation_text, structured_messages=structured_messages)
-            scen = asyncio.run(_run_summary())
+            scen = await generate_eval_scenario_summary(conversation_text=conversation_text, structured_messages=structured_messages)
+            if verbose:
+                print(f"OpenAI response: {scen}")
             if isinstance(scen, dict) and scen.get("success"):
                 desc = scen.get("description")
                 clean_body = scen.get("clean_body")
                 subj_suggestion = scen.get("subject_suggestion")
                 if isinstance(desc, str) and desc.strip():
+                    original_description = scenario_description
                     scenario_description = desc.strip().replace("\n", " ")
+                    if verbose:
+                        print(f"Updated description from '{original_description}' to '{scenario_description}'")
                 if isinstance(clean_body, str) and clean_body.strip():
                     chosen_body_html = clean_body.strip()
                 if isinstance(subj_suggestion, str) and subj_suggestion.strip():
                     chosen_subject = subj_suggestion.strip()
+            else:
+                if verbose:
+                    print(f"OpenAI summary failed or returned unsuccessful: {scen}")
     except Exception as e:
         if verbose:
             print(f"Warning: OpenAI scenario summary failed: {e}")
@@ -538,7 +553,7 @@ def print_test_summary(results: List[Dict[str, Any]]) -> None:
         print("Success Rate: N/A (no scenarios validated)")
 
 
-def main():
+async def main():
     """Main entry point for the client evaluation test runner."""
     print("Long Live your Majesty!")
     print("Starting Front email tagging client evaluation suite...")
@@ -587,7 +602,7 @@ def main():
                 target_key = _next_scenario_key(CLIENT_EVAL_SCENARIOS)
             
             print(f"Importing Front conversation {from_conv} as scenario {target_key}...")
-            imported = _fetch_front_conversation_and_build_scenario(from_conv, verbose=verbose)
+            imported = await _fetch_front_conversation_and_build_scenario(from_conv, verbose=verbose)
             if imported:
                 CLIENT_EVAL_SCENARIOS[target_key] = imported
                 print(f"{'Updated' if existing_key and force_import else 'Added'} scenario {target_key}: {imported['description']}")
@@ -656,4 +671,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    asyncio.run(main()) 
