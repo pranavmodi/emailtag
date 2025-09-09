@@ -67,3 +67,6 @@ vine==5.1.0
 wcwidth==0.2.13
 openai-agents==0.0.17
 pdf2image==1.17.0
+opencv-python==4.10.0.84
+pyzbar==0.1.9
+Pillow==11.1.0

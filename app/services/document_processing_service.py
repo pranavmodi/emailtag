@@ -402,6 +402,21 @@ ANALYSIS REQUIREMENTS:
         else:
             result = await self._process_unknown_document(file_content, filename)
         
+        # Check if this is a lien document and apply enhanced processing
+        logger.info(f"🔍 CHECKING LIEN STATUS for {filename}: success={result.get('document_analysis', {}).get('success')}, doc_type={result.get('document_analysis', {}).get('data', {}).get('document_type')}")
+        
+        if (result.get("document_analysis", {}).get("success") and 
+            result["document_analysis"]["data"].get("document_type") == "lien"):
+            logger.info(f"🔍 LIEN DETECTED: Applying enhanced lien processing to {filename}")
+            try:
+                enhanced_result = await self._apply_enhanced_lien_processing(file_content, filename, result)
+                result = enhanced_result
+                logger.info(f"✅ ENHANCED LIEN PROCESSING COMPLETED for {filename}")
+            except Exception as e:
+                logger.error(f"❌ ENHANCED LIEN PROCESSING FAILED for {filename}: {e}", exc_info=True)
+        else:
+            logger.info(f"🔍 LIEN PROCESSING SKIPPED for {filename} - not a lien document or processing failed")
+        
         # Add processing metadata
         result.update({
             "detected_type": doc_type,
@@ -411,6 +426,70 @@ ANALYSIS REQUIREMENTS:
         })
         
         return result
+    
+    async def _apply_enhanced_lien_processing(self, file_content: bytes, filename: str, basic_result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Apply enhanced lien processing including barcode reading and signature detection.
+        
+        Args:
+            file_content: Document content as bytes
+            filename: Original filename
+            basic_result: Basic document processing result
+            
+        Returns:
+            Enhanced result with lien-specific data
+        """
+        try:
+            # Import here to avoid circular imports
+            from app.services.enhanced_lien_processing_service import process_lien_document_enhanced
+            
+            # Perform enhanced lien analysis
+            enhanced_analysis = await process_lien_document_enhanced(file_content, filename)
+            
+            # Merge enhanced results with basic results
+            enhanced_result = basic_result.copy()
+            
+            # Update document analysis with enhanced lien data
+            if enhanced_result.get("document_analysis", {}).get("success"):
+                enhanced_result["document_analysis"]["data"].update({
+                    "enhanced_lien_analysis": {
+                        "PatientID": enhanced_analysis.get("PatientID", ""),
+                        "LienType": enhanced_analysis.get("LienType", ""),
+                        "ReferrerID": enhanced_analysis.get("ReferrerID", ""),
+                        "LienSignatureType": enhanced_analysis.get("LienSignatureType", "UNKNOWN"),
+                        "barcode_found": enhanced_analysis.get("barcode_found", False),
+                        "signature_analysis": enhanced_analysis.get("signature_analysis", "")
+                    }
+                })
+                
+                # Override patient ID if barcode provides more accurate data
+                barcode_patient_id = enhanced_analysis.get("PatientID", "")
+                if barcode_patient_id and barcode_patient_id.startswith("PRE"):
+                    enhanced_result["document_analysis"]["data"]["patient_id"] = barcode_patient_id
+                    logger.info(f"🔍 ENHANCED LIEN: Using barcode patient ID: {barcode_patient_id}")
+                
+                # Update lien type from barcode if available
+                barcode_lien_type = enhanced_analysis.get("LienType", "")
+                if barcode_lien_type:
+                    # Store the barcode lien type for downstream processing
+                    enhanced_result["document_analysis"]["data"]["lien_type"] = barcode_lien_type
+                    logger.info(f"🔍 ENHANCED LIEN: Using barcode lien type: {barcode_lien_type}")
+            
+            # Add enhanced processing metadata
+            enhanced_result["enhanced_lien_processing"] = enhanced_analysis
+            enhanced_result["provider_info"] = {
+                "analysis_provider": "openai_structured_outputs",
+                "enhanced_lien_provider": "barcode_signature_analysis"
+            }
+            
+            logger.info(f"✅ ENHANCED LIEN PROCESSING: Successfully enhanced {filename}")
+            return enhanced_result
+            
+        except Exception as e:
+            logger.error(f"Error in enhanced lien processing for {filename}: {e}", exc_info=True)
+            # Return original result if enhancement fails
+            basic_result["enhanced_lien_error"] = str(e)
+            return basic_result
     
     async def process_multiple_documents(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """

@@ -545,25 +545,64 @@ def perform_tagging_task(self, email_id: str) -> Dict:
             logger.info(f"Email {email_id} has OCR results and is classified under Liens. Checking for OCR-based override.")
             
             try:
-                # Check OCR results for lien_type
+                # Check OCR results for enhanced lien data (barcode + signature)
+                enhanced_lien_data = None
                 ocr_lien_type = None
-                for ocr_result in email_obj.ocr_results:
-                    if isinstance(ocr_result, dict) and 'lien_type' in ocr_result:
-                        lien_type = ocr_result['lien_type']
-                        if lien_type in ['Rad Lien', 'Tech Lien']:
-                            ocr_lien_type = lien_type
-                            break
                 
-                if ocr_lien_type:
-                    logger.info(f"🔍 OCR LIEN TYPE DETECTED for email {email_id}: {ocr_lien_type}. Overriding LLM classification.")
+                for ocr_result in email_obj.ocr_results:
+                    if isinstance(ocr_result, dict):
+                        # Check for enhanced lien processing results
+                        if ocr_result.get('document_analysis', {}).get('data', {}).get('enhanced_lien_analysis'):
+                            enhanced_data = ocr_result['document_analysis']['data']['enhanced_lien_analysis']
+                            if enhanced_data.get('barcode_found') or enhanced_data.get('LienSignatureType') != 'UNKNOWN':
+                                enhanced_lien_data = enhanced_data
+                                logger.info(f"🔍 ENHANCED LIEN DATA FOUND for email {email_id}: {enhanced_data}")
+                                break
+                        
+                        # Fallback to basic lien_type detection
+                        elif 'lien_type' in ocr_result:
+                            lien_type = ocr_result['lien_type']
+                            if lien_type in ['Rad Lien', 'Tech Lien']:
+                                ocr_lien_type = lien_type
+                
+                if enhanced_lien_data:
+                    # Use enhanced lien processing data for classification
+                    barcode_lien_type = enhanced_data.get('LienType', '')  # RAD or Tech
+                    signature_type = enhanced_data.get('LienSignatureType', 'UNKNOWN')  # PSL or ASL
+                    
+                    determined_tags = []
+                    
+                    # Add signature type (PSL/ASL) as intermediate tag
+                    if signature_type in ['PSL', 'ASL']:
+                        determined_tags.append(signature_type)
+                        logger.info(f"🔍 SIGNATURE TYPE DETECTED: {signature_type}")
+                    
+                    # Map barcode lien type to standardized format
+                    if barcode_lien_type:
+                        if barcode_lien_type.upper() == 'RAD':
+                            determined_tags.append('Rad Lien')
+                        elif barcode_lien_type.upper() == 'TECH':
+                            determined_tags.append('Tech Lien')
+                        logger.info(f"🔍 BARCODE LIEN TYPE DETECTED: {barcode_lien_type} -> {determined_tags[-1] if determined_tags else 'None'}")
+                    
+                    if determined_tags:
+                        new_tags = determined_tags
+                        logger.info(f"🔍 ENHANCED LIEN CLASSIFICATION for email {email_id}: {new_tags}")
+                        logger.info(f"Applied enhanced lien tags based on barcode/signature analysis")
+                    else:
+                        logger.info(f"Enhanced lien data present but no clear classification. Keeping LLM tags: {new_tags}")
+                        
+                elif ocr_lien_type:
+                    # Fallback to basic OCR lien type detection
+                    logger.info(f"🔍 BASIC OCR LIEN TYPE DETECTED for email {email_id}: {ocr_lien_type}. Overriding LLM classification.")
                     new_tags = [ocr_lien_type]
-                    logger.info(f"Applied OCR-based lien tag '{ocr_lien_type}' for email {email_id}")
+                    logger.info(f"Applied basic OCR-based lien tag '{ocr_lien_type}' for email {email_id}")
                 else:
-                    logger.info(f"No OCR lien type found in attachment results for email {email_id}. Keeping LLM tags: {new_tags}")
+                    logger.info(f"No enhanced or basic lien type found in attachment results for email {email_id}. Keeping LLM tags: {new_tags}")
                     
             except Exception as e:
-                logger.error(f"Error during OCR lien type check for email {email_id}: {e}", exc_info=True)
-                logger.info(f"Continuing with LLM tags due to OCR check error: {new_tags}")
+                logger.error(f"Error during enhanced lien type check for email {email_id}: {e}", exc_info=True)
+                logger.info(f"Continuing with LLM tags due to lien analysis error: {new_tags}")
         # --- END OCR-BASED LIEN CLASSIFICATION OVERRIDE ---
 
         # --- LIEN MODIFICATION DETECTION ---
