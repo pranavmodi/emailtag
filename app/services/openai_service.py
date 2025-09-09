@@ -320,19 +320,23 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
     prompt = (
         f"Analyze the following STRUCTURED email chain to determine if there are any outstanding questions, "
         f"requests, or actions that require a response from Precise Imaging (the medical imaging company).\n\n"
+        f"CRITICAL RULE: A request for Precise Imaging to take an ACTION is only resolved if there is CONFIRMATION "
+        f"that Precise Imaging has actually performed that action. Simply receiving a request does not resolve it.\n\n"
         f"IMPORTANT: Focus only on what Precise Imaging needs to address or respond to. "
         f"Ignore questions or actions that are for the patient/client to handle.\n\n"
-        f"Examples of what Precise Imaging should respond to:\n"
-        f"- Scheduling appointment requests\n"
-        f"- Questions about imaging results or reports\n"
-        f"- Billing inquiries or payment issues\n"
-        f"- Medical records requests\n"
-        f"- Insurance authorization questions\n\n"
-        f"Examples of what Precise Imaging does NOT need to respond to:\n"
+        f"Examples of UNRESOLVED requests (require Precise Imaging action/response):\n"
+        f"- 'Please schedule an appointment' - UNRESOLVED unless Precise confirms scheduling\n"
+        f"- 'Please update the portal' - UNRESOLVED unless Precise confirms portal updated\n"
+        f"- 'Please send the medical records' - UNRESOLVED unless Precise confirms records sent\n"
+        f"- 'Can you provide the imaging results?' - UNRESOLVED unless Precise provides results\n"
+        f"- 'Please process this lien documentation' - UNRESOLVED unless Precise confirms processing\n"
+        f"- 'What is the status of the appointment?' - UNRESOLVED unless Precise provides status\n\n"
+        f"Examples of what Precise Imaging does NOT need to respond to (RESOLVED):\n"
         f"- Patient saying they will call back later\n"
         f"- Patient saying they will check with their doctor\n"
         f"- Patient confirming they received information\n"
-        f"- Pure informational updates from attorneys/clients with no action needed\n\n"
+        f"- Attorney providing case updates with no action requested\n"
+        f"- Pure informational messages with explicit 'no response needed'\n\n"
         f"The emails are provided in chronological order (oldest first) for better analysis.\n\n"
         f"{email_chain_summary}"
     )
@@ -347,7 +351,7 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
         "properties": {
             "resolved": {
                 "type": "boolean",
-                "description": "True if all questions/requests for Precise Imaging have been addressed"
+                "description": "True if all questions/requests for Precise Imaging have been fully addressed with confirmation of action taken. False if any requests are pending Precise Imaging's response or action."
             },
             "unresolved_questions": {
                 "type": "array",
@@ -368,7 +372,7 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
     payload = {
         "model": "gpt-4o",
         "messages": [
-            {"role": "system", "content": "You are an AI assistant that analyzes email conversations to determine if there are outstanding questions, requests, or actions that require a response from Precise Imaging. Focus only on what Precise Imaging needs to address, not what patients/clients need to do."},
+            {"role": "system", "content": "You are an AI assistant that analyzes email conversations to determine if there are outstanding questions, requests, or actions that require a response from Precise Imaging. CRITICAL: Requests for Precise to take action are only resolved when there is confirmation that Precise has actually performed the requested action. A clear request is NOT the same as a completed request."},
             {"role": "user", "content": prompt}
         ],
         "response_format": {

@@ -611,5 +611,26 @@ Test ID: {UNIQUE_TEST_ID}"""
                 "content_type": "application/pdf"
             }
         ]
+    },
+    "23": {
+        "description": "Genesis Puche - Signed Liens V&A LAW FIRM - Forwarded email with signed lien attachments for multiple clients",
+        "subject": "EXTERNAL: Signed Liens V&A LAW FIRM - Case Manager Genesis Puche",
+        "body_html": (
+            "<p>----------- Forwarded message -----------<br>"
+            "From: genesis@valawfirm.com<br>"
+            "Date: July 7, 2025 at 11:51 AM PDT<br>"
+            "Subject: EXTERNAL: Signed Liens V&A LAW FIRM - Case Manager Genesis Puche<br>"
+            "To: billing@precisemri.com</p>"
+            "<p>Good afternoon, these are the signed lien for my clients. Please update the portal accordingly. Thanks!</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["ASL", "Rad Lien"],
+        "attachments": [
+            {
+                "filename": "20250703 - RAD signed Lien - Precise Imaging - Kathleen Neeck.pdf",
+                "filepath": "data/documents/20250703 - RAD signed Lien - Precise Imaging - Kathleen Neeck.pdf",
+                "content_type": "application/pdf"
+            }
+        ]
     }
 }
