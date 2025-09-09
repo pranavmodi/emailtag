@@ -336,24 +336,18 @@ Provide a structured analysis of the signatures found."""
             # Prepare API call - using o3 with Responses API for enhanced visual reasoning
             model_to_use = "o3"  # Preferred model for visual reasoning
             
-            # Responses API uses 'input' with rich content types: input_text, input_image
+            # Use top-level 'instructions' and a single user input with text + image
             api_params = {
                 "model": model_to_use,
+                "instructions": system_message,
                 "input": [
-                    {
-                        "role": "system",
-                        "content": [
-                            {"type": "input_text", "text": system_message}
-                        ]
-                    },
                     {
                         "role": "user",
                         "content": [
                             {"type": "input_text", "text": user_message + "\n\nReturn ONLY a strict JSON object with keys: patient_signature_present (boolean), attorney_signature_present (boolean), signature_analysis (string), lien_signature_type (PSL|ASL|UNKNOWN)."},
                             {
                                 "type": "input_image",
-                                "image_url": f"data:image/png;base64,{base64_image}",
-                                "detail": "high"
+                                "image_url": f"data:image/png;base64,{base64_image}"
                             }
                         ]
                     }
@@ -379,13 +373,58 @@ Provide a structured analysis of the signatures found."""
                     text_chunks = []
                     for item in getattr(response, "output", []) or []:
                         for part in getattr(item, "content", []) or []:
-                            if getattr(part, "type", None) == "output_text" and hasattr(part, "text"):
-                                text_chunks.append(part.text)
+                            part_type = getattr(part, "type", None)
+                            if part_type in ("output_text", "text"):
+                                # Handle various SDK object shapes
+                                part_text = None
+                                if hasattr(part, "text"):
+                                    pt = getattr(part, "text")
+                                    if isinstance(pt, str):
+                                        part_text = pt
+                                    elif hasattr(pt, "value"):
+                                        part_text = getattr(pt, "value")
+                                    elif isinstance(pt, dict) and "value" in pt:
+                                        part_text = pt.get("value")
+                                if part_text:
+                                    text_chunks.append(part_text)
                     if text_chunks:
                         content_text = "".join(text_chunks)
                 except Exception:
                     content_text = None
             
+            if not content_text:
+                # Deep fallback: use raw dict to traverse possible shapes
+                try:
+                    resp_dict = None
+                    if hasattr(response, "model_dump"):
+                        try:
+                            resp_dict = response.model_dump()
+                        except Exception:
+                            resp_dict = None
+                    if not resp_dict and hasattr(response, "to_dict"):
+                        try:
+                            resp_dict = response.to_dict()
+                        except Exception:
+                            resp_dict = None
+                    if isinstance(resp_dict, dict):
+                        text_candidates = []
+                        output_list = resp_dict.get("output") or []
+                        for item in output_list:
+                            for part in item.get("content", []) or []:
+                                ptype = part.get("type")
+                                if ptype in ("output_text", "text"):
+                                    t = part.get("text")
+                                    if isinstance(t, str):
+                                        text_candidates.append(t)
+                                    elif isinstance(t, dict):
+                                        v = t.get("value") or t.get("content") or t.get("string")
+                                        if isinstance(v, str):
+                                            text_candidates.append(v)
+                        if text_candidates:
+                            content_text = "".join(text_candidates)
+                except Exception:
+                    content_text = None
+
             if not content_text:
                 # Last resort: compatibility with chat-like structure if provided
                 try:
@@ -397,7 +436,18 @@ Provide a structured analysis of the signatures found."""
             
             # Parse the structured response (expecting strict JSON)
             if not content_text or not isinstance(content_text, str):
-                raise ValueError("Empty or invalid response content from Responses API")
+                logger.warning("🔍 SIGNATURE DETECTION: No text content returned from Responses API; returning UNKNOWN result")
+                signature_data = {
+                    "patient_signature_present": False,
+                    "attorney_signature_present": False,
+                    "signature_analysis": "No content returned from model.",
+                    "lien_signature_type": "UNKNOWN"
+                }
+                return {
+                    "success": True,
+                    "signature_data": signature_data,
+                    "note": "Model returned empty content"
+                }
 
             try:
                 signature_data = json.loads(content_text)
