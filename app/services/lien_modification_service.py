@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 LIEN_TAG_PATTERNS = ["PSL", "ASL", "Rad Lien", "Tech Lien"]
 
 # Confidence threshold for considering a modification significant
-MODIFICATION_CONFIDENCE_THRESHOLD = 0.7
+MODIFICATION_CONFIDENCE_THRESHOLD = 0.8
 
 # Keywords that indicate lien modifications in OCR text
 LIEN_MODIFICATION_KEYWORDS = [
@@ -163,6 +163,7 @@ class LienModificationDetectionService:
     def _analyze_strikethrough_results(self, strikethrough_result: Dict[str, Any]) -> bool:
         """
         Analyze strikethrough detection results to determine if modifications exist.
+        STRICT MODE: Only count as modification if actual struck-through text is provided.
         
         Args:
             strikethrough_result: Results from PDF strikethrough detection
@@ -177,35 +178,52 @@ class LienModificationDetectionService:
         strikethrough_instances = strikethrough_result.get("strikethrough_text", [])
         
         if not strikethrough_instances:
-            logger.debug("No strikethrough instances found")
+            logger.info("STRICT ANALYSIS: No strikethrough instances found - no modifications detected")
             return False
         
-        # Check confidence levels and content
+        # Check confidence levels and content with STRICT requirements
         significant_modifications = 0
+        rejected_instances = 0
         
         for instance in strikethrough_instances:
             confidence = instance.get("confidence", 0.0)
-            text_content = instance.get("text", "").lower()
+            text_content = instance.get("text", "").strip()
             
-            # Count as modification if confidence is high enough
-            if confidence >= MODIFICATION_CONFIDENCE_THRESHOLD:
-                significant_modifications += 1
-                logger.info(f"High-confidence modification detected: {text_content} (confidence: {confidence:.2f})")
+            # STRICT: Must have actual text content and high confidence
+            if not text_content or len(text_content) == 0:
+                rejected_instances += 1
+                logger.info(f"STRICT FILTER: Rejected strikethrough - no readable text content")
+                continue
+                
+            # STRICT: Must be substantial text (complete sentence or meaningful phrase)
+            word_count = len(text_content.split())
+            if word_count < 4:
+                rejected_instances += 1
+                logger.info(f"STRICT FILTER: Rejected strikethrough - too short ({word_count} words < 4): '{text_content}'")
+                continue
+                
+            if confidence < MODIFICATION_CONFIDENCE_THRESHOLD:
+                rejected_instances += 1
+                logger.info(f"STRICT FILTER: Rejected strikethrough - confidence {confidence:.2f} below threshold {MODIFICATION_CONFIDENCE_THRESHOLD}")
                 continue
             
-            # Or if text contains modification keywords
-            for keyword in LIEN_MODIFICATION_KEYWORDS:
-                if keyword in text_content:
-                    significant_modifications += 1
-                    logger.info(f"Modification keyword '{keyword}' found in strikethrough text: {text_content}")
-                    break
+            # Count as significant modification if we have actual struck-through text
+            significant_modifications += 1
+            visual_desc = instance.get("visual_description", "")
+            logger.info(f"STRICT DETECTION: High-confidence modification found!")
+            logger.info(f"  • Struck-through text: '{text_content}'")
+            logger.info(f"  • Word count: {word_count}")
+            logger.info(f"  • Confidence: {confidence:.2f}")
+            logger.info(f"  • Visual description: {visual_desc}")
+            logger.info(f"  • Location: {instance.get('location', 'Unknown')}")
         
         modifications_detected = significant_modifications > 0
         
-        logger.info(f"Lien modification analysis complete. "
-                   f"Total strikethrough instances: {len(strikethrough_instances)}, "
-                   f"Significant modifications: {significant_modifications}, "
-                   f"Modifications detected: {modifications_detected}")
+        logger.info(f"STRICT LIEN MODIFICATION ANALYSIS COMPLETE:")
+        logger.info(f"  • Total strikethrough instances: {len(strikethrough_instances)}")
+        logger.info(f"  • Accepted modifications: {significant_modifications}")
+        logger.info(f"  • Rejected instances: {rejected_instances}")
+        logger.info(f"  • Final decision: {'MODIFIED' if modifications_detected else 'NOT MODIFIED'}")
         
         return modifications_detected
     

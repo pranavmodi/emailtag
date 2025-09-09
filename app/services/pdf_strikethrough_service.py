@@ -511,29 +511,48 @@ class OpenAIProvider(StrikethroughProvider):
     
     def _prepare_vision_prompt(self) -> str:
         """Prepare the prompt for GPT-4o vision to detect strikethrough text."""
-        return """Analyze this image and detect any text that has been crossed out or has strikethrough formatting. 
+        return """CRITICAL: Analyze this image and detect ONLY text that has been physically crossed out or struck through with visible lines.
+
+STRICT REQUIREMENTS:
+- You must provide the EXACT struck-through text that you can read
+- Only mark strikethrough_detected: true if you can see actual visible lines crossing through text
+- DO NOT mark as strikethrough if text is just highlighted, circled, or otherwise marked without lines through it
+- DO NOT mark as strikethrough based on assumptions or context - only visible strikethrough marks
+- IMPORTANT: Only report strikethrough text that represents COMPLETE SENTENCES or SUBSTANTIAL PHRASES (at least 4+ words)
+- DO NOT report single words or short fragments as strikethrough - only meaningful complete text
 
 Please provide a JSON response with the following structure:
 {
     "strikethrough_detected": boolean,
     "strikethrough_instances": [
         {
-            "text": "the crossed out text (if readable)",
+            "struck_through_text": "the exact text that is crossed out (must be readable)",
             "confidence": confidence_score_0_to_1,
-            "location": "description of where it appears",
-            "type": "strikethrough|crossed_out|line_through"
+            "location": "description of where it appears on the page",
+            "visual_description": "description of the strikethrough marking (e.g., 'horizontal black line through text')"
         }
     ],
-    "summary": "brief description of findings"
+    "analysis": "detailed explanation of what you see - be specific about strikethrough marks"
 }
 
-Focus specifically on:
-- Text with horizontal lines through it
-- Text that appears crossed out
-- Any form of strikethrough formatting
-- Handwritten crossing out or strikethrough marks
+ONLY include text in strikethrough_instances if:
+1. You can clearly see lines crossing through the text
+2. You can read the actual text that is struck through
+3. The confidence is at least 0.8
+4. The struck-through text is a COMPLETE SENTENCE or SUBSTANTIAL PHRASE (minimum 4 words)
 
-If no strikethrough text is found, return strikethrough_detected: false and empty strikethrough_instances array."""
+Examples of what TO report:
+- "This patient will receive radiology services"
+- "Payment terms are thirty days from service"
+- "The lien covers all medical expenses"
+
+Examples of what NOT to report:
+- "updates" (single word)
+- "or not" (fragment)
+- "yes" (single word)
+- "payment due" (too short)
+
+If you cannot see clear strikethrough lines, cannot read substantial struck-through text, or only see single words crossed out, return strikethrough_detected: false."""
     
     async def _detect_strikethrough_in_image(self, image_path: str, page_number: int) -> List[Dict[str, Any]]:
         """Detect strikethrough in a single image using OpenAI GPT-4o Vision."""
@@ -596,36 +615,43 @@ If no strikethrough text is found, return strikethrough_detected: false and empt
                     else:
                         parsed_result = json.loads(content)
                 except json.JSONDecodeError:
-                    # If JSON parsing fails, create a fallback response
+                    # If JSON parsing fails, be STRICT - no fallback detection
                     logger.warning(f"Failed to parse JSON from OpenAI response, content: {content}")
-                    # Check for keyword indicators
-                    has_strikethrough = any(keyword in content.lower() for keyword in 
-                                          ['strikethrough', 'crossed out', 'line through', 'strike through'])
+                    logger.info("STRICT MODE: No fallback strikethrough detection - requiring valid JSON response with exact text")
                     parsed_result = {
-                        "strikethrough_detected": has_strikethrough,
-                        "strikethrough_instances": [{
-                            "text": "Detected via text analysis",
-                            "confidence": 0.7,
-                            "location": f"Page {page_number}",
-                            "type": "strikethrough"
-                        }] if has_strikethrough else [],
-                        "summary": content[:200] + "..." if len(content) > 200 else content
+                        "strikethrough_detected": False,
+                        "strikethrough_instances": [],
+                        "analysis": f"JSON parsing failed. Raw response: {content[:200]}..."
                     }
                 
-                # Convert to our standard format
+                # Convert to our standard format with STRICT requirements
                 strikethrough_instances = []
                 if parsed_result.get("strikethrough_detected", False):
                     for instance in parsed_result.get("strikethrough_instances", []):
-                        strikethrough_instances.append({
-                            "text": instance.get("text", "Unknown text"),
-                            "page_number": page_number,
-                            "confidence": instance.get("confidence", 0.8),
-                            "location": instance.get("location", f"Page {page_number}"),
-                            "type": instance.get("type", "strikethrough"),
-                            "provider_data": {
-                                "summary": parsed_result.get("summary", "")
-                            }
-                        })
+                        # STRICT REQUIREMENTS: Must have actual struck-through text
+                        struck_text = instance.get("struck_through_text", "").strip()
+                        confidence = instance.get("confidence", 0.0)
+                        
+                        # Count words in struck-through text
+                        word_count = len(struck_text.split()) if struck_text else 0
+                        
+                        # Only include if we have substantial text (4+ words) and high enough confidence
+                        if struck_text and word_count >= 4 and confidence >= 0.8:
+                            strikethrough_instances.append({
+                                "text": struck_text,
+                                "page_number": page_number,
+                                "confidence": confidence,
+                                "location": instance.get("location", f"Page {page_number}"),
+                                "visual_description": instance.get("visual_description", ""),
+                                "type": "strikethrough",
+                                "provider_data": {
+                                    "analysis": parsed_result.get("analysis", "")
+                                }
+                            })
+                            logger.info(f"STRICT DETECTION: Found substantial struck-through text: '{struck_text}' ({word_count} words, confidence: {confidence})")
+                        else:
+                            reason = "no text" if not struck_text else f"too short ({word_count} words < 4)" if word_count < 4 else f"low confidence ({confidence} < 0.8)"
+                            logger.info(f"STRICT FILTER: Rejected strikethrough - {reason}: '{struck_text}'")
                 
                 return strikethrough_instances
                 
