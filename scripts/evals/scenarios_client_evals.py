@@ -632,5 +632,26 @@ Test ID: {UNIQUE_TEST_ID}"""
                 "content_type": "application/pdf"
             }
         ]
+    },
+    "24": {
+        "description": "Genesis Puche - Tech Lien Submission V&A LAW FIRM - Forwarded email with tech lien attachment for client processing",
+        "subject": "EXTERNAL: Tech Lien Documentation V&A LAW FIRM - Case Manager Genesis Puche",
+        "body_html": (
+            "<p>----------- Forwarded message -----------<br>"
+            "From: genesis@valawfirm.com<br>"
+            "Date: July 7, 2025 at 2:15 PM PDT<br>"
+            "Subject: EXTERNAL: Tech Lien Documentation V&A LAW FIRM - Case Manager Genesis Puche<br>"
+            "To: billing@precisemri.com</p>"
+            "<p>Good afternoon, attached is the completed tech lien documentation for our client. Please process accordingly and update your records. Thanks!</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["ASL", "Tech Lien"],
+        "attachments": [
+            {
+                "filename": "20250703 - TECH  signed Lien - Precise Imaging - Kathleen Neeck.pdf",
+                "filepath": "data/documents/20250703 - TECH  signed Lien - Precise Imaging - Kathleen Neeck.pdf",
+                "content_type": "application/pdf"
+            }
+        ]
     }
 }

@@ -6,9 +6,26 @@ Please use the following rules to sub-classify the provided email content, alrea
 
 --- START Liens Sub-Classification RULES ---
 
-1. **Lien Type or Status**: Based on the email content, determine the specific type or status of the lien and classify as follows:
-   - If the email indicates that a **required lien document has not been received or is being explicitly requested**, classify as 'Missing Lien Request'.
-   - If the email pertains to a **Prescription Service Lien (PSL)**, classify as 'PSL'.
-   - If the email pertains to an **Attorney Service Lien (ASL)**, classify as 'ASL'.
+1. **Document Analysis Priority**: FIRST check if there are any attached documents analyzed in the "ATTACHED DOCUMENTS ANALYSIS" section:
+   - If there are lien documents attached (document type = "lien"), this is a SUBMISSION of liens, not a request for missing liens
+   - If there are NO lien documents attached, then consider if this is a request for missing liens
+
+2. **Lien Type or Status**: Based on the email content and attached documents, classify as follows:
+   
+   **For Missing Lien Requests:**
+   - If the email explicitly requests lien documents AND has no lien attachments, classify as 'Missing Lien Request'
+   - Examples: "We need the lien documents", "Please provide the missing lien", "Where are the liens?"
+   
+   **For Lien Submissions (with attachments):**
+   - If lien documents are attached and email indicates Patient Signed Liens, classify as 'PSL'
+   - If lien documents are attached and email indicates Attorney Signed Liens, classify as 'ASL' 
+   - If lien documents are attached but unclear who signed, look at sender:
+     - From law firms/attorneys = classify as 'ASL'
+     - From patients/individuals = classify as 'PSL'
+
+3. **Key Indicators**:
+   - **ASL indicators**: "attorney signed", "law firm", "legal", "counsel", sender is attorney/law firm
+   - **PSL indicators**: "patient signed", "patient lien", sender is patient/individual
+   - **Missing Lien indicators**: "need lien", "missing lien", "provide lien", "where is lien" AND no lien attachments
 
 --- END Liens Sub-Classification RULES --- 
