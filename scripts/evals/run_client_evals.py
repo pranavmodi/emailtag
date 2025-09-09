@@ -8,6 +8,10 @@ import sys
 import uuid
 import time
 from typing import Dict, Any, List, Optional
+import requests
+import re
+import asyncio
+from pathlib import Path
 
 # Add the scripts/evals directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -23,6 +27,12 @@ from test_utils import (
 
 # Import client eval scenarios
 from scenarios_client_evals import CLIENT_EVAL_SCENARIOS
+try:
+    # Use OpenAI helper tailored for scenario creation
+    from app.services.openai_service import generate_eval_scenario_summary
+except Exception:
+    generate_eval_scenario_summary = None  # Fallback if import fails
+
 
 
 def display_client_scenarios(verbose: bool = False) -> None:
@@ -43,6 +53,335 @@ def display_client_scenarios(verbose: bool = False) -> None:
             print(f"  {key}: {description}")
     
     print("=" * 50)
+
+
+def _next_scenario_key(existing: Dict[str, Any]) -> str:
+    """Return the next numeric string key not already in use."""
+    numeric_keys = []
+    for key in existing.keys():
+        try:
+            numeric_keys.append(int(key))
+        except ValueError:
+            continue
+    next_key = (max(numeric_keys) + 1) if numeric_keys else 1
+    return str(next_key)
+
+
+def _find_existing_scenario_by_conversation(conversation_id: str, existing: Dict[str, Any]) -> Optional[str]:
+    """
+    Check if a scenario already exists for the given conversation ID.
+    
+    Args:
+        conversation_id: The Front conversation ID to search for
+        existing: Dictionary of existing scenarios
+        
+    Returns:
+        The scenario key if found, None otherwise
+    """
+    for key, scenario in existing.items():
+        description = scenario.get("description", "")
+        # Check if description contains the conversation ID
+        if f"conversation {conversation_id}" in description.lower():
+            return key
+    return None
+
+
+def _download_attachments_for_conversation(conversation_id: str, messages: List[Dict[str, Any]], verbose: bool = False) -> List[Dict[str, str]]:
+    """
+    Download attachments referenced in the conversation messages to data/documents folder
+    and return a scenario-ready attachments list with relative filepaths.
+    """
+    attachments: List[Dict[str, str]] = []
+
+    front_api_base_url = os.getenv("FRONT_API_BASE_URL")
+    front_auth_token = os.getenv("FRONT_AUTH_TOKEN")
+    headers = {"Authorization": f"Bearer {front_auth_token}", "Accept": "application/json"} if front_auth_token else {}
+
+    # Use data/documents directory relative to project root (no conversation subdirectory)
+    project_root = Path(__file__).resolve().parent.parent.parent  # Navigate up to emailtag/
+    base_dir = project_root / "data" / "documents"
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    for msg in messages or []:
+        for att in msg.get("attachments", []) or []:
+            url = att.get("url")
+            filename = att.get("filename") or f"attachment_{uuid.uuid4().hex[:8]}"
+            content_type = att.get("content_type") or "application/octet-stream"
+            if not url:
+                continue
+            try:
+                # Some Front attachment URLs are presigned; others require auth header
+                resp = requests.get(url, headers=headers, timeout=30, verify=False)
+                resp.raise_for_status()
+                dest_path = base_dir / filename
+                with open(dest_path, "wb") as f:
+                    f.write(resp.content)
+                # Store path relative to project root (emailtag/)
+                rel_path = str(Path("data") / "documents" / filename)
+                attachments.append({
+                    "filename": filename,
+                    "filepath": rel_path,
+                    "content_type": content_type,
+                })
+                if verbose:
+                    print(f"Downloaded attachment: {dest_path}")
+            except Exception as e:
+                print(f"Warning: Failed to download attachment {filename} from {url}: {e}")
+
+    return attachments
+
+
+def _fetch_front_conversation_and_build_scenario(conversation_id: str, verbose: bool = False) -> Optional[Dict[str, Any]]:
+    """
+    Fetch a Front conversation and messages, assemble a single-step scenario dict.
+    """
+    front_api_base_url = os.getenv("FRONT_API_BASE_URL")
+    front_auth_token = os.getenv("FRONT_AUTH_TOKEN")
+
+    if not front_api_base_url or not front_auth_token:
+        print("Error: FRONT_API_BASE_URL or FRONT_AUTH_TOKEN not set. Cannot import conversation.")
+        return None
+
+    headers = {
+        "Authorization": f"Bearer {front_auth_token}",
+        "Accept": "application/json",
+    }
+
+    # Resolve supplied ID: it may be a message ID (msg_*) or a conversation ID (cnv_*)
+    resolved_conversation_id = conversation_id
+    subject = None
+    conv_obj = None
+    try:
+        conv_url = f"{front_api_base_url}/conversations/{resolved_conversation_id}"
+        if verbose:
+            print(f"Fetching conversation: {conv_url}")
+        conv_resp = requests.get(conv_url, headers=headers, timeout=30, verify=False)
+        if conv_resp.status_code == 404:
+            # Try resolving as message ID
+            if verbose:
+                print(f"Conversation not found for '{conversation_id}'. Trying as message ID...")
+            msg_url = f"{front_api_base_url}/messages/{conversation_id}"
+            msg_resp = requests.get(msg_url, headers=headers, timeout=30, verify=False)
+            msg_resp.raise_for_status()
+            msg_obj = msg_resp.json()
+            # Front message payloads typically include conversation_id or conversation object
+            resolved_conversation_id = (
+                (msg_obj.get("conversation") or {}).get("id")
+                or msg_obj.get("conversation_id")
+                or resolved_conversation_id
+            )
+            if verbose:
+                print(f"Resolved message '{conversation_id}' to conversation '{resolved_conversation_id}'.")
+            conv_url = f"{front_api_base_url}/conversations/{resolved_conversation_id}"
+            conv_resp = requests.get(conv_url, headers=headers, timeout=30, verify=False)
+        conv_resp.raise_for_status()
+        conv_obj = conv_resp.json()
+        subject = conv_obj.get("subject")
+    except Exception as e:
+        print(f"Warning: Failed to fetch conversation {resolved_conversation_id} subject: {e}")
+
+    # Fetch messages to get latest inbound body/html and attachments
+    messages: List[Dict[str, Any]] = []
+    try:
+        msgs_url = f"{front_api_base_url}/conversations/{resolved_conversation_id}/messages"
+        if verbose:
+            print(f"Fetching conversation messages: {msgs_url}")
+        msgs_resp = requests.get(msgs_url, headers=headers, timeout=30, verify=False)
+        msgs_resp.raise_for_status()
+        data = msgs_resp.json() or {}
+        messages = data.get("_results", []) or []
+        # Fetch full message contents to ensure attachments and fields are populated
+        full_messages: List[Dict[str, Any]] = []
+        for m in messages:
+            mid = m.get("id")
+            if not mid:
+                full_messages.append(m)
+                continue
+            try:
+                full_msg_url = f"{front_api_base_url}/messages/{mid}"
+                full_msg_resp = requests.get(full_msg_url, headers=headers, timeout=30, verify=False)
+                full_msg_resp.raise_for_status()
+                full_messages.append(full_msg_resp.json())
+            except Exception:
+                full_messages.append(m)
+        messages = full_messages
+    except Exception as e:
+        print(f"Warning: Failed to fetch messages for conversation {resolved_conversation_id}: {e}")
+
+    # Build structured messages for OpenAI summary and pick last inbound for body
+    chosen_body_html: Optional[str] = None
+    chosen_subject: Optional[str] = None
+    structured_messages: List[Dict[str, Any]] = []
+    for m in messages:
+        body_html = m.get("body") or ""
+        body_text = m.get("text") or ""
+        clean_text = body_text if body_text else re.sub('<[^>]*>', '', body_html)
+        structured_messages.append({
+            "body": clean_text,
+            "author_email": (m.get("author") or {}).get("email"),
+            "author_handle": (m.get("author") or {}).get("handle"),
+            "author_name": (m.get("author") or {}).get("username") or (m.get("author") or {}).get("name"),
+            "created_at": m.get("created_at"),
+        })
+
+    for m in reversed(messages):
+        is_inbound = m.get("is_inbound") is True or m.get("direction") == "inbound"
+        if m.get("type") == "email" and is_inbound:
+            raw_body = m.get("body") or ""
+            text_fallback = m.get("text") or ""
+            # Prefer provided plain text; else strip HTML tags from body
+            stripped_text = text_fallback if text_fallback else re.sub('<[^>]*>', '', raw_body)
+            chosen_body_html = stripped_text
+            chosen_subject = m.get("subject") or subject
+            break
+
+    if not chosen_subject:
+        chosen_subject = subject or f"Imported conversation {conversation_id}"
+    if not chosen_body_html:
+        chosen_body_html = "<p>(Imported from Front conversation)</p>"
+
+    # Use OpenAI to generate a concise description/summary for the scenario
+    scenario_description = f"Imported from Front conversation {resolved_conversation_id}"
+    try:
+        if generate_eval_scenario_summary and (structured_messages or chosen_body_html):
+            conversation_text = "\n\n".join([msg.get("body", "") for msg in structured_messages])
+            async def _run_summary():
+                return await generate_eval_scenario_summary(conversation_text=conversation_text, structured_messages=structured_messages)
+            scen = asyncio.run(_run_summary())
+            if isinstance(scen, dict) and scen.get("success"):
+                desc = scen.get("description")
+                clean_body = scen.get("clean_body")
+                subj_suggestion = scen.get("subject_suggestion")
+                if isinstance(desc, str) and desc.strip():
+                    scenario_description = desc.strip().replace("\n", " ")
+                if isinstance(clean_body, str) and clean_body.strip():
+                    chosen_body_html = clean_body.strip()
+                if isinstance(subj_suggestion, str) and subj_suggestion.strip():
+                    chosen_subject = subj_suggestion.strip()
+    except Exception as e:
+        if verbose:
+            print(f"Warning: OpenAI scenario summary failed: {e}")
+
+    # Ensure the body contains the test ID placeholder like other scenarios (in plain text)
+    if "{UNIQUE_TEST_ID}" not in (chosen_body_html or ""):
+        chosen_body_html = f"{chosen_body_html}\n\nTest ID: {{UNIQUE_TEST_ID}}"
+
+    # Download attachments and prepare scenario attachments list
+    scenario_attachments = _download_attachments_for_conversation(resolved_conversation_id, messages, verbose=verbose)
+
+    scenario: Dict[str, Any] = {
+        "description": scenario_description,
+        "subject": chosen_subject,
+        "body_html": chosen_body_html,
+        "expected_tags": [],
+    }
+    if scenario_attachments:
+        scenario["attachments"] = scenario_attachments
+
+    return scenario
+
+
+def _persist_scenario_to_file(new_key: str, scenario: Dict[str, Any], verbose: bool = False, is_update: bool = False) -> bool:
+    """
+    Append or update the given scenario in scripts/evals/scenarios_client_evals.py.
+    
+    Args:
+        new_key: The scenario key
+        scenario: The scenario data
+        verbose: Whether to print verbose output
+        is_update: If True, updates existing scenario; if False, appends new scenario
+        
+    Returns:
+        True on success.
+    """
+    try:
+        scenarios_file = Path(__file__).resolve().parent / "scenarios_client_evals.py"
+        text = scenarios_file.read_text(encoding="utf-8")
+
+        # Build scenario block as Python syntax
+        description = scenario.get("description", f"Imported scenario {new_key}")
+        subject = scenario.get("subject", "Imported Subject")
+        body_html = scenario.get("body_html", "")
+        # Pre-escape values for safe embedding in string literals
+        description_esc = description.replace("\\", "\\\\").replace('"', '\\"')
+        subject_esc = subject.replace("\\", "\\\\").replace('"', '\\"')
+        # Ensure body_html is safe for triple-double-quoted literal by escaping any triple quotes
+        body_html_escaped = body_html.replace('"""', '\\"""')
+
+        attachments_list = scenario.get("attachments", []) or []
+        attachments_block_lines: List[str] = []
+        for att in attachments_list:
+            filename_raw = att.get("filename", "attachment.pdf")
+            filepath_raw = att.get("filepath", "")
+            content_type_raw = att.get("content_type", "application/octet-stream")
+
+            filename_esc = filename_raw.replace("\\", "/").replace('"', '\\"')
+            filepath_esc = filepath_raw.replace("\\", "/").replace('"', '\\"')
+            content_type_esc = content_type_raw.replace('"', '\\"')
+
+            attachments_block_lines.append(
+                "            {\n"
+                f"                \"filename\": \"{filename_esc}\",\n"
+                f"                \"filepath\": \"{filepath_esc}\",\n"
+                f"                \"content_type\": \"{content_type_esc}\"\n"
+                "            }"
+            )
+
+        attachments_block = ""
+        if attachments_block_lines:
+            attachments_block = ",\n        \"attachments\": [\n" + ",\n".join(attachments_block_lines) + "\n        ]"
+
+        new_entry = (
+            f"    \"{new_key}\": {{\n"
+            f"        \"description\": \"{description_esc}\",\n"
+            f"        \"subject\": \"{subject_esc}\",\n"
+            f"        \"body_html\": (\n"
+            f"            \"\"\"{body_html_escaped}\"\"\"\n"
+            f"        ),\n"
+            f"        \"expected_tags\": []"
+            f"{attachments_block}\n"
+            f"    }}"
+        )
+
+        if is_update:
+            # Update existing scenario by replacing the entire scenario block
+            # Find the pattern: "key": { ... }
+            import re
+            pattern = rf'    "{re.escape(new_key)}": \{{[^}}]*(?:\{{[^}}]*\}})*[^}}]*\}}'
+            match = re.search(pattern, text, re.DOTALL)
+            if match:
+                updated_text = text[:match.start()] + new_entry + text[match.end():]
+            else:
+                print(f"Warning: Could not find existing scenario {new_key} to update; appending instead.")
+                # Fallback to append mode
+                insert_pos = text.rfind("}\n")
+                if insert_pos == -1:
+                    insert_pos = text.rfind('}')
+                if insert_pos == -1:
+                    print("Warning: Could not locate end of CLIENT_EVAL_SCENARIOS mapping; skipping persistence.")
+                    return False
+                updated_text = text[:insert_pos] + ",\n" + new_entry + "\n" + text[insert_pos:]
+        else:
+            # Insert before the final closing brace of CLIENT_EVAL_SCENARIOS
+            insert_pos = text.rfind("}\n")
+            if insert_pos == -1:
+                # Fallback: rfind just '}'
+                insert_pos = text.rfind('}')
+            if insert_pos == -1:
+                print("Warning: Could not locate end of CLIENT_EVAL_SCENARIOS mapping; skipping persistence.")
+                return False
+
+            # Add a comma before our new entry to separate from previous item
+            updated_text = text[:insert_pos] + ",\n" + new_entry + "\n" + text[insert_pos:]
+
+        scenarios_file.write_text(updated_text, encoding="utf-8")
+        if verbose:
+            action = "Updated" if is_update else "Persisted"
+            print(f"{action} scenario {new_key} to {scenarios_file}")
+        return True
+    except Exception as e:
+        print(f"Warning: Failed to persist scenario {new_key} to file: {e}")
+        return False
 
 
 def run_single_scenario(scenario_key: str, scenario_details: Dict[str, Any], verbose: bool = False) -> Dict[str, Any]:
@@ -204,9 +543,16 @@ def main():
     print("Long Live your Majesty!")
     print("Starting Front email tagging client evaluation suite...")
     
-    # Parse command line arguments
+    # Parse command line arguments (simple parsing to avoid adding dependencies)
     verbose = "--verbose" in sys.argv or "-v" in sys.argv
     send_only = "--send-only" in sys.argv
+    force_import = "--force" in sys.argv
+    from_conv: Optional[str] = None
+    for i, arg in enumerate(sys.argv):
+        if arg.startswith("--from-conv="):
+            from_conv = arg.split("=", 1)[1].strip()
+        elif arg == "--from-conv" and i + 1 < len(sys.argv):
+            from_conv = sys.argv[i + 1].strip()
     set_verbose_mode(verbose)
     
     if verbose:
@@ -214,13 +560,44 @@ def main():
 
     if send_only:
         print("Send-only mode enabled: emails will be sent, but tags will not be validated.")
+        
+    if force_import:
+        print("Force import mode enabled: will override existing scenarios from same conversation.")
     
     # Check Front API configuration
     can_check_tags = check_front_api_config()
     if not can_check_tags and not send_only:
         print("Warning: Front API variables not set. Will only send emails, cannot validate tags.")
     
-    # Display scenarios
+    # If a Front conversation ID is provided, import it as a scenario before displaying
+    if from_conv:
+        # Check if this conversation was already imported
+        existing_key = _find_existing_scenario_by_conversation(from_conv, CLIENT_EVAL_SCENARIOS)
+        if existing_key and not force_import:
+            print(f"Conversation {from_conv} already exists as scenario {existing_key}.")
+            existing_scenario = CLIENT_EVAL_SCENARIOS[existing_key]
+            print(f"Existing scenario: {existing_scenario['description']}")
+            print("Skipping import to avoid duplicates. Use --force to override.")
+        else:
+            if existing_key and force_import:
+                print(f"Conversation {from_conv} already exists as scenario {existing_key}.")
+                print(f"Force mode enabled - will override existing scenario {existing_key}.")
+                target_key = existing_key
+            else:
+                target_key = _next_scenario_key(CLIENT_EVAL_SCENARIOS)
+            
+            print(f"Importing Front conversation {from_conv} as scenario {target_key}...")
+            imported = _fetch_front_conversation_and_build_scenario(from_conv, verbose=verbose)
+            if imported:
+                CLIENT_EVAL_SCENARIOS[target_key] = imported
+                print(f"{'Updated' if existing_key and force_import else 'Added'} scenario {target_key}: {imported['description']}")
+                # Persist to scenarios file so it stays available next run
+                is_update = existing_key and force_import
+                _persist_scenario_to_file(target_key, imported, verbose=verbose, is_update=is_update)
+            else:
+                print("Failed to import conversation; continuing without adding a scenario.")
+
+    # Display scenarios (now including any imported one)
     display_client_scenarios(verbose)
     
     # Get user choice

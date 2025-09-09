@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     
     # Classification Debugging
     CLASSIFICATION_DEBUG: bool = False  # Enable detailed classification logging with raw prompts
+    
+    # Auto-capture Mode for Evaluation Scenarios
+    AUTO_CAPTURE_EVAL_SCENARIOS: bool = False  # Automatically capture new emails as evaluation scenarios
 
     # SSL/TLS Settings
     SSL_ENABLED: bool = True

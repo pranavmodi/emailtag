@@ -471,3 +471,101 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
             "success": False,
             "email_chain": emails
         } 
+
+
+async def generate_eval_scenario_summary(
+    conversation_text: str,
+    structured_messages: List[Dict[str, Any]] | None = None,
+) -> Dict[str, Any]:
+    """
+    Generate a concise scenario description and clean body for eval scenarios.
+
+    Returns:
+        {
+          success: bool,
+          description: str | None,
+          clean_body: str | None,
+          subject_suggestion: str | None,
+          notes: str | None,
+        }
+    """
+    if not settings.OPENAI_API_KEY:
+        return {"success": False, "description": None, "clean_body": None, "subject_suggestion": None, "notes": "OPENAI_API_KEY not configured"}
+
+    chain_lines: List[str] = []
+    if structured_messages:
+        for i, msg in enumerate(structured_messages, 1):
+            author = msg.get("author_email") or msg.get("author_handle") or msg.get("author_name") or "unknown@example.com"
+            body = (msg.get("body") or "").strip()
+            chain_lines.append(f"[{i}] From: {author}\n{body}\n---")
+    else:
+        chain_lines.append(conversation_text[:15000])
+
+    joined_chain = "\n".join(chain_lines)[:20000]
+
+    system_msg = (
+        "You generate clean eval scenarios from email threads.\n"
+        "Return a concise description (<= 200 chars) for a scenario list and a clean, readable plain-text body for the LATEST inbound email.\n"
+        "The body must be human-readable with signatures/footers minimized. Do not include HTML."
+    )
+
+    user_msg = (
+        "Create a concise one-line description and a clean body for the latest inbound email.\n"
+        "If a clearer subject is apparent, propose one.\n\n"
+        "EMAIL CHAIN (chronological):\n"
+        f"{joined_chain}"
+    )
+
+    response_schema = {
+        "type": "object",
+        "properties": {
+            "description": {"type": "string"},
+            "clean_body": {"type": "string"},
+            "subject_suggestion": {"type": "string", "nullable": True},
+            "notes": {"type": "string", "nullable": True},
+        },
+        "required": ["description", "clean_body"],
+        "additionalProperties": False,
+    }
+
+    payload = {
+        "model": "gpt-4o",
+        "messages": [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": "eval_scenario_summary", "strict": True, "schema": response_schema},
+        },
+        "temperature": 0.0,
+    }
+
+    headers = {
+        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
+            resp = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+            resp.raise_for_status()
+            completion = resp.json()
+            content = completion.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+            data = json.loads(content)
+            desc = (data.get("description") or "").strip()
+            body = (data.get("clean_body") or "").strip()
+            subj = (data.get("subject_suggestion") or None)
+            notes = (data.get("notes") or None)
+            if len(desc) > 200:
+                desc = desc[:200].rstrip()
+            return {
+                "success": True,
+                "description": desc,
+                "clean_body": body,
+                "subject_suggestion": subj,
+                "notes": notes,
+            }
+    except Exception as e:
+        logger.error(f"generate_eval_scenario_summary error: {e}")
+        return {"success": False, "description": None, "clean_body": None, "subject_suggestion": None, "notes": str(e)}

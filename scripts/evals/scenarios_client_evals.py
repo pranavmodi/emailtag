@@ -378,5 +378,113 @@ CLIENT_EVAL_SCENARIOS = {
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": []
+    },
+    "22": {
+        "description": "Imported from Front conversation cnv_1gip9rmj",
+        "subject": "Fw: EXTERNAL: Re: Antonia Garcia",
+        "body_html": (
+            """
+[Sent from Front]
+----------- Forwarded message -----------
+From: drackow2008@gmail.com<mailto:drackow2008@gmail.com>
+Date: August 28, 2025 at 10:58 PM GMT+5:30
+Subject: EXTERNAL: Re: Antonia Garcia
+To: test123abc@mediflow360.com<mailto:test123abc@mediflow360.com>
+
+----------- Forwarded message -----------
+From: phillip@sepulvedalawgroup.com<mailto:phillip@sepulvedalawgroup.com>
+Date: August 15, 2025 at 2:36 PM PDT
+Subject: EXTERNAL: Re: Antonia Garcia
+To: scheduling@precisemri.com<mailto:scheduling@precisemri.com>
+Cc: 2111774@bcc.casepeer.com<mailto:2111774@bcc.casepeer.com>
+
+Hello!
+
+This current patient has been recommended for additional MRI and xrays. See attached. Thanks!
+
+This communication is the property of Sepulveda Sanchez Accident Lawyers/Sepulveda Law Group and may contain confidential or privileged information. Unauthorized use of this communication is strictly prohibited and may be unlawful. If you have received this communication in error, please immediately notify the sender by replying to this e-mail and destroy all copies of the communication and any attachments.
+
+
+
+Regards,
+
+
+PHILLIP CUARTAS
+Case Manager
+
+[Sepulveda Sanchez Accident Lawyers]<https://sepulvedalawgroup.com/>
+Los Angeles  |  Stockton  |  New York
+
+W: sepulvedalawgroup.com<http://sepulvedalawgroup.com/>
+P: (213) 426-1051
+F: (213) 426-1052
+A: 3530 Wilshire Blvd, Suite 1515, Los Angeles, CA 90010
+_________________________________________
+
+[image.png]
+
+
+On Wed, Apr 2, 2025 at 2:22 PM Phillip Cuartas <phillip@sepulvedalawgroup.com<mailto:phillip@sepulvedalawgroup.com>> wrote:
+Hello,
+
+This client has been recommended another MRI with your office for her lumbar spine. Below are her demographics and attached is the MRI referral:
+
+Name: Antonia Garcia
+DOL:  07/12/2024
+DOB: 12/29/1963
+Address: 2340 Sanguinetti Ln Sp 4, Stockton, CA, 95205
+Contact: (209) 938-9340
+
+
+
+Notice Regarding Electronic Service
+E-Service pursuant to C.C.P. §1010.6(e), CRC 2.251 and any other applicable statute or rule, IS DEEMED INVALID UNLESS SERVED TO THE FOLLOWING DESIGNATED EMAIL ADDRESSES:     eservice@sepulvedalawgroup.com<mailto:eservice@sepulvedalawgroup.com>
+
+This communication is the property of Sepulveda Sanchez Accident Lawyers/Sepulveda Law Group and may contain confidential or privileged information. Unauthorized use of this communication is strictly prohibited and may be unlawful. If you have received this communication in error, please immediately notify the sender by replying to this e-mail and destroy all copies of the communication and any attachments.
+
+
+
+Regards,
+
+
+PHILLIP CUARTAS
+Case Manager
+
+[Sepulveda Sanchez Accident Lawyers]<https://sepulvedalawgroup.com/>
+Los Angeles  |  Stockton  |  New York
+
+W: sepulvedalawgroup.com<http://sepulvedalawgroup.com/>
+P: (213) 426-1051
+F: (213) 426-1052
+A: 3530 Wilshire Blvd, Suite 1515, Los Angeles, CA 90010
+_________________________________________
+
+[image.png]
+
+Precise Imaging Scheduling & Orders
+Scheduling Department
+[https://precisemri.com/emailsig/precise-logo.png]<https://www.precisemri.com/>
+Quick Access
+📋 Upload RX<https://precisemri.com/rx>🏥 Provider Portal<https://app.radflow360.com/>⚖️ Attorney Portal<https://app.radflow360.com/>👤 Patient Portal<https://app.radflow360.com/patient-portal>📍 View Locations<https://precisemri.com/locations>
+Contact
+📞 800-558-2223<tel:800-558-2223>
+✉️ scheduling@precisemri.com<mailto:scheduling@precisemri.com>
+🌐 www.PreciseMRI.com<https://www.precisemri.com/>
+[https://precisemri.com/emailsig/fb.png]<https://www.facebook.com/preciseimaging/> [https://precisemri.com/emailsig/tt.png] <https://twitter.com/preciseimaging>  [https://precisemri.com/emailsig/yt.png] <https://youtube.com/@preciseimagingmri3857?si=H9HGQ21f-htuWDUV>  [https://precisemri.com/emailsig/ln.png] <https://www.linkedin.com/company/precise-imaging/>  [https://precisemri.com/emailsig/it.png] <https://www.instagram.com/preciseimaging/>
+📍 Find Your Nearest Location
+Multiple convenient locations near you<https://www.precisemri.com/facility-locations/>
+Precise Imaging Disclaimer: This email message, its contents and any attachments hereto, are for the sole use of the intended recipient(s) and may contain confidential and privileged information. Any unauthorized review, use, disclosure or distribution is prohibited. Notwithstanding the Uniform Electronic Transactions Act or the applicability of any other law of similar substance or effect, absent an express statement to the contrary hereinabove, this e-mail communication, its contents and any attachments hereto, are not intended to represent an offer or acceptance to enter into a contract and are not otherwise intended to bind the sender, any of its clients, or any other person or entity.
+
+
+<p>Test ID: {UNIQUE_TEST_ID}</p>"""
+        ),
+        "expected_tags": [],
+        "attachments": [
+            {
+                "filename": "Order_Plain_X-ray__Outside_Imaging__45149.pdf",
+                "filepath": "data/documents/Order_Plain_X-ray__Outside_Imaging__45149.pdf",
+                "content_type": "application/pdf"
+            }
+        ]
     }
-} 
+}
