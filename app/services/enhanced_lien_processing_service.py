@@ -333,41 +333,83 @@ Look specifically at the signature boxes at the bottom of the document to determ
 
 Provide a structured analysis of the signatures found."""
             
-            # Prepare API call
+            # Prepare API call - using o3 with Responses API for enhanced visual reasoning
+            model_to_use = "o3"  # Preferred model for visual reasoning
+            
+            # Responses API uses 'input' with rich content types: input_text, input_image
             api_params = {
-                "model": "gpt-4o",
-                "messages": [
-                    {"role": "system", "content": system_message},
+                "model": model_to_use,
+                "input": [
                     {
-                        "role": "user", 
+                        "role": "system",
                         "content": [
-                            {"type": "text", "text": user_message},
+                            {"type": "input_text", "text": system_message}
+                        ]
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": user_message + "\n\nReturn ONLY a strict JSON object with keys: patient_signature_present (boolean), attorney_signature_present (boolean), signature_analysis (string), lien_signature_type (PSL|ASL|UNKNOWN)."},
                             {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/png;base64,{base64_image}",
-                                    "detail": "high"
-                                }
+                                "type": "input_image",
+                                "image_url": f"data:image/png;base64,{base64_image}",
+                                "detail": "high"
                             }
                         ]
                     }
                 ],
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "signature_analysis",
-                        "strict": True,
-                        "schema": signature_schema
-                    }
-                },
-                "max_tokens": 500
+                "max_output_tokens": 500,
+                "reasoning": {"effort": "medium"}  # o3 supports reasoning effort: low, medium, high
             }
             
-            response = self.openai_client.chat.completions.create(**api_params)
-            content = response.choices[0].message.content
+            # Use the Responses API endpoint for enhanced o3 capabilities
+            response = self.openai_client.responses.create(**api_params)
             
-            # Parse the structured response
-            signature_data = json.loads(content)
+            # Extract output text from Responses API
+            content_text = None
+            try:
+                # Preferred convenience property if available
+                content_text = getattr(response, "output_text", None)
+            except Exception:
+                content_text = None
+            
+            if not content_text:
+                try:
+                    # Fallback: traverse output structure
+                    text_chunks = []
+                    for item in getattr(response, "output", []) or []:
+                        for part in getattr(item, "content", []) or []:
+                            if getattr(part, "type", None) == "output_text" and hasattr(part, "text"):
+                                text_chunks.append(part.text)
+                    if text_chunks:
+                        content_text = "".join(text_chunks)
+                except Exception:
+                    content_text = None
+            
+            if not content_text:
+                # Last resort: compatibility with chat-like structure if provided
+                try:
+                    content_text = response.choices[0].message.content  # type: ignore[attr-defined]
+                except Exception:
+                    content_text = None
+            
+            logger.info(f"🔍 SIGNATURE DETECTION: Successfully used {model_to_use} model with Responses API")
+            
+            # Parse the structured response (expecting strict JSON)
+            if not content_text or not isinstance(content_text, str):
+                raise ValueError("Empty or invalid response content from Responses API")
+
+            try:
+                signature_data = json.loads(content_text)
+            except json.JSONDecodeError:
+                # Attempt to extract JSON object substring
+                start = content_text.find("{")
+                end = content_text.rfind("}")
+                if start != -1 and end != -1 and end > start:
+                    json_str = content_text[start:end+1]
+                    signature_data = json.loads(json_str)
+                else:
+                    raise
             
             logger.info(f"🔍 SIGNATURE DETECTION RESULTS:")
             logger.info(f"    Patient signature present: {signature_data.get('patient_signature_present')}")
