@@ -267,217 +267,292 @@ class EnhancedLienProcessingService:
     
     async def _detect_signatures_with_openai(self, image_data: bytes, page_name: str) -> Dict[str, Any]:
         """
-        Use OpenAI Vision API to detect signature types in lien document.
-        
-        Args:
-            image_data: Image data as bytes
-            page_name: Name of the page being processed
-            
-        Returns:
-            Dictionary with signature detection results
+        Two-step signature detection using OpenAI Responses (o3):
+        1) Detect attorney signature only. If found => ASL.
+        2) If not, detect patient signature only. If found => PSL.
+        Otherwise => UNKNOWN.
         """
         try:
             logger.info(f"🔍 SIGNATURE DETECTION: Analyzing signatures for {page_name}")
-            
-            # Convert to base64 for OpenAI API
-            base64_image = base64.b64encode(image_data).decode('utf-8')
-            
-            # Define the schema for structured signature detection
-            signature_schema = {
-                "type": "object",
-                "properties": {
-                    "patient_signature_present": {
-                        "type": "boolean",
-                        "description": "True if patient signature is found in signature boxes"
-                    },
-                    "attorney_signature_present": {
-                        "type": "boolean", 
-                        "description": "True if attorney signature is found in signature boxes"
-                    },
-                    "signature_analysis": {
-                        "type": "string",
-                        "description": "Brief description of what signatures were detected"
-                    },
-                    "lien_signature_type": {
-                        "type": "string",
-                        "enum": ["PSL", "ASL", "UNKNOWN"],
-                        "description": "Determined lien signature type based on signatures present"
-                    }
-                },
-                "required": ["patient_signature_present", "attorney_signature_present", "signature_analysis", "lien_signature_type"],
-                "additionalProperties": False
-            }
-            
-            system_message = """You are an expert at analyzing legal lien documents for signature detection.
 
-SIGNATURE DETECTION RULES:
-- Look specifically at signature boxes/fields at the bottom of the document
-- Patient signature boxes are typically labeled "Patient Signature", "Signature of Patient", or similar
-- Attorney signature boxes are typically labeled "Attorney Signature", "Attorney", "Lawyer Signature", or similar
-- Only count actual handwritten signatures, not printed names or empty boxes
-- Ignore any other signatures that are not in the designated patient/attorney signature areas
+            # Prepare multiple views for better signature detection: full page, bottom crop, and enhanced crops
+            base64_image_full = base64.b64encode(image_data).decode('utf-8')
 
-LIEN TYPE CLASSIFICATION RULES:
-- PSL (Patient Signed Lien): ONLY patient signature is present
-- ASL (Attorney Signed Lien): Attorney signature is present (with or without patient signature)
-- UNKNOWN: No clear signatures detected or unclear signature areas
-
-Focus on the signature boxes/areas at the bottom of the document."""
-            
-            user_message = f"""Analyze this lien document image for signature detection.
-
-Look specifically at the signature boxes at the bottom of the document to determine:
-1. Whether a patient signature is present
-2. Whether an attorney signature is present
-3. Classify the lien type based on the signature detection rules
-
-Provide a structured analysis of the signatures found."""
-            
-            # Prepare API call - using o3 with Responses API for enhanced visual reasoning
-            model_to_use = "o3"  # Preferred model for visual reasoning
-            
-            # Use top-level 'instructions' and a single user input with text + image
-            api_params = {
-                "model": model_to_use,
-                "instructions": system_message,
-                "input": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "input_text", "text": user_message + "\n\nReturn ONLY a strict JSON object with keys: patient_signature_present (boolean), attorney_signature_present (boolean), signature_analysis (string), lien_signature_type (PSL|ASL|UNKNOWN)."},
-                            {
-                                "type": "input_image",
-                                "image_url": f"data:image/png;base64,{base64_image}"
-                            }
-                        ]
-                    }
-                ],
-                "max_output_tokens": 500,
-                "reasoning": {"effort": "medium"}  # o3 supports reasoning effort: low, medium, high
-            }
-            
-            # Use the Responses API endpoint for enhanced o3 capabilities
-            response = self.openai_client.responses.create(**api_params)
-            
-            # Extract output text from Responses API
-            content_text = None
+            # Compute a bottom crop to focus on signature area
             try:
-                # Preferred convenience property if available
-                content_text = getattr(response, "output_text", None)
-            except Exception:
-                content_text = None
-            
-            if not content_text:
+                pil_img = Image.open(io.BytesIO(image_data)).convert('RGB')
+                width, height = pil_img.size
+                crop_top = int(height * 0.60)  # bottom 40% crop
+                if crop_top < 0:
+                    crop_top = 0
+                bottom_crop = pil_img.crop((0, crop_top, width, height))
+                buf = io.BytesIO()
+                bottom_crop.save(buf, format='PNG', quality=95)
+                base64_image_bottom = base64.b64encode(buf.getvalue()).decode('utf-8')
+                logger.info(f"🔧 SIGNATURE CROPPING: Full size={width}x{height}, bottom-crop from y={crop_top} ({height-crop_top}px tall)")
+
+                # Create enhanced crops for better signature visibility
+                cv_img = cv2.cvtColor(np.array(bottom_crop), cv2.COLOR_RGB2BGR)
+                gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+
+                # Contrast Limited Adaptive Histogram Equalization (CLAHE)
+                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+                enhanced_clahe = clahe.apply(gray)
+                enhanced_clahe_rgb = cv2.cvtColor(enhanced_clahe, cv2.COLOR_GRAY2RGB)
+                _, buf1 = cv2.imencode('.png', enhanced_clahe_rgb)
+                base64_image_bottom_clahe = base64.b64encode(buf1.tobytes()).decode('utf-8')
+
+                # Adaptive threshold to accentuate pen strokes
+                thresh = cv2.adaptiveThreshold(
+                    gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 35, 10
+                )
+                thresh_rgb = cv2.cvtColor(thresh, cv2.COLOR_GRAY2RGB)
+                _, buf2 = cv2.imencode('.png', thresh_rgb)
+                base64_image_bottom_thresh = base64.b64encode(buf2.tobytes()).decode('utf-8')
+                logger.info("🔧 SIGNATURE ENHANCEMENTS: Generated CLAHE and thresholded bottom crops")
+            except Exception as crop_err:
+                logger.warning(f"🔧 SIGNATURE CROPPING: Failed to create bottom crop: {crop_err}")
+                base64_image_bottom = base64_image_full
+                base64_image_bottom_clahe = base64_image_full
+                base64_image_bottom_thresh = base64_image_full
+
+            def _call_o3_and_get_text(instructions_text: str, user_text: str) -> Optional[str]:
+                model_to_use = "o3"
+                api_params = {
+                    "model": model_to_use,
+                    "instructions": instructions_text,
+                    "input": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "input_text", "text": user_text},
+                                # Image A: full page view
+                                {"type": "input_image", "image_url": f"data:image/png;base64,{base64_image_full}"},
+                                # Image B: bottom-region zoomed view
+                                {"type": "input_image", "image_url": f"data:image/png;base64,{base64_image_bottom}"},
+                                # Image C: bottom CLAHE enhanced
+                                {"type": "input_image", "image_url": f"data:image/png;base64,{base64_image_bottom_clahe}"},
+                                # Image D: bottom thresholded
+                                {"type": "input_image", "image_url": f"data:image/png;base64,{base64_image_bottom_thresh}"}
+                            ]
+                        }
+                    ],
+                    "max_output_tokens": 600,
+                    "reasoning": {"effort": "medium"}
+                }
+
+                resp = self.openai_client.responses.create(**api_params)
+
+                # Try multiple shapes to extract text
+                txt = getattr(resp, "output_text", None)
+                if isinstance(txt, str) and txt:
+                    return txt
+
+                # Traverse object form
                 try:
-                    # Fallback: traverse output structure
-                    text_chunks = []
-                    for item in getattr(response, "output", []) or []:
+                    chunks = []
+                    for item in getattr(resp, "output", []) or []:
                         for part in getattr(item, "content", []) or []:
-                            part_type = getattr(part, "type", None)
-                            if part_type in ("output_text", "text"):
-                                # Handle various SDK object shapes
-                                part_text = None
-                                if hasattr(part, "text"):
-                                    pt = getattr(part, "text")
-                                    if isinstance(pt, str):
-                                        part_text = pt
-                                    elif hasattr(pt, "value"):
-                                        part_text = getattr(pt, "value")
-                                    elif isinstance(pt, dict) and "value" in pt:
-                                        part_text = pt.get("value")
-                                if part_text:
-                                    text_chunks.append(part_text)
-                    if text_chunks:
-                        content_text = "".join(text_chunks)
+                            ptype = getattr(part, "type", None)
+                            if ptype in ("output_text", "text") and hasattr(part, "text"):
+                                pt = getattr(part, "text")
+                                if isinstance(pt, str):
+                                    chunks.append(pt)
+                                elif hasattr(pt, "value") and isinstance(getattr(pt, "value"), str):
+                                    chunks.append(getattr(pt, "value"))
+                    if chunks:
+                        return "".join(chunks)
                 except Exception:
-                    content_text = None
-            
-            if not content_text:
-                # Deep fallback: use raw dict to traverse possible shapes
+                    pass
+
+                # Dict fallback
                 try:
                     resp_dict = None
-                    if hasattr(response, "model_dump"):
+                    if hasattr(resp, "model_dump"):
                         try:
-                            resp_dict = response.model_dump()
+                            resp_dict = resp.model_dump()
                         except Exception:
                             resp_dict = None
-                    if not resp_dict and hasattr(response, "to_dict"):
+                    if not resp_dict and hasattr(resp, "to_dict"):
                         try:
-                            resp_dict = response.to_dict()
+                            resp_dict = resp.to_dict()
                         except Exception:
                             resp_dict = None
                     if isinstance(resp_dict, dict):
-                        text_candidates = []
-                        output_list = resp_dict.get("output") or []
-                        for item in output_list:
+                        out_list = resp_dict.get("output") or []
+                        texts = []
+                        for item in out_list:
                             for part in item.get("content", []) or []:
-                                ptype = part.get("type")
-                                if ptype in ("output_text", "text"):
+                                if part.get("type") in ("output_text", "text"):
                                     t = part.get("text")
                                     if isinstance(t, str):
-                                        text_candidates.append(t)
+                                        texts.append(t)
                                     elif isinstance(t, dict):
                                         v = t.get("value") or t.get("content") or t.get("string")
                                         if isinstance(v, str):
-                                            text_candidates.append(v)
-                        if text_candidates:
-                            content_text = "".join(text_candidates)
+                                            texts.append(v)
+                        if texts:
+                            return "".join(texts)
                 except Exception:
-                    content_text = None
+                    pass
 
-            if not content_text:
-                # Last resort: compatibility with chat-like structure if provided
+                # Last resort chat-like
                 try:
-                    content_text = response.choices[0].message.content  # type: ignore[attr-defined]
+                    return resp.choices[0].message.content  # type: ignore[attr-defined]
                 except Exception:
-                    content_text = None
-            
-            logger.info(f"🔍 SIGNATURE DETECTION: Successfully used {model_to_use} model with Responses API")
-            
-            # Parse the structured response (expecting strict JSON)
-            if not content_text or not isinstance(content_text, str):
-                logger.warning("🔍 SIGNATURE DETECTION: No text content returned from Responses API; returning UNKNOWN result")
+                    return None
+
+            system_instructions = (
+                "You are an expert at analyzing lien documents. "
+                "Two images are provided: (A) full page, (B) bottom-region crop focusing where signatures usually appear. "
+                "Focus ONLY on designated signature boxes/lines. "
+                "Count only handwritten signatures (pen/ink strokes). Ignore printed/typed names, stamps, initials, checkmarks, or blanks. "
+                "If unsure, answer false. Always return strict JSON with the required boolean fields."
+            )
+
+            # Step 1: Attorney-only detection
+            user_attorney = (
+                "Task: Detect ONLY the presence of an ATTORNEY signature.\n"
+                "Use both images: (A) full page and (B) bottom-region crop.\n"
+                "Attorney signature areas may be labeled 'Attorney' / 'Attorney Signature'.\n"
+                "Consider true only if there are clear handwritten strokes in the attorney signature box/line.\n"
+                "Return ONLY strict JSON: {\"attorney_signature_present\": true|false, \"analysis\": \"<brief reason>\"}."
+            )
+            attorney_text = _call_o3_and_get_text(system_instructions, user_attorney)
+
+            attorney_present = False
+            attorney_analysis = ""
+            if isinstance(attorney_text, str) and attorney_text.strip():
+                try:
+                    data = None
+                    try:
+                        data = json.loads(attorney_text)
+                    except json.JSONDecodeError:
+                        s = attorney_text.find("{")
+                        e = attorney_text.rfind("}")
+                        if s != -1 and e != -1 and e > s:
+                            data = json.loads(attorney_text[s:e+1])
+                    if isinstance(data, dict):
+                        attorney_present = bool(data.get("attorney_signature_present", False))
+                        attorney_analysis = str(data.get("analysis", "")).strip()
+                except Exception:
+                    pass
+                # Heuristic fallback if JSON parsing fails or field missing
+                if not attorney_present:
+                    lower_txt = attorney_text.lower()
+                    if ("attorney" in lower_txt and ("signature" in lower_txt or "signed" in lower_txt)) and ("present" in lower_txt or "found" in lower_txt or "yes" in lower_txt):
+                        attorney_present = True
+                        if not attorney_analysis:
+                            attorney_analysis = "Attorney signature likely present (heuristic)."
+                # Log a short preview for debugging
+                preview = attorney_text.replace('\n', ' ')[:200]
+                logger.info(f"🔎 Attorney step raw preview: {preview}...")
+
+            if attorney_present:
+                logger.info("🔍 SIGNATURE DETECTION: Attorney signature FOUND → ASL")
                 signature_data = {
                     "patient_signature_present": False,
-                    "attorney_signature_present": False,
-                    "signature_analysis": "No content returned from model.",
-                    "lien_signature_type": "UNKNOWN"
+                    "attorney_signature_present": True,
+                    "signature_analysis": attorney_analysis or "Attorney signature detected.",
+                    "lien_signature_type": "ASL"
                 }
-                return {
-                    "success": True,
-                    "signature_data": signature_data,
-                    "note": "Model returned empty content"
-                }
+                return {"success": True, "signature_data": signature_data}
 
-            try:
-                signature_data = json.loads(content_text)
-            except json.JSONDecodeError:
-                # Attempt to extract JSON object substring
-                start = content_text.find("{")
-                end = content_text.rfind("}")
-                if start != -1 and end != -1 and end > start:
-                    json_str = content_text[start:end+1]
-                    signature_data = json.loads(json_str)
-                else:
-                    raise
-            
-            logger.info(f"🔍 SIGNATURE DETECTION RESULTS:")
-            logger.info(f"    Patient signature present: {signature_data.get('patient_signature_present')}")
-            logger.info(f"    Attorney signature present: {signature_data.get('attorney_signature_present')}")
-            logger.info(f"    Lien signature type: {signature_data.get('lien_signature_type')}")
-            logger.info(f"    Analysis: {signature_data.get('signature_analysis')}")
-            
-            return {
-                "success": True,
-                "signature_data": signature_data
+            # Step 2: Patient-only detection (since attorney not found)
+            user_patient = (
+                "Task: Detect ONLY the presence of a PATIENT signature.\n"
+                "Use both images: (A) full page and (B) bottom-region crop.\n"
+                "Patient signature areas may be labeled 'Patient', 'Patient Signature', 'Signature of Patient'.\n"
+                "Consider true only if there are clear handwritten strokes in the patient signature box/line.\n"
+                "Return ONLY strict JSON: {\"patient_signature_present\": true|false, \"analysis\": \"<brief reason>\"}."
+            )
+            patient_text = _call_o3_and_get_text(system_instructions, user_patient)
+
+            patient_present = False
+            patient_analysis = ""
+            if isinstance(patient_text, str) and patient_text.strip():
+                try:
+                    pdata = None
+                    try:
+                        pdata = json.loads(patient_text)
+                    except json.JSONDecodeError:
+                        s = patient_text.find("{")
+                        e = patient_text.rfind("}")
+                        if s != -1 and e != -1 and e > s:
+                            pdata = json.loads(patient_text[s:e+1])
+                    if isinstance(pdata, dict):
+                        patient_present = bool(pdata.get("patient_signature_present", False))
+                        patient_analysis = str(pdata.get("analysis", "")).strip()
+                except Exception:
+                    pass
+                # Heuristic fallback if JSON parsing fails or field missing
+                if not patient_present:
+                    lower_txt = patient_text.lower()
+                    if ("patient" in lower_txt and ("signature" in lower_txt or "signed" in lower_txt)) and ("present" in lower_txt or "found" in lower_txt or "yes" in lower_txt):
+                        patient_present = True
+                        if not patient_analysis:
+                            patient_analysis = "Patient signature likely present (heuristic)."
+                # Log a short preview for debugging
+                p_preview = patient_text.replace('\n', ' ')[:200]
+                logger.info(f"🔎 Patient step raw preview: {p_preview}...")
+
+            if patient_present:
+                logger.info("🔍 SIGNATURE DETECTION: Patient signature FOUND → PSL")
+                signature_data = {
+                    "patient_signature_present": True,
+                    "attorney_signature_present": False,
+                    "signature_analysis": patient_analysis or "Patient signature detected.",
+                    "lien_signature_type": "PSL"
+                }
+                return {"success": True, "signature_data": signature_data}
+
+            # Step 3 (fallback): Combined detection to cross-check if both are present
+            combined_user = (
+                "Task: Detect BOTH attorney and patient signatures.\n"
+                "Use images: (A) full page, (B) bottom crop, (C) CLAHE, (D) thresholded.\n"
+                "Return ONLY strict JSON: {\"attorney_signature_present\": true|false, \"patient_signature_present\": true|false, \"analysis\": \"<brief>\"}."
+            )
+            combined_text = _call_o3_and_get_text(system_instructions, combined_user)
+            if isinstance(combined_text, str) and combined_text.strip():
+                try:
+                    cdata = None
+                    try:
+                        cdata = json.loads(combined_text)
+                    except json.JSONDecodeError:
+                        s = combined_text.find("{")
+                        e = combined_text.rfind("}")
+                        if s != -1 and e != -1 and e > s:
+                            cdata = json.loads(combined_text[s:e+1])
+                    if isinstance(cdata, dict):
+                        att = bool(cdata.get("attorney_signature_present", False))
+                        pat = bool(cdata.get("patient_signature_present", False))
+                        analysis = str(cdata.get("analysis", "")).strip()
+                        if att or pat:
+                            lien_type = "ASL" if att else "PSL" if pat else "UNKNOWN"
+                            logger.info(f"🔍 SIGNATURE DETECTION (combined): A={att}, P={pat} → {lien_type}")
+                            signature_data = {
+                                "patient_signature_present": pat,
+                                "attorney_signature_present": att,
+                                "signature_analysis": analysis or "Combined detection result.",
+                                "lien_signature_type": lien_type
+                            }
+                            return {"success": True, "signature_data": signature_data}
+                except Exception:
+                    pass
+
+            # Neither detected
+            logger.info("🔍 SIGNATURE DETECTION: No signatures detected → UNKNOWN")
+            signature_data = {
+                "patient_signature_present": False,
+                "attorney_signature_present": False,
+                "signature_analysis": "No signatures detected in designated boxes.",
+                "lien_signature_type": "UNKNOWN"
             }
-            
+            return {"success": True, "signature_data": signature_data}
+
         except Exception as e:
             logger.error(f"Error in OpenAI signature detection: {e}")
-            return {
-                "success": False,
-                "error": str(e)
-            }
+            return {"success": False, "error": str(e)}
     
     def _consolidate_page_results(self, page_results: List[Dict], filename: str) -> Dict[str, Any]:
         """
