@@ -516,10 +516,22 @@ class OpenAIProvider(StrikethroughProvider):
 STRICT REQUIREMENTS:
 - You must provide the EXACT struck-through text that you can read
 - Only mark strikethrough_detected: true if you can see actual visible lines crossing through text
-- DO NOT mark as strikethrough if text is just highlighted, circled, or otherwise marked without lines through it
-- DO NOT mark as strikethrough based on assumptions or context - only visible strikethrough marks
 - IMPORTANT: Only report strikethrough text that represents COMPLETE SENTENCES or SUBSTANTIAL PHRASES (at least 4+ words)
 - DO NOT report single words or short fragments as strikethrough - only meaningful complete text
+
+CRITICAL DISTINCTION - STRIKETHROUGH vs UNDERLINE:
+- STRIKETHROUGH: Lines go THROUGH/ACROSS the middle of text horizontally (like this: s̶t̶r̶i̶k̶e̶t̶h̶r̶o̶u̶g̶h̶)
+- UNDERLINE: Lines go UNDER/BELOW the text (like this: underlined)
+- ONLY report STRIKETHROUGH text - text with lines going through it
+- DO NOT report underlined text, highlighted text, or any other formatting
+- DO NOT mark as strikethrough if text is just highlighted, circled, boxed, or otherwise marked without lines through it
+- DO NOT mark as strikethrough based on assumptions or context - only visible strikethrough marks
+
+VISUAL CHECK:
+- Ask yourself: "Does this line go THROUGH the text or UNDER the text?"
+- If the line goes THROUGH the middle of letters → STRIKETHROUGH (report it)
+- If the line goes UNDER the text → UNDERLINE (do NOT report it)
+- If unsure, do NOT report it
 
 Please provide a JSON response with the following structure:
 {
