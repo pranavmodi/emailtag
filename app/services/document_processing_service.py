@@ -146,7 +146,7 @@ class DocumentProcessingService:
                 "properties": {
                     "document_type": {
                         "type": "string",
-                        "enum": ["lien", "rx", "medical_record", "insurance", "other"],
+                        "enum": ["lien", "lien_reduction", "rx", "medical_record", "insurance", "hipaa", "other"],
                         "description": "Type of medical document"
                     },
                     "description": {
@@ -177,10 +177,26 @@ class DocumentProcessingService:
 
 DOCUMENT TYPE CLASSIFICATION:
 - rx: Doctor's prescriptions, orders for imaging/scans, referrals for tests (MRI, CT, X-ray, ultrasound), physician orders for diagnostic procedures, medical referrals from one doctor to another, consultation requests, medication orders
-- lien: Legal lien documents, attorney lien agreements, lien modifications, lien forms, medical lien paperwork
+- lien: Legal lien documents ONLY - attorney lien agreements, lien modifications, lien forms, medical lien paperwork that establish legal financial obligations. These typically contain signature boxes for attorneys/patients and legal language about financial responsibility for medical services.
+- lien_reduction: Lien reduction requests, settlement agreements, lien reduction offers, documents requesting reduction of existing lien amounts. These contain negotiations about reducing the amount owed under an existing lien. Look for terms like "lien reduction", "settlement", "reduce lien amount", "lien settlement", "payment reduction".
 - medical_record: Medical charts, test results, lab reports, radiology reports, patient history, discharge summaries
 - insurance: Insurance cards, authorization forms, insurance verification documents, coverage letters
+- hipaa: HIPAA authorization forms, HIPAA releases, privacy notices, medical records release authorizations. These are forms that authorize the release or use of protected health information (PHI) under HIPAA regulations. Look for terms like "HIPAA", "Health Insurance Portability", "Protected Health Information", "PHI", "Authorization for Release", "Medical Records Release".
 - other: Any document that doesn't fit the above categories
+
+CRITICAL DISTINCTIONS:
+LIEN vs HIPAA:
+- LIEN documents establish FINANCIAL OBLIGATIONS and legal agreements for payment of medical services
+- HIPAA documents authorize INFORMATION RELEASE and privacy permissions for medical records
+- If a document is about releasing medical information/records → classify as HIPAA
+- If a document is about financial responsibility/payment obligations → classify as LIEN
+- HIPAA documents often say "Authorization to Release" while LIEN documents say "Agreement to Pay" or similar
+
+LIEN vs LIEN_REDUCTION:
+- LIEN documents are original agreements establishing financial obligations
+- LIEN_REDUCTION documents are requests/offers to reduce existing lien amounts
+- If document establishes a new lien → classify as LIEN
+- If document requests/offers to reduce an existing lien amount → classify as LIEN_REDUCTION
 
 PATIENT ID EXTRACTION:
 Precise Imaging patient IDs follow this format: PRE followed by 6-8 digits (e.g., PRE123456, PRE1234567, PRE12345678)

@@ -96,13 +96,28 @@ class DocumentBatchProcessor:
                         'barcode_found': enhanced_lien.get('barcode_found', False),
                         'signature_analysis': enhanced_lien.get('signature_analysis', '')
                     })
+                    
+                    # Extract raw barcode data from full enhanced lien processing result
+                    enhanced_full = result.get('enhanced_lien_processing', {})
+                    raw_barcode_pages = enhanced_full.get('raw_page_results', [])
+                    raw_barcode_value = 'Not found'
+                    
+                    # Look through all pages for barcode data
+                    for page in raw_barcode_pages:
+                        barcode_detection = page.get('barcode_detection', {})
+                        if barcode_detection.get('barcode_found') and barcode_detection.get('raw_value'):
+                            raw_barcode_value = barcode_detection.get('raw_value', 'Not found')
+                            break
+                    
+                    processed_result['raw_barcode_value'] = raw_barcode_value
                 else:
                     processed_result.update({
                         'lien_signature_type': 'N/A',
                         'lien_type': 'N/A',
                         'referrer_id': 'N/A',
                         'barcode_found': False,
-                        'signature_analysis': 'N/A'
+                        'signature_analysis': 'N/A',
+                        'raw_barcode_value': 'N/A'
                     })
             else:
                 error_msg = doc_analysis.get('error', 'Analysis failed') if doc_analysis else 'No analysis data'
@@ -117,7 +132,8 @@ class DocumentBatchProcessor:
                     'lien_type': 'Error',
                     'referrer_id': 'Error',
                     'barcode_found': False,
-                    'signature_analysis': 'Error'
+                    'signature_analysis': 'Error',
+                    'raw_barcode_value': 'Error'
                 })
             
             # Add full result for CSV export
@@ -145,6 +161,7 @@ class DocumentBatchProcessor:
                 'referrer_id': 'Error',
                 'barcode_found': False,
                 'signature_analysis': 'Error',
+                'raw_barcode_value': 'Error',
                 'full_result': {'error': str(e)}
             }
     
@@ -295,7 +312,7 @@ class DocumentBatchProcessor:
         if lien_results:
             print(f"\n🔗 ENHANCED LIEN PROCESSING DETAILS")
             print("=" * 140)
-            lien_headers = ["Filename", "Patient ID", "Signature Type", "Lien Type", "Referrer ID", "Barcode", "Signature Analysis"]
+            lien_headers = ["Filename", "Patient ID", "Signature Type", "Lien Type", "Referrer ID", "Barcode", "Raw Barcode", "Signature Analysis"]
             
             # Calculate lien column widths
             lien_col_widths = [len(h) for h in lien_headers]
@@ -306,8 +323,10 @@ class DocumentBatchProcessor:
                 lien_col_widths[3] = max(lien_col_widths[3], len(str(result.get('lien_type', 'N/A'))))
                 lien_col_widths[4] = max(lien_col_widths[4], len(str(result.get('referrer_id', 'N/A'))))
                 lien_col_widths[5] = max(lien_col_widths[5], len("✅" if result.get('barcode_found') else "❌"))
+                raw_barcode = str(result.get('raw_barcode_value', 'N/A'))
+                lien_col_widths[6] = max(lien_col_widths[6], len(raw_barcode))
                 sig_analysis = str(result.get('signature_analysis', 'N/A'))
-                lien_col_widths[6] = max(lien_col_widths[6], len(sig_analysis))
+                lien_col_widths[7] = max(lien_col_widths[7], len(sig_analysis))
             
             # Ensure minimum lien column widths
             for i in range(len(lien_col_widths)):
@@ -321,6 +340,7 @@ class DocumentBatchProcessor:
             # Print lien rows
             for result in lien_results:
                 barcode_icon = "✅" if result.get('barcode_found') else "❌"
+                raw_barcode = str(result.get('raw_barcode_value', 'N/A'))
                 sig_analysis = str(result.get('signature_analysis', 'N/A'))
                 
                 lien_row = [
@@ -330,6 +350,7 @@ class DocumentBatchProcessor:
                     str(result.get('lien_type', 'N/A')),
                     str(result.get('referrer_id', 'N/A')),
                     barcode_icon,
+                    raw_barcode,
                     sig_analysis
                 ]
                 
@@ -379,7 +400,7 @@ class DocumentBatchProcessor:
                     'filename', 'file_size', 'file_extension', 'detected_type',
                     'processing_status', 'provider', 'analysis_success',
                     'document_type', 'patient_id', 'confidence', 'description',
-                    'lien_signature_type', 'lien_type', 'referrer_id', 'barcode_found', 'signature_analysis'
+                    'lien_signature_type', 'lien_type', 'referrer_id', 'barcode_found', 'raw_barcode_value', 'signature_analysis'
                 ]
                 
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
