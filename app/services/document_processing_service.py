@@ -107,19 +107,41 @@ class DocumentProcessingService:
                     from pdf2image import convert_from_bytes
                     pages = convert_from_bytes(file_content, dpi=200)  # Lower DPI for smaller images
                     
-                    # Process first page for text extraction
+                    # Process multiple pages for better classification (up to 3 pages)
                     if pages:
                         import io
-                        img_buffer = io.BytesIO()
-                        pages[0].save(img_buffer, format='JPEG', quality=85)  # Compress image
-                        img_bytes = img_buffer.getvalue()
                         
-                        # Check image size - OpenAI has limits
-                        if len(img_bytes) > 20 * 1024 * 1024:  # 20MB limit
-                            return {"success": False, "error": "Converted image too large for OpenAI API"}
+                        # Use up to 3 pages for classification to capture full document context
+                        pages_to_process = pages[:3]  # First 3 pages max
+                        combined_images = []
+                        total_size = 0
                         
-                        base64_content = base64.b64encode(img_bytes).decode('utf-8')
+                        for i, page in enumerate(pages_to_process):
+                            img_buffer = io.BytesIO()
+                            page.save(img_buffer, format='JPEG', quality=75)  # Slightly lower quality to fit multiple pages
+                            img_bytes = img_buffer.getvalue()
+                            
+                            # Check if adding this page would exceed size limit
+                            if total_size + len(img_bytes) > 15 * 1024 * 1024:  # 15MB limit for multiple pages
+                                logger.info(f"PDF classification: Stopped at page {i+1} due to size limit")
+                                break
+                                
+                            combined_images.append({
+                                'data': img_bytes,
+                                'page_num': i + 1
+                            })
+                            total_size += len(img_bytes)
+                        
+                        if not combined_images:
+                            return {"success": False, "error": "No pages could be processed within size limits"}
+                        
+                        # For now, use the page with most content (largest file size) for classification
+                        # This typically contains the main document content rather than cover pages
+                        best_page = max(combined_images, key=lambda x: len(x['data']))
+                        base64_content = base64.b64encode(best_page['data']).decode('utf-8')
                         mime_type = "image/jpeg"
+                        
+                        logger.info(f"PDF classification: Using page {best_page['page_num']} out of {len(pages)} pages ({len(best_page['data']):,} bytes)")
                     else:
                         return {"success": False, "error": "Could not convert PDF to image"}
                 except ImportError:
@@ -146,7 +168,7 @@ class DocumentProcessingService:
                 "properties": {
                     "document_type": {
                         "type": "string",
-                        "enum": ["lien", "lien_reduction", "rx", "medical_record", "insurance", "hipaa", "other"],
+                        "enum": ["lien", "lien_reduction", "rx", "medical_record", "hipaa", "other"],
                         "description": "Type of medical document"
                     },
                     "description": {
@@ -180,9 +202,8 @@ DOCUMENT TYPE CLASSIFICATION:
 - lien: Legal lien documents ONLY - attorney lien agreements, lien modifications, lien forms, medical lien paperwork that establish legal financial obligations. These typically contain signature boxes for attorneys/patients and legal language about financial responsibility for medical services.
 - lien_reduction: Lien reduction requests, settlement agreements, lien reduction offers, documents requesting reduction of existing lien amounts. These contain negotiations about reducing the amount owed under an existing lien. Look for terms like "lien reduction", "settlement", "reduce lien amount", "lien settlement", "payment reduction".
 - medical_record: Medical charts, test results, lab reports, radiology reports, patient history, discharge summaries
-- insurance: Insurance cards, authorization forms, insurance verification documents, coverage letters
 - hipaa: HIPAA authorization forms, HIPAA releases, privacy notices, medical records release authorizations. These are forms that authorize the release or use of protected health information (PHI) under HIPAA regulations. Look for terms like "HIPAA", "Health Insurance Portability", "Protected Health Information", "PHI", "Authorization for Release", "Medical Records Release".
-- other: Any document that doesn't fit the above categories
+- other: Any document that doesn't fit the above categories, including insurance cards, authorization forms, insurance verification documents, coverage letters, intake forms, patient information forms
 
 CRITICAL DISTINCTIONS:
 LIEN vs HIPAA:

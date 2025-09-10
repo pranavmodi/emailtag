@@ -440,7 +440,18 @@ class EnhancedLienProcessingService:
                 # Heuristic fallback if JSON parsing fails or field missing
                 if not attorney_present:
                     lower_txt = attorney_text.lower()
-                    if ("attorney" in lower_txt and ("signature" in lower_txt or "signed" in lower_txt)) and ("present" in lower_txt or "found" in lower_txt or "yes" in lower_txt):
+                    # More precise heuristic: look for positive indicators and exclude negative ones
+                    positive_indicators = ("attorney signature present" in lower_txt or 
+                                         "attorney signature found" in lower_txt or
+                                         "attorney has signed" in lower_txt or
+                                         "attorney signature: yes" in lower_txt)
+                    negative_indicators = ("no attorney" in lower_txt or
+                                         "attorney signature not" in lower_txt or
+                                         "no area labeled for an attorney" in lower_txt or
+                                         "attorney signature is blank" in lower_txt or
+                                         "attorney signature detected: false" in lower_txt)
+                    
+                    if positive_indicators and not negative_indicators:
                         attorney_present = True
                         if not attorney_analysis:
                             attorney_analysis = "Attorney signature likely present (heuristic)."
@@ -485,10 +496,21 @@ class EnhancedLienProcessingService:
                         patient_analysis = str(pdata.get("analysis", "")).strip()
                 except Exception:
                     pass
-                # Heuristic fallback if JSON parsing fails or field missing
+                # Heuristic fallback if JSON parsing fails or field missing  
                 if not patient_present:
                     lower_txt = patient_text.lower()
-                    if ("patient" in lower_txt and ("signature" in lower_txt or "signed" in lower_txt)) and ("present" in lower_txt or "found" in lower_txt or "yes" in lower_txt):
+                    # More precise heuristic: look for positive indicators and exclude negative ones
+                    positive_indicators = ("patient signature present" in lower_txt or 
+                                         "patient signature found" in lower_txt or
+                                         "patient has signed" in lower_txt or
+                                         "patient signature: yes" in lower_txt)
+                    negative_indicators = ("no patient" in lower_txt or
+                                         "patient signature not" in lower_txt or
+                                         "no area labeled for a patient" in lower_txt or
+                                         "patient signature is blank" in lower_txt or
+                                         "patient signature detected: false" in lower_txt)
+                    
+                    if positive_indicators and not negative_indicators:
                         patient_present = True
                         if not patient_analysis:
                             patient_analysis = "Patient signature likely present (heuristic)."
@@ -586,13 +608,10 @@ class EnhancedLienProcessingService:
                     sig_data = page["signature_detection"]["signature_data"]
                     if sig_data.get("attorney_signature_present") == True:
                         attorney_found = True
-                        signature_data = {
-                            "patient_signature_present": False,
-                            "attorney_signature_present": True,
-                            "signature_analysis": sig_data.get("signature_analysis", "Attorney signature found on one of the pages"),
-                            "lien_signature_type": "ASL"
-                        }
+                        signature_data = sig_data.copy()  # Preserve original analysis
+                        signature_data["lien_signature_type"] = "ASL"
                         logger.info(f"🔍 MULTI-PAGE CONSOLIDATION: Attorney signature found → ASL (overrides all other pages)")
+                        logger.info(f"🔍 PRESERVED ANALYSIS: {sig_data.get('signature_analysis', 'No analysis')}")
                         break
             
             # Second pass: If no attorney found anywhere, look for patient signatures
@@ -603,13 +622,10 @@ class EnhancedLienProcessingService:
                         sig_data = page["signature_detection"]["signature_data"]
                         if sig_data.get("patient_signature_present") == True:
                             patient_found = True
-                            signature_data = {
-                                "patient_signature_present": True,
-                                "attorney_signature_present": False,
-                                "signature_analysis": sig_data.get("signature_analysis", "Patient signature found on one of the pages"),
-                                "lien_signature_type": "PSL"
-                            }
+                            signature_data = sig_data.copy()  # Preserve original analysis
+                            signature_data["lien_signature_type"] = "PSL"
                             logger.info(f"🔍 MULTI-PAGE CONSOLIDATION: No attorney found, patient signature found → PSL")
+                            logger.info(f"🔍 PRESERVED ANALYSIS: {sig_data.get('signature_analysis', 'No analysis')}")
                             break
             
             # Third pass: If no clear signatures found, use first available result

@@ -358,6 +358,9 @@ class DocumentBatchProcessor:
                 print(lien_row_line)
             
             print("=" * 140)
+            
+            # Print detailed per-page analysis for each lien document
+            self._print_per_page_lien_analysis(lien_results)
         
         # Print summary statistics
         total_docs = len(results)
@@ -386,6 +389,98 @@ class DocumentBatchProcessor:
             for doc_type, count in sorted(doc_types.items()):
                 percentage = count / successful * 100 if successful > 0 else 0
                 print(f"  {doc_type.upper()}: {count} ({percentage:.1f}%)")
+    
+    def _print_per_page_lien_analysis(self, lien_results: List[Dict[str, Any]]):
+        """Print detailed per-page analysis for lien documents."""
+        for result in lien_results:
+            filename = result['filename']
+            print(f"\n📄 PER-PAGE ANALYSIS: {filename}")
+            print("=" * 120)
+            
+            # Extract raw page results from enhanced lien processing
+            enhanced_full = result.get('full_result', {}).get('enhanced_lien_processing', {})
+            raw_pages = enhanced_full.get('raw_page_results', [])
+            
+            if not raw_pages:
+                print("   ⚠️  No per-page data available")
+                print("=" * 120)
+                continue
+            
+            # Per-page table headers
+            page_headers = ["Page", "Barcode Found", "Raw Barcode", "Patient Sig", "Attorney Sig", "Signature Analysis"]
+            
+            # Calculate column widths
+            page_col_widths = [len(h) for h in page_headers]
+            for page in raw_pages:
+                page_name = page.get('page_name', 'Unknown')
+                page_col_widths[0] = max(page_col_widths[0], len(page_name))
+                
+                barcode_detection = page.get('barcode_detection', {})
+                barcode_found = "✅" if barcode_detection.get('barcode_found') else "❌"
+                page_col_widths[1] = max(page_col_widths[1], len(barcode_found))
+                
+                raw_barcode = str(barcode_detection.get('raw_value', 'Not found'))
+                page_col_widths[2] = max(page_col_widths[2], len(raw_barcode))
+                
+                signature_detection = page.get('signature_detection', {})
+                if signature_detection.get('success'):
+                    sig_data = signature_detection.get('signature_data', {})
+                    patient_sig = "✅" if sig_data.get('patient_signature_present') else "❌"
+                    attorney_sig = "✅" if sig_data.get('attorney_signature_present') else "❌"
+                    sig_analysis = str(sig_data.get('signature_analysis', 'N/A'))  # No truncation
+                else:
+                    patient_sig = "Error"
+                    attorney_sig = "Error"
+                    sig_analysis = "Signature detection failed"
+                
+                page_col_widths[3] = max(page_col_widths[3], len(patient_sig))
+                page_col_widths[4] = max(page_col_widths[4], len(attorney_sig))
+                page_col_widths[5] = max(page_col_widths[5], len(sig_analysis))
+            
+            # Ensure minimum widths
+            for i in range(len(page_col_widths)):
+                page_col_widths[i] = max(page_col_widths[i], 8)
+            
+            # Print page headers
+            page_header_line = " | ".join(h.ljust(w) for h, w in zip(page_headers, page_col_widths))
+            print(page_header_line)
+            print("-" * len(page_header_line))
+            
+            # Print page rows
+            for page in raw_pages:
+                page_name = page.get('page_name', 'Unknown')
+                
+                # Barcode data
+                barcode_detection = page.get('barcode_detection', {})
+                barcode_found = "✅" if barcode_detection.get('barcode_found') else "❌"
+                raw_barcode = str(barcode_detection.get('raw_value', 'Not found'))
+                
+                # Signature data
+                signature_detection = page.get('signature_detection', {})
+                if signature_detection.get('success'):
+                    sig_data = signature_detection.get('signature_data', {})
+                    patient_sig = "✅" if sig_data.get('patient_signature_present') else "❌"
+                    attorney_sig = "✅" if sig_data.get('attorney_signature_present') else "❌"
+                    sig_analysis = str(sig_data.get('signature_analysis', 'N/A'))
+                    # No truncation - show full analysis
+                else:
+                    patient_sig = "Error"
+                    attorney_sig = "Error"
+                    sig_analysis = "Detection failed"
+                
+                page_row = [
+                    page_name,
+                    barcode_found,
+                    raw_barcode,
+                    patient_sig,
+                    attorney_sig,
+                    sig_analysis
+                ]
+                
+                page_row_line = " | ".join(val.ljust(w) for val, w in zip(page_row, page_col_widths))
+                print(page_row_line)
+            
+            print("=" * 120)
     
     def save_results_to_csv(self, results: List[Dict[str, Any]], output_file: Path):
         """Save results to a CSV file."""
