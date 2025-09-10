@@ -85,6 +85,25 @@ class DocumentBatchProcessor:
                     'confidence': analysis_data.get('confidence', 0.0),
                     'description': analysis_data.get('description', 'No description')
                 })
+                
+                # Add enhanced lien processing details if available
+                enhanced_lien = analysis_data.get('enhanced_lien_analysis', {})
+                if enhanced_lien:
+                    processed_result.update({
+                        'lien_signature_type': enhanced_lien.get('LienSignatureType', 'UNKNOWN'),
+                        'lien_type': enhanced_lien.get('LienType', ''),
+                        'referrer_id': enhanced_lien.get('ReferrerID', ''),
+                        'barcode_found': enhanced_lien.get('barcode_found', False),
+                        'signature_analysis': enhanced_lien.get('signature_analysis', '')
+                    })
+                else:
+                    processed_result.update({
+                        'lien_signature_type': 'N/A',
+                        'lien_type': 'N/A',
+                        'referrer_id': 'N/A',
+                        'barcode_found': False,
+                        'signature_analysis': 'N/A'
+                    })
             else:
                 error_msg = doc_analysis.get('error', 'Analysis failed') if doc_analysis else 'No analysis data'
                 processed_result.update({
@@ -93,7 +112,12 @@ class DocumentBatchProcessor:
                     'patient_id': 'Error',
                     'confidence': 0.0,
                     'description': f'Error: {error_msg}',
-                    'error': error_msg
+                    'error': error_msg,
+                    'lien_signature_type': 'Error',
+                    'lien_type': 'Error',
+                    'referrer_id': 'Error',
+                    'barcode_found': False,
+                    'signature_analysis': 'Error'
                 })
             
             # Add full result for CSV export
@@ -116,6 +140,11 @@ class DocumentBatchProcessor:
                 'confidence': 0.0,
                 'description': f'Processing error: {str(e)}',
                 'error': str(e),
+                'lien_signature_type': 'Error',
+                'lien_type': 'Error',
+                'referrer_id': 'Error',
+                'barcode_found': False,
+                'signature_analysis': 'Error',
                 'full_result': {'error': str(e)}
             }
     
@@ -229,7 +258,7 @@ class DocumentBatchProcessor:
             col_widths[4] = max(col_widths[4], len(str(result['patient_id'])))
             col_widths[5] = max(col_widths[5], len(f"{result['confidence']:.1%}"))
             col_widths[6] = max(col_widths[6], len("✅" if result['analysis_success'] else "❌"))
-            col_widths[7] = max(col_widths[7], min(len(str(result['description'])), 40))
+            col_widths[7] = max(col_widths[7], len(str(result['description'])))
         
         # Ensure minimum widths
         for i in range(len(col_widths)):
@@ -244,8 +273,6 @@ class DocumentBatchProcessor:
         for result in results:
             status_icon = "✅" if result['analysis_success'] else "❌"
             description = str(result['description'])
-            if len(description) > 40:
-                description = description[:37] + "..."
             
             row = [
                 str(result['filename']),
@@ -262,6 +289,54 @@ class DocumentBatchProcessor:
             print(row_line)
         
         print("=" * 120)
+        
+        # Print detailed lien processing results if any lien documents were found
+        lien_results = [r for r in results if r.get('document_type', '').lower() == 'lien' and r.get('analysis_success')]
+        if lien_results:
+            print(f"\n🔗 ENHANCED LIEN PROCESSING DETAILS")
+            print("=" * 140)
+            lien_headers = ["Filename", "Patient ID", "Signature Type", "Lien Type", "Referrer ID", "Barcode", "Signature Analysis"]
+            
+            # Calculate lien column widths
+            lien_col_widths = [len(h) for h in lien_headers]
+            for result in lien_results:
+                lien_col_widths[0] = max(lien_col_widths[0], len(str(result['filename'])))
+                lien_col_widths[1] = max(lien_col_widths[1], len(str(result.get('patient_id', 'N/A'))))
+                lien_col_widths[2] = max(lien_col_widths[2], len(str(result.get('lien_signature_type', 'N/A'))))
+                lien_col_widths[3] = max(lien_col_widths[3], len(str(result.get('lien_type', 'N/A'))))
+                lien_col_widths[4] = max(lien_col_widths[4], len(str(result.get('referrer_id', 'N/A'))))
+                lien_col_widths[5] = max(lien_col_widths[5], len("✅" if result.get('barcode_found') else "❌"))
+                sig_analysis = str(result.get('signature_analysis', 'N/A'))
+                lien_col_widths[6] = max(lien_col_widths[6], len(sig_analysis))
+            
+            # Ensure minimum lien column widths
+            for i in range(len(lien_col_widths)):
+                lien_col_widths[i] = max(lien_col_widths[i], 10)
+                
+            # Print lien headers
+            lien_header_line = " | ".join(h.ljust(w) for h, w in zip(lien_headers, lien_col_widths))
+            print(lien_header_line)
+            print("-" * len(lien_header_line))
+            
+            # Print lien rows
+            for result in lien_results:
+                barcode_icon = "✅" if result.get('barcode_found') else "❌"
+                sig_analysis = str(result.get('signature_analysis', 'N/A'))
+                
+                lien_row = [
+                    str(result['filename']),
+                    str(result.get('patient_id', 'N/A')),
+                    str(result.get('lien_signature_type', 'N/A')),
+                    str(result.get('lien_type', 'N/A')),
+                    str(result.get('referrer_id', 'N/A')),
+                    barcode_icon,
+                    sig_analysis
+                ]
+                
+                lien_row_line = " | ".join(val.ljust(w) for val, w in zip(lien_row, lien_col_widths))
+                print(lien_row_line)
+            
+            print("=" * 140)
         
         # Print summary statistics
         total_docs = len(results)
@@ -303,7 +378,8 @@ class DocumentBatchProcessor:
                 fieldnames = [
                     'filename', 'file_size', 'file_extension', 'detected_type',
                     'processing_status', 'provider', 'analysis_success',
-                    'document_type', 'patient_id', 'confidence', 'description'
+                    'document_type', 'patient_id', 'confidence', 'description',
+                    'lien_signature_type', 'lien_type', 'referrer_id', 'barcode_found', 'signature_analysis'
                 ]
                 
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)

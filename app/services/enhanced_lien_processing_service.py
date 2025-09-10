@@ -574,22 +574,51 @@ class EnhancedLienProcessingService:
                     barcode_data = page["barcode_detection"]["parsed_data"]
                     break
             
-            # Find the best signature result (prefer pages with clear signatures)
+            # PRIORITY LOGIC: Attorney signature takes precedence across ALL pages
             signature_data = None
+            attorney_found = False
+            patient_found = False
+            
+            # First pass: Look for ANY attorney signature across all pages
             for page in page_results:
                 if (page.get("success") and 
                     page.get("signature_detection", {}).get("success")):
                     sig_data = page["signature_detection"]["signature_data"]
-                    if sig_data.get("lien_signature_type") != "UNKNOWN":
-                        signature_data = sig_data
+                    if sig_data.get("attorney_signature_present") == True:
+                        attorney_found = True
+                        signature_data = {
+                            "patient_signature_present": False,
+                            "attorney_signature_present": True,
+                            "signature_analysis": sig_data.get("signature_analysis", "Attorney signature found on one of the pages"),
+                            "lien_signature_type": "ASL"
+                        }
+                        logger.info(f"🔍 MULTI-PAGE CONSOLIDATION: Attorney signature found → ASL (overrides all other pages)")
                         break
             
-            # If no clear signature found, use first available
+            # Second pass: If no attorney found anywhere, look for patient signatures
+            if not attorney_found:
+                for page in page_results:
+                    if (page.get("success") and 
+                        page.get("signature_detection", {}).get("success")):
+                        sig_data = page["signature_detection"]["signature_data"]
+                        if sig_data.get("patient_signature_present") == True:
+                            patient_found = True
+                            signature_data = {
+                                "patient_signature_present": True,
+                                "attorney_signature_present": False,
+                                "signature_analysis": sig_data.get("signature_analysis", "Patient signature found on one of the pages"),
+                                "lien_signature_type": "PSL"
+                            }
+                            logger.info(f"🔍 MULTI-PAGE CONSOLIDATION: No attorney found, patient signature found → PSL")
+                            break
+            
+            # Third pass: If no clear signatures found, use first available result
             if not signature_data:
                 for page in page_results:
                     if (page.get("success") and 
                         page.get("signature_detection", {}).get("success")):
                         signature_data = page["signature_detection"]["signature_data"]
+                        logger.info(f"🔍 MULTI-PAGE CONSOLIDATION: No clear signatures, using first available result")
                         break
             
             # Build final result
