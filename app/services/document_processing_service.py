@@ -107,12 +107,12 @@ class DocumentProcessingService:
                     from pdf2image import convert_from_bytes
                     pages = convert_from_bytes(file_content, dpi=200)  # Lower DPI for smaller images
                     
-                    # Process multiple pages for better classification (up to 3 pages)
+                    # Process all pages for comprehensive classification
                     if pages:
                         import io
                         
-                        # Use up to 3 pages for classification to capture full document context
-                        pages_to_process = pages[:3]  # First 3 pages max
+                        # Use all pages for classification to capture complete document context
+                        pages_to_process = pages  # All pages
                         combined_images = []
                         total_size = 0
                         
@@ -141,7 +141,7 @@ class DocumentProcessingService:
                         base64_content = base64.b64encode(best_page['data']).decode('utf-8')
                         mime_type = "image/jpeg"
                         
-                        logger.info(f"PDF classification: Using page {best_page['page_num']} out of {len(pages)} pages ({len(best_page['data']):,} bytes)")
+                        logger.info(f"PDF classification: Processed {len(combined_images)} pages, using page {best_page['page_num']} (largest content) out of {len(pages)} total pages ({len(best_page['data']):,} bytes)")
                     else:
                         return {"success": False, "error": "Could not convert PDF to image"}
                 except ImportError:

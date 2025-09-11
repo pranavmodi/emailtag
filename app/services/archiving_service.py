@@ -52,11 +52,12 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
             debug_logger.debug(f"🔍 ARCHIVAL: Email object provided with attributes: {list(email_obj.__dict__.keys()) if hasattr(email_obj, '__dict__') else 'No __dict__'}")
 
     # Check for document processing results that prevent archiving
-    if email_obj and hasattr(email_obj, 'document_processing_results'):
-        doc_results = email_obj.document_processing_results
+    # Document results are stored in ocr_results field
+    if email_obj and hasattr(email_obj, 'ocr_results'):
+        doc_results = email_obj.ocr_results
         if doc_results:
             if CLASSIFICATION_DEBUG:
-                debug_logger.debug(f"🔍 ARCHIVAL: Found {len(doc_results)} document processing results")
+                debug_logger.debug(f"🔍 ARCHIVAL: Found {len(doc_results)} document processing results in ocr_results")
             for result in doc_results:
                 if isinstance(result, dict):
                     doc_analysis = result.get('document_analysis', {})
