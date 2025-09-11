@@ -13,4 +13,12 @@ Please use the following rules to sub-classify the provided email content, alrea
    - If the email primarily provides **updates on the status of a financial case, account history, or payment tracking**, classify as 'Case Updates'.
    - If the email primarily relates to **overdue accounts, warnings about collections, or communication regarding accounts sent to or being considered for third-party collection agencies**, classify as 'Collections'.
 
+2. **Document Type Priority Rule**: If the email contains attachments processed by the document analysis system, prioritize classification based on document type:
+   - **CRITICAL**: If ANY attachment is classified as document type **'lien_reduction'**, classify as 'Negotiations' regardless of other content, as these are settlement/reduction requests requiring negotiation. Do NOT classify as 'Liens'.
+   - If ANY attachment is classified as document type **'lien'** (PSL/ASL) without lien_reduction, and the email is about submitting or requesting liens, classify as 'Liens'.
+
+3. **Lien vs Negotiations Distinction**: 
+   - **Lien reduction, settlement, or bill reduction requests** = 'Negotiations' (even if they mention liens)
+   - **Lien submissions, missing lien requests, or lien modifications** = 'Liens'
+
 --- END Accounts Receivable Sub-Classification RULES --- 

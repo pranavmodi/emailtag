@@ -366,7 +366,10 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
                     logger.info(f"Marked email {email_id} as 'split_off' and processed.")
                     return {"status": "success_split", "original_email_id": email_id, "new_conversation_reference": new_front_conv_ref}
                 else:
-                    logger.error(f"Failed to create new conversation for split (email {email_id}). API response: {split_response}")
+                    if split_response is None:
+                        logger.info(f"Conversation splitting not supported for this channel - continuing with original conversation (email {email_id})")
+                    else:
+                        logger.error(f"Failed to create new conversation for split (email {email_id}). API response: {split_response}")
                     # Fall through to regular processing if split failed critically (handled by not returning)
 
             except Exception as e_split:

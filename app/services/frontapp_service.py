@@ -1164,10 +1164,18 @@ def create_new_conversation_for_split(
             return None # Should be unreachable if raise_for_status() works
 
     except httpx.HTTPStatusError as e:
+        # Handle 403 Forbidden specifically for non-custom channels
+        if e.response.status_code == 403 and "Incoming message are supported for custom channel only" in e.response.text:
+            logger.warning(
+                f"Cannot split conversation to channel {channel_id} - channel does not support incoming messages. "
+                f"Conversation splitting requires a custom channel. Continuing with original conversation."
+            )
+            return None  # Graceful fallback - don't raise exception
+        
         logger.error(
             f"HTTPStatusError creating new conversation (split): {e.response.status_code} - {e.response.text}"
         )
-        raise # Re-raise for the task to potentially retry or handle
+        raise # Re-raise for other HTTP errors
     except httpx.RequestError as e:
         logger.error(f"RequestError creating new conversation (split): {e}")
         raise
