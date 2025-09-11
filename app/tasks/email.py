@@ -658,28 +658,31 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                         
                         if lien_modifications_detected:
                             logger.info(f"🔍 LIEN MODIFICATIONS DETECTED for email {email_id}! Adding 'Lien Modified' while preserving existing lien tags.")
-                            
-                            # Preserve all existing lien-related tags and add "Lien Modified"
+
+                            # Preserve lien signature (PSL/ASL) and lien type (Rad/Tech) from
+                            # either the OCR-override tags (current new_tags) OR the original
+                            # classification, then add "Lien Modified".
                             lien_modified_tags = []
-                            
-                            # Keep PSL/ASL tags from original classification (before OCR override)
-                            if any("PSL" in tag for tag in original_classification_tags):
+
+                            signature_candidates = new_tags + original_classification_tags
+                            if any(tag == "PSL" for tag in signature_candidates):
                                 lien_modified_tags.append("PSL")
-                            elif any("ASL" in tag for tag in original_classification_tags):
+                            elif any(tag == "ASL" for tag in signature_candidates):
                                 lien_modified_tags.append("ASL")
-                            
-                            # Keep OCR-derived lien type (Rad Lien, Tech Lien) from current tags
-                            for tag in new_tags:
-                                if tag in ["Rad Lien", "Tech Lien"]:
-                                    lien_modified_tags.append(tag)
-                            
+
+                            lien_type_candidates = new_tags + original_classification_tags
+                            if any(tag == "Rad Lien" for tag in lien_type_candidates):
+                                lien_modified_tags.append("Rad Lien")
+                            elif any(tag == "Tech Lien" for tag in lien_type_candidates):
+                                lien_modified_tags.append("Tech Lien")
+
                             # Always add Lien Modified
                             lien_modified_tags.append("Lien Modified")
-                            
+
                             # Remove duplicates while preserving order
                             new_tags = list(dict.fromkeys(lien_modified_tags))
                             logger.info(f"Applied comprehensive lien modification tags for email {email_id}: {new_tags}")
-                            logger.info(f"Original classification: {original_classification_tags}, OCR override: {[tag for tag in new_tags if tag in ['Rad Lien', 'Tech Lien']]}, Final: {new_tags}")
+                            logger.info(f"Original classification: {original_classification_tags}, OCR/current preserved types: {[t for t in new_tags if t in ['Rad Lien', 'Tech Lien']]}, Final: {new_tags}")
                         else:
                             logger.info(f"No lien modifications detected for email {email_id}. Keeping original tags: {new_tags}")
                     else:
