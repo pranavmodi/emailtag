@@ -29,6 +29,35 @@ class EnhancedLienProcessingService:
         """Initialize the enhanced lien processing service."""
         self.openai_client = get_openai_client()
     
+    def _is_valid_lien_type(self, lien_type: str) -> bool:
+        """
+        Check if a lien type is valid (not a numeric code or other non-lien data).
+        
+        Args:
+            lien_type: The lien type to validate
+            
+        Returns:
+            True if valid lien type, False otherwise
+        """
+        lien_type_upper = lien_type.upper()
+        
+        # Known valid lien types
+        valid_types = {
+            'RAD', 'RADIOLOGY', 
+            'TC', 'TECH', 'TECHNOLOGIST',
+            'MRI', 'CT', 'XRAY', 'ULTRASOUND'  # Add other valid types as needed
+        }
+        
+        # Filter out purely numeric codes (like '000', '019')
+        if lien_type.isdigit():
+            return False
+        
+        # Filter out very short codes that are likely not lien types
+        if len(lien_type) <= 2 and lien_type not in valid_types:
+            return False
+        
+        return lien_type_upper in valid_types
+    
     async def process_lien_document(self, file_content: bytes, filename: str) -> Dict[str, Any]:
         """
         Process a lien document with enhanced barcode and signature detection.
@@ -209,21 +238,48 @@ class EnhancedLienProcessingService:
                     "decode_error": "All barcodes failed to decode"
                 }
             
-            # Use the first successfully decoded barcode
-            first_barcode = all_barcodes[0]
-            barcode_data = first_barcode["data"]
-            barcode_type = first_barcode["type"]
+            # Parse ALL barcodes found
+            all_parsed_barcodes = []
+            all_lien_types = set()
+            primary_patient_id = None
+            primary_referrer_id = None
             
-            logger.info(f"🔍 BARCODE DETECTION: Using barcode: {barcode_type} = '{barcode_data}'")
+            for i, barcode_info in enumerate(all_barcodes):
+                barcode_data = barcode_info["data"]
+                barcode_type = barcode_info["type"]
+                
+                logger.info(f"🔍 BARCODE DETECTION: Processing barcode {i+1}: {barcode_type} = '{barcode_data}'")
+                
+                # Parse barcode data
+                parsed_data = self._parse_barcode_value(barcode_data)
+                all_parsed_barcodes.append({
+                    "barcode_type": barcode_type,
+                    "raw_value": barcode_data,
+                    "parsed_data": parsed_data
+                })
+                
+                # Collect lien types from all barcodes (filter for valid lien types only)
+                lien_type = parsed_data.get("LienType", "").upper()
+                if lien_type and self._is_valid_lien_type(lien_type):
+                    all_lien_types.add(lien_type)
+                
+                # Use first barcode's patient ID and referrer ID as primary
+                if i == 0:
+                    primary_patient_id = parsed_data.get("PatientID", "")
+                    primary_referrer_id = parsed_data.get("ReferrerID", "")
             
-            # Parse barcode data
-            parsed_data = self._parse_barcode_value(barcode_data)
+            # Combine all lien types found across all barcodes
+            combined_lien_types = list(all_lien_types)
+            logger.info(f"🔍 BARCODE DETECTION: Combined lien types from all barcodes: {combined_lien_types}")
             
             return {
                 "barcode_found": True,
-                "barcode_type": barcode_type,
-                "raw_value": barcode_data,
-                "parsed_data": parsed_data,
+                "all_barcodes_parsed": all_parsed_barcodes,
+                "combined_data": {
+                    "PatientID": primary_patient_id,
+                    "LienTypes": combined_lien_types,  # Now a list of all types found
+                    "ReferrerID": primary_referrer_id
+                },
                 "all_barcodes": all_barcodes  # Include all found barcodes for debugging
             }
             
@@ -588,13 +644,48 @@ class EnhancedLienProcessingService:
             Consolidated lien processing result
         """
         try:
-            # Find the best barcode result (first successful one)
-            barcode_data = None
+            # Collect barcode results from ALL pages and combine lien types
+            all_lien_types = set()
+            combined_barcode_data = None
+            barcode_found_anywhere = False
+            
             for page in page_results:
                 if (page.get("success") and 
                     page.get("barcode_detection", {}).get("barcode_found")):
-                    barcode_data = page["barcode_detection"]["parsed_data"]
-                    break
+                    barcode_found_anywhere = True
+                    barcode_detection = page["barcode_detection"]
+                    
+                    # Handle new format with combined_data
+                    if "combined_data" in barcode_detection:
+                        combined_data = barcode_detection["combined_data"]
+                        lien_types = combined_data.get("LienTypes", [])
+                        for lien_type in lien_types:
+                            if self._is_valid_lien_type(lien_type):
+                                all_lien_types.add(lien_type.upper())
+                        
+                        # Use first page's patient and referrer ID as primary
+                        if combined_barcode_data is None:
+                            combined_barcode_data = {
+                                "PatientID": combined_data.get("PatientID", ""),
+                                "ReferrerID": combined_data.get("ReferrerID", "")
+                            }
+                    
+                    # Handle legacy format for backward compatibility
+                    elif "parsed_data" in barcode_detection:
+                        legacy_data = barcode_detection["parsed_data"]
+                        lien_type = legacy_data.get("LienType", "")
+                        if lien_type and self._is_valid_lien_type(lien_type):
+                            all_lien_types.add(lien_type.upper())
+                        
+                        if combined_barcode_data is None:
+                            combined_barcode_data = legacy_data
+            
+            # Final combined barcode data with all lien types
+            if barcode_found_anywhere and combined_barcode_data:
+                combined_barcode_data["LienTypes"] = list(all_lien_types)
+                logger.info(f"🔍 CONSOLIDATION: Combined lien types from all pages: {list(all_lien_types)}")
+            
+            barcode_data = combined_barcode_data
             
             # PRIORITY LOGIC: Attorney signature takes precedence across ALL pages
             signature_data = None
@@ -637,12 +728,22 @@ class EnhancedLienProcessingService:
                         logger.info(f"🔍 MULTI-PAGE CONSOLIDATION: No clear signatures, using first available result")
                         break
             
-            # Build final result
+            # Build final result with support for multiple lien types
+            lien_types = []
+            if barcode_data:
+                # Handle new format with multiple lien types
+                if "LienTypes" in barcode_data:
+                    lien_types = barcode_data["LienTypes"]
+                # Handle legacy format for backward compatibility
+                elif "LienType" in barcode_data and barcode_data["LienType"]:
+                    lien_types = [barcode_data["LienType"]]
+            
             result = {
                 "filename": filename,
                 "processing_type": "enhanced_lien_processing",
                 "PatientID": barcode_data.get("PatientID", "") if barcode_data else "",
-                "LienType": barcode_data.get("LienType", "") if barcode_data else "",
+                "LienType": lien_types[0] if lien_types else "",  # First lien type for backward compatibility
+                "LienTypes": lien_types,  # New field with all lien types
                 "ReferrerID": barcode_data.get("ReferrerID", "") if barcode_data else "",
                 "LienSignatureType": signature_data.get("lien_signature_type", "UNKNOWN") if signature_data else "UNKNOWN",
                 "barcode_found": bool(barcode_data),

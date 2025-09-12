@@ -571,46 +571,69 @@ def perform_tagging_task(self, email_id: str) -> Dict:
             logger.info(f"Email {email_id} has OCR results and is classified under Liens. Checking for OCR-based override.")
             
             try:
-                # Check OCR results for enhanced lien processing data
-                enhanced_lien_data = None
+                # Check ALL OCR results for enhanced lien processing data and combine them
+                all_enhanced_lien_data = []
+                combined_lien_types = set()
+                combined_signature_types = set()
+                primary_patient_id = None
                 
                 for ocr_result in email_obj.ocr_results:
                     if isinstance(ocr_result, dict):
                         # Check for enhanced lien processing results
                         if ocr_result.get('document_analysis', {}).get('data', {}).get('enhanced_lien_analysis'):
                             enhanced_data = ocr_result['document_analysis']['data']['enhanced_lien_analysis']
-                            enhanced_lien_data = enhanced_data
+                            all_enhanced_lien_data.append(enhanced_data)
                             logger.info(f"🔍 ENHANCED LIEN DATA FOUND for email {email_id}: {enhanced_data}")
-                            break
+                            
+                            # Collect lien types from this document
+                            if "LienTypes" in enhanced_data:
+                                # New format with multiple lien types
+                                for lien_type in enhanced_data["LienTypes"]:
+                                    combined_lien_types.add(lien_type.upper())
+                            elif enhanced_data.get("LienType"):
+                                # Legacy format compatibility
+                                combined_lien_types.add(enhanced_data["LienType"].upper())
+                            
+                            # Collect signature types from this document
+                            signature_type = enhanced_data.get("LienSignatureType", "")
+                            if signature_type in ["PSL", "ASL"]:
+                                combined_signature_types.add(signature_type)
+                            
+                            # Use first document's patient ID as primary
+                            if not primary_patient_id and enhanced_data.get("PatientID"):
+                                primary_patient_id = enhanced_data["PatientID"]
                 
-                if enhanced_lien_data:
-                    # Use enhanced lien processing data for classification
-                    barcode_lien_type = enhanced_data.get('LienType', '')  # RAD or Tech
-                    signature_type = enhanced_data.get('LienSignatureType', 'UNKNOWN')  # PSL or ASL
-                    barcode_found = enhanced_data.get('barcode_found', False)
+                if all_enhanced_lien_data:
+                    # Use combined enhanced lien processing data for classification
+                    logger.info(f"🔍 COMBINING DATA: Found {len(all_enhanced_lien_data)} enhanced lien documents")
+                    logger.info(f"🔍 Combined lien types: {list(combined_lien_types)}")
+                    logger.info(f"🔍 Combined signature types: {list(combined_signature_types)}")
                     
                     determined_tags = []
                     
-                    # Add signature type (PSL/ASL) based on signature detection
-                    if signature_type in ['PSL', 'ASL']:
-                        determined_tags.append(signature_type)
-                        logger.info(f"🔍 SIGNATURE TYPE DETECTED: {signature_type}")
+                    # Add signature type (PSL/ASL) - prefer ASL if both found
+                    if "ASL" in combined_signature_types:
+                        determined_tags.append("ASL")
+                        logger.info(f"🔍 SIGNATURE TYPE DETECTED: ASL (attorney signature found)")
+                    elif "PSL" in combined_signature_types:
+                        determined_tags.append("PSL")
+                        logger.info(f"🔍 SIGNATURE TYPE DETECTED: PSL (patient signature found)")
                     
-                    # Map barcode lien type to standardized format
-                    if barcode_lien_type:
-                        barcode_upper = barcode_lien_type.upper()
-                        if barcode_upper in ['RAD', 'RADIOLOGY']:
+                    # Add ALL lien types found across all documents
+                    for lien_type in combined_lien_types:
+                        if lien_type in ['RAD', 'RADIOLOGY']:
                             determined_tags.append('Rad Lien')
-                        elif barcode_upper in ['TECH', 'TC', 'TECHNOLOGIST']:
+                            logger.info(f"🔍 LIEN TYPE DETECTED: Rad Lien")
+                        elif lien_type in ['TECH', 'TC', 'TECHNOLOGIST']:
                             determined_tags.append('Tech Lien')
-                        logger.info(f"🔍 BARCODE LIEN TYPE DETECTED: {barcode_lien_type} -> {determined_tags[-1] if determined_tags else 'None'}")
+                            logger.info(f"🔍 LIEN TYPE DETECTED: Tech Lien")
                     
                     if determined_tags:
                         new_tags = determined_tags
                         logger.info(f"🔍 ENHANCED LIEN CLASSIFICATION for email {email_id}: {new_tags}")
-                        logger.info(f"Applied enhanced lien tags: signature={signature_type}, barcode_type={barcode_lien_type}, barcode_found={barcode_found}")
+                        logger.info(f"Applied enhanced lien tags from {len(all_enhanced_lien_data)} documents: lien_types={list(combined_lien_types)}, signature_types={list(combined_signature_types)}")
                     else:
-                        logger.warning(f"🔍 ENHANCED LIEN PROCESSING completed but produced no classifiable results. Signature={signature_type}, LienType={barcode_lien_type}. Keeping LLM tags: {new_tags}")
+                        logger.warning(f"🔍 ENHANCED LIEN PROCESSING completed but produced no classifiable results. Combined types: lien={list(combined_lien_types)}, signature={list(combined_signature_types)}. Keeping LLM tags: {new_tags}")
                 else:
                     logger.warning(f"🔍 NO ENHANCED LIEN DATA: Email {email_id} is lien-related but enhanced processing data not found in OCR results. This should not happen if document was classified as lien. Keeping LLM tags: {new_tags}")
                     
@@ -671,9 +694,10 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                                 lien_modified_tags.append("ASL")
 
                             lien_type_candidates = new_tags + original_classification_tags
+                            # Support both Tech and Rad lien types (remove elif to allow both)
                             if any(tag == "Rad Lien" for tag in lien_type_candidates):
                                 lien_modified_tags.append("Rad Lien")
-                            elif any(tag == "Tech Lien" for tag in lien_type_candidates):
+                            if any(tag == "Tech Lien" for tag in lien_type_candidates):
                                 lien_modified_tags.append("Tech Lien")
 
                             # Always add Lien Modified

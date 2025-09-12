@@ -146,6 +146,9 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             logger.warning("determined_tags not passed to autorespond task. Reading from DB, which may be stale.")
             applied_tag_names = [tag.name for tag in email_obj.tags if hasattr(tag, 'name')]
 
+        # Extract document processing results for downstream agent use
+        document_results = email_obj.ocr_results if hasattr(email_obj, 'ocr_results') and email_obj.ocr_results else None
+
         # --- Human Review Check for various tags ---
         triggered_human_review_tags = [tag for tag in applied_tag_names if tag in TAGS_REQUIRING_HUMAN_REVIEW]
 

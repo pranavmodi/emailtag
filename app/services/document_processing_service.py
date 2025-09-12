@@ -491,7 +491,8 @@ ANALYSIS REQUIREMENTS:
                 enhanced_result["document_analysis"]["data"].update({
                     "enhanced_lien_analysis": {
                         "PatientID": enhanced_analysis.get("PatientID", ""),
-                        "LienType": enhanced_analysis.get("LienType", ""),
+                        "LienType": enhanced_analysis.get("LienType", ""),  # Legacy field for backward compatibility
+                        "LienTypes": enhanced_analysis.get("LienTypes", []),  # New field with all lien types
                         "ReferrerID": enhanced_analysis.get("ReferrerID", ""),
                         "LienSignatureType": enhanced_analysis.get("LienSignatureType", "UNKNOWN"),
                         "barcode_found": enhanced_analysis.get("barcode_found", False),
