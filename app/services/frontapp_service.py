@@ -1187,6 +1187,75 @@ def create_new_conversation_for_split(
 # and your .env file. For example:
 # FRONT_APP_WEBHOOK_BASE_URL_FOR_SPLIT="https://api2.frontapp.com" 
 
+def get_conversation_comments(conversation_id: str) -> List[Dict[str, Any]]:
+    """
+    Retrieve existing comments from a Front conversation.
+    
+    Args:
+        conversation_id: The ID of the conversation to get comments from
+    
+    Returns:
+        List[Dict]: List of comment objects, each containing 'body', 'author', 'created_at', etc.
+    """
+    try:
+        headers = {
+            "Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}",
+            "Accept": "application/json"
+        }
+        
+        url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/comments"
+        
+        with httpx.Client(verify=False, timeout=30.0) as client:
+            response = client.get(url, headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                comments = data.get("_results", [])
+                logger.debug(f"Retrieved {len(comments)} comments from conversation {conversation_id}")
+                return comments
+            else:
+                logger.error(f"Failed to get comments from conversation {conversation_id}. Status: {response.status_code}, Response: {response.text}")
+                return []
+                
+    except Exception as e:
+        logger.error(f"Exception occurred while getting comments from conversation {conversation_id}: {str(e)}")
+        return []
+
+
+def check_patient_id_comment_exists(conversation_id: str, patient_id: str) -> bool:
+    """
+    Check if a patient ID comment already exists in the conversation.
+    
+    Args:
+        conversation_id: The Front conversation ID
+        patient_id: The patient ID to check for
+    
+    Returns:
+        bool: True if patient ID comment already exists, False otherwise
+    """
+    try:
+        existing_comments = get_conversation_comments(conversation_id)
+        
+        # Check if any existing comment contains this patient ID
+        for comment in existing_comments:
+            comment_body = comment.get("body", "").lower()
+            # Check for various patterns of patient ID mentions
+            if (f"patient id {patient_id.lower()}" in comment_body or 
+                f"patient ids {patient_id.lower()}" in comment_body or
+                f"patient id: {patient_id.lower()}" in comment_body or
+                f"patient_id {patient_id.lower()}" in comment_body or
+                patient_id.lower() in comment_body):
+                logger.debug(f"Patient ID {patient_id} already exists in conversation {conversation_id} comments")
+                return True
+        
+        return False
+        
+    except Exception as e:
+        logger.error(f"Error checking for existing patient ID comment: {e}")
+        # On error, assume it doesn't exist to avoid blocking new comments
+        return False
+
+
 def add_conversation_comment(conversation_id: str, comment_body: str, author_id: Optional[str] = None) -> bool:
     """
     Add a comment to a Front conversation.
@@ -1231,4 +1300,83 @@ def add_conversation_comment(conversation_id: str, comment_body: str, author_id:
                 
     except Exception as e:
         logger.error(f"Exception occurred while adding comment to conversation {conversation_id}: {str(e)}")
+        return False
+
+
+def add_patient_id_comment_safe(conversation_id: str, patient_id: str, extraction_method: str = "processing") -> bool:
+    """
+    Safely add a patient ID comment, checking for duplicates first.
+    
+    Args:
+        conversation_id: The Front conversation ID
+        patient_id: The patient ID to add in comment
+        extraction_method: How the patient ID was found (e.g., "document processing", "email content", etc.)
+    
+    Returns:
+        bool: True if comment was added or already exists, False if failed
+    """
+    try:
+        # Check if patient ID comment already exists
+        if check_patient_id_comment_exists(conversation_id, patient_id):
+            logger.info(f"Patient ID {patient_id} comment already exists for conversation {conversation_id}, skipping duplicate")
+            return True
+        
+        # Add new patient ID comment
+        comment_text = f"Bot found patient id {patient_id} via {extraction_method}"
+        success = add_conversation_comment(conversation_id, comment_text)
+        
+        if success:
+            logger.info(f"Added new patient ID comment to conversation {conversation_id}: {patient_id}")
+        else:
+            logger.error(f"Failed to add patient ID comment to conversation {conversation_id}: {patient_id}")
+            
+        return success
+        
+    except Exception as e:
+        logger.error(f"Exception adding safe patient ID comment to conversation {conversation_id}: {e}", exc_info=True)
+        return False
+
+
+def add_multiple_patient_ids_comment_safe(conversation_id: str, patient_ids: List[str], extraction_method: str = "processing") -> bool:
+    """
+    Safely add multiple patient IDs in a single comment, checking for duplicates first.
+    
+    Args:
+        conversation_id: The Front conversation ID
+        patient_ids: List of patient IDs to add
+        extraction_method: How the patient IDs were found
+    
+    Returns:
+        bool: True if comment was added or all already exist, False if failed
+    """
+    try:
+        # Filter out patient IDs that already exist in comments
+        new_patient_ids = []
+        for patient_id in patient_ids:
+            if not check_patient_id_comment_exists(conversation_id, patient_id):
+                new_patient_ids.append(patient_id)
+            else:
+                logger.info(f"Patient ID {patient_id} comment already exists for conversation {conversation_id}, excluding from new comment")
+        
+        if not new_patient_ids:
+            logger.info(f"All patient IDs already exist in comments for conversation {conversation_id}, skipping")
+            return True
+        
+        # Add comment for new patient IDs only
+        if len(new_patient_ids) == 1:
+            comment_text = f"Bot found patient id {new_patient_ids[0]} via {extraction_method}"
+        else:
+            comment_text = f"Bot found patient ids {', '.join(new_patient_ids)} via {extraction_method}"
+        
+        success = add_conversation_comment(conversation_id, comment_text)
+        
+        if success:
+            logger.info(f"Added new patient ID(s) comment to conversation {conversation_id}: {new_patient_ids}")
+        else:
+            logger.error(f"Failed to add patient ID(s) comment to conversation {conversation_id}: {new_patient_ids}")
+            
+        return success
+        
+    except Exception as e:
+        logger.error(f"Exception adding safe multiple patient IDs comment to conversation {conversation_id}: {e}", exc_info=True)
         return False 

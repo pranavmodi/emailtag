@@ -552,10 +552,8 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
         
         # Add comment to Front conversation if conversation_id is provided
         if conversation_id:
-            comment_text = f"Bot found patient ids {', '.join(unique_ids)}"
             try:
-                frontapp_service.add_conversation_comment(conversation_id, comment_text)
-                logger.info(f"Added patient ID comment to conversation {conversation_id}: {comment_text}")
+                frontapp_service.add_multiple_patient_ids_comment_safe(conversation_id, unique_ids, "email content")
             except Exception as e:
                 logger.error(f"Failed to add patient ID comment to conversation {conversation_id}: {e}", exc_info=True)
         
@@ -636,9 +634,8 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
                                 if found_patient_ids:
                                     logger.info(f"Patient ID found via {lookup_type} lookup: {', '.join(found_patient_ids)}")
                                     if conversation_id:
-                                        comment_text = f"Bot found patient ids {', '.join(found_patient_ids)} (via {lookup_type} lookup)"
                                         try:
-                                            frontapp_service.add_conversation_comment(conversation_id, comment_text)
+                                            frontapp_service.add_multiple_patient_ids_comment_safe(conversation_id, found_patient_ids, f"{lookup_type} lookup")
                                         except Exception: pass
                                     return found_patient_ids
                         # If this lookup failed, continue to try next method
@@ -659,7 +656,7 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
 
 async def _add_patient_id_comment_to_front(conversation_id: str, patient_id: str, extraction_method: str):
     """
-    Add a comment to the Front conversation with the found patient ID.
+    Add a comment to the Front conversation with the found patient ID (with duplicate checking).
     
     Args:
         conversation_id (str): The Front conversation ID
@@ -667,13 +664,12 @@ async def _add_patient_id_comment_to_front(conversation_id: str, patient_id: str
         extraction_method (str): Description of how the ID was found
     """
     try:
-        comment_body = f"🏥 **Patient ID Found:** {patient_id}\n📋 **Extraction Method:** {extraction_method}\n⏰ **Found at:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
-        
-        # Use asyncio.to_thread to run the synchronous Front API call
+        # Use asyncio.to_thread to run the synchronous Front API call with duplicate checking
         success = await asyncio.to_thread(
-            frontapp_service.add_conversation_comment,
+            frontapp_service.add_patient_id_comment_safe,
             conversation_id,
-            comment_body
+            patient_id,
+            extraction_method
         )
         
         if success:

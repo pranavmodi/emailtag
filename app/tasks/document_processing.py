@@ -148,10 +148,8 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
             patient_id = attachment_data['patient_id']
             logger.info(f"Document processing found patient ID {patient_id} for email {email_id}, adding comment to conversation.")
             try:
-                from app.services.frontapp_service import add_conversation_comment
-                comment_text = f"Bot found patient id {patient_id} via document processing"
-                add_conversation_comment(updated_email.front_conversation_id, comment_text)
-                logger.info(f"Added document processing patient ID comment to conversation {updated_email.front_conversation_id}: {comment_text}")
+                from app.services.frontapp_service import add_patient_id_comment_safe
+                add_patient_id_comment_safe(updated_email.front_conversation_id, patient_id, "document processing")
             except Exception as e:
                 logger.error(f"Failed to add document processing patient ID comment to conversation {updated_email.front_conversation_id}: {e}", exc_info=True)
 
