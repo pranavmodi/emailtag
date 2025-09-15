@@ -241,6 +241,7 @@ class EnhancedLienProcessingService:
             # Parse ALL barcodes found
             all_parsed_barcodes = []
             all_lien_types = set()
+            all_patient_ids = set()
             primary_patient_id = None
             primary_referrer_id = None
             
@@ -263,21 +264,29 @@ class EnhancedLienProcessingService:
                 if lien_type and self._is_valid_lien_type(lien_type):
                     all_lien_types.add(lien_type)
                 
+                # Collect all unique patient IDs from all barcodes
+                patient_id = parsed_data.get("PatientID", "")
+                if patient_id and patient_id.startswith("PRE"):
+                    all_patient_ids.add(patient_id)
+                
                 # Use first barcode's patient ID and referrer ID as primary
                 if i == 0:
                     primary_patient_id = parsed_data.get("PatientID", "")
                     primary_referrer_id = parsed_data.get("ReferrerID", "")
             
-            # Combine all lien types found across all barcodes
+            # Combine all lien types and patient IDs found across all barcodes
             combined_lien_types = list(all_lien_types)
+            combined_patient_ids = list(all_patient_ids)
             logger.info(f"🔍 BARCODE DETECTION: Combined lien types from all barcodes: {combined_lien_types}")
+            logger.info(f"🔍 BARCODE DETECTION: Combined patient IDs from all barcodes: {combined_patient_ids}")
             
             return {
                 "barcode_found": True,
                 "all_barcodes_parsed": all_parsed_barcodes,
                 "combined_data": {
-                    "PatientID": primary_patient_id,
-                    "LienTypes": combined_lien_types,  # Now a list of all types found
+                    "PatientID": primary_patient_id,  # First patient ID for backward compatibility
+                    "PatientIDs": combined_patient_ids,  # All unique patient IDs found
+                    "LienTypes": combined_lien_types,  # All lien types found
                     "ReferrerID": primary_referrer_id
                 },
                 "all_barcodes": all_barcodes  # Include all found barcodes for debugging
@@ -644,8 +653,9 @@ class EnhancedLienProcessingService:
             Consolidated lien processing result
         """
         try:
-            # Collect barcode results from ALL pages and combine lien types
+            # Collect barcode results from ALL pages and combine lien types and patient IDs
             all_lien_types = set()
+            all_patient_ids = set()
             combined_barcode_data = None
             barcode_found_anywhere = False
             
@@ -663,6 +673,17 @@ class EnhancedLienProcessingService:
                             if self._is_valid_lien_type(lien_type):
                                 all_lien_types.add(lien_type.upper())
                         
+                        # Collect all patient IDs from this page
+                        patient_ids = combined_data.get("PatientIDs", [])
+                        for patient_id in patient_ids:
+                            if patient_id and patient_id.startswith("PRE"):
+                                all_patient_ids.add(patient_id)
+                        
+                        # Also check legacy single PatientID field
+                        single_patient_id = combined_data.get("PatientID", "")
+                        if single_patient_id and single_patient_id.startswith("PRE"):
+                            all_patient_ids.add(single_patient_id)
+                        
                         # Use first page's patient and referrer ID as primary
                         if combined_barcode_data is None:
                             combined_barcode_data = {
@@ -677,13 +698,20 @@ class EnhancedLienProcessingService:
                         if lien_type and self._is_valid_lien_type(lien_type):
                             all_lien_types.add(lien_type.upper())
                         
+                        # Collect patient ID from legacy format
+                        patient_id = legacy_data.get("PatientID", "")
+                        if patient_id and patient_id.startswith("PRE"):
+                            all_patient_ids.add(patient_id)
+                        
                         if combined_barcode_data is None:
                             combined_barcode_data = legacy_data
             
-            # Final combined barcode data with all lien types
+            # Final combined barcode data with all lien types and patient IDs
             if barcode_found_anywhere and combined_barcode_data:
                 combined_barcode_data["LienTypes"] = list(all_lien_types)
+                combined_barcode_data["PatientIDs"] = list(all_patient_ids)
                 logger.info(f"🔍 CONSOLIDATION: Combined lien types from all pages: {list(all_lien_types)}")
+                logger.info(f"🔍 CONSOLIDATION: Combined patient IDs from all pages: {list(all_patient_ids)}")
             
             barcode_data = combined_barcode_data
             
@@ -738,10 +766,21 @@ class EnhancedLienProcessingService:
                 elif "LienType" in barcode_data and barcode_data["LienType"]:
                     lien_types = [barcode_data["LienType"]]
             
+            # Extract patient IDs from consolidated barcode data
+            patient_ids = []
+            if barcode_data:
+                # Handle new format with multiple patient IDs
+                if "PatientIDs" in barcode_data:
+                    patient_ids = barcode_data["PatientIDs"]
+                # Handle legacy format for backward compatibility
+                elif barcode_data.get("PatientID"):
+                    patient_ids = [barcode_data["PatientID"]]
+            
             result = {
                 "filename": filename,
                 "processing_type": "enhanced_lien_processing",
                 "PatientID": barcode_data.get("PatientID", "") if barcode_data else "",
+                "PatientIDs": patient_ids,  # New field with all patient IDs
                 "LienType": lien_types[0] if lien_types else "",  # First lien type for backward compatibility
                 "LienTypes": lien_types,  # New field with all lien types
                 "ReferrerID": barcode_data.get("ReferrerID", "") if barcode_data else "",

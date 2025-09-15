@@ -143,15 +143,29 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
         updated_email = email_crud_sync.update(db, db_obj=updated_email_with_count, obj_in=EmailUpdate(**update_payload))
 
 
-        # Add comment to Front conversation if patient ID found
-        if attachment_data.get('patient_id') and updated_email.front_conversation_id:
-            patient_id = attachment_data['patient_id']
-            logger.info(f"Document processing found patient ID {patient_id} for email {email_id}, adding comment to conversation.")
+        # Add comments to Front conversation for all patient IDs found
+        patient_ids_to_add = []
+        
+        # Check for single patient ID (legacy)
+        if attachment_data.get('patient_id'):
+            patient_ids_to_add.append(attachment_data['patient_id'])
+        
+        # Check for multiple patient IDs from enhanced lien analysis
+        enhanced_lien_analysis = attachment_data.get('document_analysis', {}).get('data', {}).get('enhanced_lien_analysis', {})
+        if enhanced_lien_analysis.get('PatientIDs'):
+            # Add all patient IDs from barcode analysis, avoiding duplicates
+            for pid in enhanced_lien_analysis['PatientIDs']:
+                if pid and pid not in patient_ids_to_add:
+                    patient_ids_to_add.append(pid)
+        
+        # Add comments for all unique patient IDs found
+        if patient_ids_to_add and updated_email.front_conversation_id:
+            logger.info(f"Document processing found {len(patient_ids_to_add)} patient ID(s) for email {email_id}: {patient_ids_to_add}")
             try:
-                from app.services.frontapp_service import add_patient_id_comment_safe
-                add_patient_id_comment_safe(updated_email.front_conversation_id, patient_id, "document processing")
+                from app.services.frontapp_service import add_multiple_patient_ids_comment_safe
+                add_multiple_patient_ids_comment_safe(updated_email.front_conversation_id, patient_ids_to_add, "document processing")
             except Exception as e:
-                logger.error(f"Failed to add document processing patient ID comment to conversation {updated_email.front_conversation_id}: {e}", exc_info=True)
+                logger.error(f"Failed to add document processing patient ID comments to conversation {updated_email.front_conversation_id}: {e}", exc_info=True)
 
         # Check if all attachments are processed and trigger orchestration if complete
         _check_document_processing_completion_and_trigger_orchestration(updated_email, completed_count, email_id, str(email_uuid))
