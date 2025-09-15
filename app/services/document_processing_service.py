@@ -168,7 +168,7 @@ class DocumentProcessingService:
                 "properties": {
                     "document_type": {
                         "type": "string",
-                        "enum": ["lien", "lien_reduction", "rx", "medical_record", "hipaa", "other"],
+                        "enum": ["lien", "lien_reduction", "rx", "medical_record", "hipaa", "case_update", "other"],
                         "description": "Type of medical document"
                     },
                     "description": {
@@ -203,6 +203,7 @@ DOCUMENT TYPE CLASSIFICATION:
 - lien_reduction: Lien reduction requests, settlement agreements, lien reduction offers, documents requesting reduction of existing lien amounts. These contain negotiations about reducing the amount owed under an existing lien. Look for terms like "lien reduction", "settlement", "reduce lien amount", "lien settlement", "payment reduction".
 - medical_record: Medical charts, test results, lab reports, radiology reports, patient history, discharge summaries
 - hipaa: HIPAA authorization forms, HIPAA releases, privacy notices, medical records release authorizations. These are forms that authorize the release or use of protected health information (PHI) under HIPAA regulations. Look for terms like "HIPAA", "Health Insurance Portability", "Protected Health Information", "PHI", "Authorization for Release", "Medical Records Release".
+- case_update: Legal case status updates, attorney communications, and case progression documents. These include: new attorney notifications, drop letters, case drop pending notices, payment promises, liability clearance updates, settlement check status, payment received confirmations, refund requests, and payment dispatch notifications. Look for terms like "New Attorney", "Drop Letter", "Drop Pending", "Promise to send payment", "Waiting to clear liability", "Waiting on settlement check", "Sent payment but not received", "Refund Request", "Payment on way", "case status", "attorney change", "settlement update", "payment status".
 - other: Any document that doesn't fit the above categories, including insurance cards, authorization forms, insurance verification documents, coverage letters, intake forms, patient information forms
 
 CRITICAL DISTINCTIONS:
@@ -218,6 +219,12 @@ LIEN vs LIEN_REDUCTION:
 - LIEN_REDUCTION documents are requests/offers to reduce existing lien amounts
 - If document establishes a new lien → classify as LIEN
 - If document requests/offers to reduce an existing lien amount → classify as LIEN_REDUCTION
+
+CASE_UPDATE vs OTHER:
+- CASE_UPDATE documents are specific legal case status communications and attorney correspondence
+- These contain specific case progression updates, attorney changes, settlement statuses, or payment confirmations
+- If document discusses case status, attorney changes, settlement progress, or payment updates → classify as CASE_UPDATE
+- If document is general correspondence or doesn't relate to case progression → classify as OTHER
 
 PATIENT ID EXTRACTION:
 Precise Imaging patient IDs follow this format: PRE followed by 6-8 digits (e.g., PRE123456, PRE1234567, PRE12345678)

@@ -70,7 +70,7 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
                             debug_logger.debug(f"🔍 ARCHIVAL: Document analysis - type: {doc_type}, confidence: {confidence:.2f}")
                         
                         # Prevent archiving for actionable document types
-                        actionable_doc_types = ['rx', 'lien', 'medical_record']
+                        actionable_doc_types = ['rx', 'lien', 'medical_record', 'case_update']
                         if doc_type in actionable_doc_types and confidence > 0.7:
                             logger.info(f"📁 ARCHIVE PREVENTED: {front_conversation_id} - Found {doc_type} document (confidence: {confidence:.2f})")
                             if CLASSIFICATION_DEBUG:
