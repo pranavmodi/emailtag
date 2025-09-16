@@ -79,7 +79,7 @@ CASE_UPDATE_TAG_EVENT_IDS: Dict[str, int] = {
 SUPPORTED_CASE_UPDATE_TAGS = set(CASE_UPDATE_TAG_TEMPLATES.keys())
 
 # Feature flag to disable autorespond functionality while keeping code intact
-CASE_UPDATE_AUTORESPOND_ENABLED = False
+CASE_UPDATE_AUTORESPOND_ENABLED = True
 
 # ---------------------------------------------------------------------------
 # Public orchestrator

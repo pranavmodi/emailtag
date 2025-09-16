@@ -10,7 +10,7 @@ Please use the following rules to sub-classify the provided email content, alrea
    - If the email primarily concerns **invoices, payments due, account balances, W-9 requests, or general billing inquiries**, classify as 'Billing'.
    - If the email primarily discusses **legal claims on property to secure debt payment (e.g., medical liens, attorney liens)**, including requests, submissions, or modifications of liens, classify as 'Liens'.
    - If the email is primarily about **discussing, proposing, or agreeing to changes in payment terms, settlement amounts, or bill reductions**, classify as 'Negotiations'.
-   - If the email primarily provides **updates on the status of a financial case, account history, or payment tracking**, classify as 'Case Updates'.
+   - If the email primarily provides **updates on the status of a financial case, account history, or payment tracking**, including **check status inquiries, payment confirmations, attorney changes, drop letters, settlement updates, liability clearance updates, payment promises, refund requests, or payment dispatch notifications**, classify as 'Case Updates'.
    - If the email primarily relates to **overdue accounts, warnings about collections, or communication regarding accounts sent to or being considered for third-party collection agencies**, classify as 'Collections'.
 
 2. **Document Type Priority Rule**: If the email contains attachments processed by the document analysis system, prioritize classification based on document type:
@@ -20,5 +20,12 @@ Please use the following rules to sub-classify the provided email content, alrea
 3. **Lien vs Negotiations Distinction**: 
    - **Lien reduction, settlement, or bill reduction requests** = 'Negotiations' (even if they mention liens)
    - **Lien submissions, missing lien requests, or lien modifications** = 'Liens'
+
+4. **Case Updates vs Billing Distinction**:
+   - **Check status inquiries** (e.g., "will you cash the check", "check confirmation", "voiding/reissuing checks") = 'Case Updates'
+   - **Payment status updates** (e.g., "payment sent but not received", "payment on the way") = 'Case Updates' 
+   - **Attorney/legal case communications** (e.g., "new attorney", "drop letter", "case pending") = 'Case Updates'
+   - **Settlement status updates** (e.g., "waiting on settlement check", "liability clearance") = 'Case Updates'
+   - **General billing inquiries** (e.g., "what do I owe", "invoice request", "account balance") = 'Billing'
 
 --- END Accounts Receivable Sub-Classification RULES --- 
