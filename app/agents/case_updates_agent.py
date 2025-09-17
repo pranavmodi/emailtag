@@ -184,17 +184,20 @@ async def handle_case_update_request(
         }
 
     # --- Begin MCP Logging ---
-    if patient_id:
+    # Always use dummy patient ID for case update logging (temporary measure)
+    logging_patient_id = "PRE5000"
+    
+    if logging_patient_id:
         event_id = CASE_UPDATE_TAG_EVENT_IDS.get(chosen_tag)
         if event_id:
             if not mcp_client.is_connected:
                 await mcp_client.connect()
 
             tool_args = {
-                "patient_id": patient_id,
+                "patient_id": logging_patient_id,
                 "user_name": "CaseUpdatesAgent",
                 "event_id": event_id,
-                "notes": f"Auto-logged from email with tag: {chosen_tag}",
+                "notes": f"Auto-logged from email with tag: {chosen_tag} (using dummy ID PRE5000 - actual patient: {patient_id or 'unknown'})",
             }
             
             # Add required parameters based on event_id validation
@@ -233,8 +236,9 @@ async def handle_case_update_request(
             if not mcp_result.get("success"):
                 logger.error(
                     "[CaseUpdatesAgent] MCP tool 'insert_case_update_log' failed for "
-                    "patient %s in conv %s. Error: %s",
-                    patient_id,
+                    "patient %s (logging_id: %s) in conv %s. Error: %s",
+                    patient_id or "unknown",
+                    logging_patient_id,
                     front_conversation_id,
                     mcp_result.get("error"),
                 )
@@ -245,8 +249,8 @@ async def handle_case_update_request(
                 front_conversation_id,
             )
     else:
-        logger.info(
-            "[CaseUpdatesAgent] Skipping MCP log for conv %s (no patient ID found earlier).",
+        logger.warning(
+            "[CaseUpdatesAgent] Unexpected: logging_patient_id is None for conv %s. This should not happen with fallback logic.",
             front_conversation_id,
         )
     # --- End MCP Logging ---
