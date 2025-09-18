@@ -11,9 +11,11 @@ Please use the following rules to sub-classify the provided email content, alrea
 
 1. **Primary Scheduling Intent**: Based on the email content, determine the primary intent related to scheduling and classify as follows:
    - If the email primarily concerns **checking status of patient's appointment, prescriptions (RX), medication, referrals related to prescriptions, or pharmacy communications**, classify as 'RX'.
+   - If the email contains **requests to schedule specific imaging studies or procedures** (e.g., "schedule an MRI", "book a CT scan", "arrange an ultrasound") with specific study types mentioned, classify as 'RX'.
+   - If the email contains **scheduling assistance requests from medical offices** asking to schedule specific procedures for their patients, classify as 'RX'.
    - If the email clearly indicates that an **appointment is no longer happening or has been voided**, classify as 'Cancelled'.
    - If the email expresses a **request to change the date or time of an existing appointment**, classify as 'Reschedule Request'.
-   - If the email is a **request to make a new appointment or book a new scan/procedure**, classify as 'Schedule Request'.
+   - If the email is a **general request to make a new appointment** without specific study details, classify as 'Schedule Request'.
    - If the email states an **intention from the sender (or their office) to reach out to the patient directly** regarding scheduling, classify as 'Will contact patient'.
 
 --- END Scheduling Sub-Classification RULES ---

@@ -156,15 +156,51 @@ async def fetch_patient_and_study_info_tool(patient_id: str) -> Dict[str, Any]:
         if not study_result.get("success"):
             return {"success": False, "error": f"Study fetch failed: {study_result.get('error', 'Unknown MCP error')}"}
 
-        # NOTE: The structure of players is assumed here from the study_result.
-        # This should be adjusted to match the actual output of the MCP tool.
-        players = study_result.get("studies", [{}])[0].get("players", [])
+        # Get studies data
+        studies = study_result.get("studies", [])
+        
+        # Collect all players from all studies for this patient
+        all_players = []
+        
+        # Ensure MCP client is connected
+        if not mcp_client.is_connected:
+            await mcp_client.connect()
+        
+        for study in studies:
+            study_id = study.get("study_id") or study.get("id")
+            if study_id:
+                try:
+                    # Use the correct MCP tool to get study participants
+                    participants_result = await mcp_client.call_tool("get_study_participants", {"study_id": str(study_id)})
+                    
+                    if participants_result.get("success") and participants_result.get("data", {}).get("result"):
+                        participants = participants_result["data"]["result"]
+                        
+                        # Transform the participant data to match expected format
+                        for participant in participants:
+                            player_data = {
+                                "email": participant.get("email", "").strip(),
+                                "role": participant.get("playerTypeName", "").lower(),
+                                "type": participant.get("type", ""),
+                                "referrer_id": participant.get("referrerID", ""),
+                                "phone": participant.get("businessPhoneNumber", ""),
+                                "accession_number": participant.get("accessionNumber", ""),
+                                "domain": participant.get("email", "").split("@")[1] if "@" in participant.get("email", "") else ""
+                            }
+                            
+                            # Only add if has email or is a significant role
+                            if player_data["email"] or player_data["role"] in ["radiologist", "doctor/ref physician", "broker"]:
+                                all_players.append(player_data)
+                                
+                except Exception as e:
+                    logger.warning(f"Failed to get participants for study {study_id}: {e}")
+                    continue
 
         return {
             "success": True,
             "patient": patient_result.get("patients", [{}])[0],
-            "studies": study_result.get("studies", []),
-            "players": players
+            "studies": studies,
+            "players": all_players
         }
     except Exception as e:
         logger.error(f"Exception in fetch_patient_and_study_info_tool: {e}", exc_info=True)
@@ -183,11 +219,16 @@ async def verify_sender_identity(sender_email: str, players: List[Dict[str, Any]
     for player in players:
         player_email = player.get("email", "").lower()
         player_role = player.get("role", "unknown").lower()
+        player_type = player.get("type", "").lower()
 
         if sender_email.lower() == player_email:
-            if "attorney" in player_role:
+            # Check for attorney roles
+            if "attorney" in player_role or "law" in player_role:
                 return {"status": "verified", "role": "attorney_on_file", "player_info": player}
-            if "doctor" in player_role or "physician" in player_role:
+            
+            # Check for doctor/physician roles using both role and type
+            if any(keyword in player_role for keyword in ["doctor", "physician", "radiologist"]) or \
+               any(keyword in player_type for keyword in ["doctor", "physician"]):
                 return {"status": "verified", "role": "doctor_on_file", "player_info": player}
 
     # Fallback for domain check if direct email match fails
@@ -195,12 +236,21 @@ async def verify_sender_identity(sender_email: str, players: List[Dict[str, Any]
         for player in players:
             player_domain = player.get("domain", "").lower()
             if sender_domain == player_domain:
-                # Less certain, might need human review, but can be a good hint
-                 pass
+                player_role = player.get("role", "unknown").lower()
+                player_type = player.get("type", "").lower()
+                
+                # Domain match with doctor/physician type
+                if any(keyword in player_role for keyword in ["doctor", "physician", "radiologist"]) or \
+                   any(keyword in player_type for keyword in ["doctor", "physician"]):
+                    return {"status": "domain_verified", "role": "doctor_domain_match", "player_info": player}
 
-    # Simple logic for now, can be expanded (e.g. check signature text)
-    if "law" in sender_domain or "legal" in sender_domain:
+    # Check sender domain for attorney patterns
+    if sender_domain and any(keyword in sender_domain for keyword in ["law", "legal", "attorney", "lawfirm"]):
          return {"status": "unverified", "role": "attorney_not_on_file"}
+
+    # Check sender domain for medical patterns  
+    if sender_domain and any(keyword in sender_domain for keyword in ["med", "clinic", "hospital", "health", "medical"]):
+         return {"status": "unverified", "role": "doctor_not_on_file"}
 
     return {"status": "unverified", "role": "unknown"}
 
