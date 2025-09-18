@@ -1,6 +1,6 @@
 Sub-Classification Rules for Scheduling Category
 ================================================
-**Sub-Categories:** RX, Cancelled, Reschedule Request, Schedule Request, Will contact patient.
+**Sub-Categories:** RX, Cancelled, Reschedule Request, Schedule Request.
 
 Please use the following rules to sub-classify the provided email content, already identified as 'Scheduling', into one of the above sub-categories.
 
@@ -13,9 +13,12 @@ Please use the following rules to sub-classify the provided email content, alrea
    - If the email primarily concerns **checking status of patient's appointment, prescriptions (RX), medication, referrals related to prescriptions, or pharmacy communications**, classify as 'RX'.
    - If the email contains **requests to schedule specific imaging studies or procedures** (e.g., "schedule an MRI", "book a CT scan", "arrange an ultrasound") with specific study types mentioned, classify as 'RX'.
    - If the email contains **scheduling assistance requests from medical offices** asking to schedule specific procedures for their patients, classify as 'RX'.
+   - If the email contains **scheduling status inquiries** (e.g., "has the client been scheduled", "appointment confirmation", "scheduling updates"), classify as 'RX'.
+   - If the email contains **general scheduling communications, follow-ups, or coordination** between medical offices, classify as 'RX'.
    - If the email clearly indicates that an **appointment is no longer happening or has been voided**, classify as 'Cancelled'.
    - If the email expresses a **request to change the date or time of an existing appointment**, classify as 'Reschedule Request'.
    - If the email is a **general request to make a new appointment** without specific study details, classify as 'Schedule Request'.
-   - If the email states an **intention from the sender (or their office) to reach out to the patient directly** regarding scheduling, classify as 'Will contact patient'.
+
+2. **Default Classification**: If the email content does not clearly fit into Cancelled, Reschedule Request, or Schedule Request categories, classify as 'RX'.
 
 --- END Scheduling Sub-Classification RULES ---
