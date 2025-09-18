@@ -264,8 +264,14 @@ class MCPClient:
             return {"success": False, "error": f"MCP tool call failed: {response.status_code}"}
             
         except Exception as e:
-            logger.error(f"Error calling MCP tool {tool_name}: {e}", exc_info=True)
-            return {"success": False, "error": f"Error calling MCP tool: {str(e)}"}
+            # Handle different types of errors with appropriate log levels
+            error_str = str(e)
+            if "timeout" in error_str.lower() or "ReadTimeout" in str(type(e)):
+                logger.warning(f"MCP tool {tool_name} timed out: {error_str}")
+                return {"success": False, "error": f"Tool call timed out: {error_str}"}
+            else:
+                logger.error(f"Error calling MCP tool {tool_name}: {e}", exc_info=True)
+                return {"success": False, "error": f"Error calling MCP tool: {str(e)}"}
     
     async def close(self):
         """Close the MCP client connection."""

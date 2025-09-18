@@ -641,6 +641,11 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
                         # If this lookup failed, continue to try next method
                     
                     except Exception as e:
+                        error_str = str(e)
+                        if "timeout" in error_str.lower():
+                            logger.warning(f"Patient lookup via {lookup_type} timed out for {first_name} {last_name} (will try other methods)")
+                        else:
+                            logger.warning(f"Patient lookup via {lookup_type} failed for {first_name} {last_name}: {error_str}")
                         continue  # Try the next lookup method
                 
                 

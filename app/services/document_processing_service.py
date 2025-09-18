@@ -135,13 +135,20 @@ class DocumentProcessingService:
                         if not combined_images:
                             return {"success": False, "error": "No pages could be processed within size limits"}
                         
-                        # For now, use the page with most content (largest file size) for classification
-                        # This typically contains the main document content rather than cover pages
-                        best_page = max(combined_images, key=lambda x: len(x['data']))
-                        base64_content = base64.b64encode(best_page['data']).decode('utf-8')
+                        # Use ALL pages for classification to capture complete document context
+                        all_pages_content = []
+                        for img_info in combined_images:
+                            page_base64 = base64.b64encode(img_info['data']).decode('utf-8')
+                            all_pages_content.append({
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{page_base64}"
+                                }
+                            })
+                        
                         mime_type = "image/jpeg"
                         
-                        logger.info(f"PDF classification: Processed {len(combined_images)} pages, using page {best_page['page_num']} (largest content) out of {len(pages)} total pages ({len(best_page['data']):,} bytes)")
+                        logger.info(f"PDF classification: Using ALL {len(combined_images)} pages for classification out of {len(pages)} total pages (total size: {total_size:,} bytes)")
                     else:
                         return {"success": False, "error": "Could not convert PDF to image"}
                 except ImportError:
@@ -153,6 +160,15 @@ class DocumentProcessingService:
                 if len(file_content) > 20 * 1024 * 1024:  # 20MB limit
                     return {"success": False, "error": "Image too large for OpenAI API"}
                 mime_type = "image/jpeg" if file_ext in ['.jpg', '.jpeg'] else f"image/{file_ext[1:]}"
+                
+                # For single images, create the single image content format
+                base64_content = base64.b64encode(file_content).decode('utf-8')
+                all_pages_content = [{
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{mime_type};base64,{base64_content}"
+                    }
+                }]
             else:
                 return {"success": False, "error": "Unsupported file type for text extraction"}
             
@@ -234,26 +250,21 @@ Precise Imaging patient IDs follow this format: PRE followed by 6-8 digits (e.g.
 - Only return patient IDs that clearly match the PRE + 6-8 digits format
 
 ANALYSIS REQUIREMENTS:
-1. Carefully examine all text in the document
-2. Identify the primary purpose of the document
-3. Look for any patient identifiers matching the PRE format
-4. Provide a one-line description of what the document contains
-5. Give a confidence score based on how clearly you can read and classify the document"""
+1. Carefully examine all text across ALL pages of the document
+2. Identify the primary purpose of the document by considering content from all pages
+3. Look for any patient identifiers matching the PRE format on any page
+4. Provide a one-line description of what the document contains based on all pages
+5. Give a confidence score based on how clearly you can read and classify the document across all pages
+6. If multiple pages contain different document types, classify based on the primary/most important content"""
                     },
                     {
                         "role": "user",
                         "content": [
                             {
                                 "type": "text",
-                                "text": f"Analyze this document (filename: {filename}) and classify it according to the schema."
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{mime_type};base64,{base64_content}"
-                                }
+                                "text": f"Analyze this document (filename: {filename}) and classify it according to the schema. This document contains {len(all_pages_content)} page(s)."
                             }
-                        ]
+                        ] + all_pages_content
                     }
                 ],
                 "response_format": {
