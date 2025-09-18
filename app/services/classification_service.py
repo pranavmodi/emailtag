@@ -562,24 +562,24 @@ def _check_for_conflicting_top_level_topics(
     categories_list_str = "\n- ".join(_TOP_LEVEL_CATEGORIES)
     prompt = (
         f"Analyze ONLY the last {len(last_three_messages)} message(s) of the email conversation provided below. "
-        f"Determine if this recent part of the conversation discusses topics related to MORE THAN ONE of the following main categories:\n"
-        f"- {categories_list_str}\n\n"
-        f"IMPORTANT CONTEXT GUIDELINES:\n"
-        f"- Routine requests to 'update records', 'update files', or 'update billing records' in payment/settlement contexts should be considered part of Accounts Receivable, NOT Medical Records & Images\n"
-        f"- Only flag Medical Records & Images if there are explicit requests for medical records, imaging files, reports, or clinical documentation\n"
-        f"- Questions about appointment scheduling, MRI scheduling, imaging appointments, or appointment status should be considered Scheduling, NOT Medical Records & Images\n"
-        f"- Only flag Scheduling if there are explicit requests to schedule, reschedule, or change appointments, OR inquiries about appointment/scheduling status\n"
-        f"- Focus on the PRIMARY business purpose of the communication\n\n"
-        f"Analyze the conversation and identify:\n"
-        f"1. Which categories are clearly discussed in the recent messages\n"
-        f"2. Whether multiple categories are present (conflicts)\n"
-        f"3. Specific reasons why you detected conflicts (if any)\n\n"
-        # Note: Sender/Time info is for the whole conversation, which might be slightly misleading here, but still useful context.
-        f"Sender Information (Full Conversation): {sender_info}\n"
-        f"Message Timestamps (Full Conversation): {message_times}\n"
-        f"Last {len(last_three_messages)} Message(s) Text:\n"
+        f"Identify the PRIMARY business purpose and determine if multiple distinct business purposes exist that would require different departmental handling.\n\n"
+        f"Categories:\n- {categories_list_str}\n\n"
+        f"CONFLICT DETECTION RULES:\n"
+        f"- Focus on ACTIONABLE REQUESTS that require different departments to handle\n"
+        f"- Incidental mentions, context, or background information do NOT constitute conflicts\n"
+        f"- Only flag conflicts when there are MULTIPLE DISTINCT business requests requiring different expertise\n"
+        f"- A single primary question with contextual information = NO CONFLICT\n\n"
+        f"EXAMPLES:\n"
+        f"✅ NO CONFLICT: 'Has the patient been scheduled?' (scheduling status inquiry with billing context)\n"
+        f"✅ NO CONFLICT: 'Please send the bill' (billing request with appointment context)\n"
+        f"❌ CONFLICT: 'Please schedule the MRI AND send me the current bill balance' (two distinct actionable requests)\n\n"
+        f"ANALYSIS FOCUS:\n"
+        f"1. What is the PRIMARY actionable request or question?\n"
+        f"2. Are there ADDITIONAL actionable requests that would require different departments?\n"
+        f"3. Is background/contextual information being confused with actionable requests?\n\n"
+        f"Recent Message(s) for Analysis:\n"
         f'"""\n'
-        f"{recent_text[:4000]}...\n"  # Use the extracted recent text, still truncated just in case
+        f"{recent_text[:4000]}...\n"
         f'"""\n'
     )
 
