@@ -653,5 +653,61 @@ Test ID: {UNIQUE_TEST_ID}"""
                 "content_type": "application/pdf"
             }
         ]
+    },
+    "25": {
+        "description": "Dillon Sedaghat - Bill or balance Request - Simple bill request for client with DOL 07/04/2025 and DOS 09/19/2025",
+        "subject": "Bill Request - Dillon Sedaghat DOL 07/04/2025",
+        "body_html": (
+            "<p>Hello,</p>"
+            "<p>I am requesting bills for my client Dillon Sedaghat DOL 07/04/2025.</p>"
+            "<p>DOS 09/19/2025</p>"
+            "<p>Thank you,</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Bill or balance Request"]
+    },
+    "26": {
+        "description": "Williams, Sharon - Bill or balance Request - Legal firm requesting bills for settlement with detailed client info and contact details",
+        "subject": "Bill Request - Williams, Sharon DOB 10/08/1951 DOL 04/08/2020",
+        "body_html": (
+            "<p>Hi Precise Imaging- Oakland,</p>"
+            "<p>Our client has received treatment from your facility for injuries caused by the above-referenced accident.</p>"
+            "<p>In order to affect a settlement of claims, please forward any bills pertaining to the below.</p>"
+            "<p>Our Client/Your Patient: Williams, Sharon<br>"
+            "Date of Birth: 10/08/1951<br>"
+            "Date of Loss: 04/08/2020</p>"
+            "<p>Beejay Woo<br>"
+            "Medical Records Clerk</p>"
+            "<p>612 S Broadway,<br>"
+            "Los Angeles, CA 90014<br>"
+            "Tel.: (213) 291-7905 Extension 1496<br>"
+            "Fax: (877)389-2775<br>"
+            "Email: Beejay.Woo@Downtownlalaw.com<br>"
+            "Website: www.DowntownLALaw.com</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Bill or balance Request"]
+    },
+    "27": {
+        "description": "Williams, Sharon - Release of Records - Legal firm requesting medical records for settlement with detailed client info and contact details",
+        "subject": "Medical Records Request - Williams, Sharon DOB 10/08/1951 DOL 04/08/2020",
+        "body_html": (
+            "<p>Hi Precise Imaging- Oakland,</p>"
+            "<p>Our client has received treatment from your facility for injuries caused by the above-referenced accident.</p>"
+            "<p>In order to affect a settlement of claims, please forward any Medical Records report pertaining to the below.</p>"
+            "<p>Our Client/Your Patient: Williams, Sharon<br>"
+            "Date of Birth: 10/08/1951<br>"
+            "Date of Loss: 04/08/2020</p>"
+            "<p>Beejay Woo<br>"
+            "Medical Records Clerk</p>"
+            "<p>612 S Broadway,<br>"
+            "Los Angeles, CA 90014<br>"
+            "Tel.: (213) 291-7905 Extension 1496<br>"
+            "Fax: (877)389-2775<br>"
+            "Email: Beejay.Woo@Downtownlalaw.com<br>"
+            "Website: www.DowntownLALaw.com</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Release of Records"]
     }
 }
