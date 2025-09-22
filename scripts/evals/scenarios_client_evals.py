@@ -721,5 +721,23 @@ Test ID: {UNIQUE_TEST_ID}"""
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": ["Release of Records"]
+    },
+    "29": {
+        "description": "Reports Request - Simple MRI report request with patient ID attachment for medical records retrieval",
+        "subject": "MRI Report Request",
+        "body_html": (
+            "<p>Hi team</p>"
+            "<p>Can we please have the MRI report for this client?</p>"
+            "<p>Thanks</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "Precise Imaging_patientid.pdf",
+                "filepath": "data/documents/Precise Imaging_patientid.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Reports Request"]
     }
 }

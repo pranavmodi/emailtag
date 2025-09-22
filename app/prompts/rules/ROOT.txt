@@ -13,12 +13,16 @@ If there is ANY attachment with document type "rx" (prescription/referral), ALWA
 2. **MEDICAL RECORDS PRIORITY:**
 If the email requests BOTH medical records/reports AND billing information, ALWAYS classify as 'Medical Records & Images'. Medical records requests take priority over billing/financial requests when both are present in the same email.
 
+3. **MEDICAL RECORDS REQUEST PRIORITY:**
+If the email explicitly requests medical records, reports, images, or imaging data (e.g., "MRI report", "medical records", "imaging results", "radiology reports", "X-ray images"), ALWAYS classify as 'Medical Records & Images' regardless of the presence of imaging modality keywords like "MRI", "CT", "X-ray" in the subject line. This takes priority over Scheduling classification.
+
 --- START SCHEDULING RULES ---
 
 Classification Rules for Scheduling:
 
 1. **Subject Line Keywords**: 
-   - If the subject line contains keywords such as "Referral", "Scheduled", "Reschedule", "Appointment", "MRI", "Scan", or "DOL" (Date of Loss), it is likely a Scheduling email.
+   - If the subject line contains keywords such as "Referral", "Scheduled", "Reschedule", "Appointment", "Scan", or "DOL" (Date of Loss), it is likely a Scheduling email.
+   - **IMPORTANT**: "MRI", "CT", "X-ray" alone are NOT sufficient for Scheduling classification unless combined with scheduling-specific context (e.g., "Schedule MRI", "MRI Appointment", "Reschedule MRI").
 
 2. **Content Patterns and Phrases**:
    - If the content includes phrases like "patient has been scheduled", "reschedule an MRI", "appointment times", "scheduling department", "call our scheduling dept.", or "referral has been entered into our scheduling system", classify it as Scheduling.
