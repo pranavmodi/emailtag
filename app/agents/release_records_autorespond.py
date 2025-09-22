@@ -143,7 +143,7 @@ async def fetch_patient_and_study_info_tool(patient_id: str) -> Dict[str, Any]:
     Fetches patient and study details from the MCP server using the shared helper.
     This includes "players" associated with the case, like attorneys and doctors.
     """
-    logger.info(f"Tool 'fetch_patient_and_study_info_tool' called for Patient ID: {patient_id}")
+    logger.info(f"🔧 TOOL 'fetch_patient_and_study_info_tool' called for Patient ID: {patient_id}")
     try:
         # Use the shared helper to get raw data
         mcp_results = await get_patient_and_study_info(patient_id)
@@ -158,6 +158,7 @@ async def fetch_patient_and_study_info_tool(patient_id: str) -> Dict[str, Any]:
 
         # Get studies data
         studies = study_result.get("studies", [])
+        logger.info(f"🔧 TOOL: Found {len(studies)} studies for patient {patient_id}")
         
         # Collect all players from all studies for this patient
         all_players = []
@@ -167,14 +168,18 @@ async def fetch_patient_and_study_info_tool(patient_id: str) -> Dict[str, Any]:
             await mcp_client.connect()
         
         for study in studies:
-            study_id = study.get("study_id") or study.get("id")
-            if study_id:
+            accession_number = study.get("accessionNumber", "") or study.get("authorization_number", "")
+            logger.info(f"🔧 TOOL: Processing study with accession: {accession_number} (from {['accessionNumber' if study.get('accessionNumber') else 'authorization_number'][0]})")
+            if accession_number:
                 try:
-                    # Use the correct MCP tool to get study participants
-                    participants_result = await mcp_client.call_tool("get_study_participants", {"study_id": str(study_id)})
+                    # Use accession number to get study participants
+                    logger.info(f"🔧 TOOL: Calling get_study_participants for accession {accession_number}")
+                    participants_result = await mcp_client.call_tool("get_study_participants", {"accession_number": str(accession_number)})
+                    logger.info(f"🔧 TOOL: Participants result: {participants_result}")
                     
                     if participants_result.get("success") and participants_result.get("data", {}).get("result"):
                         participants = participants_result["data"]["result"]
+                        logger.info(f"🔧 TOOL: Found {len(participants)} participants for accession {accession_number}")
                         
                         # Transform the participant data to match expected format
                         for participant in participants:
@@ -184,24 +189,33 @@ async def fetch_patient_and_study_info_tool(patient_id: str) -> Dict[str, Any]:
                                 "type": participant.get("type", ""),
                                 "referrer_id": participant.get("referrerID", ""),
                                 "phone": participant.get("businessPhoneNumber", ""),
-                                "accession_number": participant.get("accessionNumber", ""),
+                                "accession_number": accession_number,
+                                "study_id": study.get("study_id") or study.get("id"),
                                 "domain": participant.get("email", "").split("@")[1] if "@" in participant.get("email", "") else ""
                             }
+                            
+                            logger.info(f"🔧 TOOL: Participant data: {player_data}")
                             
                             # Only add if has email or is a significant role
                             if player_data["email"] or player_data["role"] in ["radiologist", "doctor/ref physician", "broker"]:
                                 all_players.append(player_data)
+                                logger.info(f"🔧 TOOL: Added participant to players list")
+                            else:
+                                logger.info(f"🔧 TOOL: Skipped participant (no email or non-significant role)")
                                 
                 except Exception as e:
-                    logger.warning(f"Failed to get participants for study {study_id}: {e}")
+                    logger.warning(f"🔧 TOOL: Failed to get participants for accession {accession_number}: {e}")
                     continue
 
-        return {
+        logger.info(f"🔧 TOOL: Final result - Total players found: {len(all_players)}")
+        result = {
             "success": True,
             "patient": patient_result.get("patients", [{}])[0],
             "studies": studies,
             "players": all_players
         }
+        logger.info(f"🔧 TOOL: Returning result: {result}")
+        return result
     except Exception as e:
         logger.error(f"Exception in fetch_patient_and_study_info_tool: {e}", exc_info=True)
         return {"success": False, "error": f"Exception: {e}"}
@@ -256,6 +270,103 @@ async def verify_sender_identity(sender_email: str, players: List[Dict[str, Any]
 
 
 @function_tool
+async def verify_sender_identity_by_accession(sender_email: str, studies: List[Dict[str, Any]]) -> Dict[str, str]:
+    """
+    Verifies the sender's email by checking participants for each study using accession numbers.
+    This provides more accurate verification by checking actual study participants.
+    """
+    logger.info(f"🔧 TOOL 'verify_sender_identity_by_accession' called for sender: {sender_email}")
+    logger.info(f"🔧 TOOL: Checking against {len(studies)} studies")
+    sender_domain = sender_email.split('@')[1] if '@' in sender_email else None
+
+    # Ensure MCP client is connected
+    if not mcp_client.is_connected:
+        await mcp_client.connect()
+
+    for study in studies:
+        accession_number = study.get("accessionNumber", "") or study.get("authorization_number", "")
+        logger.info(f"🔧 TOOL: Checking study with accession: {accession_number} (from {['accessionNumber' if study.get('accessionNumber') else 'authorization_number'][0]})")
+        if not accession_number:
+            logger.info(f"🔧 TOOL: Skipping study without accession number or authorization number")
+            continue
+            
+        try:
+            # Get participants for this specific study using accession number
+            logger.info(f"🔧 TOOL: Getting participants for accession {accession_number}")
+            participants_result = await mcp_client.call_tool("get_study_participants", {"accession_number": str(accession_number)})
+            
+            if participants_result.get("success") and participants_result.get("data", {}).get("result"):
+                participants = participants_result["data"]["result"]
+                logger.info(f"🔧 TOOL: Found {len(participants)} participants for verification")
+                
+                for participant in participants:
+                    participant_email = participant.get("email", "").strip().lower()
+                    participant_role = participant.get("playerTypeName", "").lower()
+                    participant_type = participant.get("type", "").lower()
+                    
+                    logger.info(f"🔧 TOOL: Checking participant - email: {participant_email}, role: {participant_role}, type: {participant_type}")
+                    
+                    # Direct email match
+                    if sender_email.lower() == participant_email:
+                        logger.info(f"🔧 TOOL: DIRECT EMAIL MATCH found for {sender_email}")
+                        player_info = {
+                            "email": participant_email,
+                            "role": participant_role,
+                            "type": participant_type,
+                            "accession_number": accession_number,
+                            "study_id": study.get("study_id") or study.get("id"),
+                            "referrer_id": participant.get("referrerID", ""),
+                            "phone": participant.get("businessPhoneNumber", "")
+                        }
+                        
+                        # Check for attorney roles
+                        if "attorney" in participant_role or "law" in participant_role:
+                            logger.info(f"🔧 TOOL: Verified as ATTORNEY_ON_FILE")
+                            return {"status": "verified", "role": "attorney_on_file", "player_info": player_info}
+                        
+                        # Check for doctor/physician roles
+                        if any(keyword in participant_role for keyword in ["doctor", "physician", "radiologist"]) or \
+                           any(keyword in participant_type for keyword in ["doctor", "physician"]):
+                            logger.info(f"🔧 TOOL: Verified as DOCTOR_ON_FILE")
+                            return {"status": "verified", "role": "doctor_on_file", "player_info": player_info}
+                    
+                    # Domain match check
+                    if sender_domain and participant_email:
+                        participant_domain = participant_email.split('@')[1] if '@' in participant_email else None
+                        if sender_domain == participant_domain:
+                            # Domain match with doctor/physician type
+                            if any(keyword in participant_role for keyword in ["doctor", "physician", "radiologist"]) or \
+                               any(keyword in participant_type for keyword in ["doctor", "physician"]):
+                                player_info = {
+                                    "email": participant_email,
+                                    "role": participant_role,
+                                    "type": participant_type,
+                                    "accession_number": accession_number,
+                                    "study_id": study.get("study_id") or study.get("id"),
+                                    "domain": participant_domain
+                                }
+                                return {"status": "domain_verified", "role": "doctor_domain_match", "player_info": player_info}
+                                
+        except Exception as e:
+            logger.warning(f"Failed to verify sender for accession {accession_number}: {e}")
+            continue
+
+    # Fallback to domain pattern matching
+    logger.info(f"🔧 TOOL: No direct matches found, checking domain patterns for {sender_domain}")
+    if sender_domain:
+        if any(keyword in sender_domain for keyword in ["law", "legal", "attorney", "lawfirm"]):
+            logger.info(f"🔧 TOOL: Domain indicates attorney_not_on_file")
+            return {"status": "unverified", "role": "attorney_not_on_file"}
+        
+        if any(keyword in sender_domain for keyword in ["med", "clinic", "hospital", "health", "medical"]):
+            logger.info(f"🔧 TOOL: Domain indicates doctor_not_on_file")
+            return {"status": "unverified", "role": "doctor_not_on_file"}
+
+    logger.info(f"🔧 TOOL: No verification possible - returning unknown")
+    return {"status": "unverified", "role": "unknown"}
+
+
+@function_tool
 async def generate_expiring_link(patient_id: str, study_id: str) -> Dict[str, str]:
     """
     Generates a secure, time-limited link for viewing reports and images.
@@ -285,13 +396,26 @@ async def add_consulting_physician(patient_id: str, physician_info: Dict) -> Dic
 # For now, we will rely on the agent's logic to request the form.
 
 @function_tool
+async def debug_log(message: str) -> str:
+    """
+    Simple debug logging tool for the agent.
+    """
+    logger.info(f"AGENT DEBUG: {message}")
+    return f"Logged: {message}"
+
+@function_tool
 async def generate_formatted_reply(scenario: str, data: Dict[str, Any]) -> Dict[str, str]:
     """
     Generates a formatted reply string based on the scenario and provided data.
     """
-    logger.info(f"Tool 'generate_formatted_reply' called. Scenario: {scenario}")
-    reply_text = _generate_response_from_template(scenario, data)
-    return {"reply_text": reply_text}
+    logger.info(f"Tool 'generate_formatted_reply' called. Scenario: {scenario}, Data: {data}")
+    try:
+        reply_text = _generate_response_from_template(scenario, data)
+        logger.info(f"Generated reply text: {reply_text[:100]}...")
+        return {"reply_text": reply_text}
+    except Exception as e:
+        logger.error(f"Error generating formatted reply for scenario {scenario}: {e}", exc_info=True)
+        return {"reply_text": "A team member will review your request and get back to you shortly."}
 
 # --- END: Tool Definitions ---
 
@@ -308,19 +432,29 @@ async def handle_release_of_records_request(
     Orchestrates the AI agent to handle Medical Records & Images requests.
     Handles: "Release of Records", "Image Request", "CD Requests", "Reports Request".
     """
-    logger.info(f"Initiating Medical Records & Images agent for conv ID: {front_conversation_id}")
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Initiating agent for conv ID: {front_conversation_id}")
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Email sender: {email_sender}")
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Email content length: {len(current_email_content)} chars")
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: History messages count: {len(structured_history_messages)}")
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Email content preview: {current_email_content[:200]}...")
 
     # Connect to MCP server
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Attempting MCP connection...")
     if not await mcp_client.connect():
-        logger.error("Failed to connect to MCP server for Medical Records agent.")
+        logger.error("🎯 MEDICAL_RECORDS_AGENT: Failed to connect to MCP server for Medical Records agent.")
         await send_fallback_reply_and_tag(
             front_conversation_id,
             "Internal data connection error. A team member will assist you.",
             TAG_AI_HUMAN_REVIEW_REQUIRED
         )
         return {"agent_handled": False, "processed_flag": True, "details": {"reason": "MCP connection failed"}}
+    
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: MCP connection successful")
 
     full_context = f"History:\n{format_conversation_history_for_agent(structured_history_messages)}\n\nLatest Email from <{email_sender}>:\n{current_email_content}"
+    
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Formatted context length: {len(full_context)} chars")
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Context preview: {full_context[:300]}...")
 
     instructions = f"""
 You are an AI assistant processing requests for medical records. Follow these steps precisely.
@@ -339,14 +473,14 @@ Full Context:
 2.  **Get Case Info**: If you have a patient ID, call `fetch_patient_and_study_info_tool`.
     *   If this fails, send a generic error and tag for human review.
 
-3.  **Verify Sender**: Call `verify_sender_identity` with the `sender_email` and the `players` list from the previous step.
+3.  **Verify Sender**: Call `verify_sender_identity_by_accession` with the `sender_email` and the `studies` list from the previous step. This will check the sender against actual study participants using accession numbers for more accurate verification.
 
 4.  **Act on Identity**:
-    *   If `verify_sender_identity` returns `role: "attorney_on_file"`:
+    *   If `verify_sender_identity_by_accession` returns `role: "attorney_on_file"`:
         *   Generate a reply with scenario "attorney_on_file_portal" (pass a dummy portal link for now).
         *   Send the reply.
     *   If `role: "doctor_on_file"`:
-        *   Call `generate_expiring_link`.
+        *   Call `generate_expiring_link` with the patient_id and study_id from the player_info.
         *   Call `add_consulting_physician` with the doctor's info.
         *   Generate a reply with scenario "doctor_on_file_link", including the secure link.
         *   Send the reply.
@@ -359,9 +493,13 @@ Full Context:
 6.  **HIPAA Form Submission Check**: (Future logic) If the user's email contains an attachment and the history shows we were awaiting a HIPAA form, this will trigger a document analysis flow. For now, this is not implemented.
 
 **Final Step**: After calling `send_reply_to_front`, your job is to return its direct JSON output. Do not add conversational text.
+
+**Error Handling**: If any step fails, call `send_reply_to_front` with a fallback message and return the result. Always return a valid JSON response from `send_reply_to_front`.
 """
 
     agent_outcome = {"agent_handled": False, "processed_flag": False}
+    
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Creating OpenAI client and agent...")
 
     try:
         custom_httpx_client = httpx.AsyncClient(verify=False)
@@ -369,6 +507,8 @@ Full Context:
             api_key=settings_obj.OPENAI_API_KEY,
             http_client=custom_httpx_client
         )
+        
+        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: OpenAI client created successfully")
 
         ror_agent = Agent(
             name="ReleaseOfRecordsAgent_v1",
@@ -378,9 +518,11 @@ Full Context:
                 openai_client=custom_openai_client
             ),
             tools=[
+                debug_log,
                 extract_patient_id_from_email,
                 fetch_patient_and_study_info_tool,
                 verify_sender_identity,
+                verify_sender_identity_by_accession,
                 generate_expiring_link,
                 add_consulting_physician,
                 generate_formatted_reply,
@@ -388,6 +530,9 @@ Full Context:
             ],
             model_settings=ModelSettings(temperature=0.0)
         )
+        
+        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Agent created, starting execution...")
+        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Using model: {settings_obj.AGENT_MODEL or 'gpt-4o'}")
 
         run_config = RunConfig(tracing_disabled=True)
         agent_result = await Runner.run(
@@ -395,23 +540,46 @@ Full Context:
             input="Process the release of records request based on the instructions.",
             run_config=run_config
         )
+        
+        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Agent execution completed")
 
         final_output = agent_result.final_output
+        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Raw output: {final_output}")
+        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Output type: {type(final_output)}")
+        
         if isinstance(final_output, str):
+            logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Parsing string output...")
+            # Check if it's an error message that can't be parsed
+            if "error occurred" in final_output.lower() or "review the request manually" in final_output.lower():
+                logger.error(f"🎯 MEDICAL_RECORDS_AGENT: Agent returned error message: {final_output}")
+                raise ValueError(f"Agent returned error message: {final_output}")
+            
             try:
                 final_output = json.loads(final_output)
+                logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Successfully parsed JSON output")
             except json.JSONDecodeError:
-                final_output = ast.literal_eval(final_output)
+                logger.warning(f"🎯 MEDICAL_RECORDS_AGENT: JSON parsing failed, trying literal_eval...")
+                try:
+                    final_output = ast.literal_eval(final_output)
+                    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Successfully parsed with literal_eval")
+                except (ValueError, SyntaxError):
+                    logger.error(f"🎯 MEDICAL_RECORDS_AGENT: Failed to parse agent output as JSON or literal: {final_output}")
+                    raise ValueError(f"Agent output is not valid JSON or literal: {final_output}")
 
+        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Parsed output: {final_output}")
+        
         if isinstance(final_output, dict) and final_output.get("status") == "success":
+            logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Agent execution successful!")
             agent_outcome["agent_handled"] = True
             agent_outcome["processed_flag"] = True
             agent_outcome["details"] = {"reason": "Agent successfully sent reply.", "tool_response": final_output}
         else:
+            logger.error(f"🎯 MEDICAL_RECORDS_AGENT: Agent finished with non-success output: {final_output}")
             raise ValueError(f"Agent finished with non-success or invalid output: {final_output}")
 
     except Exception as e:
-        logger.error(f"Error in Release of Records agent orchestration: {e}", exc_info=True)
+        logger.error(f"🎯 MEDICAL_RECORDS_AGENT: Error in agent orchestration: {e}", exc_info=True)
+        logger.error(f"🎯 MEDICAL_RECORDS_AGENT: Exception type: {type(e)}")
         await send_fallback_reply_and_tag(
             front_conversation_id,
             "Our automated assistant encountered an error. A team member will review your request.",
@@ -422,9 +590,9 @@ Full Context:
 
     finally:
         # The MCP client is shared, so we don't close it here.
-        pass
+        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Agent execution finished, cleaning up...")
 
-    logger.info(f"Medical Records Agent finished for {front_conversation_id}. Outcome: {agent_outcome}")
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Final outcome for {front_conversation_id}: {agent_outcome}")
     return agent_outcome
 
 # --- END: Agent Orchestrator --- 

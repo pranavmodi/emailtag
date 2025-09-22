@@ -709,5 +709,17 @@ Test ID: {UNIQUE_TEST_ID}"""
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": ["Release of Records"]
+    },
+    "28": {
+        "description": "Edy Posas-Valdes - Release of Records - Mixed request for bills and MRI records (should prioritize Medical Records over billing)",
+        "subject": "Records and Bills Request - Edy Posas-Valdes DOL 04/07/2025",
+        "body_html": (
+            "<p>Hello,</p>"
+            "<p>I am requesting bills & MRI Lumbar + Left Shoulder records for my client Edy Posas-Valdes DOL 04/07/2025.</p>"
+            "<p>DOS 09/19/2025</p>"
+            "<p>Thank you,</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Release of Records"]
     }
 }

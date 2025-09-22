@@ -175,30 +175,22 @@ async def get_patient_and_study_info(patient_id: str) -> Dict[str, Any]:
 
 async def send_fallback_reply_and_tag(
     conversation_id: str,
-    reply_text: str,
+    reply_text: str,  # Kept for compatibility but not sent
     tag_to_add: str
 ):
     """
-    Sends a fallback reply message to a Front conversation and adds a specified tag.
+    Tags a Front conversation for human review when errors occur.
+    Does NOT send any reply message - only adds tags for human handling.
     This is used for error handling and escalation.
-    Automatically adds "AI handled" tag when a reply is sent.
     """
-    logger.info(f"Sending fallback reply for conversation {conversation_id}. Tag: {tag_to_add}")
+    logger.info(f"Tagging conversation {conversation_id} for human review. Tag: {tag_to_add}")
+    logger.info(f"Error message (not sent): {reply_text}")
     try:
-        # Use asyncio.to_thread to run the synchronous service functions in a separate thread
-        reply_sent = await asyncio.to_thread(
-            frontapp_service.send_conversation_reply,
-            conversation_id,
-            reply_text
-        )
-        if not reply_sent:
-            logger.error(f"Failed to send fallback error reply message for {conversation_id}.")
-
-        # Prepare tags to add, including the "AI handled" tag
+        # Do NOT send any reply message when errors occur
+        # Only add tags for human review
+        
+        # Prepare tags to add - do NOT add "AI handled" tag since we didn't send a response
         tags_to_add = [tag_to_add]
-        ai_handled_tag = "AI handled"
-        if ai_handled_tag not in tags_to_add:
-            tags_to_add.append(ai_handled_tag)
 
         tags_added = await asyncio.to_thread(
             frontapp_service.add_conversation_tags,

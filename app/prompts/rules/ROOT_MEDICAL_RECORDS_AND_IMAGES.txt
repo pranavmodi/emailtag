@@ -7,10 +7,13 @@ Please use the following rules to sub-classify the provided email content, alrea
 --- START Medical Records & Images Sub-Classification RULES ---
 
 1. **Specific Action or Item**: Based on the email content, determine the specific action being requested or the item being discussed related to medical records and images, and classify as follows:
+
+   **PRIORITY RULE - Mixed Requests:** If the email requests BOTH medical records/reports AND billing information (e.g., "bills & MRI records", "send bills and medical records", "bills & reports"), ALWAYS classify as 'Release of Records' regardless of other content patterns.
+
    - If the email involves an **authorization to share patient records or a direct request to release/send patient records**, classify as 'Release of Records'.
-   - If the email **explicitly asks for medical images** (e.g., MRI, CT, X-Ray files, DICOMs), classify as 'Image Request'.
+   - If the email **explicitly asks for medical images** (e.g., MRI, CT, X-Ray files, DICOMs) WITHOUT requesting billing information, classify as 'Image Request'.
    - If the email specifically requests that **images or reports be provided on a compact disc (CD)**, classify as 'CD Requests'.
-   - If the email is a request for **medical reports** (e.g., radiology reports, diagnostic summaries, interpretations), classify as 'Reports Request'.
+   - If the email is a request for **medical reports** (e.g., radiology reports, diagnostic summaries, interpretations) WITHOUT requesting billing information, classify as 'Reports Request'.
    - If the email relates to an **Ultrasound Technologist worksheet, form, or similar document**, classify as 'US Tech Sheet'.
    - If the email pertains to **patient portal access (e.g., login issues, requests for access, information about using the portal for records/images)**, classify as 'Portal Requests'.
    - If the email is a request from a doctor's office or facility for **physical referral pads**, classify as 'Referral pad request'.
