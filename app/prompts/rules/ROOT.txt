@@ -5,8 +5,13 @@ Classification Rules for Email Categories
 
 Please use the following rules to classify the provided email content into one of the above categories.
 
-**PRIORITY RULE - ATTACHMENT-BASED CLASSIFICATION:**
+**PRIORITY RULES:**
+
+1. **ATTACHMENT-BASED CLASSIFICATION:**
 If there is ANY attachment with document type "rx" (prescription/referral), ALWAYS classify as 'Scheduling' regardless of email content. This takes absolute priority over all other rules below.
+
+2. **MEDICAL RECORDS PRIORITY:**
+If the email requests BOTH medical records/reports AND billing information, ALWAYS classify as 'Medical Records & Images'. Medical records requests take priority over billing/financial requests when both are present in the same email.
 
 --- START SCHEDULING RULES ---
 
@@ -62,8 +67,9 @@ Classification Rules for Medical Records & Images:
  b. If tags include "Bill or Balance Request", "Bill Offer", "Rad Lien", "Tech Lien", "ASL", "SLA Applies", or similar, immediately classify under Accounts Receivable.
 
 4. Purpose and Context:
- a. Use Medical Records & Images when the primary purpose is to request, share, or discuss medical records or imaging data exclusively.
- b. Disregard imaging references if they are provided only as supplemental information in an email whose main focus is on financial processing or lien management.
+ a. Use Medical Records & Images when the primary purpose is to request, share, or discuss medical records or imaging data.
+ b. PRIORITY RULE: If email requests BOTH medical records AND billing information (e.g., "send bills & MRI records"), classify as Medical Records & Images.
+ c. Disregard imaging references if they are provided only as supplemental information in an email whose main focus is on financial processing or lien management (WITHOUT any actual medical records request).
 
 --- END MEDICAL RECORDS & IMAGES RULES ---
 
@@ -76,12 +82,13 @@ Classification Rules for Accounts Receivable:
  a. If the subject contains any strong financial/billing keywords such as:
   - "Bill", "Billing", "Lien", "Payment", "Balance", "W-9", "Offer", "Remittance", "Payment Date", "Billing Report Request", or any phrase indicating a billing process,
   then classify the email as Accounts Receivable.
- b. Even if imaging-related words like "IMG" or "Medical Records" appear, if any of the strong financial indicators above are present, default to Accounts Receivable.
- c. For fax notification subjects such as "EXTERNAL: A fax has arrived from: ..." check for additional context; if no distinct imaging portal or viewing instructions are included, classify as Accounts Receivable.
+ b. EXCEPTION: If medical records keywords like "Medical Records", "Records Request", "Release of Records", "Reports Request", "MRI", "Images" are also present, classify as Medical Records & Images instead (medical records takes priority).
+ c. For purely financial emails without medical records requests, use Accounts Receivable.
+ d. For fax notification subjects such as "EXTERNAL: A fax has arrived from: ..." check for additional context; if no distinct imaging portal or viewing instructions are included, classify as Accounts Receivable.
 
 2. Content Patterns and Phrases:
  a. IF the email body includes phrases such as "bill balance", "payment date", "lien signed", "process payment", "generate bill", "remittance", "financial reconciliation", "W-9", "negotiation offer", or explicit instructions linked to payment processing, classify as Accounts Receivable.
- b. If the email mixes imaging details with any billing or lien processing information (e.g., "Medical Records & Billing Report Request"), determine the primary intent by checking for explicit financial instructions. If financial instructions are prominent, classify as Accounts Receivable.
+ b. EXCEPTION: If the email requests both medical records/imaging AND billing information, classify as Medical Records & Images (medical records takes priority). Only classify as Accounts Receivable for purely financial requests without medical records components.
 
 3. Associated Tags & Metadata:
  a. Emails tagged with billing or financial labels (e.g., "Bill or Balance Request", "Bill Offer", "Rad Lien", "Tech Lien", "ASL", "SLA Applies") are immediately classified as Accounts Receivable.
