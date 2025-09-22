@@ -160,59 +160,10 @@ async def fetch_patient_and_study_info_tool(patient_id: str) -> Dict[str, Any]:
         studies = study_result.get("studies", [])
         logger.info(f"🔧 TOOL: Found {len(studies)} studies for patient {patient_id}")
         
-        # Collect all players from all studies for this patient
-        all_players = []
-        
-        # Ensure MCP client is connected
-        if not mcp_client.is_connected:
-            await mcp_client.connect()
-        
-        for study in studies:
-            accession_number = study.get("accessionNumber", "") or study.get("authorization_number", "")
-            logger.info(f"🔧 TOOL: Processing study with accession: {accession_number} (from {['accessionNumber' if study.get('accessionNumber') else 'authorization_number'][0]})")
-            if accession_number:
-                try:
-                    # Use accession number to get study participants
-                    logger.info(f"🔧 TOOL: Calling get_study_participants for accession {accession_number}")
-                    participants_result = await mcp_client.call_tool("get_study_participants", {"accession_number": str(accession_number)})
-                    logger.info(f"🔧 TOOL: Participants result: {participants_result}")
-                    
-                    if participants_result.get("success") and participants_result.get("data", {}).get("result"):
-                        participants = participants_result["data"]["result"]
-                        logger.info(f"🔧 TOOL: Found {len(participants)} participants for accession {accession_number}")
-                        
-                        # Transform the participant data to match expected format
-                        for participant in participants:
-                            player_data = {
-                                "email": participant.get("email", "").strip(),
-                                "role": participant.get("playerTypeName", "").lower(),
-                                "type": participant.get("type", ""),
-                                "referrer_id": participant.get("referrerID", ""),
-                                "phone": participant.get("businessPhoneNumber", ""),
-                                "accession_number": accession_number,
-                                "study_id": study.get("study_id") or study.get("id"),
-                                "domain": participant.get("email", "").split("@")[1] if "@" in participant.get("email", "") else ""
-                            }
-                            
-                            logger.info(f"🔧 TOOL: Participant data: {player_data}")
-                            
-                            # Only add if has email or is a significant role
-                            if player_data["email"] or player_data["role"] in ["radiologist", "doctor/ref physician", "broker"]:
-                                all_players.append(player_data)
-                                logger.info(f"🔧 TOOL: Added participant to players list")
-                            else:
-                                logger.info(f"🔧 TOOL: Skipped participant (no email or non-significant role)")
-                                
-                except Exception as e:
-                    logger.warning(f"🔧 TOOL: Failed to get participants for accession {accession_number}: {e}")
-                    continue
-
-        logger.info(f"🔧 TOOL: Final result - Total players found: {len(all_players)}")
         result = {
             "success": True,
             "patient": patient_result.get("patients", [{}])[0],
-            "studies": studies,
-            "players": all_players
+            "studies": studies
         }
         logger.info(f"🔧 TOOL: Returning result: {result}")
         return result
@@ -222,137 +173,146 @@ async def fetch_patient_and_study_info_tool(patient_id: str) -> Dict[str, Any]:
 
 
 @function_tool
-async def verify_sender_identity(sender_email: str, players: List[Dict[str, Any]]) -> Dict[str, str]:
+async def compile_all_participants(patient_id: str, studies: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Verifies the sender's email against the list of 'players' (attorneys, doctors)
-    associated with a patient's case.
+    Compiles all participants across all studies for a patient.
+    Returns a comprehensive list of participants with their details.
     """
-    logger.info(f"Tool 'verify_sender_identity' called for sender: {sender_email}")
-    sender_domain = sender_email.split('@')[1] if '@' in sender_email else None
-
-    for player in players:
-        player_email = player.get("email", "").lower()
-        player_role = player.get("role", "unknown").lower()
-        player_type = player.get("type", "").lower()
-
-        if sender_email.lower() == player_email:
-            # Check for attorney roles
-            if "attorney" in player_role or "law" in player_role:
-                return {"status": "verified", "role": "attorney_on_file", "player_info": player}
-            
-            # Check for doctor/physician roles using both role and type
-            if any(keyword in player_role for keyword in ["doctor", "physician", "radiologist"]) or \
-               any(keyword in player_type for keyword in ["doctor", "physician"]):
-                return {"status": "verified", "role": "doctor_on_file", "player_info": player}
-
-    # Fallback for domain check if direct email match fails
-    if sender_domain:
-        for player in players:
-            player_domain = player.get("domain", "").lower()
-            if sender_domain == player_domain:
-                player_role = player.get("role", "unknown").lower()
-                player_type = player.get("type", "").lower()
-                
-                # Domain match with doctor/physician type
-                if any(keyword in player_role for keyword in ["doctor", "physician", "radiologist"]) or \
-                   any(keyword in player_type for keyword in ["doctor", "physician"]):
-                    return {"status": "domain_verified", "role": "doctor_domain_match", "player_info": player}
-
-    # Check sender domain for attorney patterns
-    if sender_domain and any(keyword in sender_domain for keyword in ["law", "legal", "attorney", "lawfirm"]):
-         return {"status": "unverified", "role": "attorney_not_on_file"}
-
-    # Check sender domain for medical patterns  
-    if sender_domain and any(keyword in sender_domain for keyword in ["med", "clinic", "hospital", "health", "medical"]):
-         return {"status": "unverified", "role": "doctor_not_on_file"}
-
-    return {"status": "unverified", "role": "unknown"}
-
-
-@function_tool
-async def verify_sender_identity_by_accession(sender_email: str, studies: List[Dict[str, Any]]) -> Dict[str, str]:
-    """
-    Verifies the sender's email by checking participants for each study using accession numbers.
-    This provides more accurate verification by checking actual study participants.
-    """
-    logger.info(f"🔧 TOOL 'verify_sender_identity_by_accession' called for sender: {sender_email}")
-    logger.info(f"🔧 TOOL: Checking against {len(studies)} studies")
-    sender_domain = sender_email.split('@')[1] if '@' in sender_email else None
-
+    logger.info(f"🔧 TOOL 'compile_all_participants' called for Patient ID: {patient_id}")
+    logger.info(f"🔧 TOOL: Compiling participants from {len(studies)} studies")
+    
     # Ensure MCP client is connected
     if not mcp_client.is_connected:
         await mcp_client.connect()
 
+    all_participants = []
+    successful_studies = 0
+    failed_studies = 0
+
     for study in studies:
         accession_number = study.get("accessionNumber", "") or study.get("authorization_number", "")
-        logger.info(f"🔧 TOOL: Checking study with accession: {accession_number} (from {['accessionNumber' if study.get('accessionNumber') else 'authorization_number'][0]})")
+        study_id = study.get("study_id") or study.get("id")
+        logger.info(f"🔧 TOOL: Processing study {study_id} with accession: {accession_number}")
+        
         if not accession_number:
-            logger.info(f"🔧 TOOL: Skipping study without accession number or authorization number")
+            logger.warning(f"🔧 TOOL: Skipping study {study_id} - no accession number or authorization number")
+            failed_studies += 1
             continue
             
         try:
             # Get participants for this specific study using accession number
-            logger.info(f"🔧 TOOL: Getting participants for accession {accession_number}")
+            logger.info(f"🔧 TOOL: Calling get_study_participants for accession {accession_number}")
             participants_result = await mcp_client.call_tool("get_study_participants", {"accession_number": str(accession_number)})
+            logger.info(f"🔧 TOOL: Participants result: {participants_result}")
             
             if participants_result.get("success") and participants_result.get("data", {}).get("result"):
                 participants = participants_result["data"]["result"]
-                logger.info(f"🔧 TOOL: Found {len(participants)} participants for verification")
+                logger.info(f"🔧 TOOL: Found {len(participants)} participants for accession {accession_number}")
                 
+                # Transform and add each participant
                 for participant in participants:
-                    participant_email = participant.get("email", "").strip().lower()
-                    participant_role = participant.get("playerTypeName", "").lower()
-                    participant_type = participant.get("type", "").lower()
+                    participant_data = {
+                        "email": participant.get("email", "").strip().lower(),
+                        "role": participant.get("playerTypeName", "").lower(),
+                        "type": participant.get("type", "").lower(),
+                        "referrer_id": participant.get("referrerID", ""),
+                        "phone": participant.get("businessPhoneNumber", ""),
+                        "accession_number": accession_number,
+                        "study_id": study_id,
+                        "domain": participant.get("email", "").split("@")[1].lower() if "@" in participant.get("email", "") else ""
+                    }
                     
-                    logger.info(f"🔧 TOOL: Checking participant - email: {participant_email}, role: {participant_role}, type: {participant_type}")
-                    
-                    # Direct email match
-                    if sender_email.lower() == participant_email:
-                        logger.info(f"🔧 TOOL: DIRECT EMAIL MATCH found for {sender_email}")
-                        player_info = {
-                            "email": participant_email,
-                            "role": participant_role,
-                            "type": participant_type,
-                            "accession_number": accession_number,
-                            "study_id": study.get("study_id") or study.get("id"),
-                            "referrer_id": participant.get("referrerID", ""),
-                            "phone": participant.get("businessPhoneNumber", "")
-                        }
-                        
-                        # Check for attorney roles
-                        if "attorney" in participant_role or "law" in participant_role:
-                            logger.info(f"🔧 TOOL: Verified as ATTORNEY_ON_FILE")
-                            return {"status": "verified", "role": "attorney_on_file", "player_info": player_info}
-                        
-                        # Check for doctor/physician roles
-                        if any(keyword in participant_role for keyword in ["doctor", "physician", "radiologist"]) or \
-                           any(keyword in participant_type for keyword in ["doctor", "physician"]):
-                            logger.info(f"🔧 TOOL: Verified as DOCTOR_ON_FILE")
-                            return {"status": "verified", "role": "doctor_on_file", "player_info": player_info}
-                    
-                    # Domain match check
-                    if sender_domain and participant_email:
-                        participant_domain = participant_email.split('@')[1] if '@' in participant_email else None
-                        if sender_domain == participant_domain:
-                            # Domain match with doctor/physician type
-                            if any(keyword in participant_role for keyword in ["doctor", "physician", "radiologist"]) or \
-                               any(keyword in participant_type for keyword in ["doctor", "physician"]):
-                                player_info = {
-                                    "email": participant_email,
-                                    "role": participant_role,
-                                    "type": participant_type,
-                                    "accession_number": accession_number,
-                                    "study_id": study.get("study_id") or study.get("id"),
-                                    "domain": participant_domain
-                                }
-                                return {"status": "domain_verified", "role": "doctor_domain_match", "player_info": player_info}
-                                
+                    logger.info(f"🔧 TOOL: Adding participant: {participant_data}")
+                    all_participants.append(participant_data)
+                
+                successful_studies += 1
+            else:
+                logger.warning(f"🔧 TOOL: No participants found for accession {accession_number}")
+                failed_studies += 1
+                
         except Exception as e:
-            logger.warning(f"Failed to verify sender for accession {accession_number}: {e}")
+            logger.error(f"🔧 TOOL: Failed to get participants for accession {accession_number}: {e}")
+            failed_studies += 1
             continue
 
+    logger.info(f"🔧 TOOL: Compilation complete - Total participants: {len(all_participants)}, Successful studies: {successful_studies}, Failed studies: {failed_studies}")
+    
+    return {
+        "success": True,
+        "total_participants": len(all_participants),
+        "participants": all_participants,
+        "successful_studies": successful_studies,
+        "failed_studies": failed_studies
+    }
+
+
+@function_tool
+async def verify_sender_against_participants(sender_email: str, participants: List[Dict[str, Any]]) -> Dict[str, str]:
+    """
+    Verifies the sender's email against a compiled list of all participants.
+    This provides efficient verification using pre-compiled participant data.
+    """
+    logger.info(f"🔧 TOOL 'verify_sender_against_participants' called for sender: {sender_email}")
+    logger.info(f"🔧 TOOL: Checking against {len(participants)} total participants")
+    sender_domain = sender_email.split('@')[1] if '@' in sender_email else None
+
+    # First pass: Direct email matches
+    for participant in participants:
+        participant_email = participant.get("email", "").lower()
+        participant_role = participant.get("role", "").lower()
+        participant_type = participant.get("type", "").lower()
+        
+        logger.info(f"🔧 TOOL: Checking participant - email: {participant_email}, role: {participant_role}, type: {participant_type}")
+        
+        # Direct email match
+        if sender_email.lower() == participant_email:
+            logger.info(f"🔧 TOOL: DIRECT EMAIL MATCH found for {sender_email}")
+            player_info = {
+                "email": participant_email,
+                "role": participant_role,
+                "type": participant_type,
+                "accession_number": participant.get("accession_number", ""),
+                "study_id": participant.get("study_id", ""),
+                "referrer_id": participant.get("referrer_id", ""),
+                "phone": participant.get("phone", "")
+            }
+            
+            # Check for attorney roles
+            if "attorney" in participant_role or "law" in participant_role:
+                logger.info(f"🔧 TOOL: Verified as ATTORNEY_ON_FILE")
+                return {"status": "verified", "role": "attorney_on_file", "player_info": player_info}
+            
+            # Check for doctor/physician roles
+            if any(keyword in participant_role for keyword in ["doctor", "physician", "radiologist"]) or \
+               any(keyword in participant_type for keyword in ["doctor", "physician"]):
+                logger.info(f"🔧 TOOL: Verified as DOCTOR_ON_FILE")
+                return {"status": "verified", "role": "doctor_on_file", "player_info": player_info}
+
+    # Second pass: Domain matches for medical professionals
+    if sender_domain:
+        logger.info(f"🔧 TOOL: No direct email match, checking domain matches for {sender_domain}")
+        for participant in participants:
+            participant_domain = participant.get("domain", "").lower()
+            participant_role = participant.get("role", "").lower()
+            participant_type = participant.get("type", "").lower()
+            
+            if sender_domain == participant_domain:
+                # Domain match with doctor/physician type
+                if any(keyword in participant_role for keyword in ["doctor", "physician", "radiologist"]) or \
+                   any(keyword in participant_type for keyword in ["doctor", "physician"]):
+                    logger.info(f"🔧 TOOL: DOMAIN MATCH found for {sender_domain}")
+                    player_info = {
+                        "email": participant.get("email", ""),
+                        "role": participant_role,
+                        "type": participant_type,
+                        "accession_number": participant.get("accession_number", ""),
+                        "study_id": participant.get("study_id", ""),
+                        "domain": participant_domain
+                    }
+                    return {"status": "domain_verified", "role": "doctor_domain_match", "player_info": player_info}
+
     # Fallback to domain pattern matching
-    logger.info(f"🔧 TOOL: No direct matches found, checking domain patterns for {sender_domain}")
+    logger.info(f"🔧 TOOL: No participant matches found, checking domain patterns for {sender_domain}")
     if sender_domain:
         if any(keyword in sender_domain for keyword in ["law", "legal", "attorney", "lawfirm"]):
             logger.info(f"🔧 TOOL: Domain indicates attorney_not_on_file")
@@ -395,13 +355,6 @@ async def add_consulting_physician(patient_id: str, physician_info: Dict) -> Dic
 # More tools for HIPAA form handling can be added here.
 # For now, we will rely on the agent's logic to request the form.
 
-@function_tool
-async def debug_log(message: str) -> str:
-    """
-    Simple debug logging tool for the agent.
-    """
-    logger.info(f"AGENT DEBUG: {message}")
-    return f"Logged: {message}"
 
 @function_tool
 async def generate_formatted_reply(scenario: str, data: Dict[str, Any]) -> Dict[str, str]:
@@ -473,10 +426,14 @@ Full Context:
 2.  **Get Case Info**: If you have a patient ID, call `fetch_patient_and_study_info_tool`.
     *   If this fails, send a generic error and tag for human review.
 
-3.  **Verify Sender**: Call `verify_sender_identity_by_accession` with the `sender_email` and the `studies` list from the previous step. This will check the sender against actual study participants using accession numbers for more accurate verification.
+3.  **Compile All Participants**: Call `compile_all_participants` with the `patient_id` and `studies` list from step 2.
+    *   This will gather all participants across all studies for efficient verification.
 
-4.  **Act on Identity**:
-    *   If `verify_sender_identity_by_accession` returns `role: "attorney_on_file"`:
+4.  **Verify Sender**: Call `verify_sender_against_participants` with the `sender_email` and the `participants` list from step 3.
+    *   This provides comprehensive verification against all study participants.
+
+5.  **Act on Identity**:
+    *   If `verify_sender_against_participants` returns `role: "attorney_on_file"`:
         *   Generate a reply with scenario "attorney_on_file_portal" (pass a dummy portal link for now).
         *   Send the reply.
     *   If `role: "doctor_on_file"`:
@@ -488,9 +445,9 @@ Full Context:
         *   Generate a reply with scenario "hipaa_needed".
         *   Send the reply.
 
-5.  **CD Request Check**: Review the 'Full Context'. If a link was already sent and the user (who is a verified doctor) now insists on a CD, generate a reply for "human_review_cd_request" and add the "{TAG_AI_HUMAN_REVIEW_REQUIRED}" tag.
+6.  **CD Request Check**: Review the 'Full Context'. If a link was already sent and the user (who is a verified doctor) now insists on a CD, generate a reply for "human_review_cd_request" and add the "{TAG_AI_HUMAN_REVIEW_REQUIRED}" tag.
 
-6.  **HIPAA Form Submission Check**: (Future logic) If the user's email contains an attachment and the history shows we were awaiting a HIPAA form, this will trigger a document analysis flow. For now, this is not implemented.
+7.  **HIPAA Form Submission Check**: (Future logic) If the user's email contains an attachment and the history shows we were awaiting a HIPAA form, this will trigger a document analysis flow. For now, this is not implemented.
 
 **Final Step**: After calling `send_reply_to_front`, your job is to return its direct JSON output. Do not add conversational text.
 
@@ -518,11 +475,10 @@ Full Context:
                 openai_client=custom_openai_client
             ),
             tools=[
-                debug_log,
                 extract_patient_id_from_email,
                 fetch_patient_and_study_info_tool,
-                verify_sender_identity,
-                verify_sender_identity_by_accession,
+                compile_all_participants,
+                verify_sender_against_participants,
                 generate_expiring_link,
                 add_consulting_physician,
                 generate_formatted_reply,
