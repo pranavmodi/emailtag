@@ -269,6 +269,12 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             agent_name_for_status = "medical_records"
             logger.info(f"Email {email_id} tagged with Medical Records & Images tag(s): {matched_medical_records_tags}. Attempting Medical Records agent.")
             
+            # Log pre-extracted patient IDs for debugging
+            if hasattr(email_obj, 'extracted_patient_ids') and email_obj.extracted_patient_ids:
+                logger.info(f"📋 Pre-extracted patient IDs available: {email_obj.extracted_patient_ids}")
+            else:
+                logger.info("📋 No pre-extracted patient IDs found in database")
+            
             email_sender = email_obj.sender
             if not email_sender:
                 logger.error(f"Cannot run Medical Records agent for {email_id}: sender email is missing.")
@@ -282,7 +288,8 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                         current_email_content=current_email_content,
                         email_sender=email_sender,
                         structured_history_messages=structured_history_messages,
-                        settings_obj=settings
+                        settings_obj=settings,
+                        email_obj=email_obj
                     )
                 
                 try:

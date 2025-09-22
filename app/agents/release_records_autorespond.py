@@ -296,7 +296,8 @@ async def handle_release_of_records_request(
     current_email_content: str,
     email_sender: str,
     structured_history_messages: List[Dict[str, Any]],
-    settings_obj: Any = app_settings_instance
+    settings_obj: Any = app_settings_instance,
+    email_obj: Any = None
 ) -> Dict[str, Any]:
     """
     Handles Medical Records & Images requests using direct conditional logic.
@@ -312,17 +313,14 @@ async def handle_release_of_records_request(
         )
         return {"agent_handled": False, "processed_flag": True, "details": {"reason": "MCP connection failed"}}
 
-    # Extract patient ID
-    patient_ids = await extract_all_patient_ids_from_email_logic(current_email_content, front_conversation_id, None)
-    if not patient_ids:
-        await send_fallback_reply_and_tag(
-            front_conversation_id,
-            "To help you with your request for medical records, could you please provide the Patient ID?",
-            TAG_AI_HUMAN_REVIEW_REQUIRED
-        )
-        return {"agent_handled": True, "processed_flag": True, "details": {"reason": "No patient ID found, requested patient ID"}}
+    # Check for pre-extracted patient IDs from document processing
+    if not email_obj or not hasattr(email_obj, 'extracted_patient_ids') or not email_obj.extracted_patient_ids:
+        logger.info("No pre-extracted patient IDs found in database - cannot proceed with autorespond")
+        return {"agent_handled": False, "processed_flag": False, "details": {"reason": "No patient ID in database, autorespond not applicable"}}
     
+    patient_ids = email_obj.extracted_patient_ids
     patient_id = patient_ids[0]
+    logger.info(f"Using pre-extracted patient ID for Medical Records request: {patient_id}")
     
     # Get patient and study info
     mcp_results = await get_patient_and_study_info(patient_id)
