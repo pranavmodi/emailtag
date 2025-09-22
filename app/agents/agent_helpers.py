@@ -204,6 +204,56 @@ async def send_fallback_reply_and_tag(
         logger.error(f"Exception during sending fallback reply/tag for {conversation_id}: {ex_fallback}", exc_info=True)
 
 
+async def send_reply_to_front_with_attachment(
+    conversation_id: str,
+    reply_text: str,
+    attachment_path: str,
+    tags_to_add: Optional[List[str]] = None,
+    tags_to_remove: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Sends a reply message with attachment to the specified Front conversation and optionally updates tags.
+    This is a direct helper function for use in agents.
+    Automatically adds "AI handled" tag when a reply is sent.
+    """
+    logger.info(f"Helper 'send_reply_to_front_with_attachment' called for conv_id {conversation_id}.")
+    try:
+        # Add autoresponse signature to identify our bot emails
+        autoresponse_signature = f"\n\n---\n{app_settings_instance.AUTORESPONSE_SIGNATURE}"
+        final_reply_text = reply_text + autoresponse_signature
+        
+        reply_sent_successfully = await asyncio.to_thread(
+            frontapp_service.send_conversation_reply_with_attachment,
+            conversation_id,
+            final_reply_text,
+            attachment_path
+        )
+        if not reply_sent_successfully:
+            return {"status": "error", "message": "Front API failed to send reply with attachment."}
+
+        # Ensure tags_to_add is a list and add "AI handled" tag
+        if tags_to_add is None:
+            tags_to_add = []
+        else:
+            tags_to_add = list(tags_to_add)  # Make a copy to avoid modifying the original
+        
+        # Add "AI handled" tag if it's not already present
+        ai_handled_tag = "AI handled"
+        if ai_handled_tag not in tags_to_add:
+            tags_to_add.append(ai_handled_tag)
+
+        # Always add tags since we now have at least the "AI handled" tag
+        await asyncio.to_thread(frontapp_service.add_conversation_tags, conversation_id, tags_to_add)
+        
+        if tags_to_remove:
+            await asyncio.to_thread(frontapp_service.remove_conversation_tags, conversation_id, tags_to_remove)
+
+        return {"status": "success", "message": "Reply with attachment sent and tags (if any) updated."}
+    except Exception as e:
+        logger.error(f"Error in 'send_reply_to_front_with_attachment' helper for conversation {conversation_id}: {e}", exc_info=True)
+        return {"status": "error", "message": f"Exception in send_reply_to_front_with_attachment: {str(e)}"}
+
+
 async def send_reply_to_front_direct(
     conversation_id: str,
     reply_text: str,

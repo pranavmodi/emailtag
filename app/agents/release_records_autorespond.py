@@ -24,7 +24,8 @@ from app.agents.agent_helpers import (
     get_patient_and_study_info,
     send_fallback_reply_and_tag,
     extract_all_patient_ids_from_email_logic,
-    send_reply_to_front_direct
+    send_reply_to_front_direct,
+    send_reply_to_front_with_attachment
 )
 # --- END: Agent Helper Imports ---
 
@@ -362,11 +363,43 @@ async def handle_release_of_records_request(
         verification_role = verification_result.get("role", "unknown")
         player_info = verification_result.get("player_info", {})
         
-        if verification_role == "attorney_on_file":
-            portal_link = app_settings_instance.ATTORNEY_PORTAL_URL or "https://app.radflow360.com/"
-            reply_text = TEMPLATE_ATTORNEY_ON_FILE_PORTAL.format(attorney_portal_link=portal_link)
+        # Handle HIPAA needed case with attachment
+        if verification_role in ["attorney_not_on_file", "doctor_not_on_file", "unknown"]:
+            hipaa_form_path = "/home/fret/work/emailtag/app/agents/templates/Medical-Release-Form.pdf"
             
-        elif verification_role == "doctor_on_file":
+            result = await send_reply_to_front_with_attachment(
+                front_conversation_id,
+                TEMPLATE_HIPAA_NEEDED,
+                hipaa_form_path,
+                tags_to_add=["AI handled"]
+            )
+            
+            if result.get("status") == "success":
+                agent_outcome["agent_handled"] = True
+                agent_outcome["processed_flag"] = True
+                agent_outcome["details"] = {"reason": "Successfully sent HIPAA form with attachment", "response": result}
+            else:
+                logger.error(f"Failed to send HIPAA reply with attachment: {result}")
+                raise ValueError(f"Failed to send HIPAA reply with attachment: {result}")
+            
+            return agent_outcome
+        
+        # Handle doctor on file case
+        if verification_role == "doctor_on_file":
+            # Check for CD request in conversation history first
+            history_text = format_conversation_history_for_agent(structured_history_messages)
+            if "cd" in current_email_content.lower() and ("link" in history_text.lower() or "secure" in history_text.lower()):
+                await send_fallback_reply_and_tag(
+                    front_conversation_id,
+                    TEMPLATE_HUMAN_REVIEW_CD_REQUEST,
+                    TAG_AI_HUMAN_REVIEW_REQUIRED
+                )
+                agent_outcome["agent_handled"] = True
+                agent_outcome["processed_flag"] = True
+                agent_outcome["details"] = {"reason": "CD request after link sent, escalated to human review"}
+                return agent_outcome
+            
+            # Send normal doctor response with secure link
             base_url = app_settings_instance.SECURE_VIEWER_URL or "https://viewer.precisemri.com"
             mock_token = f"token_{patient_id}_{os.urandom(8).hex()}"
             secure_link = f"{base_url}/view?token={mock_token}"
@@ -377,25 +410,12 @@ async def handle_release_of_records_request(
                 secure_link=secure_link
             )
             
-        else:  # attorney_not_on_file, doctor_not_on_file, unknown
-            reply_text = TEMPLATE_HIPAA_NEEDED
+        # Handle attorney on file case
+        elif verification_role == "attorney_on_file":
+            portal_link = app_settings_instance.ATTORNEY_PORTAL_URL or "https://app.radflow360.com/"
+            reply_text = TEMPLATE_ATTORNEY_ON_FILE_PORTAL.format(attorney_portal_link=portal_link)
         
-        # Check for CD request in conversation history
-        if verification_role == "doctor_on_file":
-            history_text = format_conversation_history_for_agent(structured_history_messages)
-            if "cd" in current_email_content.lower() and ("link" in history_text.lower() or "secure" in history_text.lower()):
-                reply_text = TEMPLATE_HUMAN_REVIEW_CD_REQUEST
-                await send_fallback_reply_and_tag(
-                    front_conversation_id,
-                    reply_text,
-                    TAG_AI_HUMAN_REVIEW_REQUIRED
-                )
-                agent_outcome["agent_handled"] = True
-                agent_outcome["processed_flag"] = True
-                agent_outcome["details"] = {"reason": "CD request after link sent, escalated to human review"}
-                return agent_outcome
-        
-        # Send the response
+        # Send the response for attorney/doctor on file cases
         result = await send_reply_to_front_direct(
             front_conversation_id,
             reply_text,

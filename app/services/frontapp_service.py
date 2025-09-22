@@ -826,6 +826,98 @@ def _plain_text_to_html(plain_text: str) -> str:
             html_paragraphs.append(f"<p>{html_lines}</p>")
     return "".join(html_paragraphs)
 
+def send_conversation_reply_with_attachment(conversation_id: str, text: str, attachment_path: str) -> bool:
+    """Send a reply to a conversation in Front with an attachment."""
+    if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL or not settings.FRONT_CHANNEL_ID or not settings.FRONT_BOT_TEAMMATE_ID:
+        logger.error("Missing required Front configuration for sending reply with attachment")
+        return False
+
+    if not os.path.exists(attachment_path):
+        logger.error(f"Attachment file not found: {attachment_path}")
+        return False
+
+    # Get conversation details to extract recipients
+    try:
+        conversation_data = get_conversation(conversation_id)
+        if not conversation_data:
+            logger.error(f"Could not fetch conversation {conversation_id} to determine recipients")
+            return False
+        
+        recipient_handle = conversation_data.get("recipient", {}).get("handle")
+        if not recipient_handle:
+            logger.error(f"No recipient handle found in conversation {conversation_id}")
+            return False
+            
+        recipients = [recipient_handle]
+        
+    except Exception as e:
+        logger.error(f"Error getting conversation details for {conversation_id}: {e}")
+        return False
+
+    html_body = _plain_text_to_html(text)
+    
+    # Prepare multipart form data
+    files = {
+        'attachments': (os.path.basename(attachment_path), open(attachment_path, 'rb'), 'application/pdf')
+    }
+    
+    # For multipart form data, arrays need to be passed as multiple form fields
+    data = {
+        'body': html_body,
+        'channel_id': settings.FRONT_CHANNEL_ID,
+        'author_id': settings.FRONT_BOT_TEAMMATE_ID,
+        'body_format': 'html',
+        'type': 'message'
+    }
+    
+    # Add each recipient as a separate form field
+    for i, recipient in enumerate(recipients):
+        data[f'to[{i}]'] = recipient
+    
+    headers = {
+        "Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}",
+        "Accept": "application/json"
+        # Don't set Content-Type - httpx will set it automatically for multipart
+    }
+    
+    url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/messages"
+    
+    logger.info(f"Sending reply with attachment to conversation {conversation_id}")
+    
+    with httpx.Client(verify=False) as client:
+        try:
+            response = client.post(url, headers=headers, data=data, files=files)
+            logger.info(f"Response status from Front for reply with attachment: {response.status_code}")
+            
+            response_data = {}
+            try:
+                response_data = response.json()
+            except json.JSONDecodeError:
+                logger.warning(f"Could not decode JSON response from Front for reply with attachment. Raw text: {response.text[:200]}")
+
+            is_draft = response_data.get('is_draft', False)
+            draft_mode = response_data.get('draft_mode')
+
+            if 200 <= response.status_code < 300:
+                if is_draft:
+                    logger.warning(f"Hey Gofo! Reply with attachment to {conversation_id} created as a DRAFT (mode: {draft_mode}) according to API response {response.status_code}, but Front might send it anyway.")
+                logger.info(f"Successfully processed reply with attachment for conversation {conversation_id} with Front API status {response.status_code}.")
+                return True
+            else:
+                logger.error(f"Error sending reply with attachment to {conversation_id}: {response.status_code} - {response.text}")
+                return False
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error sending reply with attachment to {conversation_id}: {e.response.status_code} - {e.response.text}", exc_info=True)
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error sending reply with attachment to {conversation_id}: {str(e)}", exc_info=True)
+            return False
+        finally:
+            # Close the file
+            if 'files' in locals() and 'attachments' in files:
+                files['attachments'][1].close()
+
+
 def send_conversation_reply(conversation_id: str, text: str) -> bool:
     """Send a reply to a conversation in Front as a specific teammate."""
     if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL or not settings.FRONT_CHANNEL_ID or not settings.FRONT_BOT_TEAMMATE_ID:
