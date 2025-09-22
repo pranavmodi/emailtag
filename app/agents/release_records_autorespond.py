@@ -13,9 +13,7 @@ import json
 import ast
 from typing import Optional, Dict, Any, List
 
-from openai import OpenAIError, AsyncOpenAI
-from agents import Agent, Runner, ModelSettings, function_tool, OpenAIChatCompletionsModel, RunConfig
-import httpx
+from agents import function_tool
 
 from app.core.config import settings as app_settings_instance
 from celery.utils.log import get_task_logger
@@ -26,8 +24,8 @@ from app.agents.agent_helpers import (
     format_conversation_history_for_agent,
     get_patient_and_study_info,
     send_fallback_reply_and_tag,
-    extract_patient_id_from_email,
-    send_reply_to_front
+    extract_all_patient_ids_from_email_logic,
+    send_reply_to_front_direct
 )
 # --- END: Agent Helper Imports ---
 
@@ -326,49 +324,6 @@ async def verify_sender_against_participants(sender_email: str, participants: Li
     return {"status": "unverified", "role": "unknown"}
 
 
-@function_tool
-async def generate_expiring_link(patient_id: str, study_id: str) -> Dict[str, str]:
-    """
-    Generates a secure, time-limited link for viewing reports and images.
-    Placeholder: This should call a real service to generate a secure token/link.
-    """
-    logger.info(f"Tool 'generate_expiring_link' called for patient {patient_id}.")
-    # In a real implementation, this would call a service.
-    base_url = app_settings_instance.SECURE_VIEWER_URL
-    # This is a mock link
-    mock_token = f"token_{patient_id}_{os.urandom(8).hex()}"
-    secure_link = f"{base_url}/view?token={mock_token}"
-    return {"success": True, "link": secure_link}
-
-
-@function_tool
-async def add_consulting_physician(patient_id: str, physician_info: Dict) -> Dict[str, Any]:
-    """
-    Adds a physician as a consulting physician to the patient's record via HL7.
-    Placeholder: This should call a real service that generates and sends an HL7 message.
-    """
-    logger.info(f"Tool 'add_consulting_physician' called for patient {patient_id}.")
-    # In a real implementation, this would call an HL7 service.
-    logger.info(f"SIMULATING: Sending HL7 message to add {physician_info.get('name')} to patient {patient_id}.")
-    return {"success": True, "message": "HL7 message queued for delivery."}
-
-# More tools for HIPAA form handling can be added here.
-# For now, we will rely on the agent's logic to request the form.
-
-
-@function_tool
-async def generate_formatted_reply(scenario: str, data: Dict[str, Any]) -> Dict[str, str]:
-    """
-    Generates a formatted reply string based on the scenario and provided data.
-    """
-    logger.info(f"Tool 'generate_formatted_reply' called. Scenario: {scenario}, Data: {data}")
-    try:
-        reply_text = _generate_response_from_template(scenario, data)
-        logger.info(f"Generated reply text: {reply_text[:100]}...")
-        return {"reply_text": reply_text}
-    except Exception as e:
-        logger.error(f"Error generating formatted reply for scenario {scenario}: {e}", exc_info=True)
-        return {"reply_text": "A team member will review your request and get back to you shortly."}
 
 # --- END: Tool Definitions ---
 
@@ -404,149 +359,146 @@ async def handle_release_of_records_request(
     
     logger.info(f"🎯 MEDICAL_RECORDS_AGENT: MCP connection successful")
 
+    # Pre-compute patient ID extraction
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Extracting patient ID...")
+    patient_ids = await extract_all_patient_ids_from_email_logic(current_email_content, front_conversation_id, None)
+    if not patient_ids:
+        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: No patient ID found, sending request for patient ID")
+        await send_fallback_reply_and_tag(
+            front_conversation_id,
+            "To help you with your request for medical records, could you please provide the Patient ID?",
+            TAG_AI_HUMAN_REVIEW_REQUIRED
+        )
+        return {"agent_handled": True, "processed_flag": True, "details": {"reason": "No patient ID found, requested patient ID"}}
+    
+    patient_id = patient_ids[0]
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Using patient ID: {patient_id}")
+    
+    # Pre-compute patient and study info
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Fetching patient and study info...")
+    mcp_results = await get_patient_and_study_info(patient_id)
+    patient_result = mcp_results.get("patient_result", {})
+    study_result = mcp_results.get("study_result", {})
+
+    if not patient_result.get("success") or not study_result.get("success"):
+        logger.error(f"🎯 MEDICAL_RECORDS_AGENT: Failed to fetch patient/study data")
+        await send_fallback_reply_and_tag(
+            front_conversation_id,
+            "Internal data error. A team member will assist you.",
+            TAG_AI_HUMAN_REVIEW_REQUIRED
+        )
+        return {"agent_handled": False, "processed_flag": True, "details": {"reason": "Patient/study fetch failed"}}
+    
+    studies = study_result.get("studies", [])
+    patient_info = patient_result.get("patients", [{}])[0]
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Found {len(studies)} studies for patient")
+    
+    # Pre-compute participant compilation
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Compiling all participants...")
+    participants_result = await compile_all_participants(patient_id, studies)
+    if not participants_result.get("success"):
+        logger.error(f"🎯 MEDICAL_RECORDS_AGENT: Failed to compile participants")
+        await send_fallback_reply_and_tag(
+            front_conversation_id,
+            "Internal participant lookup error. A team member will assist you.",
+            TAG_AI_HUMAN_REVIEW_REQUIRED
+        )
+        return {"agent_handled": False, "processed_flag": True, "details": {"reason": "Participant compilation failed"}}
+    
+    participants = participants_result.get("participants", [])
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Compiled {len(participants)} total participants")
+    
+    # Pre-compute sender verification
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Verifying sender against participants...")
+    verification_result = await verify_sender_against_participants(email_sender, participants)
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Verification result: {verification_result}")
+
     full_context = f"History:\n{format_conversation_history_for_agent(structured_history_messages)}\n\nLatest Email from <{email_sender}>:\n{current_email_content}"
     
     logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Formatted context length: {len(full_context)} chars")
     logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Context preview: {full_context[:300]}...")
 
-    instructions = f"""
-You are an AI assistant processing requests for medical records. Follow these steps precisely.
-Conversation ID: {front_conversation_id}
-Sender Email: {email_sender}
-Full Context:
----
-{full_context}
----
-
-**Your Task:**
-
-1.  **Find Patient ID**: Call `extract_patient_id_from_email` on the 'Full Context' with `conversation_id="{front_conversation_id}"`.
-    *   If no ID is found, call `generate_formatted_reply` with scenario "request_patient_id" and send it. Your job is done.
-
-2.  **Get Case Info**: If you have a patient ID, call `fetch_patient_and_study_info_tool`.
-    *   If this fails, send a generic error and tag for human review.
-
-3.  **Compile All Participants**: Call `compile_all_participants` with the `patient_id` and `studies` list from step 2.
-    *   This will gather all participants across all studies for efficient verification.
-
-4.  **Verify Sender**: Call `verify_sender_against_participants` with the `sender_email` and the `participants` list from step 3.
-    *   This provides comprehensive verification against all study participants.
-
-5.  **Act on Identity**:
-    *   If `verify_sender_against_participants` returns `role: "attorney_on_file"`:
-        *   Generate a reply with scenario "attorney_on_file_portal" (pass a dummy portal link for now).
-        *   Send the reply.
-    *   If `role: "doctor_on_file"`:
-        *   Call `generate_expiring_link` with the patient_id and study_id from the player_info.
-        *   Call `add_consulting_physician` with the doctor's info.
-        *   Generate a reply with scenario "doctor_on_file_link", including the secure link.
-        *   Send the reply.
-    *   If `role` is `attorney_not_on_file`, `doctor_not_on_file`, or `unknown`:
-        *   Generate a reply with scenario "hipaa_needed".
-        *   Send the reply.
-
-6.  **CD Request Check**: Review the 'Full Context'. If a link was already sent and the user (who is a verified doctor) now insists on a CD, generate a reply for "human_review_cd_request" and add the "{TAG_AI_HUMAN_REVIEW_REQUIRED}" tag.
-
-7.  **HIPAA Form Submission Check**: (Future logic) If the user's email contains an attachment and the history shows we were awaiting a HIPAA form, this will trigger a document analysis flow. For now, this is not implemented.
-
-**Final Step**: After calling `send_reply_to_front`, your job is to return its direct JSON output. Do not add conversational text.
-
-**Error Handling**: If any step fails, call `send_reply_to_front` with a fallback message and return the result. Always return a valid JSON response from `send_reply_to_front`.
-"""
-
+    # Direct conditional logic based on verification result
+    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Processing request with direct conditional logic...")
     agent_outcome = {"agent_handled": False, "processed_flag": False}
-    
-    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Creating OpenAI client and agent...")
 
     try:
-        custom_httpx_client = httpx.AsyncClient(verify=False)
-        custom_openai_client = AsyncOpenAI(
-            api_key=settings_obj.OPENAI_API_KEY,
-            http_client=custom_httpx_client
-        )
+        verification_role = verification_result.get("role", "unknown")
+        verification_status = verification_result.get("status", "unverified")
+        player_info = verification_result.get("player_info", {})
         
-        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: OpenAI client created successfully")
-
-        ror_agent = Agent(
-            name="ReleaseOfRecordsAgent_v1",
-            instructions=instructions,
-            model=OpenAIChatCompletionsModel(
-                model=settings_obj.AGENT_MODEL or "gpt-4o",
-                openai_client=custom_openai_client
-            ),
-            tools=[
-                extract_patient_id_from_email,
-                fetch_patient_and_study_info_tool,
-                compile_all_participants,
-                verify_sender_against_participants,
-                generate_expiring_link,
-                add_consulting_physician,
-                generate_formatted_reply,
-                send_reply_to_front,
-            ],
-            model_settings=ModelSettings(temperature=0.0)
-        )
+        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Acting on verification role: {verification_role}, status: {verification_status}")
         
-        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Agent created, starting execution...")
-        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Using model: {settings_obj.AGENT_MODEL or 'gpt-4o'}")
-
-        run_config = RunConfig(tracing_disabled=True)
-        agent_result = await Runner.run(
-            ror_agent,
-            input="Process the release of records request based on the instructions.",
-            run_config=run_config
-        )
-        
-        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Agent execution completed")
-
-        final_output = agent_result.final_output
-        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Raw output: {final_output}")
-        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Output type: {type(final_output)}")
-        
-        if isinstance(final_output, str):
-            logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Parsing string output...")
-            # Check if it's an error message that can't be parsed
-            if "error occurred" in final_output.lower() or "review the request manually" in final_output.lower():
-                logger.error(f"🎯 MEDICAL_RECORDS_AGENT: Agent returned error message: {final_output}")
-                raise ValueError(f"Agent returned error message: {final_output}")
+        if verification_role == "attorney_on_file":
+            logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Sending attorney portal response")
+            # Generate attorney portal response
+            portal_link = app_settings_instance.ATTORNEY_PORTAL_URL or "https://app.radflow360.com/"
+            reply_text = TEMPLATE_ATTORNEY_ON_FILE_PORTAL.format(attorney_portal_link=portal_link)
             
-            try:
-                final_output = json.loads(final_output)
-                logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Successfully parsed JSON output")
-            except json.JSONDecodeError:
-                logger.warning(f"🎯 MEDICAL_RECORDS_AGENT: JSON parsing failed, trying literal_eval...")
-                try:
-                    final_output = ast.literal_eval(final_output)
-                    logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Successfully parsed with literal_eval")
-                except (ValueError, SyntaxError):
-                    logger.error(f"🎯 MEDICAL_RECORDS_AGENT: Failed to parse agent output as JSON or literal: {final_output}")
-                    raise ValueError(f"Agent output is not valid JSON or literal: {final_output}")
-
-        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Parsed output: {final_output}")
+        elif verification_role == "doctor_on_file":
+            logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Sending doctor secure link response")
+            # Generate secure link for doctor
+            study_id = player_info.get("study_id", "")
+            base_url = app_settings_instance.SECURE_VIEWER_URL or "https://viewer.precisemri.com"
+            mock_token = f"token_{patient_id}_{os.urandom(8).hex()}"
+            secure_link = f"{base_url}/view?token={mock_token}"
+            
+            # Add as consulting physician (mock implementation)
+            doctor_name = player_info.get("email", "").split("@")[0] if player_info.get("email") else "Doctor"
+            logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Adding consulting physician: {doctor_name}")
+            
+            reply_text = TEMPLATE_DOCTOR_ON_FILE_LINK.format(
+                doctor_name=doctor_name, 
+                secure_link=secure_link
+            )
+            
+        else:  # attorney_not_on_file, doctor_not_on_file, unknown
+            logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Sending HIPAA form request")
+            reply_text = TEMPLATE_HIPAA_NEEDED
         
-        if isinstance(final_output, dict) and final_output.get("status") == "success":
-            logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Agent execution successful!")
+        # Check for CD request in conversation history
+        if verification_role == "doctor_on_file":
+            history_text = format_conversation_history_for_agent(structured_history_messages)
+            if "cd" in current_email_content.lower() and ("link" in history_text.lower() or "secure" in history_text.lower()):
+                logger.info(f"🎯 MEDICAL_RECORDS_AGENT: CD request detected after link already sent, escalating to human review")
+                reply_text = TEMPLATE_HUMAN_REVIEW_CD_REQUEST
+                # Add human review tag
+                await send_fallback_reply_and_tag(
+                    front_conversation_id,
+                    reply_text,
+                    TAG_AI_HUMAN_REVIEW_REQUIRED
+                )
+                agent_outcome["agent_handled"] = True
+                agent_outcome["processed_flag"] = True
+                agent_outcome["details"] = {"reason": "CD request after link sent, escalated to human review"}
+                return agent_outcome
+        
+        # Send the response
+        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Sending reply to Front...")
+        result = await send_reply_to_front_direct(
+            front_conversation_id,
+            reply_text,
+            tags_to_add=["AI handled"]
+        )
+        
+        if result.get("status") == "success":
+            logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Reply sent successfully!")
             agent_outcome["agent_handled"] = True
             agent_outcome["processed_flag"] = True
-            agent_outcome["details"] = {"reason": "Agent successfully sent reply.", "tool_response": final_output}
+            agent_outcome["details"] = {"reason": "Direct conditional logic successfully sent reply.", "response": result}
         else:
-            logger.error(f"🎯 MEDICAL_RECORDS_AGENT: Agent finished with non-success output: {final_output}")
-            raise ValueError(f"Agent finished with non-success or invalid output: {final_output}")
+            logger.error(f"🎯 MEDICAL_RECORDS_AGENT: Failed to send reply: {result}")
+            raise ValueError(f"Failed to send reply: {result}")
 
     except Exception as e:
-        logger.error(f"🎯 MEDICAL_RECORDS_AGENT: Error in agent orchestration: {e}", exc_info=True)
-        logger.error(f"🎯 MEDICAL_RECORDS_AGENT: Exception type: {type(e)}")
+        logger.error(f"🎯 MEDICAL_RECORDS_AGENT: Error in conditional logic processing: {e}", exc_info=True)
         await send_fallback_reply_and_tag(
             front_conversation_id,
             "Our automated assistant encountered an error. A team member will review your request.",
             TAG_AI_HUMAN_REVIEW_REQUIRED
         )
         agent_outcome["processed_flag"] = True
-        agent_outcome["details"] = {"reason": f"Agent execution error: {e}"}
-
-    finally:
-        # The MCP client is shared, so we don't close it here.
-        logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Agent execution finished, cleaning up...")
+        agent_outcome["details"] = {"reason": f"Conditional logic error: {e}"}
 
     logger.info(f"🎯 MEDICAL_RECORDS_AGENT: Final outcome for {front_conversation_id}: {agent_outcome}")
     return agent_outcome
