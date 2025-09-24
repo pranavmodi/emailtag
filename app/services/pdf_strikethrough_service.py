@@ -309,7 +309,7 @@ class RoboflowProvider(StrikethroughProvider):
             import tempfile
             
             # Convert PDF to images
-            pages = convert_from_path(pdf_path, dpi=300)
+            pages = convert_from_path(pdf_path, dpi=200)
             image_paths = []
             
             for i, page in enumerate(pages):
@@ -638,7 +638,12 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
                     headers=headers, 
                     json=payload
                 )
-                response.raise_for_status()
+                if response.status_code != 200:
+                    try:
+                        logger.error(f"OpenAI Responses API error {response.status_code}: {response.text}")
+                    except Exception:
+                        logger.error(f"OpenAI Responses API error {response.status_code} (no body)")
+                    return []
                 
                 result_data = response.json()
                 logger.debug(f"OpenAI response: {result_data}")
