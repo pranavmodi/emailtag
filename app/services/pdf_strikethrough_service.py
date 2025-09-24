@@ -464,7 +464,13 @@ class OpenAIProvider(StrikethroughProvider):
     
     def __init__(self, model: Optional[str] = None, max_tokens: Optional[int] = None):
         super().__init__()
-        self.model = model or getattr(settings, 'OPENAI_VISION_MODEL', 'gpt-4o')
+        # Prefer DOCUMENT_ANALYSIS_MODEL, fallback to env, then OPENAI_VISION_MODEL, then gpt-4o
+        self.model = (
+            model
+            or getattr(settings, 'DOCUMENT_ANALYSIS_MODEL', None)
+            or os.getenv('DOCUMENT_ANALYSIS_MODEL')
+            or getattr(settings, 'OPENAI_VISION_MODEL', 'gpt-4o')
+        )
         self.max_tokens = max_tokens or getattr(settings, 'OPENAI_MAX_TOKENS', 1000)
         self.api_key = getattr(settings, 'OPENAI_API_KEY', None)
         
@@ -567,7 +573,7 @@ Examples of what NOT to report:
 If you cannot see clear strikethrough lines, cannot read substantial struck-through text, or only see single words crossed out, return strikethrough_detected: false."""
     
     async def _detect_strikethrough_in_image(self, image_path: str, page_number: int) -> List[Dict[str, Any]]:
-        """Detect strikethrough in a single image using OpenAI GPT-4o Vision."""
+        """Detect strikethrough in a single image using OpenAI Responses API."""
         try:
             base64_image = self._encode_image_to_base64(image_path)
             if not base64_image:
@@ -578,32 +584,57 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
                 "Authorization": f"Bearer {self.api_key}"
             }
             
+            # Structured output schema for strikethrough detection
+            schema: Dict[str, Any] = {
+                "type": "object",
+                "properties": {
+                    "strikethrough_detected": {"type": "boolean"},
+                    "strikethrough_instances": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "struck_through_text": {"type": "string"},
+                                "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                                "location": {"type": "string"},
+                                "visual_description": {"type": "string"}
+                            },
+                            "required": ["struck_through_text", "confidence"],
+                            "additionalProperties": True
+                        }
+                    },
+                    "analysis": {"type": "string"}
+                },
+                "required": ["strikethrough_detected", "strikethrough_instances", "analysis"],
+                "additionalProperties": False
+            }
+
             payload = {
                 "model": self.model,
-                "messages": [
+                "input": [
                     {
                         "role": "user",
                         "content": [
-                            {
-                                "type": "text",
-                                "text": self._prepare_vision_prompt()
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_image}"
-                                }
-                            }
+                            {"type": "input_text", "text": self._prepare_vision_prompt()},
+                            {"type": "input_image", "image_url": f"data:image/jpeg;base64,{base64_image}"}
                         ]
                     }
                 ],
-                "max_tokens": self.max_tokens
+                "text": {
+                    "format": {
+                        "type": "json_schema",
+                        "name": "strikethrough_detection",
+                        "strict": True,
+                        "schema": schema
+                    }
+                },
+                "max_output_tokens": self.max_tokens
             }
             
             async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
-                logger.info(f"Sending image to OpenAI GPT-4o Vision API")
+                logger.info(f"Sending image to OpenAI Responses API for strikethrough detection")
                 response = await client.post(
-                    "https://api.openai.com/v1/chat/completions", 
+                    "https://api.openai.com/v1/responses", 
                     headers=headers, 
                     json=payload
                 )
@@ -611,30 +642,41 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
                 
                 result_data = response.json()
                 logger.debug(f"OpenAI response: {result_data}")
-                
-                # Extract the response content
-                content = result_data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                
-                # Try to parse JSON response
+
+                # Extract structured output text from Responses API
+                text_content: Optional[str] = None
+                if isinstance(result_data.get("output_text"), str):
+                    text_content = result_data.get("output_text")
+                if text_content is None:
+                    output_items = result_data.get("output", []) or result_data.get("response", {}).get("output", [])
+                    if output_items:
+                        for item in output_items:
+                            if isinstance(item, dict) and isinstance(item.get("text"), str):
+                                text_content = item.get("text")
+                                break
+                            content_list = item.get("content", []) if isinstance(item, dict) else []
+                            for part in content_list:
+                                if part.get("type") in ("output_text", "text") and isinstance(part.get("text"), str):
+                                    text_content = part["text"]
+                                    break
+                            if text_content:
+                                break
+
                 import json
-                try:
-                    # Look for JSON in the response
-                    start_idx = content.find('{')
-                    end_idx = content.rfind('}') + 1
-                    if start_idx != -1 and end_idx > start_idx:
-                        json_str = content[start_idx:end_idx]
-                        parsed_result = json.loads(json_str)
+                if not text_content:
+                    # Last resort: accept dict under parsed/result
+                    parsed = result_data.get("parsed") or result_data.get("result")
+                    if isinstance(parsed, dict):
+                        parsed_result = parsed
                     else:
-                        parsed_result = json.loads(content)
-                except json.JSONDecodeError:
-                    # If JSON parsing fails, be STRICT - no fallback detection
-                    logger.warning(f"Failed to parse JSON from OpenAI response, content: {content}")
-                    logger.info("STRICT MODE: No fallback strikethrough detection - requiring valid JSON response with exact text")
-                    parsed_result = {
-                        "strikethrough_detected": False,
-                        "strikethrough_instances": [],
-                        "analysis": f"JSON parsing failed. Raw response: {content[:200]}..."
-                    }
+                        logger.warning("Responses API: No text content found for strikethrough detection output")
+                        return []
+                else:
+                    try:
+                        parsed_result = json.loads(text_content)
+                    except json.JSONDecodeError:
+                        logger.warning(f"Failed to parse JSON from Responses output, content: {text_content[:200]}...")
+                        return []
                 
                 # Convert to our standard format with STRICT requirements
                 strikethrough_instances = []
