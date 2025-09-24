@@ -328,13 +328,13 @@ async def handle_release_of_records_request(
     study_result = mcp_results.get("study_result", {})
 
     if not patient_result.get("success") or not study_result.get("success"):
-        logger.error("Failed to fetch patient/study data")
+        logger.error("Failed to fetch patient/study data from MCP - tagging for human review without sending message")
         await send_fallback_reply_and_tag(
             front_conversation_id,
-            "Internal data error. A team member will assist you.",
+            "",  # Don't send any message to user on MCP errors
             TAG_AI_HUMAN_REVIEW_REQUIRED
         )
-        return {"agent_handled": False, "processed_flag": True, "details": {"reason": "Patient/study fetch failed"}}
+        return {"agent_handled": False, "processed_flag": True, "details": {"reason": "Patient/study fetch failed - tagged for human review"}}
     
     studies = study_result.get("studies", [])
     patient_info = patient_result.get("patients", [{}])[0]
@@ -342,13 +342,13 @@ async def handle_release_of_records_request(
     # Compile participants
     participants_result = await compile_all_participants(patient_id, studies)
     if not participants_result.get("success"):
-        logger.error("Failed to compile participants")
+        logger.error("Failed to compile participants - tagging for human review without sending message")
         await send_fallback_reply_and_tag(
             front_conversation_id,
-            "Internal participant lookup error. A team member will assist you.",
+            "",  # Don't send any message to user on participant lookup errors
             TAG_AI_HUMAN_REVIEW_REQUIRED
         )
-        return {"agent_handled": False, "processed_flag": True, "details": {"reason": "Participant compilation failed"}}
+        return {"agent_handled": False, "processed_flag": True, "details": {"reason": "Participant compilation failed - tagged for human review"}}
     
     participants = participants_result.get("participants", [])
     
