@@ -90,6 +90,11 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
     if determined_tags is not None:
         pass
 
+    # Check if autorespond is enabled
+    if not settings.AUTORESPOND_ENABLED:
+        logger.info(f"Autorespond disabled - skipping autorespond processing for email {email_id}")
+        return {"status": "autorespond_disabled", "message": "Autorespond functionality is disabled"}
+
     try:
         email_uuid = UUID(email_id)
     except ValueError:

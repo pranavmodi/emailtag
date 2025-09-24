@@ -175,6 +175,11 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
     # logger.info(f"PROCESS_AUTORESPOND ENTRY: db object (type: {type(db)}, id: {id(db)})")
     # logger.info(f"PROCESS_AUTORESPOND ENTRY: conversation_text (type: {type(conversation_text)}, length: {len(conversation_text) if isinstance(conversation_text, str) else 'N/A'})")
 
+    # Check if autorespond is enabled
+    if not settings.AUTORESPOND_ENABLED:
+        logger.info(f"Autorespond disabled - skipping appointment autorespond for conversation {conversation_id}")
+        return {"status": "autorespond_disabled", "details": "Autorespond functionality is disabled"}
+
     try:
         # Log all channels for debugging
         # try:
