@@ -206,9 +206,12 @@ class DocumentProcessingService:
                 "additionalProperties": False
             }
             
+            model_name = getattr(settings, "DOCUMENT_ANALYSIS_MODEL", None) or os.getenv("DOCUMENT_ANALYSIS_MODEL") or "gpt-4o"
+
+            # Build Responses API payload (tools -> json_schema)
             payload = {
-                "model": "gpt-4o-2024-08-06",  # Use specific model version that supports structured outputs
-                "messages": [
+                "model": model_name,
+                "input": [
                     {
                         "role": "system",
                         "content": """You are a medical document analyzer for Precise Imaging. Analyze the provided document image and classify it accurately.
@@ -261,26 +264,29 @@ ANALYSIS REQUIREMENTS:
                         "role": "user",
                         "content": [
                             {
-                                "type": "text",
+                                "type": "input_text",
                                 "text": f"Analyze this document (filename: {filename}) and classify it according to the schema. This document contains {len(all_pages_content)} page(s)."
                             }
-                        ] + all_pages_content
+                        ] + [
+                            {"type": "input_image", "image_url": c["image_url"]["url"]}
+                            for c in all_pages_content
+                        ]
                     }
                 ],
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {
+                "text": {
+                    "format": {
+                        "type": "json_schema",
                         "name": "document_analysis",
                         "strict": True,
                         "schema": schema
                     }
                 },
-                "max_tokens": 1000
+                "max_output_tokens": 1000
             }
             
             async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
                 response = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
+                    "https://api.openai.com/v1/responses",
                     headers=headers,
                     json=payload
                 )
@@ -292,20 +298,51 @@ ANALYSIS REQUIREMENTS:
                 response.raise_for_status()
                 
                 result_data = response.json()
-                
-                # Check for refusal
-                if result_data.get("choices", [{}])[0].get("message", {}).get("refusal"):
-                    return {"success": False, "error": "OpenAI refused to analyze this document"}
-                
-                # Extract structured output
-                content = result_data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                
+
+                # Try common locations for structured output text
+                text_content: Optional[str] = None
+
+                # 1) Direct convenience field
+                if isinstance(result_data.get("output_text"), str):
+                    text_content = result_data.get("output_text")
+
+                # 2) Standard output array shape (scan all items, not just first)
+                if text_content is None:
+                    output_items = result_data.get("output", []) or result_data.get("response", {}).get("output", [])
+                    if output_items:
+                        try:
+                            for item in output_items:
+                                # Direct text on item
+                                if isinstance(item, dict) and isinstance(item.get("text"), str):
+                                    text_content = item.get("text")
+                                    break
+                                # Inspect nested message content
+                                content_list = item.get("content", []) if isinstance(item, dict) else []
+                                for part in content_list:
+                                    if part.get("type") in ("output_text", "text") and isinstance(part.get("text"), str):
+                                        text_content = part["text"]
+                                        break
+                                if text_content:
+                                    break
+                        except Exception:
+                            text_content = None
+
+                # 3) Parsed/result keys as last resort
+                if text_content is None:
+                    parsed = result_data.get("parsed") or result_data.get("result")
+                    if isinstance(parsed, dict):
+                        return {"success": True, "data": parsed}
+
+                if not text_content:
+                    logger.error(f"Unable to locate text content in Responses API output: {result_data}")
+                    return {"success": False, "error": "Unable to parse Responses API output"}
+
                 import json
                 try:
-                    parsed_result = json.loads(content)
+                    parsed_result = json.loads(text_content)
                     return {"success": True, "data": parsed_result}
                 except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse structured output: {e}, content: {content}")
+                    logger.error(f"Failed to parse structured output: {e}, content: {text_content}")
                     return {"success": False, "error": f"Failed to parse structured output: {str(e)}"}
                     
         except Exception as e:

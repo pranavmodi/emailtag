@@ -31,6 +31,10 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
     and updates the email record directly.
     """
     
+    # Extract filename for clearer logging
+    filename = attachment_url.split('/')[-1] if '/' in attachment_url else 'attachment'
+    logger.info(f"🔄 DOCUMENT PROCESSING START: {filename} for email {email_id}")
+    
     try:
         email_uuid = UUID(email_id)
     except ValueError:
@@ -91,10 +95,21 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
             doc_analysis = processing_result.get("document_analysis", {})
             if doc_analysis.get("success"):
                 analysis_data = doc_analysis.get("data", {})
-                logger.info(f"📋 Document Type: {analysis_data.get('document_type', 'unknown')}")
-                logger.info(f"📋 Description: {analysis_data.get('description', 'N/A')}")
+                doc_type = analysis_data.get('document_type', 'unknown')
+                description = analysis_data.get('description', 'N/A')
+                confidence = analysis_data.get('confidence', 0.0)
+                
+                logger.info(f"📋 Document Type: {doc_type} (confidence: {confidence:.2f})")
+                logger.info(f"📋 Classification Reason: {description}")
                 logger.info(f"📋 Patient ID: {analysis_data.get('patient_id', 'Not found')}")
-                logger.info(f"📋 Confidence: {analysis_data.get('confidence', 0.0):.2f}")
+                
+                # Clear explanation of why it was classified as lien or other
+                if doc_type == 'lien':
+                    logger.info(f"🏷️ LIEN DETECTED in {filename}: Document identified as lien based on content analysis")
+                elif doc_type == 'other':
+                    logger.info(f"🏷️ NON-LIEN DOCUMENT in {filename}: Classified as '{doc_type}' - {description}")
+                else:
+                    logger.info(f"🏷️ DOCUMENT CLASSIFICATION in {filename}: Type '{doc_type}' - {description}")
             else:
                 logger.warning(f"❌ Document analysis failed: {doc_analysis.get('error', 'Unknown error')}")
 
@@ -186,6 +201,8 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
 
         # Check if all attachments are processed and trigger orchestration if complete
         _check_document_processing_completion_and_trigger_orchestration(updated_email, completed_count, email_id, str(email_uuid))
+        
+        logger.info(f"✅ DOCUMENT PROCESSING COMPLETE: {filename} for email {email_id}")
 
     except Exception as db_exc:
         logger.exception(f"Database error processing document result for email {email_id}: {db_exc}")
