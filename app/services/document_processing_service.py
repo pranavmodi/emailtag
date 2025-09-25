@@ -159,6 +159,21 @@ class DocumentProcessingService:
                 # Check image size
                 if len(file_content) > 20 * 1024 * 1024:  # 20MB limit
                     return {"success": False, "error": "Image too large for OpenAI API"}
+                
+                # Check if this is likely a small logo/letterhead (less than 20KB)
+                # Small images are often logos and should not be classified as case_update
+                if len(file_content) < 20 * 1024:  # 20KB threshold
+                    logger.info(f"Small image detected ({len(file_content)} bytes), likely a logo - avoiding case_update classification")
+                    return {
+                        "success": True,
+                        "data": {
+                            "document_type": "other",
+                            "description": f"Small image file ({len(file_content)} bytes), likely a logo or letterhead snippet",
+                            "patient_id": None,
+                            "confidence": 0.1
+                        }
+                    }
+                
                 mime_type = "image/jpeg" if file_ext in ['.jpg', '.jpeg'] else f"image/{file_ext[1:]}"
                 
                 # For single images, create the single image content format

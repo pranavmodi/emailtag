@@ -11,7 +11,7 @@ Please use the following rules to classify the provided email content into one o
 If there is ANY attachment with document type "rx" (prescription/referral), ALWAYS classify as 'Scheduling' regardless of email content. This takes absolute priority over all other rules below.
 
 2. **CASE UPDATE PRIORITY:**
-If there is ANY attachment with document type "case_update" (e.g., attorney case status updates, new attorney notifications, settlement/payment status updates), ALWAYS classify the TOP-LEVEL category as 'Accounts Receivable' regardless of subject line or body content.
+If there is ANY attachment with document type "case_update" (e.g., attorney case status updates, new attorney notifications, settlement/payment status updates) AND the attachment is a substantial document (not a small logo or letterhead image), ALWAYS classify the TOP-LEVEL category as 'Accounts Receivable' regardless of subject line or body content. Small image files (< 20KB) classified as case_update should be ignored for this rule as they are likely logos.
 
 3. **CASE UPDATE CONTENT PRIORITY:**
 If the email SUBJECT or BODY clearly indicates a legal case status update or attorney correspondence (e.g., phrases like "new attorney", "change of representation", "remove our firm from future correspondence", "drop letter", "drop pending", "promise to send payment", "waiting to clear liability", "waiting on settlement check", "payment on way", "refund request"), ALWAYS classify the TOP-LEVEL category as 'Accounts Receivable'. This applies even when there are scheduling/modality keywords present, unless there is an explicit medical records request (in which case see Medical Records priority below).
