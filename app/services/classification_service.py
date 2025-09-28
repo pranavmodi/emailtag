@@ -19,6 +19,8 @@ from app.services.frontapp_service import get_conversation_text
 from app.services.frontapp_service import remove_conversation_tags
 # File-based rules service (replaces database-based hierarchical rules)
 from app.services.file_based_rules_service import get_file_based_rules_service
+from app.services.trace_service import create_tracer
+from app.models.processing_trace import StepTypes, TraceSteps, TraceStatus
 
 # Load environment variables if needed (though settings should handle this)
 load_dotenv()
@@ -742,12 +744,16 @@ def classify_email_tags_hierarchical(
     Classifies an email conversation by traversing the EMAIL_CATEGORIES hierarchy,
     using rules from file-based storage.
     """
+    # Create tracer for classification (temporarily disabled)
+    # tracer = create_tracer(front_conversation_id=front_conversation_id)
+    
+    # TODO: Fix trace context indentation
     client = get_openai_client()
 
     # --- PRE-CHECK FOR CONFLICTING TOPICS ---
     try:
         conflict_result = _check_for_conflicting_top_level_topics(client, front_conversation_id, conversation_text, sender_info, message_times)
-        
+    
         if conflict_result.get("success", False) and conflict_result.get("has_conflicts", False):
             logger.info(f"🚫 ASSIGNING HUMAN REVIEW: Conflicting topics detected for {front_conversation_id}")
             return ["AI: Human review required"]

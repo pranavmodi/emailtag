@@ -73,6 +73,11 @@ class Email(Base):
     related_patient_data: Mapped[List["PatientConversationData"]] = relationship(
         "PatientConversationData", back_populates="source_email"
     )
+    
+    # Relationship to processing traces
+    processing_traces: Mapped[List["EmailProcessingTrace"]] = relationship(
+        "EmailProcessingTrace", back_populates="email"
+    )
 
 
 class Tag(Base):

@@ -23,6 +23,8 @@ from app.schemas.patient_conversation_data import PatientConversationDataCreate
 from app.tasks.email import process_email
 from app.services.patient import fetch_patient_by_id
 from app.helpers.patient_extraction import extract_and_log_patient_info
+from app.services.trace_service import create_tracer, TraceLogger
+from app.models.processing_trace import StepTypes, TraceSteps, TraceStatus
 
 logger = logging.getLogger(__name__)
 
@@ -73,57 +75,120 @@ async def frontapp_webhook(
     Returns:
         Dict[str, Any]: Response indicating the webhook was received
     """
+    # Initialize tracer - we'll get the conversation ID after parsing
+    tracer = None
+    
     # Get the raw request body
     body = await request.body()
-    # logger.info(f"Received raw FrontApp webhook request")
-
     
-    # Verify webhook signature in production
-    # if not settings.DEBUG:
-    #     signature = request.headers.get("X-Front-Signature")
-    #     if not signature or not verify_webhook_signature(body, signature):
-    #         logger.warning("Invalid webhook signature")
-    #         raise HTTPException(
-    #             status_code=status.HTTP_401_UNAUTHORIZED,
-    #             detail="Invalid signature",
-    #         )
-    
-    # Parse the webhook payload
     try:
+        # Parse the webhook payload first to get conversation ID for tracing
         payload = json.loads(body)
         webhook_data = FrontAppWebhook(**payload)
+        
+        # Now we can create a tracer with the conversation ID
+        conversation_id = webhook_data.conversation.get("id") if webhook_data.conversation else "unknown"
+        tracer = create_tracer(front_conversation_id=conversation_id)
+        
+        # Log webhook received
+        tracer.log_step(
+            step_name=TraceSteps.WEBHOOK_RECEIVED,
+            step_type=StepTypes.ENTRY_POINT,
+            status=TraceStatus.COMPLETED,
+            input_data={
+                "webhook_type": webhook_data.type,
+                "conversation_id": conversation_id,
+                "payload_size": len(body),
+                "source_ip": request.client.host if request.client else "unknown"
+            },
+            output_data={
+                "payload_parsed": True,
+                "event_type": webhook_data.type
+            }
+        )
+        
     except Exception as e:
+        # Log parsing failure if we have a tracer
+        if tracer:
+            tracer.log_step(
+                step_name=TraceSteps.WEBHOOK_PARSED,
+                step_type=StepTypes.VALIDATION,
+                status=TraceStatus.FAILED,
+                error_data={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "payload_size": len(body)
+                }
+            )
+        
         logger.error(f"Error parsing webhook payload: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid payload format",
         )
     
+    # Verify webhook signature in production (traced)
+    # if not settings.DEBUG:
+    #     signature = request.headers.get("X-Front-Signature")
+    #     if not signature or not verify_webhook_signature(body, signature):
+    #         tracer.log_step(
+    #             step_name=TraceSteps.WEBHOOK_VALIDATED,
+    #             step_type=StepTypes.VALIDATION,
+    #             status=TraceStatus.FAILED,
+    #             error_data={"error_message": "Invalid webhook signature"}
+    #         )
+    #         logger.warning("Invalid webhook signature")
+    #         raise HTTPException(
+    #             status_code=status.HTTP_401_UNAUTHORIZED,
+    #             detail="Invalid signature",
+    #         )
+    
     # Process based on event type
     if webhook_data.type in ["inbound", "custom"]:
-        await process_inbound_message(db, webhook_data)
+        tracer.log_step(
+            step_name=TraceSteps.WEBHOOK_VALIDATED,
+            step_type=StepTypes.VALIDATION,
+            status=TraceStatus.COMPLETED,
+            output_data={"event_type": webhook_data.type, "processing": True}
+        )
+        await process_inbound_message(db, webhook_data, tracer)
     else:
+        tracer.log_step(
+            step_name=TraceSteps.WEBHOOK_VALIDATED,
+            step_type=StepTypes.VALIDATION,
+            status=TraceStatus.SKIPPED,
+            output_data={"event_type": webhook_data.type, "processing": False, "reason": "ignored_event_type"}
+        )
         logger.info(f"Ignoring webhook event of type: {webhook_data.type}")
     
     return {"status": "accepted"}
 
 
-async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhook) -> None:
+async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhook, tracer: TraceLogger) -> None:
     """
     Process an inbound message from FrontApp.
     
     Args:
         db: Database session
         webhook_data: The webhook data from FrontApp
+        tracer: Trace logger for this conversation
     """
     try:
-        # logger.info(f"Processing inbound message: {webhook_data.id}")
-        
-        # Extract conversation data
-        conversation_id = webhook_data.conversation.get("id")
-        if not conversation_id:
-            logger.warning("No conversation ID found in webhook data")
-            return
+        # Log message processing start
+        with tracer.trace_step(
+            step_name=TraceSteps.CONTENT_EXTRACTED,
+            step_type=StepTypes.EXTRACTION,
+            input_data={"message_id": webhook_data.id}
+        ) as (trace_id, output_data):
+            
+            # Extract conversation data
+            conversation_id = webhook_data.conversation.get("id")
+            if not conversation_id:
+                logger.warning("No conversation ID found in webhook data")
+                output_data["error"] = "No conversation ID found"
+                return
+            
+            output_data["conversation_id"] = conversation_id
         
         # Extract message data and attachments from target.data
         message = webhook_data.target.get("data", {})
@@ -182,28 +247,49 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         else:
             final_content_html = content_body
         
-        # Skip processing if this is an autoresponse email
-        if is_autoresponse_email(final_content_text, content_body):
-            logger.info(f"🤖 AUTORESPONSE DETECTED: Skipping email from {sender}")
-            return
-        else:
-            logger.info(f"✅ Processing email from {sender} (not autoresponse)")
+        # Check for autoresponse
+        with tracer.trace_step(
+            step_name=TraceSteps.AUTORESPONSE_CHECK,
+            step_type=StepTypes.BUSINESS_LOGIC,
+            input_data={"sender": sender, "content_length": len(final_content_text)}
+        ) as (trace_id, output_data):
+            is_autoresponse = is_autoresponse_email(final_content_text, content_body)
+            output_data["is_autoresponse"] = is_autoresponse
+            
+            if is_autoresponse:
+                logger.info(f"🤖 AUTORESPONSE DETECTED: Skipping email from {sender}")
+                output_data["action"] = "skipped"
+                return
+            else:
+                logger.info(f"✅ Processing email from {sender} (not autoresponse)")
+                output_data["action"] = "processing"
         
-        # Create email record with raw webhook data
-        email_create = EmailCreate(
-            front_message_id=webhook_data.id,
-            front_conversation_id=conversation_id,
-            sender=sender,
-            recipients=recipients,
-            subject=subject,
-            content_text=final_content_text,
-            content_html=final_content_html,
-            has_attachments=bool(attachments),
-            raw_data=webhook_data.model_dump()  # Include the complete webhook data
-        )
-        
-        db_email = await email_crud.create(db=db, obj_in=email_create)
-        # logger.info(f"Created email record with ID: {db_email.id}")
+        # Create email record
+        with tracer.trace_step(
+            step_name=TraceSteps.EMAIL_CREATED,
+            step_type=StepTypes.DATABASE,
+            input_data={
+                "sender": sender,
+                "subject": subject,
+                "has_attachments": bool(attachments),
+                "recipients_count": len(recipients)
+            }
+        ) as (trace_id, output_data):
+            email_create = EmailCreate(
+                front_message_id=webhook_data.id,
+                front_conversation_id=conversation_id,
+                sender=sender,
+                recipients=recipients,
+                subject=subject,
+                content_text=final_content_text,
+                content_html=final_content_html,
+                has_attachments=bool(attachments),
+                raw_data=webhook_data.model_dump()
+            )
+            
+            db_email = await email_crud.create(db=db, obj_in=email_create)
+            output_data["email_id"] = str(db_email.id)
+            output_data["created_successfully"] = True
         
         # Log the entire conversation thread
         try:
@@ -215,11 +301,19 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         # Extract and process patient IDs using the helper function (now with subject support)
         await extract_and_log_patient_info(db, final_content_text, conversation_id, db_email.id, logger, subject)
 
-        # Always queue the main process_email task.
-        # The process_email task itself will determine if OCR is needed and dispatch OCR tasks.
-        # process_email.delay(str(db_email.id))
-        process_email.apply_async(args=[str(db_email.id)], queue='emails')
-        # logger.info(f"Queued email {db_email.id} for initial processing via process_email task to 'emails' queue.")
+        # Queue email for processing
+        with tracer.trace_step(
+            step_name=TraceSteps.TASK_QUEUED,
+            step_type=StepTypes.TASK_QUEUE,
+            input_data={
+                "email_id": str(db_email.id),
+                "queue": "emails",
+                "task": "process_email"
+            }
+        ) as (trace_id, output_data):
+            process_email.apply_async(args=[str(db_email.id)], queue='emails')
+            output_data["queued_successfully"] = True
+            output_data["queue_name"] = "emails"
         
     except Exception as e:
         logger.exception(f"Error processing inbound message: {str(e)}")

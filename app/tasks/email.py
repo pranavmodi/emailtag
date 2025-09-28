@@ -16,6 +16,7 @@ from celery.utils.log import get_task_logger
 from app.core.config import settings
 from app.crud.sync import email as email_crud_sync
 from app.crud.sync import tag as tag_crud_sync
+from app.crud.sync import processing_trace as trace_crud_sync
 from app.db.session import SessionLocal
 from app.db.session import AsyncSessionLocal # Add AsyncSessionLocal import
 from app.services.classification_service import classify_email_tags_hierarchical, remove_conflicting_tags
@@ -28,6 +29,8 @@ from app.agents.agent_helpers import extract_all_patient_ids_from_email_logic
 from app.models.email import Email # Added for type hinting
 from app.schemas.email import EmailUpdate # Added for type hinting
 from app.services.archiving_service import check_and_archive_conversation # Import the new archiving service
+from app.services.trace_service import create_tracer
+from app.models.processing_trace import StepTypes, TraceSteps, TraceStatus
 
 # Import document processing task from separate module
 from app.tasks.document_processing import send_attachment_to_document_processing
@@ -159,19 +162,35 @@ def process_email(email_id: str) -> Dict:
         return {"status": "error", "message": "Invalid email ID format"}
 
     db = SessionLocal()
+    tracer = None
     try:
         email_obj = email_crud_sync.get(db, id=email_uuid)
         if not email_obj:
             logger.error(f"Email {email_id} not found in process_email task.")
             return {"status": "error", "message": "Email not found"}
-
-        # Assuming 'ocr_status' can be: None (not processed), 'pending_ocr', 'ocr_completed', 'ocr_error', 'ocr_skipped'
-        # And Email model has 'ocr_attachments_total'
         
-        needs_ocr = False
-        if email_obj.has_attachments and email_obj.status not in ["ocr_completed", "ocr_completed_with_errors", "ocr_error", "ocr_skipped", "pending_ocr"]: # Basic check
-             # More robust: check a dedicated ocr_status field if available
-             needs_ocr = True
+        # Create tracer for this conversation
+        tracer = create_tracer(
+            front_conversation_id=email_obj.front_conversation_id,
+            email_id=email_id
+        )
+
+        # Check OCR requirements
+        with tracer.trace_step(
+            step_name=TraceSteps.OCR_REQUIREMENTS_CHECK,
+            step_type=StepTypes.BUSINESS_LOGIC,
+            input_data={
+                "has_attachments": email_obj.has_attachments,
+                "current_status": email_obj.status,
+                "email_id": email_id
+            }
+        ) as (trace_id, output_data):
+            needs_ocr = False
+            if email_obj.has_attachments and email_obj.status not in ["ocr_completed", "ocr_completed_with_errors", "ocr_error", "ocr_skipped", "pending_ocr"]:
+                needs_ocr = True
+            
+            output_data["needs_ocr"] = needs_ocr
+            output_data["reason"] = "has_attachments_and_not_processed" if needs_ocr else "no_attachments_or_already_processed"
 
 
         if needs_ocr:
@@ -233,11 +252,21 @@ def process_email(email_id: str) -> Dict:
 
         else:
             logger.info(f"Email {email_id} does not require OCR or OCR already handled. Proceeding to orchestration on 'processing' queue.")
-            # If OCR was previously completed, status might be 'ocr_completed'.
-            # If no attachments, has_attachments is false.
-            # If OCR was skipped, status might be 'ocr_skipped'.
-            # orchestrate_post_ocr_processing.delay(email_id)
-            orchestrate_post_ocr_processing.apply_async(args=[email_id], queue='processing')
+            
+            # Queue for orchestration
+            with tracer.trace_step(
+                step_name=TraceSteps.TASK_QUEUED,
+                step_type=StepTypes.TASK_QUEUE,
+                input_data={
+                    "email_id": email_id,
+                    "queue": "processing", 
+                    "task": "orchestrate_post_ocr_processing"
+                }
+            ) as (trace_id, output_data):
+                orchestrate_post_ocr_processing.apply_async(args=[email_id], queue='processing')
+                output_data["queued_successfully"] = True
+                output_data["next_step"] = "orchestrate_post_ocr_processing"
+            
             return {"status": "processing_ocr_not_needed", "email_id": email_id}
 
     except Exception as e:

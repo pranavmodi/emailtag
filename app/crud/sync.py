@@ -111,4 +111,7 @@ class SyncCRUDTag:
 
 # Create instances of the CRUD classes
 email = SyncCRUDEmail(Email)
-tag = SyncCRUDTag(Tag) 
+tag = SyncCRUDTag(Tag)
+
+# Import processing_trace from the submodule
+from app.crud.sync.processing_trace import processing_trace 

@@ -2,4 +2,5 @@
 
 from app.models.email import Email, Tag, email_tag_association 
 from .patient_conversation_data import PatientConversationData  # noqa
-from .classification_rule import ClassificationRule  # noqa 
+from .classification_rule import ClassificationRule  # noqa
+from .processing_trace import EmailProcessingTrace  # noqa 
