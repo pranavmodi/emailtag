@@ -310,6 +310,12 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
             email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="orchestration_failed_no_front_id", is_processed=True))
             return {"status": "error", "message": "Missing Front conversation ID for orchestration"}
 
+        # Create tracer for this conversation
+        tracer = create_tracer(
+            front_conversation_id=front_conversation_id,
+            email_id=email_id
+        )
+
         # --- TOPIC SPLIT DETECTION --- (Copied and adapted from tag_email)
         is_potential_split = False
         try:
@@ -448,7 +454,19 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
                     subject=email_subject
                 )
             
-            extracted_patient_ids = asyncio.run(_run_patient_id_extraction_async())
+            with tracer.trace_step(
+                step_name=TraceSteps.PATIENT_ID_EXTRACTION,
+                step_type=StepTypes.AI_PROCESSING,
+                input_data={
+                    "email_content_length": len(conversation_content),
+                    "has_subject": bool(email_subject),
+                    "subject": email_subject,
+                    "front_conversation_id": front_conversation_id
+                }
+            ) as (trace_id, output_data):
+                extracted_patient_ids = asyncio.run(_run_patient_id_extraction_async())
+                output_data["extracted_patient_ids"] = extracted_patient_ids
+                output_data["patient_ids_count"] = len(extracted_patient_ids) if extracted_patient_ids else 0
             
             # Store extracted patient IDs in database
             if extracted_patient_ids:

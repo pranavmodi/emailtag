@@ -407,6 +407,14 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> bool:
         logger.info(f"No tag names provided for conversation {conversation_id}. Skipping add_conversation_tags.")
         return True # No action needed, considered success for this function's purpose
 
+    # Special case: When "Counter Offer Sent" is applied, also apply "Bill Offer"
+    tag_names_list = list(tag_names)  # Create a mutable copy
+    if "Counter Offer Sent" in tag_names_list and "Bill Offer" not in tag_names_list:
+        tag_names_list.append("Bill Offer")
+        logger.info(f"Added 'Bill Offer' tag automatically because 'Counter Offer Sent' was applied to conversation {conversation_id}")
+    
+    tag_names = tag_names_list  # Use the modified list
+
     try:
         available_tags = list_front_tags() # This can raise exceptions
         tag_name_to_id_map = {tag.get('name'): tag.get('id') for tag in available_tags if tag.get('name') and tag.get('id')}

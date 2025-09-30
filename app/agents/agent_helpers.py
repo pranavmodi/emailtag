@@ -50,14 +50,133 @@ from openai import AsyncOpenAI
 from app.core.config import settings as app_settings_instance
 from app.services import frontapp_service
 from app.mcp import default_mcp_client as mcp_client, call_mcp_tool
+from app.services.trace_service import create_tracer
+from app.models.processing_trace import StepTypes, TraceSteps
 
 logger = get_task_logger(__name__)
+
+
+def _extract_meaningful_content_from_forwards(email_content: str) -> str:
+    """
+    Extracts meaningful content from heavily forwarded emails by identifying
+    and prioritizing the most recent relevant content over forwarded headers.
+    
+    Args:
+        email_content: Email content that may contain multiple forwards
+        
+    Returns:
+        Cleaned content with forwarded email clutter removed
+    """
+    if not email_content or len(email_content) < 500:
+        # Short emails likely don't have heavy forwarding issues
+        return email_content
+    
+    lines = email_content.split('\n')
+    
+    # Patterns that indicate forwarded email boundaries
+    forward_patterns = [
+        r'From:\s*.+@.+',
+        r'Sent:\s*\w+',
+        r'To:\s*.+@.+',
+        r'Subject:\s*.+',
+        r'Date:\s*.+',
+        r'-----Original Message-----',
+        r'Begin forwarded message:',
+        r'Forwarded message',
+        r'On .+ wrote:',
+        r'On .+ at .+ wrote:',
+    ]
+    
+    # Find sections that contain patient-relevant information
+    patient_info_patterns = [
+        r'DOB\s*:?\s*\d{1,2}[/\-]\d{1,2}[/\-]\d{4}',
+        r'DOL\s*:?\s*\d{1,2}[/\-]\d{1,2}[/\-]\d{4}',
+        r'Date of Birth\s*:?\s*\d{1,2}[/\-]\d{1,2}[/\-]\d{4}',
+        r'Date of Loss\s*:?\s*\d{1,2}[/\-]\d{1,2}[/\-]\d{4}',
+        r'Case type\s*:',
+        r'Patient\s*:',
+        r'Client\s*:',
+        r'Name\s*:',
+        r'Demos\s*:',
+        r'\(\d{3}\)\s*\d{3}-\d{4}',  # Phone numbers
+        r'\d{1,5}\s+\w+.*St|Ave|Rd|Blvd',  # Addresses
+    ]
+    
+    # Score each line based on content relevance
+    scored_lines = []
+    for i, line in enumerate(lines):
+        score = 0
+        line_stripped = line.strip()
+        
+        # Skip empty lines but keep them for structure
+        if not line_stripped:
+            scored_lines.append((line, 0, i))
+            continue
+            
+        # High score for patient information
+        for pattern in patient_info_patterns:
+            if re.search(pattern, line_stripped, re.IGNORECASE):
+                score += 10
+                break
+        
+        # Negative score for forwarded email headers
+        for pattern in forward_patterns:
+            if re.search(pattern, line_stripped, re.IGNORECASE):
+                score -= 5
+                break
+        
+        # Medium score for lines with common patient-related keywords
+        patient_keywords = ['patient', 'client', 'schedule', 'MRI', 'case', 'injury', 'birth']
+        for keyword in patient_keywords:
+            if keyword.lower() in line_stripped.lower():
+                score += 2
+                break
+        
+        # Small score for lines with actual content (not just headers)
+        if len(line_stripped) > 10 and not line_stripped.startswith('>'):
+            score += 1
+            
+        scored_lines.append((line, score, i))
+    
+    # Extract the highest scoring consecutive sections
+    # Look for blocks of content with high average scores
+    best_section_start = 0
+    best_section_end = len(lines)
+    best_score = 0
+    
+    # Try different window sizes to find the most relevant section
+    for window_size in [20, 30, 50]:
+        if window_size > len(lines):
+            continue
+            
+        for start in range(len(lines) - window_size + 1):
+            end = start + window_size
+            section_lines = scored_lines[start:end]
+            avg_score = sum(score for _, score, _ in section_lines) / len(section_lines)
+            
+            # Bonus for sections containing patient info
+            has_patient_info = any(score >= 10 for _, score, _ in section_lines)
+            if has_patient_info:
+                avg_score += 5
+                
+            if avg_score > best_score:
+                best_score = avg_score
+                best_section_start = start
+                best_section_end = end
+    
+    # If we found a good section, use it; otherwise use the original content
+    if best_score > 2:  # Threshold for meaningful improvement
+        relevant_lines = lines[best_section_start:best_section_end]
+        return '\n'.join(relevant_lines)
+    
+    return email_content
 
 
 def preprocess_email_content_for_extraction(email_content: str) -> str:
     """
     Preprocesses email content to clean HTML entities and formatting issues
     that might interfere with patient information extraction.
+    Enhanced to handle heavily forwarded emails by extracting meaningful content.
     
     Args:
         email_content: Raw email content with potential HTML entities
@@ -85,6 +204,10 @@ def preprocess_email_content_for_extraction(email_content: str) -> str:
     for entity, replacement in html_entities.items():
         cleaned_content = cleaned_content.replace(entity, replacement)
     
+    # Enhanced forwarded email handling
+    # Extract the most relevant content from heavily forwarded emails
+    cleaned_content = _extract_meaningful_content_from_forwards(cleaned_content)
+    
     # Normalize excessive whitespace while preserving structure
     # Replace multiple spaces with single space
     cleaned_content = re.sub(r' {2,}', ' ', cleaned_content)
@@ -96,6 +219,10 @@ def preprocess_email_content_for_extraction(email_content: str) -> str:
     # Fix spacing around DOB patterns
     cleaned_content = re.sub(r'DOB\s*:\s*', 'DOB: ', cleaned_content, flags=re.IGNORECASE)
     cleaned_content = re.sub(r'DOB\s+', 'DOB: ', cleaned_content, flags=re.IGNORECASE)
+    
+    # Fix spacing around DOL patterns  
+    cleaned_content = re.sub(r'DOL\s*:\s*', 'DOL: ', cleaned_content, flags=re.IGNORECASE)
+    cleaned_content = re.sub(r'DOL\s+', 'DOL: ', cleaned_content, flags=re.IGNORECASE)
     
     # Fix spacing around email patterns
     cleaned_content = re.sub(r'Email\s*:\s*', 'Email: ', cleaned_content, flags=re.IGNORECASE)
@@ -367,7 +494,7 @@ def _extract_patient_names_and_dates_from_email(email_content: str) -> list:
     return extracted_patients
 
 
-async def _extract_patient_info_with_openai(email_content: str, subject: Optional[str] = None) -> Optional[Dict[str, str]]:
+async def _extract_patient_info_with_openai(email_content: str, subject: Optional[str] = None, conversation_id: Optional[str] = None) -> Optional[Dict[str, str]]:
     """
     Uses OpenAI structured outputs to extract patient name and DOI/DOB from email content.
     
@@ -378,15 +505,44 @@ async def _extract_patient_info_with_openai(email_content: str, subject: Optiona
     Returns:
         Dict with 'first_name', 'last_name', 'date', and 'date_type' ('DOI' or 'DOB'), or None
     """
+    debug_log_file = "/tmp/patient_extraction_debug.log"
+    
+    # Add debug logging at function entry
+    with open(debug_log_file, "a") as f:
+        f.write(f"FUNCTION_ENTRY: _extract_patient_info_with_openai\n")
+        f.write(f"CONVERSATION_ID: {conversation_id}\n")
+        f.write(f"HAS_SUBJECT: {bool(subject)}\n")
+        f.write(f"EMAIL_CONTENT_LEN: {len(email_content) if email_content else 0}\n")
+        f.write(f"STARTING_TRY_BLOCK...\n")
+    
     try:
         # Create OpenAI client
+        with open(debug_log_file, "a") as f:
+            f.write(f"CREATING_OPENAI_CLIENT...\n")
+            
         custom_httpx_client = httpx.AsyncClient(verify=False)
         openai_client = AsyncOpenAI(
             api_key=app_settings_instance.OPENAI_API_KEY if hasattr(app_settings_instance, 'OPENAI_API_KEY') else os.environ.get("OPENAI_API_KEY"),
             http_client=custom_httpx_client
         )
         
+        with open(debug_log_file, "a") as f:
+            f.write(f"OPENAI_CLIENT_CREATED\n")
+        
         full_email_content = f"Subject: {subject}\n\n{email_content}" if subject else email_content
+        
+        # Log full content for debugging
+        from datetime import datetime
+        debug_log_file = "/tmp/patient_extraction_debug.log"
+        with open(debug_log_file, "a") as f:
+            f.write(f"\n{'='*80}\n")
+            f.write(f"TIMESTAMP: {datetime.now().isoformat()}\n")
+            f.write(f"CONVERSATION_ID: {conversation_id}\n")
+            f.write(f"SUBJECT: {subject}\n")
+            f.write(f"EMAIL_CONTENT_LENGTH: {len(email_content)}\n")
+            f.write(f"FULL_CONTENT_LENGTH: {len(full_email_content)}\n")
+            f.write(f"FULL_EMAIL_CONTENT:\n{full_email_content}\n")
+            f.write(f"{'='*80}\n")
         
         # Define structured output schema to extract both DOI and DOB if available
         schema = {
@@ -473,56 +629,208 @@ IMPORTANT INSTRUCTIONS:
             "max_tokens": 200
         }
         
-        response = await openai_client.chat.completions.create(**api_params)
-        response_text = response.choices[0].message.content.strip()
-        
-        try:
-            extracted_data = json.loads(response_text)
+        # Prepare the OpenAI API call and trace it if conversation_id is provided
+        with open(debug_log_file, "a") as f:
+            f.write(f"CHECKING_CONVERSATION_ID: '{conversation_id}'\n")
+            f.write(f"BOOL_CONVERSATION_ID: {bool(conversation_id)}\n")
             
-            if not extracted_data.get("found", False):
-                return None
-            
-            # Validate required name fields
-            first_name = extracted_data.get("first_name", "").strip()
-            last_name = extracted_data.get("last_name", "").strip()
-            
-            if not first_name or not last_name:
-                return None
-            
-            # Extract and validate dates
-            doi = extracted_data.get("doi", "").strip()
-            dob = extracted_data.get("dob", "").strip()
-            
-            # Validate date formats
-            validated_dates = {}
-            if doi:
+        if conversation_id:
+            with open(debug_log_file, "a") as f:
+                f.write(f"ENTERING_TRACING_BRANCH\n")
+            tracer = create_tracer(front_conversation_id=conversation_id)
+            with tracer.trace_step(
+                step_name=TraceSteps.OPENAI_PATIENT_EXTRACTION,
+                step_type=StepTypes.AI_PROCESSING,
+                input_data={
+                    "model": patient_extraction_model,
+                    "email_content_length": len(full_email_content),
+                    "has_subject": bool(subject),
+                    "subject": subject,
+                    "prompt_length": len(prompt),
+                    "schema": schema,
+                    "api_params": {
+                        "model": api_params["model"],
+                        "temperature": api_params["temperature"],
+                        "max_tokens": api_params["max_tokens"]
+                    }
+                }
+            ) as (trace_id, output_data):
+                # Log OpenAI request details
+                with open(debug_log_file, "a") as f:
+                    f.write(f"OPENAI_REQUEST_PROMPT:\n{prompt}\n")
+                    f.write(f"OPENAI_REQUEST_PARAMS:\n{json.dumps(api_params, indent=2)}\n")
+                    f.write(f"{'='*40}\n")
+                
+                response = await openai_client.chat.completions.create(**api_params)
+                response_text = response.choices[0].message.content.strip()
+                
+                # Log OpenAI response details
+                with open(debug_log_file, "a") as f:
+                    f.write(f"OPENAI_RESPONSE_RAW:\n{response_text}\n")
+                    f.write(f"OPENAI_RESPONSE_USAGE:\n{response.usage.model_dump() if response.usage else 'None'}\n")
+                    f.write(f"{'='*40}\n")
+                
+                output_data["raw_response"] = response_text
+                output_data["usage"] = response.usage.model_dump() if response.usage else None
+                
                 try:
-                    datetime.strptime(doi, '%m/%d/%Y')
-                    validated_dates["doi"] = doi
-                except ValueError:
-                    pass
-            
-            if dob:
-                try:
-                    datetime.strptime(dob, '%m/%d/%Y')
-                    validated_dates["dob"] = dob
-                except ValueError:
-                    pass
-            
-            if not validated_dates:
-                return None
+                    extracted_data = json.loads(response_text)
+                    
+                    if not extracted_data.get("found", False):
+                        output_data["extraction_success"] = False
+                        output_data["reason"] = "Patient not found in content"
+                        
+                        # Log extraction failure
+                        with open(debug_log_file, "a") as f:
+                            f.write(f"EXTRACTION_FAILED: Patient not found in content\n")
+                            f.write(f"EXTRACTED_DATA: {extracted_data}\n")
+                            f.write(f"{'='*80}\n\n")
+                        
+                        return None
+                    
+                    # Validate required name fields
+                    first_name = extracted_data.get("first_name", "").strip()
+                    last_name = extracted_data.get("last_name", "").strip()
+                    
+                    if not first_name or not last_name:
+                        output_data["extraction_success"] = False
+                        output_data["reason"] = "Missing required name fields"
+                        
+                        # Log name validation failure
+                        with open(debug_log_file, "a") as f:
+                            f.write(f"EXTRACTION_FAILED: Missing required name fields\n")
+                            f.write(f"FIRST_NAME: '{first_name}'\n")
+                            f.write(f"LAST_NAME: '{last_name}'\n")
+                            f.write(f"EXTRACTED_DATA: {extracted_data}\n")
+                            f.write(f"{'='*80}\n\n")
+                        
+                        return None
+                    
+                    # Extract and validate dates
+                    doi = extracted_data.get("doi", "").strip()
+                    dob = extracted_data.get("dob", "").strip()
+                    
+                    # Validate date formats
+                    validated_dates = {}
+                    if doi:
+                        try:
+                            datetime.strptime(doi, '%m/%d/%Y')
+                            validated_dates["doi"] = doi
+                        except ValueError:
+                            pass
+                    
+                    if dob:
+                        try:
+                            datetime.strptime(dob, '%m/%d/%Y')
+                            validated_dates["dob"] = dob
+                        except ValueError:
+                            pass
+                    
+                    if not validated_dates:
+                        output_data["extraction_success"] = False
+                        output_data["reason"] = "No valid dates found"
+                        
+                        # Log date validation failure
+                        with open(debug_log_file, "a") as f:
+                            f.write(f"EXTRACTION_FAILED: No valid dates found\n")
+                            f.write(f"RAW_DOI: '{doi}'\n")
+                            f.write(f"RAW_DOB: '{dob}'\n")
+                            f.write(f"EXTRACTED_DATA: {extracted_data}\n")
+                            f.write(f"{'='*80}\n\n")
+                        
+                        return None
 
-            result = {
-                "first_name": first_name,
-                "last_name": last_name,
-                "dates": validated_dates
-            }
-            return result
+                    result = {
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "dates": validated_dates
+                    }
+                    
+                    # Log final extraction result
+                    with open(debug_log_file, "a") as f:
+                        f.write(f"EXTRACTION_SUCCESS: {result}\n")
+                        f.write(f"{'='*80}\n\n")
+                    
+                    output_data["extracted_patient_info"] = result
+                    output_data["extraction_success"] = True
+                    return result
+                    
+                except (json.JSONDecodeError, ValueError, KeyError) as e:
+                    output_data["extraction_success"] = False
+                    output_data["extraction_error"] = str(e)
+                    
+                    # Log JSON parsing error
+                    with open(debug_log_file, "a") as f:
+                        f.write(f"EXTRACTION_FAILED: JSON parsing error\n")
+                        f.write(f"ERROR: {str(e)}\n")
+                        f.write(f"RAW_RESPONSE: {response_text}\n")
+                        f.write(f"{'='*80}\n\n")
+                    
+                    return None
+        else:
+            # No tracing - direct API call
+            with open(debug_log_file, "a") as f:
+                f.write(f"ENTERING_NO_TRACING_BRANCH\n")
+                f.write(f"MAKING_DIRECT_OPENAI_CALL...\n")
+                
+            response = await openai_client.chat.completions.create(**api_params)
             
-        except (json.JSONDecodeError, ValueError, KeyError) as e:
-            return None
+            with open(debug_log_file, "a") as f:
+                f.write(f"OPENAI_RESPONSE_RECEIVED\n")
+            response_text = response.choices[0].message.content.strip()
+            
+            try:
+                extracted_data = json.loads(response_text)
+                
+                if not extracted_data.get("found", False):
+                    return None
+                
+                # Validate required name fields
+                first_name = extracted_data.get("first_name", "").strip()
+                last_name = extracted_data.get("last_name", "").strip()
+                
+                if not first_name or not last_name:
+                    return None
+                
+                # Extract and validate dates
+                doi = extracted_data.get("doi", "").strip()
+                dob = extracted_data.get("dob", "").strip()
+                
+                # Validate date formats
+                validated_dates = {}
+                if doi:
+                    try:
+                        datetime.strptime(doi, '%m/%d/%Y')
+                        validated_dates["doi"] = doi
+                    except ValueError:
+                        pass
+                
+                if dob:
+                    try:
+                        datetime.strptime(dob, '%m/%d/%Y')
+                        validated_dates["dob"] = dob
+                    except ValueError:
+                        pass
+                
+                if not validated_dates:
+                    return None
+
+                result = {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "dates": validated_dates
+                }
+                return result
+                
+            except (json.JSONDecodeError, ValueError, KeyError) as e:
+                return None
             
     except Exception as e:
+        with open(debug_log_file, "a") as f:
+            f.write(f"EXCEPTION_CAUGHT: {type(e).__name__}: {str(e)}\n")
+            f.write(f"{'='*80}\n\n")
+            
+        logger.error(f"Error in patient info extraction: {e}", exc_info=True)
         return None
     finally:
         if 'custom_httpx_client' in locals():
@@ -572,18 +880,24 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
     
     # Preprocess email content to clean HTML entities and formatting issues
     cleaned_email_content = preprocess_email_content_for_extraction(email_content)
-    # logger.info(f"🔍 PATIENT_ID_EXTRACTION: Cleaned content length: {len(cleaned_email_content)} chars (diff: {len(email_content) - len(cleaned_email_content)})")
+    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Original content length: {len(email_content)} chars")
+    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Cleaned content length: {len(cleaned_email_content)} chars")
+    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Subject: '{subject}'")
+    logger.info(f"🔍 PATIENT_ID_EXTRACTION: Email content preview (first 500 chars): {repr(cleaned_email_content[:500])}")
     
     # Include subject in content for all extraction methods
     full_content = cleaned_email_content
     if subject:
         full_content = f"Subject: {subject}\n\n{cleaned_email_content}"
+        logger.info(f"🔍 PATIENT_ID_EXTRACTION: Full content length with subject: {len(full_content)} chars")
 
     # Tier 1: Direct PRE Patient ID Extraction (Regex-based)
     # Search for PRE prefix patient IDs with 6, 7, or 8 digits
     pre_pattern = r'(PRE\d{6,8})'
     matches = re.findall(pre_pattern, full_content, re.IGNORECASE)
     
+    logger.info(f"🔍 TIER 1 REGEX: Searching for PRE pattern in {len(full_content)} chars")
+    logger.info(f"🔍 TIER 1 REGEX: Found {len(matches)} matches: {matches}")
     
     found_patient_ids = []
     
@@ -591,6 +905,8 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
         # Take ALL matches, ensure uppercase, and remove duplicates
         unique_ids = list(set(match.upper() for match in matches))
         found_patient_ids.extend(unique_ids)
+        
+        logger.info(f"🔍 TIER 1 SUCCESS: Found PRE patient IDs: {unique_ids}")
         
         # Add comment to Front conversation if conversation_id is provided
         if conversation_id:
@@ -602,14 +918,22 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
         return found_patient_ids
 
     # Tier 2: OpenAI-based extraction as fallback
+    logger.info(f"🔍 TIER 2 OPENAI: No PRE IDs found, proceeding to OpenAI extraction")
     try:
-        openai_extracted = await _extract_patient_info_with_openai(cleaned_email_content, subject)
+        logger.info(f"🔍 TIER 2 OPENAI: Calling _extract_patient_info_with_openai...")
+        openai_extracted = await _extract_patient_info_with_openai(cleaned_email_content, subject, conversation_id)
+        
+        logger.info(f"🔍 TIER 2 OPENAI: OpenAI extraction result: {openai_extracted}")
         
         if openai_extracted:
             first_name = openai_extracted["first_name"]
             last_name = openai_extracted["last_name"]
             available_dates = openai_extracted["dates"]
             
+            # Enhanced logging for extracted DOB/DOL information
+            logger.info(f"🔍 EXTRACTED PATIENT INFO: {first_name} {last_name}")
+            for date_type, date_value in available_dates.items():
+                logger.info(f"🔍 EXTRACTED {date_type.upper()}: {date_value}")
             
             try:
                 if not mcp_client.is_connected:
@@ -629,8 +953,9 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
                             "type": "DOI",
                             "original_date": available_dates["doi"]
                         })
-                    except ValueError:
-                        pass
+                        logger.info(f"🔍 PREPARED DOI LOOKUP: {first_name} {last_name} with DOI {available_dates['doi']} (DB format: {db_doi})")
+                    except ValueError as e:
+                        logger.warning(f"🔍 DOI DATE FORMAT ERROR: {available_dates['doi']} - {e}")
                 
                 # Prepare DOB lookup if available  
                 if "dob" in available_dates and available_dates["dob"]:
@@ -643,11 +968,15 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
                             "type": "DOB", 
                             "original_date": available_dates["dob"]
                         })
-                    except ValueError:
-                        pass
+                        logger.info(f"🔍 PREPARED DOB LOOKUP: {first_name} {last_name} with DOB {available_dates['dob']} (DB format: {db_dob})")
+                    except ValueError as e:
+                        logger.warning(f"🔍 DOB DATE FORMAT ERROR: {available_dates['dob']} - {e}")
                 
                 if not lookup_attempts:
-                    return None
+                    logger.warning(f"🔍 NO VALID DATES: Could not prepare any MCP lookups for {first_name} {last_name}")
+                    return []
+                
+                logger.info(f"🔍 MCP LOOKUPS PREPARED: {len(lookup_attempts)} lookup attempts for {first_name} {last_name}")
 
                 # Try all available date lookups - prioritize DOI first, then DOB
                 if not mcp_client.is_connected:
@@ -659,45 +988,116 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
                     lookup_type = attempt["type"]
                     original_date = attempt["original_date"]
                     
-                    
-                    try:
-                        patient_data = await call_mcp_tool(tool_name=tool_name, arguments=arguments)
-                        
-                        # Process successful response
-                        if patient_data and patient_data.get('success', False) and patient_data.get('patients'):
-                            patients = patient_data['patients']
-                            
-                            if isinstance(patients, list) and len(patients) > 0:
-                                for idx, patient in enumerate(patients):
-                                    patient_id = patient.get("patient_id")
-                                    if patient_id and patient_id not in found_patient_ids:
-                                        found_patient_ids.append(patient_id)
+                    # Create tracer for MCP call if conversation_id is provided
+                    if conversation_id:
+                        tracer = create_tracer(front_conversation_id=conversation_id)
+                        with tracer.trace_step(
+                            step_name=TraceSteps.MCP_PATIENT_LOOKUP,
+                            step_type=StepTypes.API_CALL,
+                            input_data={
+                                "tool_name": tool_name,
+                                "lookup_type": lookup_type,
+                                "patient_name": f"{first_name} {last_name}",
+                                "original_date": original_date,
+                                "formatted_date": arguments.get("doi") or arguments.get("dob"),
+                                "mcp_arguments": arguments
+                            }
+                        ) as (trace_id, output_data):
+                            try:
+                                logger.info(f"🔍 MCP REQUEST: {tool_name} for {first_name} {last_name} ({lookup_type}: {original_date})")
+                                patient_data = await call_mcp_tool(tool_name=tool_name, arguments=arguments)
                                 
-                                if found_patient_ids:
-                                    logger.info(f"Patient ID found via {lookup_type} lookup: {', '.join(found_patient_ids)}")
-                                    if conversation_id:
-                                        try:
-                                            frontapp_service.add_multiple_patient_ids_comment_safe(conversation_id, found_patient_ids, f"{lookup_type} lookup")
-                                        except Exception: pass
-                                    return found_patient_ids
-                        # If this lookup failed, continue to try next method
-                    
-                    except Exception as e:
-                        error_str = str(e)
-                        if "timeout" in error_str.lower():
-                            logger.warning(f"Patient lookup via {lookup_type} timed out for {first_name} {last_name} (will try other methods)")
-                        else:
-                            logger.warning(f"Patient lookup via {lookup_type} failed for {first_name} {last_name}: {error_str}")
-                        continue  # Try the next lookup method
+                                output_data["mcp_response"] = patient_data
+                                output_data["mcp_success"] = patient_data.get('success', False) if patient_data else False
+                                
+                                # Process successful response
+                                if patient_data and patient_data.get('success', False) and patient_data.get('patients'):
+                                    patients = patient_data['patients']
+                                    output_data["patients_count"] = len(patients) if isinstance(patients, list) else 0
+                                    
+                                    if isinstance(patients, list) and len(patients) > 0:
+                                        patient_ids_found = []
+                                        for idx, patient in enumerate(patients):
+                                            patient_id = patient.get("patient_id")
+                                            if patient_id and patient_id not in found_patient_ids:
+                                                found_patient_ids.append(patient_id)
+                                                patient_ids_found.append(patient_id)
+                                        
+                                        output_data["patient_ids_found"] = patient_ids_found
+                                        output_data["lookup_success"] = len(patient_ids_found) > 0
+                                        
+                                        if found_patient_ids:
+                                            logger.info(f"🔍 MCP SUCCESS: Found patient IDs via {lookup_type} lookup: {', '.join(patient_ids_found)}")
+                                            if conversation_id:
+                                                try:
+                                                    frontapp_service.add_multiple_patient_ids_comment_safe(conversation_id, found_patient_ids, f"{lookup_type} lookup")
+                                                except Exception: pass
+                                            return found_patient_ids
+                                    else:
+                                        output_data["lookup_success"] = False
+                                        output_data["reason"] = "No patients in response"
+                                        logger.warning(f"🔍 MCP EMPTY: {tool_name} returned empty patients list for {first_name} {last_name}")
+                                else:
+                                    output_data["lookup_success"] = False
+                                    output_data["reason"] = "Invalid response or no success flag"
+                                    logger.warning(f"🔍 MCP FAILED: {tool_name} failed for {first_name} {last_name} - invalid response")
+                                # If this lookup failed, continue to try next method
+                            
+                            except Exception as e:
+                                error_str = str(e)
+                                output_data["lookup_success"] = False
+                                output_data["error"] = error_str
+                                if "timeout" in error_str.lower():
+                                    logger.warning(f"🔍 MCP TIMEOUT: {tool_name} timed out for {first_name} {last_name} (will try other methods)")
+                                    output_data["error_type"] = "timeout"
+                                else:
+                                    logger.warning(f"🔍 MCP ERROR: {tool_name} failed for {first_name} {last_name}: {error_str}")
+                                    output_data["error_type"] = "exception"
+                                continue  # Try the next lookup method
+                    else:
+                        # No tracing - direct MCP call
+                        try:
+                            logger.info(f"🔍 MCP REQUEST: {tool_name} for {first_name} {last_name} ({lookup_type}: {original_date})")
+                            patient_data = await call_mcp_tool(tool_name=tool_name, arguments=arguments)
+                            
+                            # Process successful response
+                            if patient_data and patient_data.get('success', False) and patient_data.get('patients'):
+                                patients = patient_data['patients']
+                                
+                                if isinstance(patients, list) and len(patients) > 0:
+                                    for idx, patient in enumerate(patients):
+                                        patient_id = patient.get("patient_id")
+                                        if patient_id and patient_id not in found_patient_ids:
+                                            found_patient_ids.append(patient_id)
+                                    
+                                    if found_patient_ids:
+                                        logger.info(f"🔍 MCP SUCCESS: Found patient IDs via {lookup_type} lookup: {', '.join(found_patient_ids)}")
+                                        if conversation_id:
+                                            try:
+                                                frontapp_service.add_multiple_patient_ids_comment_safe(conversation_id, found_patient_ids, f"{lookup_type} lookup")
+                                            except Exception: pass
+                                        return found_patient_ids
+                            # If this lookup failed, continue to try next method
+                        
+                        except Exception as e:
+                            error_str = str(e)
+                            if "timeout" in error_str.lower():
+                                logger.warning(f"🔍 MCP TIMEOUT: {tool_name} timed out for {first_name} {last_name} (will try other methods)")
+                            else:
+                                logger.warning(f"🔍 MCP ERROR: {tool_name} failed for {first_name} {last_name}: {error_str}")
+                            continue  # Try the next lookup method
                 
                 
-            except Exception:
-                pass
+            except Exception as mcp_exception:
+                logger.error(f"🔍 TIER 2 MCP ERROR: Exception during MCP processing: {mcp_exception}", exc_info=True)
+        else:
+            logger.info(f"🔍 TIER 2 OPENAI: No patient information extracted by OpenAI")
                 
-    except Exception:
-        pass
+    except Exception as openai_exception:
+        logger.error(f"🔍 TIER 2 OPENAI ERROR: Exception during OpenAI extraction: {openai_exception}", exc_info=True)
     
     # Final fallback - no patient ID found
+    logger.info(f"🔍 PATIENT_ID_EXTRACTION COMPLETE: No patient IDs found via any method")
     return []
 
 
