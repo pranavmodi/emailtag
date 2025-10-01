@@ -10,6 +10,7 @@ import os
 import sys
 import asyncio
 import csv
+import logging
 from pathlib import Path
 from typing import List, Dict, Any
 from datetime import datetime
@@ -17,6 +18,22 @@ from datetime import datetime
 # Add the project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+
+# Configure logging to show DEBUG level messages, but silence OpenAI client
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+# Silence noisy debug logs
+logging.getLogger('openai').setLevel(logging.WARNING)
+logging.getLogger('openai._base_client').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('httpcore').setLevel(logging.WARNING)
+logging.getLogger('PIL').setLevel(logging.WARNING)
 
 from app.services.document_processing_service import DocumentProcessingService
 

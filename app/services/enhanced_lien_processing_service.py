@@ -70,7 +70,7 @@ class EnhancedLienProcessingService:
             Dictionary containing enhanced lien processing results
         """
         try:
-            logger.info(f"🔍 ENHANCED LIEN PROCESSING: Starting analysis for {filename}")
+            logger.info(f"📄 ENHANCED LIEN: Starting analysis for {filename}")
             
             # Convert PDF to images if needed
             images = await self._convert_to_images(file_content, filename)
@@ -80,7 +80,7 @@ class EnhancedLienProcessingService:
             # Process each page/image
             results = []
             for i, image_data in enumerate(images):
-                logger.info(f"🔍 Processing page {i+1}/{len(images)}")
+                logger.info(f"📄 PAGE {i+1}/{len(images)}: Processing...")
                 
                 page_result = await self._process_single_page(
                     image_data, 
@@ -91,9 +91,8 @@ class EnhancedLienProcessingService:
             # Consolidate results from all pages
             final_result = self._consolidate_page_results(results, filename)
             
-            logger.info(f"✅ ENHANCED LIEN PROCESSING: Completed analysis for {filename}")
-            logger.info(f"📋 Final Result: {json.dumps(final_result, indent=2)}")
-            
+            logger.info(f"✅ ENHANCED LIEN: Completed {filename}")
+                
             return final_result
             
         except Exception as e:
@@ -130,7 +129,7 @@ class EnhancedLienProcessingService:
                     page.save(img_buffer, format='PNG', quality=95)
                     images.append(img_buffer.getvalue())
                 
-                logger.info(f"🔍 ENHANCED LIEN: Converted PDF to {len(images)} image(s) for {filename}")
+                logger.info(f"📄 ENHANCED LIEN: Converted PDF to {len(images)} pages")
                 return images
                 
             elif file_ext in ['.png', '.jpg', '.jpeg', '.tiff', '.bmp']:
@@ -177,39 +176,40 @@ class EnhancedLienProcessingService:
             Dictionary with barcode detection results
         """
         try:
-            logger.info("🔍 BARCODE DETECTION: Starting barcode analysis")
+            logger.info("🔍 BARCODE: Scanning page...")
             
             # Convert bytes to PIL Image
             pil_image = Image.open(io.BytesIO(image_data))
-            logger.info(f"🔍 BARCODE DETECTION: Image size: {pil_image.size}, mode: {pil_image.mode}")
-            
+                
             # Convert to OpenCV format
             cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
             
             # Convert to grayscale for better barcode detection
             gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
-            logger.info(f"🔍 BARCODE DETECTION: Converted to grayscale image shape: {gray.shape}")
-            
+                
             # Try different preprocessing techniques for better barcode detection
             # 1. Original grayscale
             barcodes = pyzbar.decode(gray)
-            logger.info(f"🔍 BARCODE DETECTION: Found {len(barcodes)} barcodes in original image")
+            if len(barcodes) > 0:
+                logger.info(f"🔍 BARCODE: Found {len(barcodes)} barcode(s)")
             
             # 2. If no barcodes found, try with contrast enhancement
             if not barcodes:
                 enhanced = cv2.equalizeHist(gray)
                 barcodes = pyzbar.decode(enhanced)
-                logger.info(f"🔍 BARCODE DETECTION: Found {len(barcodes)} barcodes in enhanced image")
+                if len(barcodes) > 0:
+                    logger.info(f"🔍 BARCODE: Found {len(barcodes)} barcode(s) after enhancement")
             
             # 3. If still no barcodes, try with morphological operations
             if not barcodes:
                 kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
                 morphed = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel)
                 barcodes = pyzbar.decode(morphed)
-                logger.info(f"🔍 BARCODE DETECTION: Found {len(barcodes)} barcodes in morphed image")
+                if len(barcodes) > 0:
+                    logger.info(f"🔍 BARCODE: Found {len(barcodes)} barcode(s) after morphing")
             
             if not barcodes:
-                logger.info("🔍 BARCODE DETECTION: No barcodes found after all preprocessing attempts")
+                logger.info("🔍 BARCODE: None found")
                 return {
                     "barcode_found": False,
                     "parsed_data": None
@@ -217,25 +217,63 @@ class EnhancedLienProcessingService:
             
             # Process all barcodes found (take the first one)
             all_barcodes = []
+            logger.info(f"🔍 BARCODE: Processing {len(barcodes)} detected barcode(s)...")
+            
             for i, barcode in enumerate(barcodes):
                 try:
-                    barcode_data = barcode.data.decode('utf-8')
-                    barcode_type = barcode.type
-                    logger.info(f"🔍 BARCODE DETECTION: Barcode {i+1}: {barcode_type} = '{barcode_data}'")
-                    all_barcodes.append({
-                        "type": barcode_type,
-                        "data": barcode_data,
-                        "rect": barcode.rect._asdict()
-                    })
+                    # Log raw barcode properties before decoding
+                    logger.info(f"🔍 BARCODE {i+1}: Type={barcode.type}, Length={len(barcode.data)}b")
+                    
+                    # Try different decoding methods
+                    barcode_data = None
+                    decode_method = None
+                    
+                    # Method 1: UTF-8 decoding
+                    try:
+                        barcode_data = barcode.data.decode('utf-8')
+                        decode_method = "utf-8"
+                        logger.info(f"🔍 BARCODE {i+1}: '{barcode_data}' (UTF-8)")
+                    except UnicodeDecodeError as utf8_error:
+                        logger.info(f"🔍 BARCODE {i+1}: UTF-8 failed, trying latin-1...")
+                        
+                        # Method 2: Latin-1 decoding
+                        try:
+                            barcode_data = barcode.data.decode('latin-1')
+                            decode_method = "latin-1"
+                            logger.info(f"🔍 BARCODE {i+1}: '{barcode_data}' (Latin-1)")
+                        except UnicodeDecodeError as latin1_error:
+                            logger.info(f"🔍 BARCODE {i+1}: Latin-1 failed, trying ASCII...")
+                            
+                            # Method 3: ASCII with error handling
+                            try:
+                                barcode_data = barcode.data.decode('ascii', errors='replace')
+                                decode_method = "ascii-replace"
+                                logger.info(f"🔍 BARCODE {i+1}: '{barcode_data}' (ASCII fallback)")
+                            except Exception as ascii_error:
+                                logger.error(f"🔍 BARCODE {i+1}: All decode methods failed")
+                    
+                    if barcode_data:
+                        barcode_type = barcode.type
+                        all_barcodes.append({
+                            "type": barcode_type,
+                            "data": barcode_data,
+                            "rect": barcode.rect._asdict(),
+                            "decode_method": decode_method,
+                            "raw_bytes_length": len(barcode.data)
+                        })
+                    else:
+                        logger.error(f"🔍 BARCODE {i+1}: DECODE FAILED")
+                        
                 except Exception as decode_error:
-                    logger.warning(f"🔍 BARCODE DETECTION: Error decoding barcode {i+1}: {decode_error}")
+                    logger.error(f"🔍 BARCODE {i+1}: Processing error - {decode_error}")
             
             if not all_barcodes:
-                logger.warning("🔍 BARCODE DETECTION: Barcodes found but all failed to decode")
+                logger.error(f"🔍 BARCODE: {len(barcodes)} detected but all failed to decode")
                 return {
                     "barcode_found": False,
                     "parsed_data": None,
-                    "decode_error": "All barcodes failed to decode"
+                    "decode_error": f"All {len(barcodes)} barcodes failed to decode",
+                    "barcodes_detected_count": len(barcodes)
                 }
             
             # Parse ALL barcodes found
@@ -249,7 +287,7 @@ class EnhancedLienProcessingService:
                 barcode_data = barcode_info["data"]
                 barcode_type = barcode_info["type"]
                 
-                logger.info(f"🔍 BARCODE DETECTION: Processing barcode {i+1}: {barcode_type} = '{barcode_data}'")
+                logger.info(f"🔍 PARSING: '{barcode_data}'")
                 
                 # Parse barcode data
                 parsed_data = self._parse_barcode_value(barcode_data)
@@ -277,8 +315,10 @@ class EnhancedLienProcessingService:
             # Combine all lien types and patient IDs found across all barcodes
             combined_lien_types = list(all_lien_types)
             combined_patient_ids = list(all_patient_ids)
-            logger.info(f"🔍 BARCODE DETECTION: Combined lien types from all barcodes: {combined_lien_types}")
-            logger.info(f"🔍 BARCODE DETECTION: Combined patient IDs from all barcodes: {combined_patient_ids}")
+            if combined_lien_types:
+                logger.info(f"🔍 BARCODE: Lien types found: {combined_lien_types}")
+            if combined_patient_ids:
+                logger.info(f"🔍 BARCODE: Patient IDs found: {combined_patient_ids}")
             
             return {
                 "barcode_found": True,
@@ -318,7 +358,7 @@ class EnhancedLienProcessingService:
                 "ReferrerID": components[2] if len(components) > 2 else ""
             }
             
-            logger.info(f"🔍 BARCODE PARSING: {parsed}")
+            logger.info(f"🔍 PARSED: {parsed}")
             return parsed
             
         except Exception as e:
@@ -338,7 +378,7 @@ class EnhancedLienProcessingService:
         Otherwise => UNKNOWN.
         """
         try:
-            logger.info(f"🔍 SIGNATURE DETECTION: Analyzing signatures for {page_name}")
+            logger.info("✍️ SIGNATURE: Analyzing...")
 
             # Prepare multiple views for better signature detection: full page, bottom crop, and enhanced crops
             base64_image_full = base64.b64encode(image_data).decode('utf-8')
@@ -354,7 +394,6 @@ class EnhancedLienProcessingService:
                 buf = io.BytesIO()
                 bottom_crop.save(buf, format='PNG', quality=95)
                 base64_image_bottom = base64.b64encode(buf.getvalue()).decode('utf-8')
-                logger.info(f"🔧 SIGNATURE CROPPING: Full size={width}x{height}, bottom-crop from y={crop_top} ({height-crop_top}px tall)")
 
                 # Create enhanced crops for better signature visibility
                 cv_img = cv2.cvtColor(np.array(bottom_crop), cv2.COLOR_RGB2BGR)
@@ -374,9 +413,8 @@ class EnhancedLienProcessingService:
                 thresh_rgb = cv2.cvtColor(thresh, cv2.COLOR_GRAY2RGB)
                 _, buf2 = cv2.imencode('.png', thresh_rgb)
                 base64_image_bottom_thresh = base64.b64encode(buf2.tobytes()).decode('utf-8')
-                logger.info("🔧 SIGNATURE ENHANCEMENTS: Generated CLAHE and thresholded bottom crops")
             except Exception as crop_err:
-                logger.warning(f"🔧 SIGNATURE CROPPING: Failed to create bottom crop: {crop_err}")
+                logger.warning("⚠️ SIGNATURE: Image crop failed")
                 base64_image_bottom = base64_image_full
                 base64_image_bottom_clahe = base64_image_full
                 base64_image_bottom_thresh = base64_image_full
@@ -522,10 +560,9 @@ class EnhancedLienProcessingService:
                             attorney_analysis = "Attorney signature likely present (heuristic)."
                 # Log a short preview for debugging
                 preview = attorney_text.replace('\n', ' ')[:200]
-                logger.info(f"🔎 Attorney step raw preview: {preview}...")
 
             if attorney_present:
-                logger.info("🔍 SIGNATURE DETECTION: Attorney signature FOUND → ASL")
+                logger.info("✍️ SIGNATURE: Attorney found → ASL")
                 signature_data = {
                     "patient_signature_present": False,
                     "attorney_signature_present": True,
@@ -581,10 +618,9 @@ class EnhancedLienProcessingService:
                             patient_analysis = "Patient signature likely present (heuristic)."
                 # Log a short preview for debugging
                 p_preview = patient_text.replace('\n', ' ')[:200]
-                logger.info(f"🔎 Patient step raw preview: {p_preview}...")
 
             if patient_present:
-                logger.info("🔍 SIGNATURE DETECTION: Patient signature FOUND → PSL")
+                logger.info("✍️ SIGNATURE: Patient found → PSL")
                 signature_data = {
                     "patient_signature_present": True,
                     "attorney_signature_present": False,
@@ -616,7 +652,7 @@ class EnhancedLienProcessingService:
                         analysis = str(cdata.get("analysis", "")).strip()
                         if att or pat:
                             lien_type = "ASL" if att else "PSL" if pat else "UNKNOWN"
-                            logger.info(f"🔍 SIGNATURE DETECTION (combined): A={att}, P={pat} → {lien_type}")
+                            logger.info(f"✍️ SIGNATURE: Combined analysis → {lien_type}")
                             signature_data = {
                                 "patient_signature_present": pat,
                                 "attorney_signature_present": att,
@@ -628,7 +664,7 @@ class EnhancedLienProcessingService:
                     pass
 
             # Neither detected
-            logger.info("🔍 SIGNATURE DETECTION: No signatures detected → UNKNOWN")
+            logger.info("✍️ SIGNATURE: None detected → UNKNOWN")
             signature_data = {
                 "patient_signature_present": False,
                 "attorney_signature_present": False,
@@ -710,8 +746,10 @@ class EnhancedLienProcessingService:
             if barcode_found_anywhere and combined_barcode_data:
                 combined_barcode_data["LienTypes"] = list(all_lien_types)
                 combined_barcode_data["PatientIDs"] = list(all_patient_ids)
-                logger.info(f"🔍 CONSOLIDATION: Combined lien types from all pages: {list(all_lien_types)}")
-                logger.info(f"🔍 CONSOLIDATION: Combined patient IDs from all pages: {list(all_patient_ids)}")
+                if all_lien_types:
+                    logger.info(f"📄 FINAL: Lien types {list(all_lien_types)}")
+                if all_patient_ids:
+                    logger.info(f"📄 FINAL: Patient IDs {list(all_patient_ids)}")
             
             barcode_data = combined_barcode_data
             
@@ -729,8 +767,7 @@ class EnhancedLienProcessingService:
                         attorney_found = True
                         signature_data = sig_data.copy()  # Preserve original analysis
                         signature_data["lien_signature_type"] = "ASL"
-                        logger.info(f"🔍 MULTI-PAGE CONSOLIDATION: Attorney signature found → ASL (overrides all other pages)")
-                        logger.info(f"🔍 PRESERVED ANALYSIS: {sig_data.get('signature_analysis', 'No analysis')}")
+                        logger.info("✍️ FINAL: Attorney signature found → ASL")
                         break
             
             # Second pass: If no attorney found anywhere, look for patient signatures
@@ -743,8 +780,7 @@ class EnhancedLienProcessingService:
                             patient_found = True
                             signature_data = sig_data.copy()  # Preserve original analysis
                             signature_data["lien_signature_type"] = "PSL"
-                            logger.info(f"🔍 MULTI-PAGE CONSOLIDATION: No attorney found, patient signature found → PSL")
-                            logger.info(f"🔍 PRESERVED ANALYSIS: {sig_data.get('signature_analysis', 'No analysis')}")
+                            logger.info("✍️ FINAL: Patient signature found → PSL")
                             break
             
             # Third pass: If no clear signatures found, use first available result
@@ -753,7 +789,7 @@ class EnhancedLienProcessingService:
                     if (page.get("success") and 
                         page.get("signature_detection", {}).get("success")):
                         signature_data = page["signature_detection"]["signature_data"]
-                        logger.info(f"🔍 MULTI-PAGE CONSOLIDATION: No clear signatures, using first available result")
+                        logger.info("✍️ FINAL: No clear signatures found")
                         break
             
             # Build final result with support for multiple lien types
