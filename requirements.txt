@@ -70,3 +70,9 @@ pdf2image==1.17.0
 opencv-python==4.10.0.84
 pyzbar==0.1.9
 Pillow==11.1.0
+# Enhanced barcode processing dependencies
+scipy==1.16.2
+scikit-image==0.25.2
+pytesseract==0.3.13
+pyzxing==1.1.1
+pylibdmtx==0.1.10
