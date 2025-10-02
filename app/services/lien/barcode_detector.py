@@ -9,11 +9,37 @@ import logging
 import cv2
 import numpy as np
 from pyzbar import pyzbar
-from PIL import Image
-from typing import Dict, Any, List
+from PIL import Image, ImageFilter, ImageEnhance
+from typing import Dict, Any, List, Tuple, Optional
 import io
 import os
 from pathlib import Path
+import math
+from scipy import ndimage
+from skimage import filters, morphology, measure
+import pytesseract
+
+# Try to import zxing, fallback gracefully if not available
+try:
+    import pyzxing
+    ZXING_AVAILABLE = True
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.info("🔍 ZXING: Available as secondary barcode detector")
+except ImportError:
+    ZXING_AVAILABLE = False
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.warning("🔍 ZXING: Not available, using pyzbar only")
+
+# Try to import pylibdmtx for Data Matrix codes
+try:
+    from pylibdmtx import pylibdmtx
+    DMTX_AVAILABLE = True
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.info("🔍 DMTX: Available for Data Matrix detection")
+except ImportError:
+    DMTX_AVAILABLE = False
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.warning("🔍 DMTX: Not available, Data Matrix detection disabled")
 
 logger = logging.getLogger(__name__)
 
@@ -23,19 +49,34 @@ class BarcodeDetector:
     
     def __init__(self):
         """Initialize the barcode detector."""
+        import os
         # Create tmp directory for debug images
-        self.tmp_dir = Path("emailtag/tmp/barcode_debug")
+        logger.info(f"🔍 BARCODE DEBUG: Current working directory: {os.getcwd()}")
+        self.tmp_dir = Path("tmp/barcode_debug")
         self.tmp_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"🔍 BARCODE DEBUG: Saving images to {self.tmp_dir}")
+        logger.info(f"🔍 BARCODE DEBUG: Saving images to {self.tmp_dir.absolute()}")
+        
+        # Initialize zxing reader if available
+        self.zxing_reader = None
+        if ZXING_AVAILABLE:
+            try:
+                self.zxing_reader = pyzxing.BarCodeReader()
+                logger.info("🔍 ZXING: Initialized successfully as secondary detector")
+            except Exception as e:
+                logger.warning(f"🔍 ZXING: Failed to initialize: {e}")
+                self.zxing_reader = None
     
     def _save_debug_image(self, image, filename: str) -> None:
         """Save debug image to tmp directory."""
         try:
             filepath = self.tmp_dir / filename
-            cv2.imwrite(str(filepath), image)
-            logger.info(f"🔍 DEBUG: Saved {filename}")
+            success = cv2.imwrite(str(filepath), image)
+            if success:
+                logger.info(f"🔍 DEBUG: Saved {filename} to {filepath.absolute()}")
+            else:
+                logger.error(f"🔍 DEBUG: Failed to save {filename} - cv2.imwrite returned False")
         except Exception as e:
-            logger.warning(f"🔍 DEBUG: Failed to save {filename}: {e}")
+            logger.error(f"🔍 DEBUG: Exception saving {filename}: {e}")
     
     def _is_valid_lien_type(self, lien_type: str) -> bool:
         """
@@ -66,36 +107,137 @@ class BarcodeDetector:
         
         return lien_type_upper in valid_types
     
-    def _scan_image_section(self, gray_image, section_name: str) -> List:
+    def _scan_with_both_libraries(self, gray_image, process_name: str) -> List:
+        """
+        Scan image with both pyzbar and zxing libraries.
+        
+        Args:
+            gray_image: Grayscale OpenCV image
+            process_name: Description for logging
+            
+        Returns:
+            Combined list of barcodes from both libraries
+        """
+        all_barcodes = []
+        
+        # 1. Try pyzbar first
+        logger.info(f"🔍 PYZBAR: Scanning {process_name}...")
+        pyzbar_barcodes = pyzbar.decode(gray_image)
+        if pyzbar_barcodes:
+            logger.info(f"🔍 PYZBAR: Found {len(pyzbar_barcodes)} barcode(s) in {process_name}")
+            all_barcodes.extend(pyzbar_barcodes)
+        else:
+            logger.info(f"🔍 PYZBAR: No barcodes found in {process_name}")
+        
+        # 2. Try zxing if available (always try, even if pyzbar found something)
+        if self.zxing_reader:
+            temp_path = None
+            try:
+                logger.info(f"🔍 ZXING: Scanning {process_name}...")
+                
+                # Convert to PIL Image for zxing
+                pil_image = Image.fromarray(gray_image)
+                
+                # Save temporary image for zxing (it works with file paths)
+                temp_path = self.tmp_dir / f"temp_zxing_{process_name.replace(' ', '_')}.png"
+                pil_image.save(temp_path)
+                
+                # Try to decode with zxing
+                zxing_result = self.zxing_reader.decode(str(temp_path))
+                
+                if zxing_result and hasattr(zxing_result, 'parsed') and zxing_result.parsed:
+                    # Check if this barcode was already found by pyzbar
+                    zxing_data = zxing_result.parsed.strip()
+                    already_found = any(
+                        barcode.data.decode('utf-8', errors='ignore').strip() == zxing_data 
+                        for barcode in pyzbar_barcodes
+                    )
+                    
+                    if not already_found:
+                        logger.info(f"🔍 ZXING: Found additional barcode in {process_name}: '{zxing_data}'")
+                        
+                        # Create a pyzbar-compatible object for consistency
+                        class ZxingBarcode:
+                            def __init__(self, data, barcode_type="ZXING"):
+                                self.data = data.encode('utf-8') if isinstance(data, str) else data
+                                self.type = barcode_type
+                                self.rect = type('rect', (), {
+                                    'left': 0, 'top': 0, 'width': 0, 'height': 0,
+                                    '_replace': lambda **kwargs: self.rect,
+                                    '_asdict': lambda: {'left': 0, 'top': 0, 'width': 0, 'height': 0}
+                                })()
+                        
+                        zxing_barcode = ZxingBarcode(zxing_data)
+                        all_barcodes.append(zxing_barcode)
+                    elif pyzbar_barcodes:
+                        logger.info(f"🔍 ZXING: Confirmed barcode found by pyzbar: '{zxing_data}'")
+                    else:
+                        logger.info(f"🔍 ZXING: Found barcode in {process_name}: '{zxing_data}'")
+                        
+                        class ZxingBarcode:
+                            def __init__(self, data, barcode_type="ZXING"):
+                                self.data = data.encode('utf-8') if isinstance(data, str) else data
+                                self.type = barcode_type
+                                self.rect = type('rect', (), {
+                                    'left': 0, 'top': 0, 'width': 0, 'height': 0,
+                                    '_replace': lambda **kwargs: self.rect,
+                                    '_asdict': lambda: {'left': 0, 'top': 0, 'width': 0, 'height': 0}
+                                })()
+                        
+                        zxing_barcode = ZxingBarcode(zxing_data)
+                        all_barcodes.append(zxing_barcode)
+                else:
+                    logger.info(f"🔍 ZXING: No barcodes found in {process_name}")
+                    
+            except Exception as e:
+                logger.warning(f"🔍 ZXING: Error scanning {process_name}: {e}")
+            finally:
+                # Clean up temp file
+                if temp_path and temp_path.exists():
+                    try:
+                        temp_path.unlink()
+                    except Exception:
+                        pass
+        else:
+            logger.info(f"🔍 ZXING: Not available for {process_name} (using pyzbar only)")
+        
+        return all_barcodes
+    
+    def _scan_image_section(self, gray_image, section_name: str, debug_name: str = None) -> List:
         """
         Scan a specific image section for barcodes using multiple preprocessing techniques.
         
         Args:
             gray_image: Grayscale OpenCV image section
             section_name: Name of the section for logging
+            debug_name: Name for debug image files
             
         Returns:
             List of detected barcodes
         """
         logger.info(f"🔍   {section_name}: Scanning...")
         
-        # 1. Original grayscale
-        barcodes = pyzbar.decode(gray_image)
+        # 1. Original grayscale - try both libraries
+        barcodes = self._scan_with_both_libraries(gray_image, f"{section_name}_original")
         if len(barcodes) > 0:
             logger.info(f"🔍   {section_name}: Found {len(barcodes)} barcode(s)")
             return barcodes
         
-        # 2. Try with contrast enhancement
+        # 2. Try with contrast enhancement - both libraries
         enhanced = cv2.equalizeHist(gray_image)
-        barcodes = pyzbar.decode(enhanced)
+        if debug_name:
+            self._save_debug_image(enhanced, f"{debug_name}_enhanced.png")
+        barcodes = self._scan_with_both_libraries(enhanced, f"{section_name}_enhanced")
         if len(barcodes) > 0:
             logger.info(f"🔍   {section_name}: Found {len(barcodes)} barcode(s) after enhancement")
             return barcodes
         
-        # 3. Try with morphological operations
+        # 3. Try with morphological operations - both libraries
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         morphed = cv2.morphologyEx(gray_image, cv2.MORPH_CLOSE, kernel)
-        barcodes = pyzbar.decode(morphed)
+        if debug_name:
+            self._save_debug_image(morphed, f"{debug_name}_morphed.png")
+        barcodes = self._scan_with_both_libraries(morphed, f"{section_name}_morphed")
         if len(barcodes) > 0:
             logger.info(f"🔍   {section_name}: Found {len(barcodes)} barcode(s) after morphing")
             return barcodes
@@ -103,12 +245,13 @@ class BarcodeDetector:
         logger.info(f"🔍   {section_name}: None found")
         return []
     
-    def detect_and_parse_barcodes(self, image_data: bytes) -> Dict[str, Any]:
+    def detect_and_parse_barcodes(self, image_data: bytes, page_name: str = "unknown") -> Dict[str, Any]:
         """
-        Detect and parse barcodes from image data using both full-page and quadrant scanning.
+        Detect and parse barcodes from image data using both full-page and section scanning.
         
         Args:
             image_data: Raw image bytes
+            page_name: Name of the page for debug images
             
         Returns:
             Dictionary with barcode detection results
@@ -125,11 +268,15 @@ class BarcodeDetector:
             # Convert to grayscale for better barcode detection
             gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
             height, width = gray.shape
+            
+            # Save full page debug image
+            safe_page_name = page_name.replace("/", "_").replace("\\", "_")
+            self._save_debug_image(gray, f"{safe_page_name}_fullpage.png")
                 
             all_barcodes_found = []
             
             # 1. Full page scan first
-            barcodes = self._scan_image_section(gray, "Full page")
+            barcodes = self._scan_image_section(gray, "Full page", f"{safe_page_name}_fullpage")
             all_barcodes_found.extend(barcodes)
             
             # 2. If no barcodes found, try 3-section vertical scanning
@@ -140,13 +287,16 @@ class BarcodeDetector:
                 section_height = height // 3
                 
                 sections = [
-                    (gray[0:section_height, 0:width], "Top-Section"),
-                    (gray[section_height:section_height*2, 0:width], "Middle-Section"), 
-                    (gray[section_height*2:height, 0:width], "Bottom-Section")
+                    (gray[0:section_height, 0:width], "Top-Section", f"{safe_page_name}_top"),
+                    (gray[section_height:section_height*2, 0:width], "Middle-Section", f"{safe_page_name}_middle"), 
+                    (gray[section_height*2:height, 0:width], "Bottom-Section", f"{safe_page_name}_bottom")
                 ]
                 
-                for section_img, section_name in sections:
-                    barcodes = self._scan_image_section(section_img, section_name)
+                for section_img, section_name, debug_name in sections:
+                    # Save section debug image
+                    self._save_debug_image(section_img, f"{debug_name}.png")
+                    
+                    barcodes = self._scan_image_section(section_img, section_name, debug_name)
                     if barcodes:
                         # Adjust barcode coordinates to full image coordinates
                         for barcode in barcodes:

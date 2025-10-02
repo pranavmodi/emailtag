@@ -71,7 +71,7 @@ class EnhancedLienService:
         """Process a single page/image for barcode and signature detection."""
         try:
             # Step 1: Barcode Detection
-            barcode_result = self.barcode_detector.detect_and_parse_barcodes(image_data)
+            barcode_result = self.barcode_detector.detect_and_parse_barcodes(image_data, page_name)
             
             # Step 2: Signature Detection via OpenAI Vision
             signature_result = self.signature_detector.detect_signatures(image_data, page_name)
