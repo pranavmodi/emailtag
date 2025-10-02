@@ -55,4 +55,7 @@ celerybeat.pid
 
 # Alembic
 migrations/versions/*
-!migrations/versions/.gitkeep 
+!migrations/versions/.gitkeep
+
+# Debug images and temporary files
+tmp/ 
