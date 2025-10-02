@@ -341,6 +341,7 @@ class DocumentBatchProcessor:
                 lien_col_widths[4] = max(lien_col_widths[4], len(str(result.get('referrer_id', 'N/A'))))
                 lien_col_widths[5] = max(lien_col_widths[5], len("✅" if result.get('barcode_found') else "❌"))
                 raw_barcode = str(result.get('raw_barcode_value', 'N/A'))
+                print(f"🔍 DEBUG: For {result.get('filename', 'Unknown')}: raw_barcode_value = '{result.get('raw_barcode_value', 'MISSING')}' → display = '{raw_barcode}'")
                 lien_col_widths[6] = max(lien_col_widths[6], len(raw_barcode))
                 sig_analysis = str(result.get('signature_analysis', 'N/A'))
                 lien_col_widths[7] = max(lien_col_widths[7], len(sig_analysis))
