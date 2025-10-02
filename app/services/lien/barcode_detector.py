@@ -12,6 +12,8 @@ from pyzbar import pyzbar
 from PIL import Image
 from typing import Dict, Any, List
 import io
+import os
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +23,19 @@ class BarcodeDetector:
     
     def __init__(self):
         """Initialize the barcode detector."""
-        pass
+        # Create tmp directory for debug images
+        self.tmp_dir = Path("emailtag/tmp/barcode_debug")
+        self.tmp_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"🔍 BARCODE DEBUG: Saving images to {self.tmp_dir}")
+    
+    def _save_debug_image(self, image, filename: str) -> None:
+        """Save debug image to tmp directory."""
+        try:
+            filepath = self.tmp_dir / filename
+            cv2.imwrite(str(filepath), image)
+            logger.info(f"🔍 DEBUG: Saved {filename}")
+        except Exception as e:
+            logger.warning(f"🔍 DEBUG: Failed to save {filename}: {e}")
     
     def _is_valid_lien_type(self, lien_type: str) -> bool:
         """
@@ -118,35 +132,28 @@ class BarcodeDetector:
             barcodes = self._scan_image_section(gray, "Full page")
             all_barcodes_found.extend(barcodes)
             
-            # 2. If no barcodes found, try quadrant scanning
+            # 2. If no barcodes found, try 3-section vertical scanning
             if not all_barcodes_found:
-                logger.info("🔍 BARCODE: Quadrant scanning...")
+                logger.info("🔍 BARCODE: 3-section scanning...")
                 
-                # Split into 4 quadrants
-                mid_height = height // 2
-                mid_width = width // 2
+                # Split into 3 vertical sections (lengthwise)
+                section_height = height // 3
                 
-                quadrants = [
-                    (gray[0:mid_height, 0:mid_width], "Top-Left"),
-                    (gray[0:mid_height, mid_width:width], "Top-Right"), 
-                    (gray[mid_height:height, 0:mid_width], "Bottom-Left"),
-                    (gray[mid_height:height, mid_width:width], "Bottom-Right")
+                sections = [
+                    (gray[0:section_height, 0:width], "Top-Section"),
+                    (gray[section_height:section_height*2, 0:width], "Middle-Section"), 
+                    (gray[section_height*2:height, 0:width], "Bottom-Section")
                 ]
                 
-                for quadrant_img, quadrant_name in quadrants:
-                    barcodes = self._scan_image_section(quadrant_img, quadrant_name)
+                for section_img, section_name in sections:
+                    barcodes = self._scan_image_section(section_img, section_name)
                     if barcodes:
                         # Adjust barcode coordinates to full image coordinates
                         for barcode in barcodes:
-                            if quadrant_name == "Top-Right":
-                                barcode.rect = barcode.rect._replace(left=barcode.rect.left + mid_width)
-                            elif quadrant_name == "Bottom-Left":
-                                barcode.rect = barcode.rect._replace(top=barcode.rect.top + mid_height)
-                            elif quadrant_name == "Bottom-Right":
-                                barcode.rect = barcode.rect._replace(
-                                    left=barcode.rect.left + mid_width,
-                                    top=barcode.rect.top + mid_height
-                                )
+                            if section_name == "Middle-Section":
+                                barcode.rect = barcode.rect._replace(top=barcode.rect.top + section_height)
+                            elif section_name == "Bottom-Section":
+                                barcode.rect = barcode.rect._replace(top=barcode.rect.top + section_height * 2)
                         all_barcodes_found.extend(barcodes)
             
             barcodes = all_barcodes_found
