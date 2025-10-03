@@ -65,6 +65,7 @@ class BarcodeDetector:
             except Exception as e:
                 logger.warning(f"🔍 ZXING: Failed to initialize: {e}")
                 self.zxing_reader = None
+        
     
     def _save_debug_image(self, image, filename: str) -> None:
         """Save debug image to tmp directory."""
@@ -273,40 +274,8 @@ class BarcodeDetector:
             safe_page_name = page_name.replace("/", "_").replace("\\", "_")
             self._save_debug_image(gray, f"{safe_page_name}_fullpage.png")
                 
-            all_barcodes_found = []
-            
-            # 1. Full page scan first
+            # Scan full page for barcodes
             barcodes = self._scan_image_section(gray, "Full page", f"{safe_page_name}_fullpage")
-            all_barcodes_found.extend(barcodes)
-            
-            # 2. If no barcodes found, try 3-section vertical scanning
-            if not all_barcodes_found:
-                logger.info("🔍 BARCODE: 3-section scanning...")
-                
-                # Split into 3 vertical sections (lengthwise)
-                section_height = height // 3
-                
-                sections = [
-                    (gray[0:section_height, 0:width], "Top-Section", f"{safe_page_name}_top"),
-                    (gray[section_height:section_height*2, 0:width], "Middle-Section", f"{safe_page_name}_middle"), 
-                    (gray[section_height*2:height, 0:width], "Bottom-Section", f"{safe_page_name}_bottom")
-                ]
-                
-                for section_img, section_name, debug_name in sections:
-                    # Save section debug image
-                    self._save_debug_image(section_img, f"{debug_name}.png")
-                    
-                    barcodes = self._scan_image_section(section_img, section_name, debug_name)
-                    if barcodes:
-                        # Adjust barcode coordinates to full image coordinates
-                        for barcode in barcodes:
-                            if section_name == "Middle-Section":
-                                barcode.rect = barcode.rect._replace(top=barcode.rect.top + section_height)
-                            elif section_name == "Bottom-Section":
-                                barcode.rect = barcode.rect._replace(top=barcode.rect.top + section_height * 2)
-                        all_barcodes_found.extend(barcodes)
-            
-            barcodes = all_barcodes_found
             
             if not barcodes:
                 logger.info("🔍 BARCODE: None found")
