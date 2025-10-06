@@ -122,20 +122,14 @@ class BarcodeDetector:
         all_barcodes = []
         
         # 1. Try pyzbar first
-        logger.info(f"🔍 PYZBAR: Scanning {process_name}...")
         pyzbar_barcodes = pyzbar.decode(gray_image)
         if pyzbar_barcodes:
-            logger.info(f"🔍 PYZBAR: Found {len(pyzbar_barcodes)} barcode(s) in {process_name}")
             all_barcodes.extend(pyzbar_barcodes)
-        else:
-            logger.info(f"🔍 PYZBAR: No barcodes found in {process_name}")
         
         # 2. Try zxing if available (always try, even if pyzbar found something)
         if self.zxing_reader:
             temp_path = None
             try:
-                logger.info(f"🔍 ZXING: Scanning {process_name}...")
-                
                 # Convert to PIL Image for zxing
                 pil_image = Image.fromarray(gray_image)
                 
@@ -155,8 +149,6 @@ class BarcodeDetector:
                     )
                     
                     if not already_found:
-                        logger.info(f"🔍 ZXING: Found additional barcode in {process_name}: '{zxing_data}'")
-                        
                         # Create a pyzbar-compatible object for consistency
                         class ZxingBarcode:
                             def __init__(self, data, barcode_type="ZXING"):
@@ -170,11 +162,7 @@ class BarcodeDetector:
                         
                         zxing_barcode = ZxingBarcode(zxing_data)
                         all_barcodes.append(zxing_barcode)
-                    elif pyzbar_barcodes:
-                        logger.info(f"🔍 ZXING: Confirmed barcode found by pyzbar: '{zxing_data}'")
                     else:
-                        logger.info(f"🔍 ZXING: Found barcode in {process_name}: '{zxing_data}'")
-                        
                         class ZxingBarcode:
                             def __init__(self, data, barcode_type="ZXING"):
                                 self.data = data.encode('utf-8') if isinstance(data, str) else data
@@ -187,11 +175,9 @@ class BarcodeDetector:
                         
                         zxing_barcode = ZxingBarcode(zxing_data)
                         all_barcodes.append(zxing_barcode)
-                else:
-                    logger.info(f"🔍 ZXING: No barcodes found in {process_name}")
                     
             except Exception as e:
-                logger.warning(f"🔍 ZXING: Error scanning {process_name}: {e}")
+                pass
             finally:
                 # Clean up temp file
                 if temp_path and temp_path.exists():
@@ -199,8 +185,387 @@ class BarcodeDetector:
                         temp_path.unlink()
                     except Exception:
                         pass
-        else:
-            logger.info(f"🔍 ZXING: Not available for {process_name} (using pyzbar only)")
+        
+        return all_barcodes
+    
+    def _detect_vertical_lines(self, gray_image, debug_name: str = None) -> np.ndarray:
+        """
+        Detect vertical lines in the image using Sobel filters and Hough transform.
+        
+        Args:
+            gray_image: Grayscale OpenCV image
+            debug_name: Name for debug image files
+            
+        Returns:
+            Heat map showing vertical line density
+        """
+        # 1. Apply contrast enhancement with two-stage isolated pixel removal
+        # First remove isolated pixels before contrast enhancement
+        preprocessed = gray_image.copy()
+        height, width = preprocessed.shape
+        
+        # Stage 1: Remove isolated pixels before CLAHE
+        remove_mask = np.zeros((height, width), dtype=bool)
+        
+        # Check each pixel (excluding borders)
+        for y in range(1, height - 1):
+            for x in range(1, width - 1):
+                # Get 3x3 neighborhood around current pixel
+                neighborhood = preprocessed[y-1:y+2, x-1:x+2]
+                center_pixel = neighborhood[1, 1]
+                
+                # Count non-blank neighbors (darker pixels)
+                # Assuming background is light (high values), foreground is dark (low values)
+                threshold = 200  # Adjust based on your image characteristics
+                dark_neighbors = np.sum(neighborhood < threshold) - (1 if center_pixel < threshold else 0)
+                
+                # If current pixel is dark but has no dark neighbors, mark for removal
+                if center_pixel < threshold and dark_neighbors == 0:
+                    remove_mask[y, x] = True
+        
+        # Remove isolated pixels by setting them to background value
+        preprocessed[remove_mask] = 255  # Set to white/background
+        
+        # Apply stronger contrast enhancement to cleaned image
+        clahe = cv2.createCLAHE(clipLimit=8.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(preprocessed)
+        
+        # Stage 2: Remove isolated pixels created by CLAHE
+        remove_mask_post = np.zeros((height, width), dtype=bool)
+        
+        # Check each pixel again after contrast enhancement
+        for y in range(1, height - 1):
+            for x in range(1, width - 1):
+                # Get 3x3 neighborhood around current pixel
+                neighborhood = enhanced[y-1:y+2, x-1:x+2]
+                center_pixel = neighborhood[1, 1]
+                
+                # Count non-blank neighbors (darker pixels)
+                threshold = 200  # Same threshold for consistency
+                dark_neighbors = np.sum(neighborhood < threshold) - (1 if center_pixel < threshold else 0)
+                
+                # If current pixel is dark but has no dark neighbors, mark for removal
+                if center_pixel < threshold and dark_neighbors == 0:
+                    remove_mask_post[y, x] = True
+        
+        # Remove CLAHE-created isolated pixels
+        enhanced[remove_mask_post] = 255  # Set to white/background
+        
+        if debug_name:
+            self._save_debug_image(enhanced, f"{debug_name}_contrast_enhanced.png")
+        
+        # 2. Apply morphological denoising after contrast enhancement
+        # Apply morphological opening to remove small isolated elements
+        noise_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        denoised = cv2.morphologyEx(enhanced, cv2.MORPH_OPEN, noise_kernel)
+        
+        # Apply median filter to further reduce salt-and-pepper noise
+        denoised = cv2.medianBlur(denoised, 3)
+        
+        if debug_name:
+            self._save_debug_image(denoised, f"{debug_name}_denoised.png")
+        
+        # 3. Apply vertical Sobel filter to emphasize vertical edges
+        sobel_vertical = cv2.Sobel(denoised, cv2.CV_64F, 1, 0, ksize=3)
+        sobel_vertical = np.absolute(sobel_vertical)
+        sobel_vertical = np.uint8(sobel_vertical)
+        
+        # 4. Apply morphological operations with vertical kernel to connect broken lines
+        vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 30))
+        morphed = cv2.morphologyEx(sobel_vertical, cv2.MORPH_CLOSE, vertical_kernel)
+        
+        # 5. Apply threshold to get binary image
+        _, binary = cv2.threshold(morphed, 50, 255, cv2.THRESH_BINARY)
+        
+        # 6. Detect lines using Hough Line Transform
+        lines = cv2.HoughLinesP(
+            binary, 
+            rho=1, 
+            theta=np.pi/180, 
+            threshold=50,
+            minLineLength=20,
+            maxLineGap=10
+        )
+        
+        # 7. Create heat map from detected lines
+        heat_map = np.zeros_like(gray_image, dtype=np.float32)
+        
+        if lines is not None:
+            # Create debug image showing detected lines
+            line_debug_image = cv2.cvtColor(gray_image.copy(), cv2.COLOR_GRAY2BGR)
+            
+            for line in lines:
+                x1, y1, x2, y2 = line[0]
+                
+                # Check if line is approximately vertical (angle within 15 degrees of vertical)
+                if x2 - x1 != 0:
+                    angle = np.abs(np.arctan((y2 - y1) / (x2 - x1)) * 180 / np.pi)
+                    if angle > 75:  # Approximately vertical
+                        # Draw line on debug image
+                        cv2.line(line_debug_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                        
+                        # Add to heat map - draw thick line to create density
+                        cv2.line(heat_map, (x1, y1), (x2, y2), 255, 3)
+                else:
+                    # Perfectly vertical line
+                    cv2.line(line_debug_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.line(heat_map, (x1, y1), (x2, y2), 255, 3)
+        
+        # 8. Apply Gaussian blur to create smooth heat map
+        heat_map_blurred = cv2.GaussianBlur(heat_map, (15, 15), 0)
+        
+        if debug_name:
+            # Normalize heat map for visualization
+            heat_map_vis = cv2.normalize(heat_map_blurred, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            self._save_debug_image(heat_map_vis, f"{debug_name}_heat_map.png")
+        
+        
+        return heat_map_blurred
+    
+    def _extract_candidate_regions(self, heat_map: np.ndarray, gray_image: np.ndarray, debug_name: str = None) -> List[Tuple[int, int, int, int]]:
+        """
+        Extract candidate barcode regions from the heat map.
+        
+        Args:
+            heat_map: Heat map showing vertical line density
+            gray_image: Original grayscale image
+            debug_name: Name for debug image files
+            
+        Returns:
+            List of bounding box tuples (x_min, y_min, x_max, y_max) for candidate regions
+        """
+        # 1. Normalize heat map and apply threshold
+        heat_map_normalized = cv2.normalize(heat_map, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+        
+        # Use adaptive threshold to find high-density regions
+        threshold_value = np.percentile(heat_map_normalized[heat_map_normalized > 0], 75)  # Top 25%
+        
+        _, thresholded = cv2.threshold(heat_map_normalized, threshold_value, 255, cv2.THRESH_BINARY)
+        
+        
+        # 2. Apply morphological operations to merge nearby regions
+        # Use horizontal kernel to merge vertically aligned barcode segments
+        horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (20, 1))
+        merged = cv2.morphologyEx(thresholded, cv2.MORPH_CLOSE, horizontal_kernel)
+        
+        # Use vertical kernel to ensure full height coverage
+        vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 10))
+        merged = cv2.morphologyEx(merged, cv2.MORPH_CLOSE, vertical_kernel)
+        
+        # 3. Find contours of candidate regions
+        contours, _ = cv2.findContours(merged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # 4. Filter contours based on size and aspect ratio
+        candidate_regions = []
+        min_area = 500  # Minimum area for a barcode region
+        max_aspect_ratio = 10  # Maximum width/height ratio for vertical barcodes
+        
+        # Create debug image showing candidate regions
+        debug_image = cv2.cvtColor(gray_image.copy(), cv2.COLOR_GRAY2BGR)
+        
+        for i, contour in enumerate(contours):
+            # Get bounding rectangle
+            x, y, w, h = cv2.boundingRect(contour)
+            area = w * h
+            
+            # Filter by area
+            if area < min_area:
+                continue
+            
+            # For vertical barcodes, height should be greater than width
+            if h < w:
+                continue
+            
+            # Check aspect ratio (height/width for vertical barcodes)
+            aspect_ratio = h / w if w > 0 else float('inf')
+            if aspect_ratio > max_aspect_ratio:
+                continue
+            
+            # Expand region slightly to ensure full barcode capture
+            padding = 10
+            x_expanded = max(0, x - padding)
+            y_expanded = max(0, y - padding)
+            w_expanded = min(gray_image.shape[1] - x_expanded, w + 2 * padding)
+            h_expanded = min(gray_image.shape[0] - y_expanded, h + 2 * padding)
+            
+            candidate_regions.append((x_expanded, y_expanded, x_expanded + w_expanded, y_expanded + h_expanded))
+            
+            # Draw bounding box on debug image
+            cv2.rectangle(debug_image, (x_expanded, y_expanded), (x_expanded + w_expanded, y_expanded + h_expanded), (0, 255, 0), 2)
+            cv2.putText(debug_image, f"{len(candidate_regions)}", (x_expanded, y_expanded - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        
+        return candidate_regions
+    
+    def _enhance_region(self, region: np.ndarray, region_index: int, debug_name: str = None) -> List[np.ndarray]:
+        """
+        Enhance resolution and clarity of a candidate region for better barcode detection.
+        
+        Args:
+            region: Grayscale image region
+            region_index: Index of the region for logging
+            debug_name: Name for debug image files
+            
+        Returns:
+            List of enhanced region variants
+        """
+        enhanced_regions = []
+        
+        # 1. Original region
+        enhanced_regions.append(region.copy())
+        
+        # 2. Upscale using bicubic interpolation (2x)
+        height, width = region.shape
+        upscaled_2x = cv2.resize(region, (width * 2, height * 2), interpolation=cv2.INTER_CUBIC)
+        enhanced_regions.append(upscaled_2x)
+        
+        
+        # 3. Upscale 3x for very small regions
+        if width < 100 or height < 100:
+            upscaled_3x = cv2.resize(region, (width * 3, height * 3), interpolation=cv2.INTER_CUBIC)
+            enhanced_regions.append(upscaled_3x)
+        
+        # 4. Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        clahe_enhanced = clahe.apply(region)
+        enhanced_regions.append(clahe_enhanced)
+        
+        # 5. Apply sharpening filter
+        # Create sharpening kernel
+        sharpening_kernel = np.array([[-1, -1, -1],
+                                     [-1,  9, -1],
+                                     [-1, -1, -1]])
+        sharpened = cv2.filter2D(region, -1, sharpening_kernel)
+        
+        # Ensure values are within valid range
+        sharpened = np.clip(sharpened, 0, 255).astype(np.uint8)
+        enhanced_regions.append(sharpened)
+        
+        # 6. Apply unsharp masking
+        gaussian_blurred = cv2.GaussianBlur(region, (0, 0), 1.0)
+        unsharp_mask = cv2.addWeighted(region, 1.5, gaussian_blurred, -0.5, 0)
+        unsharp_mask = np.clip(unsharp_mask, 0, 255).astype(np.uint8)
+        enhanced_regions.append(unsharp_mask)
+        
+        # 7. Apply morphological operations with vertical kernel for barcode enhancement
+        vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 5))
+        morphed = cv2.morphologyEx(region, cv2.MORPH_CLOSE, vertical_kernel)
+        enhanced_regions.append(morphed)
+        
+        # 8. Apply adaptive thresholding (binary)
+        adaptive_thresh = cv2.adaptiveThreshold(
+            region, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+        )
+        enhanced_regions.append(adaptive_thresh)
+        
+        
+        return enhanced_regions
+    
+    def _scan_enhanced_region(self, enhanced_regions: List[np.ndarray], region_bbox: Tuple[int, int, int, int], region_index: int, debug_name: str = None) -> List:
+        """
+        Scan enhanced region variants for vertical Code128 barcodes.
+        
+        Args:
+            enhanced_regions: List of enhanced region variants
+            region_bbox: Original bounding box (x_min, y_min, x_max, y_max)
+            region_index: Index of the region for logging
+            debug_name: Name for debug image files
+            
+        Returns:
+            List of detected barcodes
+        """
+        all_barcodes = []
+        x_min, y_min, x_max, y_max = region_bbox
+        
+        for variant_idx, enhanced_region in enumerate(enhanced_regions):
+            try:
+                variant_name = f"Region-{region_index}-Variant-{variant_idx+1}"
+                
+                # 1. Try original orientation (vertical)
+                barcodes = self._scan_with_both_libraries(enhanced_region, f"{variant_name}_vertical")
+                if barcodes:
+                    # Adjust coordinates back to original image coordinates
+                    for barcode in barcodes:
+                        if hasattr(barcode, 'rect') and hasattr(barcode.rect, '_replace'):
+                            # Calculate scale factor if this is an upscaled variant
+                            scale_factor = 1.0
+                            if variant_idx == 1:  # 2x upscaled
+                                scale_factor = 0.5
+                            elif variant_idx == 2 and len(enhanced_regions) > 2:  # 3x upscaled
+                                scale_factor = 1.0/3.0
+                            
+                            adjusted_rect = barcode.rect._replace(
+                                left=int(barcode.rect.left * scale_factor) + x_min,
+                                top=int(barcode.rect.top * scale_factor) + y_min
+                            )
+                            barcode.rect = adjusted_rect
+                    
+                    all_barcodes.extend(barcodes)
+                    # If we found barcodes in this variant, we can break early
+                    break
+                
+                # 2. Try rotating 90 degrees (make vertical barcode horizontal)
+                height, width = enhanced_region.shape
+                rotated_90 = cv2.rotate(enhanced_region, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                
+                barcodes = self._scan_with_both_libraries(rotated_90, f"{variant_name}_rotated_90")
+                if barcodes:
+                    # Adjust coordinates for rotation and original position
+                    for barcode in barcodes:
+                        if hasattr(barcode, 'rect') and hasattr(barcode.rect, '_replace'):
+                            # For 90° counter-clockwise rotation: new_x = old_y, new_y = width - old_x
+                            # To convert back: old_x = width - new_y, old_y = new_x
+                            
+                            scale_factor = 1.0
+                            if variant_idx == 1:  # 2x upscaled
+                                scale_factor = 0.5
+                            elif variant_idx == 2 and len(enhanced_regions) > 2:  # 3x upscaled
+                                scale_factor = 1.0/3.0
+                            
+                            # Convert rotated coordinates back to original orientation
+                            original_x = int((height - barcode.rect.top) * scale_factor)
+                            original_y = int(barcode.rect.left * scale_factor)
+                            
+                            adjusted_rect = barcode.rect._replace(
+                                left=original_x + x_min,
+                                top=original_y + y_min
+                            )
+                            barcode.rect = adjusted_rect
+                    
+                    all_barcodes.extend(barcodes)
+                    break
+                
+                # 3. Try rotating 270 degrees (alternative horizontal orientation)
+                rotated_270 = cv2.rotate(enhanced_region, cv2.ROTATE_90_CLOCKWISE)
+                
+                barcodes = self._scan_with_both_libraries(rotated_270, f"{variant_name}_rotated_270")
+                if barcodes:
+                    # Adjust coordinates for rotation and original position
+                    for barcode in barcodes:
+                        if hasattr(barcode, 'rect') and hasattr(barcode.rect, '_replace'):
+                            # For 90° clockwise rotation: new_x = height - old_y, new_y = old_x
+                            # To convert back: old_x = new_y, old_y = height - new_x
+                            
+                            scale_factor = 1.0
+                            if variant_idx == 1:  # 2x upscaled
+                                scale_factor = 0.5
+                            elif variant_idx == 2 and len(enhanced_regions) > 2:  # 3x upscaled
+                                scale_factor = 1.0/3.0
+                            
+                            # Convert rotated coordinates back to original orientation
+                            original_x = int(barcode.rect.top * scale_factor)
+                            original_y = int((width - barcode.rect.left) * scale_factor)
+                            
+                            adjusted_rect = barcode.rect._replace(
+                                left=original_x + x_min,
+                                top=original_y + y_min
+                            )
+                            barcode.rect = adjusted_rect
+                    
+                    all_barcodes.extend(barcodes)
+                    break
+                
+            except Exception as e:
+                pass
         
         return all_barcodes
     
@@ -216,12 +581,9 @@ class BarcodeDetector:
         Returns:
             List of detected barcodes
         """
-        logger.info(f"🔍   {section_name}: Scanning...")
-        
         # 1. Original grayscale - try both libraries
         barcodes = self._scan_with_both_libraries(gray_image, f"{section_name}_original")
         if len(barcodes) > 0:
-            logger.info(f"🔍   {section_name}: Found {len(barcodes)} barcode(s)")
             return barcodes
         
         # 2. Try with contrast enhancement - both libraries
@@ -230,7 +592,6 @@ class BarcodeDetector:
             self._save_debug_image(enhanced, f"{debug_name}_enhanced.png")
         barcodes = self._scan_with_both_libraries(enhanced, f"{section_name}_enhanced")
         if len(barcodes) > 0:
-            logger.info(f"🔍   {section_name}: Found {len(barcodes)} barcode(s) after enhancement")
             return barcodes
         
         # 3. Try with morphological operations - both libraries
@@ -240,10 +601,8 @@ class BarcodeDetector:
             self._save_debug_image(morphed, f"{debug_name}_morphed.png")
         barcodes = self._scan_with_both_libraries(morphed, f"{section_name}_morphed")
         if len(barcodes) > 0:
-            logger.info(f"🔍   {section_name}: Found {len(barcodes)} barcode(s) after morphing")
             return barcodes
         
-        logger.info(f"🔍   {section_name}: None found")
         return []
     
     def detect_and_parse_barcodes(self, image_data: bytes, page_name: str = "unknown") -> Dict[str, Any]:
@@ -274,8 +633,40 @@ class BarcodeDetector:
             safe_page_name = page_name.replace("/", "_").replace("\\", "_")
             self._save_debug_image(gray, f"{safe_page_name}_fullpage.png")
                 
-            # Scan full page for barcodes
+            # Try simple full-page scan first
+            logger.info("🔍 BARCODE: Starting simple full-page scan...")
             barcodes = self._scan_image_section(gray, "Full page", f"{safe_page_name}_fullpage")
+            
+            # If simple approach failed, try advanced vertical barcode detection
+            if not barcodes:
+                logger.info("🔍 BARCODE: Simple scan found nothing, trying vertical barcode detection...")
+                
+                # 1. Detect vertical lines and create heat map
+                heat_map = self._detect_vertical_lines(gray, f"{safe_page_name}_fullpage")
+                
+                # 2. Extract candidate regions from heat map
+                candidate_regions = self._extract_candidate_regions(heat_map, gray, f"{safe_page_name}_fullpage")
+                
+                # 3. Scan each candidate region with enhancement
+                if candidate_regions:
+                    logger.info(f"🔍 BARCODE: Processing {len(candidate_regions)} candidate regions...")
+                    
+                    for i, region_bbox in enumerate(candidate_regions):
+                        x_min, y_min, x_max, y_max = region_bbox
+                        
+                        # Extract region from original image
+                        region = gray[y_min:y_max, x_min:x_max]
+                        
+                        # Enhance the region
+                        enhanced_regions = self._enhance_region(region, i+1, f"{safe_page_name}_fullpage")
+                        
+                        # Scan enhanced region variants
+                        region_barcodes = self._scan_enhanced_region(enhanced_regions, region_bbox, i+1, f"{safe_page_name}_fullpage")
+                        
+                        if region_barcodes:
+                            barcodes.extend(region_barcodes)
+                
+                logger.info(f"🔍 BARCODE: Advanced approach found {len(barcodes)} barcode(s) from {len(candidate_regions)} candidate regions")
             
             if not barcodes:
                 logger.info("🔍 BARCODE: None found")

@@ -1,0 +1,14 @@
+# Input Directory
+
+Place your test images here for barcode heatmap analysis.
+
+Supported formats:
+- PNG
+- JPG/JPEG
+- BMP
+- TIFF
+
+Example usage:
+1. Copy test image to this directory: `cp ~/my_barcode.png input/`
+2. Run analysis: `python test_heatmap.py input/my_barcode.png`
+3. Check results in `output/` directory
