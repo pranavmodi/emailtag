@@ -1,6 +1,6 @@
 Sub-Classification Rules for Accounts Receivable Category
 =========================================================
-**Sub-Categories:** Billing, Liens, Negotiations, Case Updates, Collections.
+**Sub-Categories:** Billing, Liens, Negotiations, Case Updates, Collections, Process CC.
 
 Please use the following rules to sub-classify the provided email content, already identified as 'Accounts Receivable', into one of the above sub-categories.
 
@@ -12,6 +12,7 @@ Please use the following rules to sub-classify the provided email content, alrea
    - If the email is primarily about **discussing, proposing, or agreeing to changes in payment terms, settlement amounts, or bill reductions**, classify as 'Negotiations'.
    - If the email primarily provides **updates on the status of a financial case, account history, or payment tracking**, including **check status inquiries, payment confirmations, attorney changes, drop letters, settlement updates, liability clearance updates, payment promises, refund requests, or payment dispatch notifications**, classify as 'Case Updates'.
    - If the email primarily relates to **overdue accounts, warnings about collections, or communication regarding accounts sent to or being considered for third-party collection agencies**, classify as 'Collections'.
+   - If the email contains **explicit instructions to charge or process a credit card payment** (e.g., "please charge the credit card", "process CC payment", "run the credit card"), classify as 'Process CC'.
 
 2. **Document Type Priority Rule**: If the email contains attachments processed by the document analysis system, prioritize classification based on document type:
    - **CRITICAL**: If ANY attachment is classified as document type **'lien_reduction'**, classify as 'Negotiations' regardless of other content, as these are settlement/reduction requests requiring negotiation. Do NOT classify as 'Liens'.

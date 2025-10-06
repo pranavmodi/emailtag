@@ -1,0 +1,46 @@
+Classification Rules for Accounts Receivable - Process CC Category
+===========================================================
+
+**Final Tag:** Process CC
+
+Please use the following rules to classify the provided email content into the 'Process CC' category when it has already been identified as 'Accounts Receivable'.
+
+--- START Process CC Classification RULES ---
+
+**Process CC Classification Rule:**
+
+Classify as 'Process CC' when the email contains explicit instructions to charge or process a credit card payment. This includes:
+
+1. **Direct Credit Card Processing Instructions:**
+   - "Please charge the credit card"
+   - "Process the credit card payment"
+   - "Run the credit card"
+   - "Charge the card on file"
+   - "Process CC payment"
+   - "Execute credit card transaction"
+
+2. **Credit Card Authorization Requests:**
+   - "You are authorized to charge my credit card"
+   - "Please proceed with charging the card"
+   - "Go ahead and process the payment via credit card"
+   - "Charge my card for the balance"
+
+3. **Payment Method Specifications:**
+   - "Use the credit card for payment"
+   - "Pay via credit card"
+   - "Charge to my Visa/MasterCard/etc."
+   - "Process payment using the card ending in [numbers]"
+
+**Important Distinctions:**
+- This is for IMMEDIATE processing instructions, not general billing inquiries
+- Different from "Bill or balance Request" which asks for billing information
+- Different from payment promises or settlement discussions
+- Must contain explicit instruction to charge/process a credit card
+
+**Key Phrases to Look For:**
+- "charge", "process", "run" + "credit card"/"CC"/"card"
+- "authorized to charge"
+- "proceed with payment"
+- Specific card details with processing instructions
+
+--- END Process CC Classification RULES ---
