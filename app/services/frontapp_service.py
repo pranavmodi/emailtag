@@ -286,6 +286,52 @@ def get_conversation_tags(conversation_id: str) -> Optional[List[Dict]]:
         return None
 
 
+def move_conversation_to_inbox(conversation_id: str, target_inbox_id: str) -> bool:
+    """
+    Moves a conversation to a different inbox in Front.
+
+    Args:
+        conversation_id: The ID of the conversation to move.
+        target_inbox_id: The ID of the inbox to move the conversation to.
+
+    Returns:
+        bool: True if moving was successful, False otherwise.
+    """
+    if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
+        logger.error("Missing required Front configuration for moving conversation.")
+        return False
+
+    auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
+    url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}"
+    headers = {
+        "Authorization": auth_header,
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    payload = {"inbox_id": target_inbox_id}
+
+    # TODO: Configure SSL verification properly
+    with httpx.Client(verify=False) as client:
+        try:
+            logger.info(f"Moving conversation {conversation_id} to inbox {target_inbox_id} in Front via API: {url}")
+            response = client.patch(url, headers=headers, json=payload)
+
+            if response.status_code == 204:  # Front API returns 204 No Content on successful update
+                logger.info(f"Successfully moved conversation {conversation_id} to inbox {target_inbox_id}. Status: {response.status_code}")
+                return True
+            else:
+                # Attempt to parse error for better logging
+                try:
+                    error_details = response.json()
+                except json.JSONDecodeError:
+                    error_details = response.text
+                logger.error(f"Failed to move conversation {conversation_id} to inbox {target_inbox_id}. Status: {response.status_code}, Details: {error_details}")
+                return False
+        except Exception as e:
+            logger.error(f"Exception while moving conversation {conversation_id} to inbox {target_inbox_id}: {e}", exc_info=True)
+            return False
+
+
 def archive_conversation_in_front(conversation_id: str) -> bool:
     """
     Archives a conversation in Front.

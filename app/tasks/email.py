@@ -822,6 +822,34 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                         logger.warning(f"Failed to add human review tag to conversation {front_conversation_id} for case update tags")
                 else:
                     logger.debug(f"No case update tags found in {new_tags} for conversation {front_conversation_id}")
+                
+                # --- INBOX ROUTING LOGIC ---
+                if settings.INBOX_ROUTING_ENABLED:
+                    from app.services.frontapp_service import move_conversation_to_inbox
+                    
+                    tag_to_inbox_mapping = settings.TAG_TO_INBOX_MAPPING
+                    target_inbox_id = None
+                    matched_tag = None
+                    
+                    # Find the first tag that matches our mapping (priority order matters)
+                    for tag in new_tags:
+                        if tag in tag_to_inbox_mapping:
+                            target_inbox_id = tag_to_inbox_mapping[tag]
+                            matched_tag = tag
+                            break
+                    
+                    if target_inbox_id:
+                        logger.info(f"📬 INBOX ROUTING: Moving conversation {front_conversation_id} to inbox {target_inbox_id} based on tag '{matched_tag}'")
+                        move_success = move_conversation_to_inbox(front_conversation_id, target_inbox_id)
+                        if move_success:
+                            logger.info(f"✅ Successfully moved conversation {front_conversation_id} to inbox {target_inbox_id}")
+                        else:
+                            logger.warning(f"❌ Failed to move conversation {front_conversation_id} to inbox {target_inbox_id}")
+                    else:
+                        logger.debug(f"📬 INBOX ROUTING: No inbox mapping found for tags {new_tags}")
+                else:
+                    logger.debug(f"📬 INBOX ROUTING: Disabled (INBOX_ROUTING_ENABLED=False)")
+                # --- END INBOX ROUTING LOGIC ---
             else:
                 logger.error(f"Failed to apply tags {new_tags} to conversation {front_conversation_id} on Front.")
                 applied_tags_to_front = False 
@@ -845,6 +873,33 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                         logger.info(f"Added human review tag to conversation {front_conversation_id} due to case update tags (main tagging failed): {[tag for tag in new_tags if tag in case_update_tags]}")
                     else:
                         logger.warning(f"Failed to add human review tag to conversation {front_conversation_id} for case update tags (main tagging also failed)")
+        
+        # --- INBOX ROUTING (for failed main tagging case) ---
+        # Attempt inbox routing even if main tag application failed, based on determined tags
+        if not applied_tags_to_front and settings.INBOX_ROUTING_ENABLED and new_tags:
+            from app.services.frontapp_service import move_conversation_to_inbox
+            
+            tag_to_inbox_mapping = settings.TAG_TO_INBOX_MAPPING
+            target_inbox_id = None
+            matched_tag = None
+            
+            # Find the first tag that matches our mapping
+            for tag in new_tags:
+                if tag in tag_to_inbox_mapping:
+                    target_inbox_id = tag_to_inbox_mapping[tag]
+                    matched_tag = tag
+                    break
+            
+            if target_inbox_id:
+                logger.info(f"📬 INBOX ROUTING (after tag failure): Moving conversation {front_conversation_id} to inbox {target_inbox_id} based on determined tag '{matched_tag}'")
+                move_success = move_conversation_to_inbox(front_conversation_id, target_inbox_id)
+                if move_success:
+                    logger.info(f"✅ Successfully moved conversation {front_conversation_id} to inbox {target_inbox_id} (despite tag application failure)")
+                else:
+                    logger.warning(f"❌ Failed to move conversation {front_conversation_id} to inbox {target_inbox_id} (tag application also failed)")
+            else:
+                logger.debug(f"📬 INBOX ROUTING (after tag failure): No inbox mapping found for determined tags {new_tags}")
+        # --- END INBOX ROUTING (for failed main tagging case) ---
         
         # Regardless of tagging outcome (unless critical error above), proceed to auto-response.
         perform_autorespond_task.apply_async(args=[email_id], kwargs={'determined_tags': new_tags}, queue='processing')

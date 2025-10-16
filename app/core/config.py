@@ -121,6 +121,10 @@ class Settings(BaseSettings):
     
     # Document Processing Model Settings
     DOCUMENT_ANALYSIS_MODEL: str = "o3"  # Model for document type classification and analysis
+    
+    # Inbox Routing Settings
+    INBOX_ROUTING_ENABLED: bool = False  # Enable/disable automatic conversation routing to different inboxes
+    TAG_TO_INBOX_MAPPING: Json[Dict[str, str]]  # Maps tags to inbox IDs for conversation routing
 
     @field_validator("ASYNC_DATABASE_URL", mode="before")
     def assemble_async_db_connection(cls, v: Optional[str], info) -> Any:
