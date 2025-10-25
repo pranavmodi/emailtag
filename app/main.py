@@ -12,6 +12,7 @@ import uvicorn
 from app.api.api_v1.api import api_router
 from app.api.v1.endpoints.classification_rules_api import router as rules_router
 from app.api.v1.endpoints.trace_viewer_api import router as trace_router
+from app.api.api_v1.endpoints.ui import settings_ui
 from app.core.config import settings
 
 # Configure logging
@@ -60,6 +61,12 @@ def create_application() -> FastAPI:
     application.include_router(api_router, prefix=settings.API_V1_PREFIX)
     application.include_router(rules_router, prefix="/admin", tags=["Classification Rules UI"])
     application.include_router(trace_router, prefix="/admin", tags=["Trace Viewer UI"])
+
+    # Add settings page at root level
+    @application.get("/settings")
+    async def settings_page(request: Request):
+        """System settings page."""
+        return await settings_ui(request)
 
     @application.get("/health")
     async def health_check():
