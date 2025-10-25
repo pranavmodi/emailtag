@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.crud import email as email_crud
 from app.crud import patient_conversation_data as pcd_crud
+from app.crud.system_settings import system_settings_crud
 from app.db.session import get_db
 from app.schemas.email import EmailCreate, FrontAppWebhook, PreprocessingWebhook, EmailUpdate, Email, FrontOutboundMessageWebhook
 from app.schemas.patient_conversation_data import PatientConversationDataCreate
@@ -301,7 +302,30 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         # Extract and process patient IDs using the helper function (now with subject support)
         await extract_and_log_patient_info(db, final_content_text, conversation_id, db_email.id, logger, subject)
 
-        # Queue email for processing
+        # Check if email processing is enabled before queuing
+        with tracer.trace_step(
+            step_name=TraceSteps.PROCESSING_CHECK,
+            step_type=StepTypes.VALIDATION,
+            input_data={"email_id": str(db_email.id)}
+        ) as (trace_id, output_data):
+            processing_enabled = await system_settings_crud.is_email_processing_enabled(db)
+            output_data["processing_enabled"] = processing_enabled
+
+            if not processing_enabled:
+                # Update email status to processing_disabled
+                await email_crud.update(
+                    db=db,
+                    db_obj=db_email,
+                    obj_in={"status": "processing_disabled"}
+                )
+                output_data["action"] = "disabled"
+                output_data["email_status"] = "processing_disabled"
+                logger.warning(
+                    f"⏸️  Email processing is DISABLED. Email {db_email.id} saved but NOT queued for processing."
+                )
+                return
+
+        # Queue email for processing (only if processing is enabled)
         with tracer.trace_step(
             step_name=TraceSteps.TASK_QUEUED,
             step_type=StepTypes.TASK_QUEUE,

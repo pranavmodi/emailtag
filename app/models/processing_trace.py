@@ -97,6 +97,7 @@ class TraceSteps:
     EMAIL_CREATED = "email_created"
     CONTENT_EXTRACTED = "content_extracted"
     AUTORESPONSE_CHECK = "autoresponse_check"
+    PROCESSING_CHECK = "processing_check"
     PATIENT_ID_EXTRACTION = "patient_id_extraction"
     OPENAI_PATIENT_EXTRACTION = "openai_patient_extraction"
     MCP_PATIENT_LOOKUP = "mcp_patient_lookup"

@@ -1,5 +1,6 @@
 # Data directories
 /home/fret/data/emailtag/
+scripts/getraces/
 
 # Python
 __pycache__/
