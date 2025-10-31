@@ -318,69 +318,57 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
         email_chain_summary += "---\n\n"
 
     prompt = (
-        f"Analyze the following STRUCTURED email chain to determine if there are any outstanding questions, "
-        f"requests, or actions that require a response from Precise Imaging (the medical imaging company).\n\n"
-        f"CRITICAL RULE: A request for Precise Imaging to take an ACTION is only resolved if there is CONFIRMATION "
-        f"that Precise Imaging has actually performed that action. Simply receiving a request does not resolve it.\n\n"
-        f"IMPORTANT: Focus only on what Precise Imaging needs to address or respond to. "
-        f"Ignore questions or actions that are for the patient/client to handle.\n\n"
-        f"SPECIAL CASE - External Attorney Responses: If Precise Imaging previously requested a case update "
-        f"and an external attorney responds with status information (like 'client is pending', 'under review', "
-        f"'waiting for settlement'), this should be considered RESOLVED as it answers Precise's request.\n\n"
-        f"Examples of UNRESOLVED requests (require Precise Imaging action/response):\n"
-        f"- 'Please schedule an appointment' - UNRESOLVED unless Precise confirms scheduling\n"
-        f"- 'Please update the portal' - UNRESOLVED unless Precise confirms portal updated\n"
-        f"- 'Please send the medical records' - UNRESOLVED unless Precise confirms records sent\n"
-        f"- 'Can you provide the imaging results?' - UNRESOLVED unless Precise provides results\n"
-        f"- 'Please process this lien documentation' - UNRESOLVED unless Precise confirms processing\n"
-        f"- 'What is the status of the appointment?' - UNRESOLVED unless Precise provides status\n\n"
-        f"Examples of what Precise Imaging does NOT need to respond to (RESOLVED):\n"
-        f"- Patient saying they will call back later\n"
-        f"- Patient saying they will check with their doctor\n"
-        f"- Patient confirming they received information\n"
-        f"- Attorney providing case updates with no action requested from Precise Imaging\n"
-        f"- External attorney responses like 'client is pending' or 'case under review' without specific requests\n"
-        f"- Attorney status updates that are purely informational (e.g., 'client listed below is pending')\n"
-        f"- Pure informational messages with explicit 'no response needed'\n"
-        f"- Responses from external parties that are answers to Precise Imaging's requests, not new requests\n\n"
-        f"🚨🚨🚨 CHECK FINAL EMAIL FIRST 🚨🚨🚨\n\n"
-        f"BEFORE analyzing the entire conversation, YOU MUST check the FINAL/LAST/MOST RECENT email first.\n"
-        f"If it contains ANY of these acknowledgment phrases, IMMEDIATELY return resolved=true and IGNORE any previous unresolved questions:\n\n"
-        f"ACKNOWLEDGMENT PHRASES that OVERRIDE ALL OTHER ANALYSIS:\n"
-        f"- ✓ 'Noted' (even just this single word) → ARCHIVE IMMEDIATELY\n"
-        f"- ✓ 'Noted, I've just emailed' or 'Noted, I've contacted' → ARCHIVE IMMEDIATELY\n"
-        f"- ✓ 'Thanks for the update' or 'Thank you for the update' → ARCHIVE IMMEDIATELY\n"
-        f"- ✓ \"We'll keep you updated\" or \"I'll keep you posted\" → ARCHIVE IMMEDIATELY\n"
-        f"- ✓ 'Will update you' or 'Will keep you informed' → ARCHIVE IMMEDIATELY\n"
-        f"- ✓ 'Okay, thanks' or 'Ok, thank you' → ARCHIVE IMMEDIATELY\n"
-        f"- ✓ 'Got it' or 'Understood' → ARCHIVE IMMEDIATELY\n"
-        f"- ✓ 'Appreciate it' or 'Appreciate the update' → ARCHIVE IMMEDIATELY\n\n"
-        f"🔴 CRITICAL UNDERSTANDING: 🔴\n"
-        f"If the final email says 'Noted' or 'Thanks for the update', it means:\n"
-        f"- The external party has acknowledged Precise Imaging's request/information\n"
-        f"- They are taking action on their end (e.g., 'I've just emailed the facility')\n"
-        f"- NO response is needed from Precise Imaging\n"
-        f"- The ball is now in the external party's court\n"
-        f"- Previous unresolved questions are NO LONGER RELEVANT because the external party has taken ownership\n\n"
-        f"❌ WRONG ANALYSIS: 'Previous email asked for ICD-10 code, still unresolved' → This is INCORRECT\n"
-        f"✅ CORRECT ANALYSIS: 'Final email says Noted, external party taking action' → Return resolved=true\n\n"
-        f"This rule takes ABSOLUTE PRIORITY over all other considerations. Even if previous emails have unanswered "
-        f"questions, if the final email contains these acknowledgment phrases, return resolved=true immediately.\n\n"
-        f"⚠️ CRITICAL SPECIAL CASE - Referral/Schedule Request Processing: ⚠️\n"
-        f"If the conversation is about a referral or schedule request and the LATEST email from Precise Imaging staff "
-        f"contains a response indicating the request is being processed with timeframe information, YOU MUST consider it RESOLVED.\n\n"
-        f"KEY INDICATORS that signal IMMEDIATE ARCHIVAL:\n"
-        f"- ✓ 'The referral is currently with the intake team' or 'Referral is with intake'\n"
-        f"- ✓ 'Please allow [X] business hours/days for processing' or any processing timeframe mentioned\n"
-        f"- ✓ 'We'll keep you updated on any progress' or 'We'll reach out with updates'\n"
-        f"- ✓ Any combination of: acknowledgment + in process + timeframe + will update\n\n"
-        f"RATIONALE: These responses indicate the referral/schedule request has been:\n"
-        f"1. Received and acknowledged by staff\n"
-        f"2. Actively being processed by the appropriate team\n"
-        f"3. Will be followed up on within stated timeframe\n"
-        f"4. Requires NO immediate action or response\n\n"
-        f"This takes HIGH PRIORITY in archival decisions - if you see this pattern, archive immediately.\n\n"
-        f"The emails are provided in chronological order (oldest first) for better analysis.\n\n"
+        f"Analyze the following email chain to determine if there are any outstanding questions, requests, or actions "
+        f"that require a response or action from Precise Imaging.\n\n"
+        f"--- BEGIN ANALYSIS (Follow in Order) ---\n\n"
+        f"### Step 1: Check for Final External Acknowledgment (Immediate Resolution)\n"
+        f"Examine the **single most recent (last) email** in the chain.\n"
+        f"IF this final email is **from an external party** (not Precise Imaging) AND it contains one of the simple "
+        f"acknowledgment phrases below, the entire thread is **RESOLVED**. This indicates the external party has "
+        f"taken ownership or acknowledged receipt, and the ball is in their court.\n\n"
+        f"* **Acknowledgment Phrases:**\n"
+        f"    * 'Noted' (or 'Noted, I've just emailed...')\n"
+        f"    * 'Thanks for the update' or 'Thank you for the update'\n"
+        f"    * 'Okay, thanks' or 'Ok, thank you'\n"
+        f"    * 'Got it' or 'Understood'\n"
+        f"    * 'Appreciate it' or 'Appreciate the update'\n"
+        f"    * 'We'll keep you updated' or 'I'll keep you posted'\n"
+        f"    * 'Will update you' or 'Will keep you informed'\n\n"
+        f"**If this rule is met, stop and classify the thread as RESOLVED.**\n\n"
+        f"### Step 2: Check for 'In Process' Update by Precise (Immediate Resolution)\n"
+        f"If Step 1 does not apply, examine the **most recent email sent *by* Precise Imaging**.\n"
+        f"IF this email indicates that a request (like a referral or scheduling) is **actively being processed**, "
+        f"the entire thread is **RESOLVED**. This shows the request is in the internal workflow and requires "
+        f"no immediate follow-up response.\n\n"
+        f"* **'In Process' Indicators:**\n"
+        f"    * 'The referral is currently with the intake team.'\n"
+        f"    * 'This is being processed.'\n"
+        f"    * 'Please allow [X] business hours/days for processing.' (Any mention of a processing timeframe)\n"
+        f"    * 'We'll keep you updated on any progress.'\n\n"
+        f"**If this rule is met, stop and classify the thread as RESOLVED.**\n\n"
+        f"### Step 3: General Analysis (Default Logic)\n"
+        f"If neither Step 1 nor Step 2 applies, analyze the full chain to find any unresolved items based on the "
+        f"**Core Principle**:\n\n"
+        f"**Core Principle:** A thread is **UNRESOLVED** if there is a specific question, request, or action directed "
+        f"*at Precise Imaging* that has not been demonstrably **completed** or **answered**.\n\n"
+        f"* **Examples of UNRESOLVED (Precise must act):**\n"
+        f"    * 'Please schedule an appointment.' (Unresolved unless Precise confirms scheduling is *done*.)\n"
+        f"    * 'Please send the medical records.' (Unresolved unless Precise confirms records were *sent*.)\n"
+        f"    * 'Please update the portal.' (Unresolved unless Precise confirms the portal is *updated*.)\n"
+        f"    * 'What is the status of the appointment?' (Unresolved unless Precise *provides* the status.)\n"
+        f"    * 'Can you provide the imaging results?' (Unresolved unless Precise *provides* the results.)\n\n"
+        f"* **Examples of RESOLVED (No Precise action needed):**\n"
+        f"    * Questions or actions for the patient/client (e.g., 'Patient will call back').\n"
+        f"    * Simple informational updates from external parties (e.g., 'FYI, the client is pending').\n"
+        f"    * **Attorney Status Exception:** If Precise *asked* for a case status, and an attorney *responds* "
+        f"with a status (e.g., 'client is pending,' 'under review'), that specific inquiry is **RESOLVED**.\n\n"
+        f"--- END ANALYSIS ---\n\n"
+        f"**IMPORTANT: In your response, you MUST provide a 'latest_email_analysis' field that contains:**\n"
+        f"1. Who sent the most recent/final/last email (external party or Precise Imaging)\n"
+        f"2. Key phrases or content found in that email\n"
+        f"3. Whether it matches Step 1 criteria (external acknowledgment) or Step 2 criteria (in process update)\n"
+        f"4. The decision made based on this email alone (RESOLVED or continue to Step 3)\n\n"
+        f"**Email Chain to Analyze:**\n"
         f"{email_chain_summary}"
     )
 
@@ -406,9 +394,13 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
             "summary": {
                 "type": "string",
                 "description": "Brief explanation of the analysis focusing on what Precise Imaging needs to handle"
+            },
+            "latest_email_analysis": {
+                "type": "string",
+                "description": "Detailed analysis of ONLY the most recent/final/last email in the conversation. Include: who sent it, key phrases found, whether it matches Step 1 or Step 2 criteria, and the decision made based on this email alone."
             }
         },
-        "required": ["resolved", "unresolved_questions", "summary"],
+        "required": ["resolved", "unresolved_questions", "summary", "latest_email_analysis"],
         "additionalProperties": False
     }
 
@@ -462,12 +454,17 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
             try:
                 # Parse the JSON response - structured outputs guarantee valid JSON
                 analysis_result = json.loads(ai_response_text)
-                
+
+                # Log the latest email analysis separately for debugging
+                latest_email_analysis = analysis_result.get("latest_email_analysis", "N/A")
+                logger.info(f"🔍 LATEST EMAIL ANALYSIS: {latest_email_analysis}")
+
                 # With structured outputs, we can trust the schema is correct
                 result = {
                     "resolved": analysis_result["resolved"],
                     "unresolved_questions": analysis_result["unresolved_questions"],
                     "summary": analysis_result["summary"],
+                    "latest_email_analysis": latest_email_analysis,
                     "success": True,
                     "email_chain": emails  # Include structured emails from step 1
                 }
