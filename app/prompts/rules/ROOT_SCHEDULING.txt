@@ -7,14 +7,15 @@ Please use the following rules to sub-classify the provided email content, alrea
 --- START Scheduling Sub-Classification RULES ---
 
 **PRIORITY RULE - ATTACHMENT-BASED CLASSIFICATION:**
-⚠️ **CRITICAL**: If there is ANY attachment with document type "rx" (prescription/referral), ALWAYS classify as 'RX' regardless of email content. This takes absolute priority over all other rules below.
+
 
 1. **Primary Scheduling Intent**: Based on the email content, determine the primary intent related to scheduling and classify as follows:
-   - If the email primarily concerns **checking status of patient's appointment, prescriptions (RX), medication, referrals related to prescriptions, or pharmacy communications**, classify as 'RX'.
-   - If the email contains **scheduling status inquiries** (e.g., "has the client been scheduled", "appointment confirmation", "scheduling updates"), classify as 'RX'.
+   - If the email is a **request to make a new appointment or schedule a procedure** (with or without specific study details like MRI, CT, X-ray, etc.), classify as 'Schedule Request'. ALWAYS use this rule if the email is specifically asking to schedule an appointment.
+   - If the email primarily concerns **checking status of patient's appointment, prescriptions (RX), medication, referrals related to prescriptions, or pharmacy communications**, classify as 'RX'. Never use this if an email is specifically to schedule an appointment, use Schedule Request instead.
+   - If the email contains **scheduling status inquiries** (e.g., "has the client been scheduled", "appointment confirmation", "scheduling updates"), classify as 'RX'.  Do not use this if an email is specifically to schedule an appointment use Schedule Request instead.
    - If the email clearly indicates that an **appointment is no longer happening or has been voided**, classify as 'Cancelled'.
    - If the email expresses a **request to change the date or time of an existing appointment**, classify as 'Reschedule Request'.
-   - If the email is a **request to make a new appointment or schedule a procedure** (with or without specific study details like MRI, CT, X-ray, etc.), classify as 'Schedule Request'.
+ If there is ANY attachment with document type "rx" (prescription/referral), ALWAYS classify as 'RX' regardless of email content. However this rule applies only if there is document of type RX
 
 
 --- END Scheduling Sub-Classification RULES ---
