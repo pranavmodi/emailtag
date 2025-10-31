@@ -19,16 +19,23 @@ If the email SUBJECT or BODY clearly indicates a legal case status update or att
 4. **MEDICAL RECORDS PRIORITY:**
 If the email requests BOTH medical records/reports AND billing information, ALWAYS classify as 'Medical Records & Images'. Medical records requests take priority over billing/financial requests when both are present in the same email.
 
-5. **MEDICAL RECORDS REQUEST PRIORITY:**
-If the email explicitly requests medical records, reports, images, or imaging data (e.g., "MRI report", "medical records", "imaging results", "radiology reports", "X-ray images"), ALWAYS classify as 'Medical Records & Images' regardless of the presence of imaging modality keywords like "MRI", "CT", "X-ray" in the subject line. This takes priority over Scheduling classification.
+5. **MEDICAL RECORDS REQUEST PRIORITY (HIGHEST PRIORITY FOR RECORDS REQUESTS):**
+If the email body explicitly requests medical records, reports, images, or imaging data (e.g., "provide records", "send records", "MRI report", "medical records", "imaging results", "radiology reports", "X-ray images", "send images"), ALWAYS classify as 'Medical Records & Images' regardless of ANY keywords in the subject line including "MRI REFERRAL", "REFERRAL", or imaging modality keywords.
+
+**CRITICAL DISTINCTION**: "MRI REFERRAL" in subject line does NOT automatically mean Scheduling:
+- If body asks to SCHEDULE a new MRI based on a referral → Scheduling
+- If body asks to PROVIDE RECORDS/REPORTS of already completed studies → Medical Records & Images
+
+This takes ABSOLUTE PRIORITY over Scheduling classification. Check the email body for the actual request, not just the subject line.
 
 --- START SCHEDULING RULES ---
 
 Classification Rules for Scheduling:
 
-1. **Subject Line Keywords**: 
+1. **Subject Line Keywords**:
    - If the subject line contains keywords such as "Referral", "Scheduled", "Reschedule", "Appointment", "Scan", or "DOL" (Date of Loss), it is likely a Scheduling email.
    - **IMPORTANT**: "MRI", "CT", "X-ray" alone are NOT sufficient for Scheduling classification unless combined with scheduling-specific context (e.g., "Schedule MRI", "MRI Appointment", "Reschedule MRI").
+   - **CRITICAL EXCEPTION**: "REFERRAL" or "MRI REFERRAL" in subject line does NOT mean Scheduling if the email body is requesting records/reports of completed studies. ALWAYS check the email body content - if it asks to "provide records", "send records", "send images", or similar, classify as Medical Records & Images regardless of subject line.
 
 2. **Content Patterns and Phrases**:
    - If the content includes phrases like "patient has been scheduled", "reschedule an MRI", "appointment times", "scheduling department", "call our scheduling dept.", or "referral has been entered into our scheduling system", classify it as Scheduling.
