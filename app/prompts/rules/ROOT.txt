@@ -8,7 +8,7 @@ Please use the following rules to classify the provided email content into one o
 **PRIORITY RULES:**
 
 1. **ATTACHMENT-BASED CLASSIFICATION:**
-If there is ANY attachment with document type "rx" (prescription/referral), ALWAYS classify as 'Scheduling' regardless of email content. This takes absolute priority over all other rules below.
+If there is ANY attachment with document type "rx" (prescription/referral), classify as 'Scheduling' UNLESS the email content is explicitly requesting to forward/send completed medical records, reports, bills, or imaging data (e.g., "forward the report", "send the bill", "forward the records", "send the images", "forward report and bill"). When such forwarding/sending requests are present, SKIP this rule and proceed to evaluate using the Medical Records & Images priority rules below. This rule takes priority over all other rules below EXCEPT when forwarding/sending of completed documentation is requested.
 
 2. **CASE UPDATE PRIORITY:**
 If there is ANY attachment with document type "case_update" (e.g., attorney case status updates, new attorney notifications, settlement/payment status updates) AND the attachment is a substantial document (not a small logo or letterhead image), ALWAYS classify the TOP-LEVEL category as 'Accounts Receivable' regardless of subject line or body content. Small image files (< 20KB) classified as case_update should be ignored for this rule as they are likely logos.

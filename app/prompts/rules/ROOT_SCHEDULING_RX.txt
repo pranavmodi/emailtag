@@ -7,11 +7,14 @@ Please use the following rules to sub-classify the provided email content, alrea
 --- START RX Sub-Classification RULES ---
 
 1. **RX-Related Status or Request**: Based on the email content, determine the specific status or request concerning a prescription (RX) or related appointment, and classify as follows:
+
+   **PRIORITY RULE - Status Inquiries Come First:**
+   - If the email is an **inquiry about the status of an appointment, scheduling confirmation, or asking about patient progress/status** (e.g., "Has the client been scheduled?", "What's the appointment status?", "Is the patient scheduled for imaging?", "What's going on with this patient?", "Any update on this patient?", "What's the status?"), classify as 'Apt Status Req'. This takes priority over other classifications, especially when replying to a previous email that said the order was entered or is being processed.
+
    - If the email indicates that a **prescription order is awaiting processing, confirmation, or further action**, classify as 'Order Pending'.
-   - If the email confirms that a **prescription order has been successfully entered into the system**, classify as 'Order Entered'.
+   - If the email confirms that a **prescription order has been successfully entered into the system** AND is NOT a reply asking for status update, classify as 'Order Entered'. NOTE: If someone replies asking "What's going on?" after being told order was entered, classify as 'Apt Status Req', not 'Order Entered'.
    - If the email states that **necessary information is missing to process a prescription or referral**, classify as 'Incomplete'.
    - If the email has an attachment of type RX and/or is a **direct request for a new prescription or a refill**, classify as 'RX'.
-   - If the email is an **inquiry about the status of an appointment, scheduling confirmation, or asking if a patient has been scheduled** (e.g., "Has the client been scheduled?", "What's the appointment status?", "Is the patient scheduled for imaging?"), classify as 'Apt Status Req'.
    - If the email reports that a **patient did not attend an appointment associated with a prescription or referral**, classify as 'No Show'.
    - If the email mentions that the **patient will be paying cash for services related to a prescription or referral**, classify as 'Cash Patient'.
 
