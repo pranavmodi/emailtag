@@ -750,18 +750,32 @@ def classify_email_tags_hierarchical(
     # TODO: Fix trace context indentation
     client = get_openai_client()
 
-    # --- PRE-CHECK FOR CONFLICTING TOPICS ---
-    try:
-        conflict_result = _check_for_conflicting_top_level_topics(client, front_conversation_id, conversation_text, sender_info, message_times)
-    
-        if conflict_result.get("success", False) and conflict_result.get("has_conflicts", False):
-            logger.info(f"🚫 ASSIGNING HUMAN REVIEW: Conflicting topics detected for {front_conversation_id}")
-            return ["AI: Human review required"]
-        elif not conflict_result.get("success", False):
-            logger.warning(f"⚠️ CONFLICT CHECK FAILED for {front_conversation_id}, proceeding with classification")
-            
-    except Exception as conflict_check_error:
-        logger.error(f"Error during conflict check for {front_conversation_id}: {conflict_check_error}. Proceeding.", exc_info=True)
+    # --- CHECK FOR RX DOCUMENTS (Skip conflict detection if present) ---
+    has_rx_document = False
+    if document_analysis_results:
+        for doc_result in document_analysis_results:
+            doc_analysis = doc_result.get('document_analysis', {})
+            if doc_analysis.get('success') and doc_analysis.get('data', {}).get('document_type') == 'rx':
+                has_rx_document = True
+                confidence = doc_analysis.get('data', {}).get('confidence', 'unknown')
+                logger.info(f"✅ RX DOCUMENT DETECTED (confidence: {confidence}) - Skipping conflict detection for {front_conversation_id}")
+                break
+
+    # --- PRE-CHECK FOR CONFLICTING TOPICS (Skip if RX document present) ---
+    if not has_rx_document:
+        try:
+            conflict_result = _check_for_conflicting_top_level_topics(client, front_conversation_id, conversation_text, sender_info, message_times)
+
+            if conflict_result.get("success", False) and conflict_result.get("has_conflicts", False):
+                logger.info(f"🚫 ASSIGNING HUMAN REVIEW: Conflicting topics detected for {front_conversation_id}")
+                return ["AI: Human review required"]
+            elif not conflict_result.get("success", False):
+                logger.warning(f"⚠️ CONFLICT CHECK FAILED for {front_conversation_id}, proceeding with classification")
+
+        except Exception as conflict_check_error:
+            logger.error(f"Error during conflict check for {front_conversation_id}: {conflict_check_error}. Proceeding.", exc_info=True)
+    else:
+        logger.info(f"⏭️ CONFLICT CHECK SKIPPED for {front_conversation_id} - RX document present")
     # --- END PRE-CHECK ---
 
     try:
