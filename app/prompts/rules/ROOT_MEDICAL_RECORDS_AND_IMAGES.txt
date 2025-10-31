@@ -10,12 +10,14 @@ Please use the following rules to sub-classify the provided email content, alrea
 
    **PRIORITY RULE - Mixed Requests:** If the email requests BOTH medical records/reports AND billing information (e.g., "bills & MRI records", "send bills and medical records", "bills & reports"), ALWAYS classify as 'Release of Records' regardless of other content patterns.
 
+   **PRIORITY RULE - Portal Access/Permission Requests:** If the email requests portal access, portal permissions, portal login credentials, or ability to VIEW images/records through the portal (e.g., "give this account permission to view", "portal access for", "add user to portal", "grant access to view images"), ALWAYS classify as 'Portal Requests'. This takes priority over 'Image Request' classification.
+
+   - If the email pertains to **patient portal access, permissions, or credentials** (e.g., login issues, requests for portal access, permission to view images/records through portal, adding users to portal, granting access rights), classify as 'Portal Requests'.
    - If the email involves an **authorization to share patient records or a direct request to release/send patient records**, classify as 'Release of Records'.
-   - If the email **explicitly asks for medical images** (e.g., MRI, CT, X-Ray files, DICOMs) WITHOUT requesting billing information, classify as 'Image Request'.
+   - If the email **explicitly asks for medical images to be SENT/DELIVERED** (e.g., "send me the MRI images", "email the CT scans", "forward the X-Ray files/DICOMs") WITHOUT requesting billing information, classify as 'Image Request'. NOTE: Requests for permission to VIEW images on portal = Portal Requests, not Image Request.
    - If the email specifically requests that **images or reports be provided on a compact disc (CD)**, classify as 'CD Requests'.
    - If the email is a request for **medical reports** (e.g., radiology reports, diagnostic summaries, interpretations) WITHOUT requesting billing information, classify as 'Reports Request'.
    - If the email relates to an **Ultrasound Technologist worksheet, form, or similar document**, classify as 'US Tech Sheet'.
-   - If the email pertains to **patient portal access (e.g., login issues, requests for access, information about using the portal for records/images)**, classify as 'Portal Requests'.
    - If the email is a request from a doctor's office or facility for **physical referral pads**, classify as 'Referral pad request'.
    - If the email highlights **errors in patient demographic information or identification details** (e.g., misspelled name, wrong DOB), classify as 'Incorrect patient info'.
    - If the email points out **discrepancies, errors, or issues with the medical study performed or documented** (e.g., wrong body part imaged, incorrect study type listed), classify as 'Incorrect study info'.
