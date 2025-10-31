@@ -637,35 +637,36 @@ class BarcodeDetector:
             logger.info("🔍 BARCODE: Starting simple full-page scan...")
             barcodes = self._scan_image_section(gray, "Full page", f"{safe_page_name}_fullpage")
             
-            # If simple approach failed, try advanced vertical barcode detection
-            if not barcodes:
+            # DISABLED: If simple approach failed, try advanced vertical barcode detection
+            # Disabled per user request - vertical barcode detection is too slow/unreliable
+            if False and not barcodes:
                 logger.info("🔍 BARCODE: Simple scan found nothing, trying vertical barcode detection...")
-                
+
                 # 1. Detect vertical lines and create heat map
                 heat_map = self._detect_vertical_lines(gray, f"{safe_page_name}_fullpage")
-                
+
                 # 2. Extract candidate regions from heat map
                 candidate_regions = self._extract_candidate_regions(heat_map, gray, f"{safe_page_name}_fullpage")
-                
+
                 # 3. Scan each candidate region with enhancement
                 if candidate_regions:
                     logger.info(f"🔍 BARCODE: Processing {len(candidate_regions)} candidate regions...")
-                    
+
                     for i, region_bbox in enumerate(candidate_regions):
                         x_min, y_min, x_max, y_max = region_bbox
-                        
+
                         # Extract region from original image
                         region = gray[y_min:y_max, x_min:x_max]
-                        
+
                         # Enhance the region
                         enhanced_regions = self._enhance_region(region, i+1, f"{safe_page_name}_fullpage")
-                        
+
                         # Scan enhanced region variants
                         region_barcodes = self._scan_enhanced_region(enhanced_regions, region_bbox, i+1, f"{safe_page_name}_fullpage")
-                        
+
                         if region_barcodes:
                             barcodes.extend(region_barcodes)
-                
+
                 logger.info(f"🔍 BARCODE: Advanced approach found {len(barcodes)} barcode(s) from {len(candidate_regions)} candidate regions")
             
             if not barcodes:
