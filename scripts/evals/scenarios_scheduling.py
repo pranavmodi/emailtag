@@ -94,7 +94,7 @@ SCHEDULING_SCENARIOS = {
             "<p>Thank you for your help,<br>"
             "Rachel Thompson</p>"
         ),
-        "expected_tags": ["Apt Status Req"]
+        "expected_tags": ["Apt status req"]
     },
     "16": {
         "description": "Appointment Status Request - Inquiry about existing appointment with Patient ID PRE248509",
@@ -111,13 +111,13 @@ SCHEDULING_SCENARIOS = {
             "<p>Thank you,<br>"
             "Alex Patient (via Test Script)</p>"
         ),
-        "expected_tags": ["Apt Status Req"],
+        "expected_tags": ["Apt status req"],
         "patient_id": "PRE248509"
     },
     "17": {
         "description": "Multi-email: Appt status check (no ID), then followup with ID",
         "is_multi_step": True,
-        "expected_tags": ["Apt Status Req"],
+        "expected_tags": ["Apt status req"],
         "patient_id": "PRE248509",
         "steps": [
             {

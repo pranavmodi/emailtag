@@ -28,7 +28,7 @@ from app.agents.agent_helpers import extract_patient_id_from_email_logic
 logger = get_task_logger(__name__)
 
 # Tag constants for auto-response logic
-APT_STATUS_REQ_TAG_NAME = "Apt Status Req"
+APT_STATUS_REQ_TAG_NAME = "Apt status req"
 RELEASE_OF_RECORDS_TAG_NAME = "Release of Records"
 IMAGE_REQUEST_TAG_NAME = "Image Request"
 CD_REQUESTS_TAG_NAME = "CD Requests"

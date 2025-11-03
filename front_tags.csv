@@ -1,0 +1,139 @@
+name,id,status,is_visible_in_conversation_lists,highlight,is_private,description,created_at,updated_at,parent_tag_id,owner_link
+Churn Risk,tag_vg5vl,VISIBLE,True,⚠️,False,"The message indicates a high risk of the customer leaving or canceling the service. Look for keywords such as ""cancel,"" ""terminate,"" ""leaving,"" ""switching to another provider,"" or expressions of chronic dissatisfaction.",1749858484.615,1749858484.615,tag_vg5oh,
+Negative,tag_vg5s1,VISIBLE,True,😠,False,"The message shows extremely negative sentiment. The message clearly expresses strong dissatisfaction, frustration, or criticism about the product or service.",1749858484.549,1749858484.549,tag_vg5oh,
+Positive,tag_vg5q9,VISIBLE,True,😄,False,"The message clearly conveys great satisfaction, happiness, or praise for the product or service.",1749858484.491,1749858484.491,tag_vg5oh,
+Sentiment,tag_vg5oh,VISIBLE,True,😃,False,,1749858484.462,1749858484.462,,
+Urgent,tag_vg5tt,VISIBLE,True,🚨,False,The message indicates it needs immediate or urgent attention. This could be due to critical issues or could be asking to escalate to a manager.,1749858484.578,1749858484.578,tag_vg5oh,
+SLA Applies,tag_ts9dt,ARCHIVED,False,,False,,1668018639.204,1762147689.653,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+3P Facility Report,tag_4mpes2,VISIBLE,True,🏣,False,,1761847621.659,1761855653.532,tag_tpmkh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+AI,tag_vaq69,ARCHIVED,False,🤖,False,,1739386200.454,1762029424.36,,
+AI:Handled,tag_vckap,ARCHIVED,False,,False,,1742532657.928,1753349982.028,tag_vaq69,
+AI:Training,tag_vaq81,ARCHIVED,False,🧠,False,Use to train AI on how to tag things correctly.,1739386232.786,1762029424.349,tag_vaq69,
+AI: Auto-Responded,tag_vdow1,VISIBLE,True,green,False,Conversation was handled by AI without human intervention,1745036618.525,1757978725.947,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+AI: Awaiting Response,tag_vatxd,ARCHIVED,False,🕛,False,,1739490454.208,1739490454.208,tag_vaq69,
+AI: Cannot confirm player,tag_vb2f5,ARCHIVED,False,❓,False,,1740010559.153,1757105883.892,tag_vaq69,
+AI handled,tag_4la5le,ARCHIVED,False,,False,,1752739011.904,1758712368.596,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+AI: Human review required,tag_vb1j5,ARCHIVED,False,🧍,False,,1739992855.077,1761841941.31,tag_vaq69,
+AI: Human review required,tag_vdkch,VISIBLE,True,red,False,Conversation needs human review or intervention,1744720844.348,1762151252.098,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+AI: Low Confidence,tag_vattt,ARCHIVED,False,😕,False,,1739490420.249,1744033392.646,tag_vaq69,
+Apt Status Req,tag_4kxoeq,ARCHIVED,False,,False,,1751542922.759,1762144828.466,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Apt status req,tag_trwld,VISIBLE,True,purple,False,,1667845054.944,1761872396.168,tag_3k7ll,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+ASL,tag_tq0g1,VISIBLE,True,green,False,,1666081657.233,1761954816.146,tag_vaxxd,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Attorney Non-Payment,tag_vayo1,ARCHIVED,False,,False,,1739905844.282,1739905844.282,tag_vaykh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Billing,tag_rlvnl,VISIBLE,True,💰,False,,1620743231.352,1762023966.815,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Bill and Report Request,tag_rlw75,VISIBLE,True,🖇️,False,,1620743872.861,1741201343.913,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Bill Negotiation,tag_vaxz5,ARCHIVED,False,↔️,False,,1739904953.044,1762141757.777,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Bill Offer,tag_tq0e9,VISIBLE,True,🤑,False,,1666081638.131,1762111022.111,tag_vaxz5,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Bill or balance Request,tag_rlvr5,VISIBLE,True,📄,False,,1620743248.686,1762023966.799,tag_rlvnl,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Cancelled,tag_3k5w1,VISIBLE,True,🚫,False,,1551304337.406,1762130640.968,tag_trx8h,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Cancel Request,tag_trx8h,VISIBLE,True,red,False,,1667855238.975,1762130640.983,tag_3k7ll,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Case Update,tag_vay69,ARCHIVED,False,📩,False,,1739905183.454,1762034442.259,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Cash Patient,tag_3k5u1,VISIBLE,True,💸,False,,1551299559.842,1753801849.004,tag_3k7ll,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+CD Request,tag_qi6m9,VISIBLE,True,💿,False,,1597076035.72,1761932257.426,tag_tpmkh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+CD Requests,tag_4m93ma,ARCHIVED,False,,False,,1758713701.186,1758713701.757,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Cedar,tag_uky81,ARCHIVED,False,red,False,,1695401003.375,1740006041.961,tag_ukybl,
+Cedar and Herb emails,tag_upo1t,VISIBLE,True,,False,,1704404514.263,1740005985.824,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Centrelake,tag_404ld,VISIBLE,True,yellow,False,,1568152684.713,1746030725.659,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+CHART SQUAD REQUESTS,tag_rn2yp,VISIBLE,True,yellow,False,,1621618419.281,1739906683.672,tag_tpmkh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Collections,tag_ukybl,ARCHIVED,False,pink,False,,1695401218.796,1740006052.774,,
+Collections,tag_vaykh,ARCHIVED,False,📂,False,,1739905784.6,1759262756.004,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Collections Reductions,tag_uoebl,ARCHIVED,False,,False,collection files negotiated with law firm for payment s,1701800572.979,1754000750.566,tag_vaxz5,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Counter Offer Sent,tag_vay4h,ARCHIVED,False,🔄,False,,1739905139.299,1762014406.575,tag_vaxz5,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Deletions,tag_scjpd,ARCHIVED,False,,False,,1639322732.008,1739906628.595,tag_scjnl,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Done,tag_3k5yh,VISIBLE,True,✅,False,,1551379891.024,1761953815.002,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Downtown LA Law Group Emails,tag_4lme1e,VISIBLE,True,red,False,Negotiation emails for Downtown LA Law group ,1754669948.569,1761778610.564,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Drop Letter,tag_rlvup,VISIBLE,True,grey,False,,1620743565.495,1761935599.259,tag_vay69,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Drop pending,tag_vay81,ARCHIVED,False,,False,,1739905375.527,1758071853.812,tag_vay69,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Drop Pending,tag_4m93pu,ARCHIVED,False,,False,,1758716355.168,1759272852.748,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+DTLA Hold,tag_4lt21e,ARCHIVED,False,red,False,,1756140601.631,1761954471.74,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Duplicate,tag_3k5w9,VISIBLE,True,‼️,False,,1551309992.31,1739906860.23,tag_3k7ll,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Duplicate,tag_rn2dd,VISIBLE,True,🗑️,False,,1621614185.748,1739905888.312,tag_qjozl,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Duplicate Request,tag_rlw01,VISIBLE,True,‼️,False,,1620743672.68,1761953132.852,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+First Priority Mgmt,tag_3k5u9,VISIBLE,True,pink,False,,1551299825.231,1761845914.207,tag_2tjo9,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Funding Company,tag_2tjo9,VISIBLE,True,purple,False,,1550789213.49,1761845914.223,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+HFS,tag_3k5wp,VISIBLE,True,pink,False,,1551378894.447,1670611140.99,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+HRK Law,tag_uky9t,ARCHIVED,False,red,False,,1695401206.639,1740006049.033,tag_ukybl,
+ID Mismatch,tag_4ligk2,ARCHIVED,False,red,False,,1753546348.182,1753546348.182,tag_4lcc7m,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+ID Mismatch,tag_4lcc7m,ARCHIVED,False,🆔,False,,1752865531.744,1762017406.511,tag_tpmkh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Image Request,tag_vaxmp,ARCHIVED,False,🖼️,False,,1739903668.697,1761903686.209,tag_tpmkh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Incomplete,tag_3k5yp,VISIBLE,True,❓,False,,1551380010.825,1761969203.311,tag_tn98h,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Incorrect patient info,tag_vaxtt,ARCHIVED,False,⁉️,False,,1739904143.506,1762144984.526,tag_tpmkh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Incorrect study info,tag_vaxvl,ARCHIVED,False,⁉️,False,,1739904153.053,1761089933.271,tag_tpmkh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Keyhealth,tag_3k601,VISIBLE,True,pink,False,,1551383786.029,1670611173.443,tag_2tjo9,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Legal,tag_vfypt,ARCHIVED,False,⚖️,False,,1749674628.789,1755730579.685,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Liens,tag_vaxxd,ARCHIVED,False,📃,False,,1739904823.741,1762033228.375,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Lien Modified,tag_vfyo1,ARCHIVED,False,🔀,False,,1749674443.339,1760567749.367,tag_vaxxd,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Live Chat,tag_3yw5d,VISIBLE,True,💻,False,,1567110481.207,1744690853.257,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Login Request,tag_qrs5d,VISIBLE,True,purple,False,,1602630227.771,1761932249.122,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Make Up Cases,tag_unatd,VISIBLE,True,purple,False,,1699654353.819,1739905004.063,tag_tq0e9,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Mednik,tag_403y9,VISIBLE,True,light-blue,False,,1568143771.048,1739906655.788,tag_tpmkh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+MIS,tag_3k6xt,VISIBLE,True,pink,False,,1552067495.61,1708445704.933,tag_2tjo9,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Missing Lien Request,tag_4m0ivm,ARCHIVED,False,,False,,1757592994.578,1761952804.561,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Missing PSL Request,tag_vazcx,ARCHIVED,False,❓,False,,1739914252.746,1761857393.827,tag_vaxxd,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+MTI,tag_3k60p,VISIBLE,True,pink,False,,1551383811.712,1720034514.733,tag_2tjo9,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Needs Response,tag_3k5x5,ARCHIVED,False,⏲️,False,,1551378920.173,1746728935.129,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+New Attorney,tag_rlvwh,VISIBLE,True,grey,False,,1620743608.13,1762034442.246,tag_vay69,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Not a Precise patient,tag_ve8w1,ARCHIVED,False,❌,False,,1746223099.874,1761763475.431,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+No Action Needed,tag_vb9j5,ARCHIVED,False,🚫,False,,1740428513.657,1761953812.238,,
+No Show,tag_vaz0h,ARCHIVED,False,,False,,1739907355.968,1761853162.744,tag_3k7ll,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Offer Approved,tag_vay2p,ARCHIVED,False,✳️,False,,1739905123.307,1762117319.884,tag_vaxz5,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+OneCall,tag_3k609,VISIBLE,True,pink,False,,1551383794.391,1708549875.297,tag_2tjo9,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Order Entered,tag_3k5wx,ARCHIVED,False,✅,False,,1551378905.259,1761955255.792,tag_tn98h,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+ORDER PENDING,tag_4moihe,ARCHIVED,False,,False,,1761594504.158,1761594504.784,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Order Pending,tag_2tj8x,VISIBLE,True,⏳,False,,1550786870.379,1762147710.54,tag_tn98h,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Payment on way,tag_vbf7l,ARCHIVED,False,💸,False,,1740702249.995,1761776219.667,tag_vay69,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Pending Approval,tag_vay0x,ARCHIVED,False,⏳,False,,1739905051.817,1762141757.763,tag_vaxz5,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Portal Request,tag_vaxq9,ARCHIVED,False,🧑‍💻,False,,1739904040.189,1761854924.978,tag_tpmkh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Portal Requests,tag_4mpkpe,ARCHIVED,False,,False,,1761904007.339,1761947685.7,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+PPW,tag_rlvy9,VISIBLE,True,pink,False,,1620743651.484,1739914427.159,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Process CC,tag_4mc80i,ARCHIVED,False,red,False,,1759355335.501,1759737316.303,tag_rlvnl,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Promise to send payment,tag_vay9t,ARCHIVED,False,,False,,1739905402.526,1758753971.604,tag_vay69,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+PSL,tag_tq0ht,VISIBLE,True,pink,False,,1666081669.278,1762033228.36,tag_vaxxd,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Radiologist Re-Read Request,tag_ve8u9,ARCHIVED,False,,False,,1746223072.788,1760973789.545,tag_tpmkh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Rad Lien,tag_tnirl,VISIBLE,True,orange,False,,1663957823.918,1762019267.246,tag_vaxxd,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Received,tag_3k6eh,ARCHIVED,False,,False,,1551482014.547,1739906867.388,tag_3k7ll,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Received,tag_3kidd,ARCHIVED,False,,False,,1557339710.096,1670611053.643,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Records Dept,tag_tpmkh,ARCHIVED,False,🗄️,False,,1665696942.501,1762152648.562,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Recoverable Items,tag_scjnl,ARCHIVED,False,,False,,1639322731.946,1739906628.617,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Referral Pad Request,tag_vaxs1,ARCHIVED,False,🗒️,False,,1739904065.549,1739904065.549,tag_tpmkh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Refund Request,tag_4mpdea,ARCHIVED,False,,False,,1761842812.295,1761920802.561,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Refund request,tag_vayip,ARCHIVED,False,,False,,1739905604.145,1760134726.095,tag_vay69,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Rejected Email,tag_4mpfma,ARCHIVED,False,🏸,False,,1761851026.15,1761854784.01,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Release of Records,tag_4043l,VISIBLE,True,🎈,False,,1568146417.048,1762152648.547,tag_tpmkh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Reports Request,tag_4m7976,ARCHIVED,False,,False,,1758273069.17,1761955040.763,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Report Correction,tag_ve8sh,ARCHIVED,False,,False,,1746223061.089,1761763814.374,tag_tpmkh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Report Request,tag_3k5y1,VISIBLE,True,📄,False,,1551379862.125,1761939240.628,tag_tpmkh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Rescheduled,tag_trxdt,VISIBLE,True,green,False,,1667857676.692,1761693477.442,tag_trxa9,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Reschedule Request,tag_trxa9,VISIBLE,True,pink,False,,1667857167.13,1762150827.557,tag_3k7ll,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Reschedule Request,tag_upm69,ARCHIVED,False,,False,,1704301439.591,1739906942.578,tag_trxa9,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+RX,tag_tn98h,VISIBLE,True,blue,False,,1663790297.907,1762156873.579,tag_3k7ll,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+RX Request,tag_vb1kx,ARCHIVED,False,yellow,False,,1739993069.274,1761869533.753,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Scheduled,tag_2tj8h,VISIBLE,True,green,False,,1550786836.575,1761867454.609,tag_vaywx,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Schedule Request,tag_vaywx,ARCHIVED,False,teal,False,,1739907243.218,1762103077.836,tag_3k7ll,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Scheduling,tag_vdq81,ARCHIVED,False,,False,,1745325200.015,1762025020.014,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Scheduling request,tag_3k7ll,ARCHIVED,False,pink,False,,1553099160.863,1762156873.593,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Sent payment but not received,tag_vayf5,ARCHIVED,False,,False,,1739905474.709,1761951471.743,tag_vay69,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Sent to collections,tag_vaym9,ARCHIVED,False,,False,,1739905833.727,1739905833.727,tag_vaykh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Sent Via Radflow,tag_rlw1t,VISIBLE,True,green,False,,1620743699.005,1739904599.666,tag_rlvnl,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Settle,tag_3k6a9,VISIBLE,True,🤑,False,,1551464762.49,1668548482.436,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Settle Pending Payments,tag_v7ny9,ARCHIVED,False,orange,False,,1734550306.309,1757371994.529,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Settle Pending Payments,tag_v7nsx,ARCHIVED,False,orange,False,,1734550234.718,1739905232.593,tag_rlvnl,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+SLA Breach,tag_qfqm9,VISIBLE,True,🔥,False,,1595541861.745,1761948006.625,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+SLA Warning,tag_qfqo1,VISIBLE,True,⚠️,False,,1595541861.969,1761938501.242,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+SMS,tag_3k5tt,VISIBLE,True,📱,False,,1551299412.171,1762128990.587,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+South Valley,tag_404jl,VISIBLE,True,yellow,False,,1568152540.192,1670611087.898,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Status,tag_qjozl,VISIBLE,True,🗄️,False,,1597956330.037,1739905902.319,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Status Updates,tag_take9,VISIBLE,True,green,False,,1654798573.499,1739905894.821,tag_qjozl,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+subpoena,tag_q6xa9,VISIBLE,True,red,False,,1591640033.105,1761947284.956,tag_3k5xt,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Subs,tag_3k5xt,VISIBLE,True,light-blue,False,,1551379853.254,1761947284.586,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Tech Lien,tag_tnitd,VISIBLE,True,orange,False,,1663957839.427,1762033228.356,tag_vaxxd,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+To review,tag_vaypt,ARCHIVED,False,,False,,1739905854.947,1744033860.331,tag_vaykh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+To Review,tag_rlwap,VISIBLE,True,purple,False,,1620746884.395,1739904608.922,tag_rlvnl,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+To Review,tag_ta6m9,VISIBLE,True,,False,,1654290138.444,1739905875.953,tag_qjozl,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+To Send To Collections,tag_rlw3l,VISIBLE,True,yellow,False,,1620743760.471,1739905805.186,tag_vaykh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+US Tech Sheet,tag_tq0jl,VISIBLE,True,🔦,False,,1666081687.768,1760136838.349,tag_tpmkh,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+VM,tag_tzmyp,VISIBLE,True,📞,False,,1673400344.009,1762021580.895,,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Waiting on settlement check,tag_vaydd,ARCHIVED,False,,False,,1739905453.361,1758797271.922,tag_vay69,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Waiting to clear liability,tag_vaybl,ARCHIVED,False,,False,,1739905427.095,1756229607.371,tag_vay69,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Will contact patient,tag_vayyp,ARCHIVED,False,,False,,1739907317.718,1758201917.343,tag_3k7ll,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1
+Xcel Resources,tag_uq9tt,VISIBLE,True,pink,False,,1705598765.68,1735606243.899,tag_2tjo9,https://precise-imaging84cb.api.frontapp.com/teams/tim_awm1

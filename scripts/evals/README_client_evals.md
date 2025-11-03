@@ -36,11 +36,11 @@ python run_client_evals.py -v
 
 ## Current Scenarios
 
-### Scenario 1: Apt Status Req - Client following up on imaging status
+### Scenario 1: Apt status req - Client following up on imaging status
 - **Subject**: "I am following up to see if our client got imaging's done."
 - **Content**: Following up on client imaging status with patient information
-- **Expected Tag**: `["Apt Status Req"]`
-- **Category**: Scheduling > RX > Apt Status Req
+- **Expected Tag**: `["Apt status req"]`
+- **Category**: Scheduling > RX > Apt status req
 
 ## Adding New Client Scenarios
 

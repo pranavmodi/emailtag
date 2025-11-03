@@ -5,24 +5,24 @@ These scenarios are designed to test real-world client email patterns.
 
 CLIENT_EVAL_SCENARIOS = {
     "1": {
-        "description": "Edy Posas-Valdes - Apt Status Req - Client following up on imaging status with DOL 04/07/2025",
+        "description": "Edy Posas-Valdes - Apt status req - Client following up on imaging status with DOL 04/07/2025",
         "subject": "I am following up to see if our client got imaging's done.",
         "body_html": (
             "<p>I am following up to see if our client got imaging's done.</p>"
             "<p>Edy Posas- Valdes DOL: 04/07/2025</p>"
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
-        "expected_tags": ["Apt Status Req"]
+        "expected_tags": ["Apt status req"]
     },
     "2": {
-        "description": "Servando Zamora - Apt Status Req - Client following up on imaging status with DOL 07/27/2023, testing similar phrasing to scenario 1",
+        "description": "Servando Zamora - Apt status req - Client following up on imaging status with DOL 07/27/2023, testing similar phrasing to scenario 1",
         "subject": "I am following up to see if our client got imaging's done.",
         "body_html": (
             "<p>I am following up to see if our client got imaging's done.</p>"
             "<p>Servando Zamora - DOL 07/27/2023</p>"
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
-        "expected_tags": ["Apt Status Req"]
+        "expected_tags": ["Apt status req"]
     },
     "3": {
         "description": "Servando Zamora - Sent payment but not received - Complex payment settlement with multiple check details and law firm correspondence",
@@ -69,7 +69,7 @@ CLIENT_EVAL_SCENARIOS = {
         "expected_tags": ["Sent payment but not received"]
     },
     "6": {
-        "description": "Edy Posas-Valdes - Apt Status Req - Forwarded email from Danny Rackow testing forwarded message parsing and patient extraction with DOL 04/07/2025",
+        "description": "Edy Posas-Valdes - Apt status req - Forwarded email from Danny Rackow testing forwarded message parsing and patient extraction with DOL 04/07/2025",
         "subject": "I am following up to see if our client got imaging's done.",
         "body_html": (
             "<p>Danny Rackow<br>"
@@ -84,7 +84,7 @@ CLIENT_EVAL_SCENARIOS = {
             "<p>Edy Posas-Valdes DOL: 04/07/2025</p>"
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
-        "expected_tags": ["Apt Status Req"]
+        "expected_tags": ["Apt status req"]
     },
     "7": {
         "description": "Servando Zamora - Sent payment but not received - Nested forwarded messages with multiple DOL dates (07/27/2023 & 06/01/2024) testing complex email parsing and payment settlement claims",
@@ -160,14 +160,14 @@ CLIENT_EVAL_SCENARIOS = {
         "expected_tags": ["ASL"]
     },
     "10": {
-        "description": "Juana Perez Cordero - Apt Status Req - Client inquiry about open MRI scheduling status with Patient ID PRE1063320",
+        "description": "Juana Perez Cordero - Apt status req - Client inquiry about open MRI scheduling status with Patient ID PRE1063320",
         "subject": "Is the patient scheduled for an open MRI?",
         "body_html": (
             "<p>Is the patient scheduled for an open MRI?</p>"
             "<p>Patient ID: PRE1063320- JUANA PEREZ CORDERO</p>"
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
-        "expected_tags": ["Apt Status Req"]
+        "expected_tags": ["Apt status req"]
     },
     "11": {
         "description": "OCR Rad Lien Override - Email with attachment containing Rad Lien OCR data, should override LLM classification",
@@ -350,7 +350,7 @@ CLIENT_EVAL_SCENARIOS = {
         "expected_tags": ["PSL", "Rad Lien", "Lien Modified"]
     },
     "20": {
-        "description": "Tharanga Chamara Wickramaarachchi - Apt Status Req - Client inquiry with DOB instead of DOL",
+        "description": "Tharanga Chamara Wickramaarachchi - Apt status req - Client inquiry with DOB instead of DOL",
         "subject": "ggjgj",
         "body_html": (
             "<p>Good afternoon Team</p>"
@@ -367,7 +367,7 @@ CLIENT_EVAL_SCENARIOS = {
             "Toll-Free: 800.680.5526</p>"
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
-        "expected_tags": ["Apt Status Req"]
+        "expected_tags": ["Apt status req"]
     },
     "21": {
         "description": "Generic acknowledgment/thank you - Simple follow-up acknowledgment message",

@@ -30,7 +30,7 @@ Email_Categories
 │   │   ├── Order Entered
 │   │   ├── Incomplete
 │   │   ├── RX
-│   │   ├── Apt Status Req
+│   │   ├── Apt status req
 │   │   ├── No Show
 │   │   └── Cash Patient
 │   ├── Cancelled

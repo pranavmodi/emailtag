@@ -5,28 +5,36 @@ Classification Rules for Email Categories
 
 Please use the following rules to classify the provided email content into one of the above categories.
 
-**PRIORITY RULES:**
+**PRIORITY RULES - MULTI-CATEGORY EMAILS:**
 
-1. **ATTACHMENT-BASED CLASSIFICATION:**
-If there is ANY attachment with document type "rx" (prescription/referral), classify as 'Scheduling' UNLESS the email content is explicitly requesting to forward/send completed medical records, reports, bills, or imaging data (e.g., "forward the report", "send the bill", "forward the records", "send the images", "forward report and bill"). When such forwarding/sending requests are present, SKIP this rule and proceed to evaluate using the Medical Records & Images priority rules below. This rule takes priority over all other rules below EXCEPT when forwarding/sending of completed documentation is requested.
+When an email contains requests from MULTIPLE categories, use this priority order:
+1. **Scheduling** (HIGHEST PRIORITY)
+2. **Medical Records & Images** (SECOND PRIORITY)
+3. **Accounts Receivable** (LOWEST PRIORITY)
 
-2. **CASE UPDATE PRIORITY:**
-If there is ANY attachment with document type "case_update" (e.g., attorney case status updates, new attorney notifications, settlement/payment status updates) AND the attachment is a substantial document (not a small logo or letterhead image), ALWAYS classify the TOP-LEVEL category as 'Accounts Receivable' regardless of subject line or body content. Small image files (< 20KB) classified as case_update should be ignored for this rule as they are likely logos.
+**SPECIFIC PRIORITY RULES:**
 
-3. **CASE UPDATE CONTENT PRIORITY:**
-If the email SUBJECT or BODY clearly indicates a legal case status update or attorney correspondence (e.g., phrases like "new attorney", "change of representation", "remove our firm from future correspondence", "drop letter", "drop pending", "promise to send payment", "waiting to clear liability", "waiting on settlement check", "payment on way", "refund request"), ALWAYS classify the TOP-LEVEL category as 'Accounts Receivable'. This applies even when there are scheduling/modality keywords present, unless there is an explicit medical records request (in which case see Medical Records priority below).
+1. **ATTACHMENT-BASED CLASSIFICATION (RX Documents):**
+If there is ANY attachment with document type "rx" (prescription/referral), classify as 'Scheduling' UNLESS the email content is ONLY requesting to forward/send completed medical records, reports, bills, or imaging data without any scheduling-related content. This rule takes priority over all other rules below.
 
-4. **MEDICAL RECORDS PRIORITY:**
-If the email requests BOTH medical records/reports AND billing information, ALWAYS classify as 'Medical Records & Images'. Medical records requests take priority over billing/financial requests when both are present in the same email.
+2. **SCHEDULING PRIORITY (HIGHEST):**
+If the email contains ANY scheduling-related content (e.g., "schedule appointment", "reschedule", "cancel appointment", "appointment confirmation", "did patient attend", "patient no-show", "check appointment status"), classify as 'Scheduling' EVEN IF the email also requests medical records, reports, or billing information.
 
-5. **MEDICAL RECORDS REQUEST PRIORITY (HIGHEST PRIORITY FOR RECORDS REQUESTS):**
-If the email body explicitly requests medical records, reports, images, or imaging data (e.g., "provide records", "send records", "MRI report", "medical records", "imaging results", "radiology reports", "X-ray images", "send images"), ALWAYS classify as 'Medical Records & Images' regardless of ANY keywords in the subject line including "MRI REFERRAL", "REFERRAL", or imaging modality keywords.
+Examples that should be classified as Scheduling:
+- "Did the patient attend their appointment? Also, please send the report."
+- "Please confirm appointment status and forward the bill."
+- "The patient wants to reschedule. Can you also send the medical records?"
 
-**CRITICAL DISTINCTION**: "MRI REFERRAL" in subject line does NOT automatically mean Scheduling:
-- If body asks to SCHEDULE a new MRI based on a referral → Scheduling
-- If body asks to PROVIDE RECORDS/REPORTS of already completed studies → Medical Records & Images
+3. **MEDICAL RECORDS PRIORITY (SECOND):**
+If the email requests medical records, reports, images, or imaging data (e.g., "provide records", "send records", "forward report", "medical records", "imaging results", "send images") AND does NOT contain any scheduling-related content, classify as 'Medical Records & Images'.
 
-This takes ABSOLUTE PRIORITY over Scheduling classification. Check the email body for the actual request, not just the subject line.
+Note: If medical records are requested ALONG WITH scheduling content, classify as 'Scheduling' per rule #2.
+
+4. **CASE UPDATE ATTACHMENT PRIORITY:**
+If there is ANY attachment with document type "case_update" (e.g., attorney case status updates, new attorney notifications, settlement/payment status updates) AND the attachment is a substantial document (not a small logo or letterhead image) AND the email does NOT contain scheduling or medical records requests, classify as 'Accounts Receivable'. Small image files (< 20KB) classified as case_update should be ignored for this rule as they are likely logos.
+
+5. **CASE UPDATE CONTENT PRIORITY:**
+If the email SUBJECT or BODY clearly indicates a legal case status update or attorney correspondence (e.g., phrases like "new attorney", "change of representation", "remove our firm from future correspondence", "drop letter", "drop pending", "promise to send payment", "waiting to clear liability", "waiting on settlement check", "payment on way", "refund request") AND does NOT contain scheduling or medical records requests, classify as 'Accounts Receivable'.
 
 --- START SCHEDULING RULES ---
 

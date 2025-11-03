@@ -7,6 +7,8 @@ import re # Import the regex module
 from typing import List, Dict, Any
 from typing import Dict, List, Optional
 import os # Import os module
+import csv
+from pathlib import Path
 
 from datetime import datetime
 import pytz  # Add this import at the top
@@ -23,6 +25,68 @@ from app.services.front_api_helpers.permission_checker import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def log_archived_tag_failure(conversation_id: str, tag_name: str, tag_id: str, tag_details: Dict[str, Any] = None):
+    """
+    Log archived tag failures to a CSV file for tracking.
+
+    Args:
+        conversation_id: The Front conversation ID
+        tag_name: Name of the tag that couldn't be applied
+        tag_id: ID of the archived tag
+        tag_details: Optional dictionary with additional tag details
+    """
+    try:
+        # Create logs directory if it doesn't exist
+        log_dir = Path("logs")
+        log_dir.mkdir(exist_ok=True)
+
+        csv_file = log_dir / "archived_tag_failures.csv"
+        file_exists = csv_file.exists()
+
+        # Prepare row data
+        timestamp = datetime.now(pytz.UTC).isoformat()
+        is_visible = tag_details.get('is_visible_in_conversation_lists', 'unknown') if tag_details else 'unknown'
+        highlight = tag_details.get('highlight', '') if tag_details else ''
+        parent_tag = ''
+        if tag_details and '_links' in tag_details:
+            parent_tag_link = tag_details.get('_links', {}).get('related', {}).get('parent_tag')
+            if parent_tag_link and parent_tag_link != 'null':
+                parent_tag = parent_tag_link.split('/')[-1]
+
+        # Write to CSV
+        with open(csv_file, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+
+            # Write header if file is new
+            if not file_exists:
+                writer.writerow([
+                    'timestamp',
+                    'conversation_id',
+                    'tag_name',
+                    'tag_id',
+                    'is_visible',
+                    'highlight',
+                    'parent_tag_id'
+                ])
+
+            # Write the failure record
+            writer.writerow([
+                timestamp,
+                conversation_id,
+                tag_name,
+                tag_id,
+                is_visible,
+                highlight,
+                parent_tag
+            ])
+
+        logger.info(f"📝 Logged archived tag failure to {csv_file}: {tag_name} ({tag_id}) for conversation {conversation_id}")
+
+    except Exception as e:
+        logger.error(f"Failed to log archived tag failure to CSV: {e}")
+
 
 # Helper function to log diagnostic information
 # def _log_front_permission_diagnostics(conversation_id: str, error_context: str):
@@ -473,22 +537,35 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> bool:
                     tag_name_counts[tag_name] = []
                 tag_name_counts[tag_name].append(tag)
 
-        # Log duplicates and archived tags
+        # Log tag status for all requested tags
         for name in tag_names:
             if name in tag_name_counts:
                 matching_tags = tag_name_counts[name]
-                if len(matching_tags) > 1:
-                    logger.warning(f"⚠️ DUPLICATE TAG NAMES: Found {len(matching_tags)} tags named '{name}' for conversation {conversation_id}")
-                    for idx, tag in enumerate(matching_tags):
-                        is_visible = tag.get('is_visible_in_conversation_lists', True)
-                        logger.warning(f"  Tag {idx+1}: ID={tag.get('id')}, is_visible_in_conversation_lists={is_visible}, highlight={tag.get('highlight')}")
-                else:
-                    tag = matching_tags[0]
+                visible_count = sum(1 for t in matching_tags if t.get('is_visible_in_conversation_lists', True))
+                archived_count = sum(1 for t in matching_tags if not t.get('is_visible_in_conversation_lists', True))
+
+                # Always log the summary first
+                logger.info(f"🔍 TAG STATUS for '{name}': Total={len(matching_tags)}, Visible={visible_count}, Archived={archived_count}")
+
+                # Show details for each instance
+                for idx, tag in enumerate(matching_tags):
                     is_visible = tag.get('is_visible_in_conversation_lists', True)
-                    if not is_visible:
-                        logger.error(f"🚫 ARCHIVED TAG: Tag '{name}' (ID: {tag.get('id')}) is NOT VISIBLE (archived) and cannot be applied to conversation {conversation_id}")
-                    else:
-                        logger.info(f"✅ Tag '{name}' found: ID={tag.get('id')}, is_visible={is_visible}")
+                    status_icon = "✅" if is_visible else "🚫"
+                    logger.info(f"  {status_icon} Instance {idx+1}: ID={tag.get('id')}, is_visible={is_visible}, highlight={tag.get('highlight')}")
+                    # Log the raw tag object from Front API for debugging
+                    logger.info(f"  📄 RAW Front API response for Instance {idx+1}: {tag}")
+
+                # Log warnings/errors based on status
+                if visible_count == 0:
+                    logger.error(f"❌ PROBLEM: Tag '{name}' has {archived_count} archived instance(s) but NO visible instances available for conversation {conversation_id}")
+                    # Log each archived instance to CSV
+                    for tag in matching_tags:
+                        if not tag.get('is_visible_in_conversation_lists', True):
+                            log_archived_tag_failure(conversation_id, name, tag.get('id'), tag)
+                elif visible_count > 1:
+                    logger.warning(f"⚠️ MULTIPLE VISIBLE: Tag '{name}' has {visible_count} visible instances. Will use one of them.")
+            else:
+                logger.warning(f"⚠️ Tag '{name}' does NOT exist in Front (will attempt to create)")
 
         # Build tag name to ID map (only visible/non-archived tags)
         # When there are duplicates, prefer visible tags

@@ -23,7 +23,7 @@ When the AI email tagging system classifies incoming emails, conversations are a
 - `Order Pending`
 - `Order Entered`
 - `Incomplete`
-- `Apt Status Req`
+- `Apt status req`
 - `No Show`
 - `Cash Patient`
 - `Cancelled`
