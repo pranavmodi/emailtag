@@ -463,22 +463,70 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> bool:
 
     try:
         available_tags = list_front_tags() # This can raise exceptions
-        tag_name_to_id_map = {tag.get('name'): tag.get('id') for tag in available_tags if tag.get('name') and tag.get('id')}
-        
+
+        # Check for duplicate tag names and archived tags
+        tag_name_counts = {}
+        for tag in available_tags:
+            tag_name = tag.get('name')
+            if tag_name:
+                if tag_name not in tag_name_counts:
+                    tag_name_counts[tag_name] = []
+                tag_name_counts[tag_name].append(tag)
+
+        # Log duplicates and archived tags
+        for name in tag_names:
+            if name in tag_name_counts:
+                matching_tags = tag_name_counts[name]
+                if len(matching_tags) > 1:
+                    logger.warning(f"⚠️ DUPLICATE TAG NAMES: Found {len(matching_tags)} tags named '{name}' for conversation {conversation_id}")
+                    for idx, tag in enumerate(matching_tags):
+                        is_visible = tag.get('is_visible_in_conversation_lists', True)
+                        logger.warning(f"  Tag {idx+1}: ID={tag.get('id')}, is_visible_in_conversation_lists={is_visible}, highlight={tag.get('highlight')}")
+                else:
+                    tag = matching_tags[0]
+                    is_visible = tag.get('is_visible_in_conversation_lists', True)
+                    if not is_visible:
+                        logger.error(f"🚫 ARCHIVED TAG: Tag '{name}' (ID: {tag.get('id')}) is NOT VISIBLE (archived) and cannot be applied to conversation {conversation_id}")
+                    else:
+                        logger.info(f"✅ Tag '{name}' found: ID={tag.get('id')}, is_visible={is_visible}")
+
+        # Build tag name to ID map (only visible/non-archived tags)
+        # When there are duplicates, prefer visible tags
+        tag_name_to_id_map = {}
+        for tag in available_tags:
+            tag_name = tag.get('name')
+            tag_id = tag.get('id')
+            is_visible = tag.get('is_visible_in_conversation_lists', True)
+
+            if tag_name and tag_id and is_visible:
+                # If duplicate names exist, prefer the visible one
+                # If there are multiple visible ones, this will use the last one
+                tag_name_to_id_map[tag_name] = tag_id
+
         tag_ids_to_add = []
         not_found_tags = []
+        archived_tags = []
         for name in list(tag_names): # Use a copy
             tag_id = tag_name_to_id_map.get(name)
             if tag_id:
                 tag_ids_to_add.append(tag_id)
             else:
+                # Check if it's archived (not visible)
+                if name in tag_name_counts:
+                    matching_tags = tag_name_counts[name]
+                    all_archived = all(not tag.get('is_visible_in_conversation_lists', True) for tag in matching_tags)
+                    if all_archived:
+                        logger.error(f"Tag '{name}' exists but all instances are ARCHIVED (not visible). Cannot add to conversation {conversation_id}.")
+                        archived_tags.append(name)
+                        continue
+
                 logger.info(f"Tag '{name}' not found for conversation {conversation_id}. Attempting to create.")
                 try:
                     new_tag = create_front_tag(name) # This can raise exceptions
                     new_tag_id = new_tag.get('id')
                     if new_tag_id:
                         tag_ids_to_add.append(new_tag_id)
-                        tag_name_to_id_map[name] = new_tag_id 
+                        tag_name_to_id_map[name] = new_tag_id
                     else:
                         logger.error(f"Created tag '{name}' but did not receive an ID. Skipping.")
                         not_found_tags.append(name)
@@ -489,13 +537,28 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> bool:
         if not_found_tags:
             logger.warning(f"Tags not found or could not be created in Front for conversation {conversation_id}: {', '.join(not_found_tags)}. Skipping these tags.")
             # Continue with any tags that were found/created
-            
+
+        if archived_tags:
+            logger.error(f"Tags are ARCHIVED and cannot be applied to conversation {conversation_id}: {', '.join(archived_tags)}. Skipping these tags.")
+            # Continue with any tags that were found/created
+
         if not tag_ids_to_add:
+            if archived_tags and not not_found_tags:
+                # All tags were archived - this is an error condition
+                logger.error(f"All tags for conversation {conversation_id} are ARCHIVED and cannot be applied.")
+                return False
             logger.warning(f"No valid tags found to add for conversation {conversation_id} after checking/creating in Front.")
             return True # No valid tags to add, considered success for this function's purpose.
 
         auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
-        
+
+        # Log which tag IDs we're actually sending
+        logger.info(f"🏷️ Attempting to add tag IDs to conversation {conversation_id}: {tag_ids_to_add}")
+        for tag_id in tag_ids_to_add:
+            # Find the tag name for this ID
+            tag_name = next((name for name, tid in tag_name_to_id_map.items() if tid == tag_id), "Unknown")
+            logger.info(f"  - Tag ID: {tag_id} → Name: '{tag_name}'")
+
         with httpx.Client(verify=False) as client:
             url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/tags"
             payload = {"tag_ids": tag_ids_to_add}
@@ -504,7 +567,7 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> bool:
                 "Accept": "application/json",
                 "Content-Type": "application/json"
             }
-            
+
             response = client.post(url, headers=headers, json=payload)
             
             if response.status_code >= 400:
