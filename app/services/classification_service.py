@@ -761,8 +761,12 @@ def classify_email_tags_hierarchical(
                 logger.info(f"✅ RX DOCUMENT DETECTED (confidence: {confidence}) - Skipping conflict detection for {front_conversation_id}")
                 break
 
-    # --- PRE-CHECK FOR CONFLICTING TOPICS (Skip if RX document present) ---
-    if not has_rx_document:
+    # --- PRE-CHECK FOR CONFLICTING TOPICS (Skip if RX document present or disabled) ---
+    conflict_detection_enabled = getattr(settings, 'CONFLICT_DETECTION_ENABLED', True)
+
+    if not conflict_detection_enabled:
+        logger.info(f"⏭️ CONFLICT CHECK DISABLED for {front_conversation_id} - CONFLICT_DETECTION_ENABLED=False")
+    elif not has_rx_document:
         try:
             conflict_result = _check_for_conflicting_top_level_topics(client, front_conversation_id, conversation_text, sender_info, message_times)
 
