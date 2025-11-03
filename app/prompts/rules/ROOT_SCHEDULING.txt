@@ -13,8 +13,9 @@ Please use the following rules to sub-classify the provided email content, alrea
    - If the email is a **request to make a new appointment or schedule a procedure** (with or without specific study details like MRI, CT, X-ray, etc.), classify as 'Schedule Request'. ALWAYS use this rule if the email is specifically asking to schedule an appointment.
    - If the email primarily concerns **checking status of patient's appointment, prescriptions (RX), medication, referrals related to prescriptions, or pharmacy communications**, classify as 'RX'. Never use this if an email is specifically to schedule an appointment, use Schedule Request instead.
    - If the email contains **scheduling status inquiries** (e.g., "has the client been scheduled", "appointment confirmation", "scheduling updates"), classify as 'RX'.  Do not use this if an email is specifically to schedule an appointment use Schedule Request instead.
-   - If the email clearly indicates that an **appointment is no longer happening or has been voided**, classify as 'Cancelled'.
+   - If the email clearly indicates that an **appointment is no longer happening or has been voided WITHOUT any mention of rescheduling**, classify as 'Cancelled'.
    - If the email expresses a **request to change the date or time of an existing appointment**, classify as 'Reschedule Request'.
+   - If the email mentions both a **missed/no-show appointment AND an intent to reschedule** (e.g., "did not attend...reschedule", "no-show...need to reschedule", "missed appointment...call to reschedule"), classify as 'Reschedule Request'.
  If there is ANY attachment with document type "rx" (prescription/referral), ALWAYS classify as 'RX' regardless of email content. However this rule applies only if there is document of type RX
 
 
