@@ -13,7 +13,17 @@ Please use the following rules to sub-classify the provided email content, alrea
 
    - If the email indicates that a **prescription order is awaiting processing, confirmation, or further action**, classify as 'Order Pending'.
    - If the email confirms that a **prescription order has been successfully entered into the system** AND is NOT a reply asking for status update, classify as 'Order Entered'. NOTE: If someone replies asking "What's going on?" after being told order was entered, classify as 'Apt status req', not 'Order Entered'.
-   - If the email states that **necessary information is missing to process a prescription or referral**, classify as 'Incomplete'.
+
+   - **CRITICAL - Incomplete Classification Rule:**
+   ONLY classify as 'Incomplete' if the email explicitly states that necessary information is missing, incomplete, or cannot be processed due to missing data (e.g., "We need the patient's phone number", "Missing demographics", "Cannot process without DOB", "Incomplete information provided").
+
+   DO NOT classify as 'Incomplete' if:
+   - The email is PROVIDING information that was previously requested
+   - The email is responding to a request for information with the requested details
+   - Previous emails in the thread mentioned missing info but the current email supplies it
+
+   Focus ONLY on what the current email is stating, not what previous emails in the conversation requested.
+
    - If the email has an attachment of type RX and/or is a **direct request for a new prescription or a refill**, classify as 'RX'.
    - If the email reports that a **patient did not attend an appointment associated with a prescription or referral**, classify as 'No Show'.
    - If the email mentions that the **patient will be paying cash for services related to a prescription or referral**, classify as 'Cash Patient'.
