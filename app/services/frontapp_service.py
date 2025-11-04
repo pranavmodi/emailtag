@@ -649,12 +649,31 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> bool:
             }
 
             response = client.post(url, headers=headers, json=payload)
-            
+
+            logger.info(f"📡 Front API Response: Status={response.status_code}")
+            logger.info(f"📡 Front API Response Body: {response.text}")
+
             if response.status_code >= 400:
-                logger.error(f"Front API error response ({response.status_code}) for {conversation_id} when adding tags: {response.text}")
-                # response.raise_for_status() # Replaced with return False
+                logger.error(f"❌ Front API error response ({response.status_code}) for {conversation_id} when adding tags")
+
+                # Log specific details for archived tags
+                if archived_tags:
+                    logger.error(f"🔬 ARCHIVED TAG TEST RESULT: Failed to apply archived tags {archived_tags}")
+                    for tag_name in archived_tags:
+                        tag_id = archived_tag_ids.get(tag_name)
+                        logger.error(f"  - Tag '{tag_name}' (ID: {tag_id}) was REJECTED by Front API")
+
                 return False
-                
+            else:
+                logger.info(f"✅ Successfully applied tags to conversation {conversation_id}")
+
+                # Log success for archived tags (if any were included)
+                if archived_tags:
+                    logger.info(f"🔬 ARCHIVED TAG TEST RESULT: Successfully applied archived tags {archived_tags}!")
+                    for tag_name in archived_tags:
+                        tag_id = archived_tag_ids.get(tag_name)
+                        logger.info(f"  ✅ Archived tag '{tag_name}' (ID: {tag_id}) was ACCEPTED by Front API")
+
             added_tag_names = [name for name, tag_id_val in tag_name_to_id_map.items() if tag_id_val in tag_ids_to_add]
             return True
             
