@@ -26,7 +26,7 @@ When the AI email tagging system classifies incoming emails, conversations are a
 - `Apt status req`
 - `No Show`
 - `Cash Patient`
-- `Cancelled`
+- `Cancel Request`
 - `Reschedule Request`
 - `Schedule Request`
 - `Will contact patient`

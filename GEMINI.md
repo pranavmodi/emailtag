@@ -33,8 +33,8 @@ Email_Categories
 │   │   ├── Apt status req
 │   │   ├── No Show
 │   │   └── Cash Patient
-│   ├── Cancelled
-│   │   └── Cancelled
+│   ├── Cancel Request
+│   │   └── Cancel Request
 │   ├── Reschedule Request
 │   │   └── Reschedule Request
 │   ├── Schedule Request

@@ -1,6 +1,6 @@
 Sub-Classification Rules for Scheduling Category
 ================================================
-**Sub-Categories:** RX, Cancelled, Reschedule Request, Schedule Request.
+**Sub-Categories:** RX, Cancel Request, Reschedule Request, Schedule Request.
 
 Please use the following rules to sub-classify the provided email content, already identified as 'Scheduling', into one of the above sub-categories.
 
@@ -27,7 +27,7 @@ Please use the following rules to sub-classify the provided email content, alrea
 
    - If the email concerns **prescription/referral processing, order entry status, or pharmacy coordination** WITHOUT actively requesting to schedule an appointment (e.g., "Order was entered", "Referral received", "Prescription being processed"), classify as 'RX'.
 
-   - If the email clearly indicates that an **appointment is no longer happening or has been voided WITHOUT any mention of rescheduling**, classify as 'Cancelled'.
+   - If the email clearly indicates that an **appointment is no longer happening or has been voided WITHOUT any mention of rescheduling**, classify as 'Cancel Request'.
 
    - If the email expresses a **request to change the date or time of an existing appointment**, classify as 'Reschedule Request'.
 

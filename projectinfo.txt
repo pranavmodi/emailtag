@@ -43,7 +43,7 @@ The AI will classify and route messages under the correct department and subcate
     * Incomplete
     * RX
 * Cancel Request
-    * Cancelled
+    * Cancel Request
 * Reschedule Request
     * Rescheduled
 * Apt status req

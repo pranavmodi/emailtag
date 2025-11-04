@@ -583,6 +583,8 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> bool:
         tag_ids_to_add = []
         not_found_tags = []
         archived_tags = []
+        archived_tag_ids = {}  # Map of archived tag names to their IDs
+
         for name in list(tag_names): # Use a copy
             tag_id = tag_name_to_id_map.get(name)
             if tag_id:
@@ -593,8 +595,14 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> bool:
                     matching_tags = tag_name_counts[name]
                     all_archived = all(not tag.get('is_visible_in_conversation_lists', True) for tag in matching_tags)
                     if all_archived:
-                        logger.error(f"Tag '{name}' exists but all instances are ARCHIVED (not visible). Cannot add to conversation {conversation_id}.")
-                        archived_tags.append(name)
+                        logger.warning(f"⚠️ Tag '{name}' exists but all instances are ARCHIVED (not visible). Will ATTEMPT to add it anyway and show API response.")
+                        # Get the first archived tag's ID and try to use it
+                        archived_tag_id = matching_tags[0].get('id')
+                        if archived_tag_id:
+                            archived_tags.append(name)
+                            archived_tag_ids[name] = archived_tag_id
+                            tag_ids_to_add.append(archived_tag_id)
+                            logger.info(f"  🔬 TESTING: Will attempt to apply archived tag '{name}' (ID: {archived_tag_id}) to conversation {conversation_id}")
                         continue
 
                 logger.info(f"Tag '{name}' not found for conversation {conversation_id}. Attempting to create.")
@@ -616,14 +624,9 @@ def add_conversation_tags(conversation_id: str, tag_names: List[str]) -> bool:
             # Continue with any tags that were found/created
 
         if archived_tags:
-            logger.error(f"Tags are ARCHIVED and cannot be applied to conversation {conversation_id}: {', '.join(archived_tags)}. Skipping these tags.")
-            # Continue with any tags that were found/created
+            logger.warning(f"⚠️ ARCHIVED TAGS DETECTED for conversation {conversation_id}: {', '.join(archived_tags)}. Will attempt to apply them anyway to see API response.")
 
         if not tag_ids_to_add:
-            if archived_tags and not not_found_tags:
-                # All tags were archived - this is an error condition
-                logger.error(f"All tags for conversation {conversation_id} are ARCHIVED and cannot be applied.")
-                return False
             logger.warning(f"No valid tags found to add for conversation {conversation_id} after checking/creating in Front.")
             return True # No valid tags to add, considered success for this function's purpose.
 

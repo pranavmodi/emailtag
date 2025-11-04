@@ -21,6 +21,59 @@ project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
 from app.services.frontapp_service import list_front_tags
+from app.core.config import settings
+import httpx
+
+
+def fetch_individual_tag(tag_id: str) -> Dict[str, Any]:
+    """Fetch individual tag details from Front API using GET /tags/{tag_id}.
+
+    Args:
+        tag_id: The tag ID to fetch
+
+    Returns:
+        Dict with 'success' (bool), 'status_code' (int), 'data' (dict or None), 'error' (str or None)
+    """
+    if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
+        return {
+            'success': False,
+            'status_code': None,
+            'data': None,
+            'error': 'Missing Front configuration'
+        }
+
+    auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
+    url = f"{settings.FRONT_API_BASE_URL}/tags/{tag_id}"
+    headers = {
+        "Authorization": auth_header,
+        "Accept": "application/json",
+    }
+
+    try:
+        with httpx.Client(verify=False, timeout=10.0) as client:
+            response = client.get(url, headers=headers)
+
+            if response.status_code == 200:
+                return {
+                    'success': True,
+                    'status_code': 200,
+                    'data': response.json(),
+                    'error': None
+                }
+            else:
+                return {
+                    'success': False,
+                    'status_code': response.status_code,
+                    'data': None,
+                    'error': f"HTTP {response.status_code}"
+                }
+    except Exception as e:
+        return {
+            'success': False,
+            'status_code': None,
+            'data': None,
+            'error': str(e)
+        }
 
 
 def format_tag_info(tag: Dict[str, Any]) -> str:
@@ -71,7 +124,10 @@ def export_to_csv(tags: List[Dict[str, Any]], filename: str = 'front_tags.csv') 
         'created_at',
         'updated_at',
         'parent_tag_id',
-        'owner_link'
+        'owner_link',
+        'individual_fetch_success',
+        'individual_fetch_status_code',
+        'individual_fetch_error'
     ]
 
     with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
@@ -100,7 +156,10 @@ def export_to_csv(tags: List[Dict[str, Any]], filename: str = 'front_tags.csv') 
                 'created_at': tag.get('created_at', ''),
                 'updated_at': tag.get('updated_at', ''),
                 'parent_tag_id': parent_tag_id,
-                'owner_link': owner_link
+                'owner_link': owner_link,
+                'individual_fetch_success': tag.get('individual_fetch_success', ''),
+                'individual_fetch_status_code': tag.get('individual_fetch_status_code', ''),
+                'individual_fetch_error': tag.get('individual_fetch_error', '')
             }
             writer.writerow(row)
 
@@ -118,6 +177,33 @@ def main():
         print("📡 Fetching tags from Front API...")
         tags = list_front_tags()
         print(f"✅ Successfully fetched {len(tags)} tags\n")
+
+        # Fetch individual tag details for each tag
+        print("🔍 Fetching individual tag details...")
+        for i, tag in enumerate(tags, 1):
+            tag_id = tag.get('id')
+            tag_name = tag.get('name', 'Unknown')
+
+            if tag_id:
+                print(f"   [{i}/{len(tags)}] Checking {tag_name} ({tag_id})...", end=' ')
+                result = fetch_individual_tag(tag_id)
+
+                # Store the result in the tag dictionary
+                tag['individual_fetch_success'] = result['success']
+                tag['individual_fetch_status_code'] = result['status_code']
+                tag['individual_fetch_error'] = result['error']
+
+                if result['success']:
+                    print("✅")
+                else:
+                    print(f"❌ {result['error']}")
+            else:
+                print(f"   [{i}/{len(tags)}] Skipping {tag_name} (no ID)")
+                tag['individual_fetch_success'] = False
+                tag['individual_fetch_status_code'] = None
+                tag['individual_fetch_error'] = 'No tag ID'
+
+        print(f"✅ Completed individual tag checks\n")
 
         # Categorize tags
         visible_tags = []
@@ -144,6 +230,13 @@ def main():
         print(f"Total tags: {len(tags)}")
         print(f"Visible tags: {len(visible_tags)}")
         print(f"Archived tags: {len(archived_tags)}")
+
+        # Individual fetch statistics
+        individual_fetch_success = sum(1 for t in tags if t.get('individual_fetch_success') == True)
+        individual_fetch_failed = sum(1 for t in tags if t.get('individual_fetch_success') == False)
+        print(f"\nIndividual fetch results:")
+        print(f"  ✅ Successful: {individual_fetch_success}")
+        print(f"  ❌ Failed: {individual_fetch_failed}")
 
         # Find duplicates
         duplicates = {name: tags_list for name, tags_list in tag_name_duplicates.items() if len(tags_list) > 1}

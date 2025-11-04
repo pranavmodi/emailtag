@@ -51,7 +51,7 @@ SCHEDULING_SCENARIOS = {
             "<p>Thanks,<br>"
             "Robert Kim</p>"
         ),
-        "expected_tags": ["Cancelled"]
+        "expected_tags": ["Cancel Request"]
     },
     "12": {
         "description": "Patient No-Show Follow-up",
