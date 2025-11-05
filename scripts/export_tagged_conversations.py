@@ -17,15 +17,16 @@ from sqlalchemy import and_
 import pytz
 
 
-def export_tagged_conversations(tag_name: str = "Cancelled", hours: int = None, days: int = None, output_file: str = "tagged_conversations.csv"):
+def export_tagged_conversations(tag_name: str = "Cancelled", hours: int = None, days: int = None, output_file: str = None, print_only: bool = False):
     """
-    Find all conversations with a specific tag within a time period and export to CSV.
+    Find all conversations with a specific tag within a time period and export to CSV or print to console.
 
     Args:
         tag_name: Name of the tag to search for (default: "Cancelled")
         hours: Number of hours to look back (optional)
         days: Number of days to look back (optional)
-        output_file: Output CSV filename (default: tagged_conversations.csv)
+        output_file: Output CSV filename (default: auto-generated from tag name)
+        print_only: If True, print to console instead of writing CSV (default: False)
     """
     db = SessionLocal()
 
@@ -77,49 +78,79 @@ def export_tagged_conversations(tag_name: str = "Cancelled", hours: int = None, 
         print(f"📊 Found {len(emails_with_tag)} conversations with '{tag_name}' tag in the last {time_desc}")
 
         if not emails_with_tag:
-            print("ℹ️ No conversations found. No CSV will be created.")
+            print("ℹ️ No conversations found.")
             return
 
-        # Prepare CSV output
-        output_path = Path(output_file)
+        if print_only:
+            # Print to console
+            print(f"\n{'='*100}")
+            print(f"CONVERSATIONS WITH TAG '{tag_name}'")
+            print(f"{'='*100}\n")
 
-        with open(output_path, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-
-            # Write header
-            writer.writerow([
-                'conversation_id',
-                'subject',
-                'sender',
-                'created_at',
-                'updated_at',
-                'status',
-                'all_tags'
-            ])
-
-            # Write data
-            for email in emails_with_tag:
+            for i, email in enumerate(emails_with_tag, 1):
                 # Get all tag names for this email
                 tag_names = [tag.name for tag in email.tags]
 
+                print(f"[{i}/{len(emails_with_tag)}] {email.front_conversation_id}")
+                print(f"  Subject: {email.subject or 'N/A'}")
+                print(f"  Sender: {email.sender}")
+                print(f"  Created: {email.created_at.isoformat() if email.created_at else 'N/A'}")
+                print(f"  Updated: {email.updated_at.isoformat() if email.updated_at else 'N/A'}")
+                print(f"  Status: {email.status or 'N/A'}")
+                print(f"  Tags: {', '.join(tag_names)}")
+                print(f"  URL: https://app.frontapp.com/open/{email.front_conversation_id}")
+                print()
+
+        else:
+            # Write to CSV
+            # Generate filename if not provided
+            if not output_file:
+                safe_tag_name = tag_name.lower().replace(' ', '_').replace('/', '_').replace('\\', '_')
+                safe_tag_name = ''.join(c for c in safe_tag_name if c.isalnum() or c in ('_', '-'))
+                output_file = f"{safe_tag_name}_conversations.csv"
+
+            output_path = Path(output_file)
+
+            with open(output_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+
+                # Write header
                 writer.writerow([
-                    email.front_conversation_id,
-                    email.subject or '',
-                    email.sender,
-                    email.created_at.isoformat() if email.created_at else '',
-                    email.updated_at.isoformat() if email.updated_at else '',
-                    email.status or '',
-                    ', '.join(tag_names)
+                    'conversation_id',
+                    'subject',
+                    'sender',
+                    'created_at',
+                    'updated_at',
+                    'status',
+                    'all_tags'
                 ])
 
-        print(f"✅ Exported {len(emails_with_tag)} conversations to {output_path.absolute()}")
+                # Write data
+                for email in emails_with_tag:
+                    # Get all tag names for this email
+                    tag_names = [tag.name for tag in email.tags]
+
+                    writer.writerow([
+                        email.front_conversation_id,
+                        email.subject or '',
+                        email.sender,
+                        email.created_at.isoformat() if email.created_at else '',
+                        email.updated_at.isoformat() if email.updated_at else '',
+                        email.status or '',
+                        ', '.join(tag_names)
+                    ])
+
+            print(f"✅ Exported {len(emails_with_tag)} conversations to {output_path.absolute()}")
 
         # Print summary statistics
-        print("\n📈 Summary:")
-        print(f"   Total conversations: {len(emails_with_tag)}")
+        print(f"\n{'='*100}")
+        print("📈 SUMMARY")
+        print(f"{'='*100}")
+        print(f"Total conversations: {len(emails_with_tag)}")
         if emails_with_tag:
-            print(f"   Oldest: {emails_with_tag[-1].updated_at.isoformat()}")
-            print(f"   Newest: {emails_with_tag[0].updated_at.isoformat()}")
+            print(f"Oldest: {emails_with_tag[-1].updated_at.isoformat()}")
+            print(f"Newest: {emails_with_tag[0].updated_at.isoformat()}")
+        print(f"{'='*100}\n")
 
     except Exception as e:
         print(f"❌ Error: {e}")
@@ -153,15 +184,30 @@ if __name__ == "__main__":
     parser.add_argument(
         '--output',
         type=str,
-        default='tagged_conversations.csv',
-        help='Output CSV filename (default: tagged_conversations.csv)'
+        default=None,
+        help='Output CSV filename (default: auto-generated from tag name)'
+    )
+    parser.add_argument(
+        '--print',
+        action='store_true',
+        help='Print results to console instead of writing to CSV'
     )
 
     args = parser.parse_args()
+
+    # Generate output filename from tag name if not specified
+    output_file = args.output
+    if not output_file and not args.print:
+        # Sanitize tag name for filename (replace spaces and special chars)
+        safe_tag_name = args.tag.lower().replace(' ', '_').replace('/', '_').replace('\\', '_')
+        # Remove any other problematic characters
+        safe_tag_name = ''.join(c for c in safe_tag_name if c.isalnum() or c in ('_', '-'))
+        output_file = f"{safe_tag_name}_conversations.csv"
 
     export_tagged_conversations(
         tag_name=args.tag,
         hours=args.hours,
         days=args.days,
-        output_file=args.output
+        output_file=output_file,
+        print_only=args.print
     )
