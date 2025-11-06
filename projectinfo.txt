@@ -39,7 +39,6 @@ The AI will classify and route messages under the correct department and subcate
 
 * RX
     * Order Pending
-    * Order Entered
     * Incomplete
     * RX
 * Cancel Request
@@ -96,7 +95,6 @@ C) Negotiations
 
 * Bill Offer
 * Pending Approval
-* Offer Approved
 * Counter Offer Sent
 
 D) Case Updates
@@ -114,7 +112,6 @@ D) Case Updates
 F) Collections
 
 * To send to collections
-* Sent to Collections
 * Attorney Non-Payment
 * To Review 
 

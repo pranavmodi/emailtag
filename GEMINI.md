@@ -27,7 +27,6 @@ Email_Categories
 ├── Scheduling
 │   ├── RX
 │   │   ├── Order Pending
-│   │   ├── Order Entered
 │   │   ├── Incomplete
 │   │   ├── RX
 │   │   ├── Apt status req
@@ -67,7 +66,6 @@ Email_Categories
     ├── Negotiations
     │   ├── Bill Offer
     │   ├── Pending Approval
-    │   ├── Offer Approved
     │   └── Counter Offer Sent
     ├── Case Updates
     │   ├── New Attorney
@@ -81,7 +79,6 @@ Email_Categories
     │   └── Payment on way
     └── Collections
         ├── To send to collections
-        ├── Sent to Collections
         ├── Attorney Non-Payment
         └── To Review
 

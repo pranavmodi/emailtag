@@ -1,6 +1,6 @@
 Sub-Classification Rules for Scheduling - RX Category
 =====================================================
-**Sub-Categories:** Order Pending, Order Entered, Incomplete, RX, Apt status req, No Show, Cash Patient.
+**Sub-Categories:** Order Pending, Incomplete, RX, Apt status req, No Show, Cash Patient.
 
 Please use the following rules to sub-classify the provided email content, already identified as 'Scheduling - RX', into one of the above sub-categories.
 
@@ -12,7 +12,6 @@ Please use the following rules to sub-classify the provided email content, alrea
    - If the email is an **inquiry about the status of an appointment, scheduling confirmation, or asking about patient progress/status** (e.g., "Has the client been scheduled?", "What's the appointment status?", "Is the patient scheduled for imaging?", "What's going on with this patient?", "Any update on this patient?", "What's the status?"), classify as 'Apt status req'. This takes priority over other classifications, especially when replying to a previous email that said the order was entered or is being processed.
 
    - If the email indicates that a **prescription order is awaiting processing, confirmation, or further action**, classify as 'Order Pending'.
-   - If the email confirms that a **prescription order has been successfully entered into the system** AND is NOT a reply asking for status update, classify as 'Order Entered'. NOTE: If someone replies asking "What's going on?" after being told order was entered, classify as 'Apt status req', not 'Order Entered'.
 
    - **CRITICAL - Incomplete Classification Rule:**
    ONLY classify as 'Incomplete' if the email explicitly states that necessary information is missing, incomplete, or cannot be processed due to missing data (e.g., "We need the patient's phone number", "Missing demographics", "Cannot process without DOB", "Incomplete information provided").

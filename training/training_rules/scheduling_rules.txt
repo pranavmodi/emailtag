@@ -8,7 +8,7 @@ Classification Rules for Scheduling:
    - Mentions of specific actions related to scheduling, such as "contact us to reschedule or cancel", "reach out to the patient", or "call our direct scheduling line", indicate a Scheduling email.
 
 3. **Associated Tags**:
-   - Emails tagged with "Order Entered", "Order Pending", or "RX" are often associated with Scheduling.
+   - Emails tagged with "Order Pending" or "RX" are often associated with Scheduling.
 
 4. **Purpose or Intent**:
    - If the main purpose of the email is to confirm, arrange, or modify an appointment or referral, it belongs to the Scheduling category.

@@ -21,7 +21,6 @@ When the AI email tagging system classifies incoming emails, conversations are a
 - `Scheduling`
 - `RX`
 - `Order Pending`
-- `Order Entered`
 - `Incomplete`
 - `Apt status req`
 - `No Show`
@@ -78,7 +77,6 @@ When the AI email tagging system classifies incoming emails, conversations are a
 **Tags routed to this inbox:**
 - `Bill Offer`
 - `Pending Approval`
-- `Offer Approved`
 - `Counter Offer Sent`
 
 ---
@@ -104,7 +102,6 @@ When the AI email tagging system classifies incoming emails, conversations are a
 
 **Tags routed to this inbox:**
 - `To send to collections`
-- `Sent to Collections`
 - `Attorney Non-Payment`
 - `To Review`
 
