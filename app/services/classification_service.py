@@ -211,14 +211,29 @@ def classify_email_category(front_conversation_id: str, existing_tags: List[str]
         conversation_text = conversation_data.get('text', '')
         raw_senders = conversation_data.get('senders', ['Unknown Sender'])
         raw_timestamps = conversation_data.get('timestamps', ['Unknown Timestamps'])
+        raw_recipients_to = conversation_data.get('recipients_to', [])
+        raw_recipients_cc = conversation_data.get('recipients_cc', [])
+
         sender_info = ", ".join(map(str, raw_senders)) if raw_senders else "Unknown Sender"
         message_times = ", ".join(map(str, raw_timestamps)) if raw_timestamps else "Unknown Timestamps"
+        recipients_to_info = ", ".join([r for r in raw_recipients_to if r]) if raw_recipients_to else "Unknown Recipients"
+        recipients_cc_info = ", ".join([r for r in raw_recipients_cc if r]) if raw_recipients_cc else ""
+
         if not conversation_text:
             return None, 0.0
 
         # Inject content into the fetched 'ROOT' prompt template (which is now just instructions)
         final_llm_prompt = (
             f"{llm_prompt_template}\n\n" # llm_prompt_template is the instruction part from DB
+            f"--- EMAIL METADATA ---\n"
+            f"From: {sender_info}\n"
+            f"To: {recipients_to_info}\n"
+        )
+        if recipients_cc_info:
+            final_llm_prompt += f"CC: {recipients_cc_info}\n"
+        final_llm_prompt += (
+            f"Timestamps: {message_times}\n"
+            f"--- EMAIL METADATA END ---\n\n"
             f"--- EMAIL CONTENT TO CLASSIFY START ---\n"
             f"{conversation_text}\n"
             f"--- EMAIL CONTENT TO CLASSIFY END ---\n\n"
@@ -266,7 +281,7 @@ def classify_email_category(front_conversation_id: str, existing_tags: List[str]
         logger.error(f"Unexpected error during non-hierarchical email classification for {front_conversation_id}: {e}", exc_info=True)
         return None, 0.0
 
-def classify_email_subcategory(front_conversation_id: str, top_level_category: str, conversation_text: str, sender_info: str, message_times: str) -> Tuple[Optional[str], float]:
+def classify_email_subcategory(front_conversation_id: str, top_level_category: str, conversation_text: str, sender_info: str, message_times: str, recipients_to_info: str = "", recipients_cc_info: str = "") -> Tuple[Optional[str], float]:
     """
     Classify an email into a subcategory based on its top-level category.
 
@@ -276,6 +291,8 @@ def classify_email_subcategory(front_conversation_id: str, top_level_category: s
         conversation_text (str): The full conversation text
         sender_info (str): Information about the sender(s)
         message_times (str): Timestamps of messages
+        recipients_to_info (str): Information about 'to' recipients (optional)
+        recipients_cc_info (str): Information about 'cc' recipients (optional)
 
     Returns:
         Tuple[Optional[str], float]: Predicted subcategory name and confidence score
@@ -303,12 +320,18 @@ def classify_email_subcategory(front_conversation_id: str, top_level_category: s
         # Create a formatted string of available subcategories for the prompt
         subcategories_list_str = "\n- " + "\n- ".join(valid_subcategories)
 
+        metadata_section = f"Sender Information: {sender_info}\n"
+        if recipients_to_info:
+            metadata_section += f"To Recipients: {recipients_to_info}\n"
+        if recipients_cc_info:
+            metadata_section += f"CC Recipients: {recipients_cc_info}\n"
+        metadata_section += f"Message Timestamps: {message_times}\n"
+
         prompt = (
             f"You are classifying an email that belongs to the {top_level_category} category.\n"
             f"Choose ONE of the following subcategories for {top_level_category}:\n{subcategories_list_str}\n\n"
             "Classify this conversation into exactly ONE of the subcategories listed above. Respond with ONLY the chosen subcategory name.\n\n"
-            f"Sender Information: {sender_info}\n"
-            f"Message Timestamps: {message_times}\n"
+            f"{metadata_section}"
             "Full Conversation Text:\n"
             '"""'
             f"{conversation_text[:4000]}...\n"
@@ -350,19 +373,20 @@ def classify_email_subcategory(front_conversation_id: str, top_level_category: s
         return None, 0.0
 
 def _call_llm_for_classification(
-    client: OpenAI, 
-    conversation_text: str, 
-    # sender_info, message_times are not directly used if prompt_template has placeholders for them
-    # and they are injected before this call, or if template doesn't use them.
-    # For now, the DB prompt template only has {{EMAIL_CONTENT_PLACEHOLDER}}
+    client: OpenAI,
+    conversation_text: str,
     llm_prompt_template: str, # This is the full prompt template from the DB
     classification_level_name: str, # For logging
     current_path: List[str], # For logging
-    document_analysis_results: Optional[List[Dict[str, Any]]] = None
+    document_analysis_results: Optional[List[Dict[str, Any]]] = None,
+    sender_info: str = "",
+    message_times: str = "",
+    recipients_to_info: str = "",
+    recipients_cc_info: str = ""
 ) -> Optional[str]:
     """
     Helper function to call the LLM using a pre-fetched and pre-formatted prompt template.
-    It injects the conversation text into the placeholder.
+    It injects the conversation text and metadata into the prompt.
     """
     # The placeholder check is no longer needed as llm_prompt_template is now just instructions.
     # if "{EMAIL_CONTENT_PLACEHOLDER}" not in llm_prompt_template: 
@@ -382,20 +406,52 @@ def _call_llm_for_classification(
                 description = analysis_data.get("description", "No description available")
                 patient_id = analysis_data.get("patient_id")
                 confidence = analysis_data.get("confidence", 0.0)
-                
+
                 document_section += f"Document {i}:\n"
                 document_section += f"- Type: {doc_type}\n"
                 document_section += f"- Description: {description}\n"
                 document_section += f"- Patient ID: {patient_id if patient_id else 'Not found'}\n"
                 document_section += f"- Analysis Confidence: {confidence:.2f}\n\n"
             else:
-                document_section += f"Document {i}: Analysis failed - {doc_result.get('document_analysis', {}).get('error', 'Unknown error')}\n\n"
+                # Get error message and filename if available
+                error_msg = doc_result.get('document_analysis', {}).get('error', 'Unknown error')
+                filename = doc_result.get('filename', 'Unknown')
+
+                # Check if the error indicates a password-protected file
+                is_password_protected = ('password' in error_msg.lower() or
+                                        'incorrect password' in error_msg.lower() or
+                                        'encrypted' in error_msg.lower())
+
+                document_section += f"Document {i} ({filename}):\n"
+                if is_password_protected:
+                    document_section += f"- Status: ⚠️ PASSWORD-PROTECTED / ENCRYPTED\n"
+                    document_section += f"- Analysis: Cannot be analyzed - file is password-protected\n"
+                    document_section += f"- Note: This document requires a password to open\n"
+                else:
+                    document_section += f"- Status: Analysis failed\n"
+                    document_section += f"- Error: {error_msg}\n"
+                document_section += "\n"
         
         document_section += "--- END ATTACHED DOCUMENTS ANALYSIS ---\n"
 
-    # Construct the final prompt by appending email content, document analysis, and cue to the instructions
+    # Construct metadata section
+    metadata_section = ""
+    if sender_info or recipients_to_info or recipients_cc_info or message_times:
+        metadata_section = "--- EMAIL METADATA ---\n"
+        if sender_info:
+            metadata_section += f"From: {sender_info}\n"
+        if recipients_to_info:
+            metadata_section += f"To: {recipients_to_info}\n"
+        if recipients_cc_info:
+            metadata_section += f"CC: {recipients_cc_info}\n"
+        if message_times:
+            metadata_section += f"Timestamps: {message_times}\n"
+        metadata_section += "--- EMAIL METADATA END ---\n\n"
+
+    # Construct the final prompt by appending metadata, email content, document analysis, and cue to the instructions
     final_llm_prompt = (
         f"{llm_prompt_template}\n\n"
+        f"{metadata_section}"
         f"--- EMAIL CONTENT TO CLASSIFY START ---\n"
         f"{conversation_text}\n"
         f"--- EMAIL CONTENT TO CLASSIFY END ---"
@@ -523,7 +579,9 @@ def _check_for_conflicting_top_level_topics(
     conversation_id: str,
     conversation_text: str,
     sender_info: str,  # Note: sender_info might not correspond perfectly to only the last 3 messages
-    message_times: str  # Note: message_times might not correspond perfectly to only the last 3 messages
+    message_times: str,  # Note: message_times might not correspond perfectly to only the last 3 messages
+    recipients_to_info: str = "",
+    recipients_cc_info: str = ""
 ) -> Dict[str, Any]:
     """
     Uses the LLM to check if the last 3 messages of the conversation discuss topics from multiple top-level categories.
@@ -534,6 +592,8 @@ def _check_for_conflicting_top_level_topics(
         conversation_text: The full email text (chronological, cleaned).
         sender_info: Sender information string (for the whole conversation).
         message_times: Timestamp information string (for the whole conversation).
+        recipients_to_info: Information about 'to' recipients.
+        recipients_cc_info: Information about 'cc' recipients.
 
     Returns:
         Dict[str, Any]: Structured response containing:
@@ -734,15 +794,29 @@ def get_rules_for_classification_step(
 
 
 def classify_email_tags_hierarchical(
-    front_conversation_id: str, 
-    conversation_text: str, 
-    sender_info: str, 
+    front_conversation_id: str,
+    conversation_text: str,
+    sender_info: str,
     message_times: str,
-    document_analysis_results: Optional[List[Dict[str, Any]]] = None
+    document_analysis_results: Optional[List[Dict[str, Any]]] = None,
+    recipients_to_info: str = "",
+    recipients_cc_info: str = ""
 ) -> List[str]:
     """
     Classifies an email conversation by traversing the EMAIL_CATEGORIES hierarchy,
     using rules from file-based storage.
+
+    Args:
+        front_conversation_id: The Front conversation ID
+        conversation_text: Full conversation text
+        sender_info: Information about senders
+        message_times: Message timestamps
+        document_analysis_results: Optional document analysis results
+        recipients_to_info: Information about 'to' recipients
+        recipients_cc_info: Information about 'cc' recipients
+
+    Returns:
+        List of tag names for the classified conversation
     """
     # Create tracer for classification (temporarily disabled)
     # tracer = create_tracer(front_conversation_id=front_conversation_id)
@@ -768,7 +842,15 @@ def classify_email_tags_hierarchical(
         logger.info(f"⏭️ CONFLICT CHECK DISABLED for {front_conversation_id} - CONFLICT_DETECTION_ENABLED=False")
     elif not has_rx_document:
         try:
-            conflict_result = _check_for_conflicting_top_level_topics(client, front_conversation_id, conversation_text, sender_info, message_times)
+            conflict_result = _check_for_conflicting_top_level_topics(
+                client,
+                front_conversation_id,
+                conversation_text,
+                sender_info,
+                message_times,
+                recipients_to_info,
+                recipients_cc_info
+            )
 
             if conflict_result.get("success", False) and conflict_result.get("has_conflicts", False):
                 logger.info(f"🚫 ASSIGNING HUMAN REVIEW: Conflicting topics detected for {front_conversation_id}")
@@ -810,12 +892,16 @@ def classify_email_tags_hierarchical(
                 return ["AI: Human review required"] if classification_path else []
 
             chosen_option = _call_llm_for_classification(
-                client, 
-                conversation_text, 
+                client,
+                conversation_text,
                 llm_prompt_template, # Pass the fetched prompt template
                 level_name_for_logging,
                 classification_path,
-                document_analysis_results
+                document_analysis_results,
+                sender_info,
+                message_times,
+                recipients_to_info,
+                recipients_cc_info
             )
 
             if not chosen_option or chosen_option not in options: # Validate prediction against current options
@@ -860,7 +946,11 @@ def classify_email_tags_hierarchical(
                     llm_prompt_template_for_list,
                     level_name_for_logging, # Name of the parent that led to this list
                     classification_path,
-                    document_analysis_results
+                    document_analysis_results,
+                    sender_info,
+                    message_times,
+                    recipients_to_info,
+                    recipients_cc_info
                 )
 
                 if chosen_final_tag and chosen_final_tag in final_options_in_list:

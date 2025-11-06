@@ -785,7 +785,7 @@ def remove_conversation_tags(conversation_id: str, tag_names_to_remove: List[str
 
 
 def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
-    """Fetch all message bodies, sender info, and timestamps from a Front conversation,
+    """Fetch all message bodies, sender info, recipient info, and timestamps from a Front conversation,
        cleaned and in chronological order. Also includes a structured list of messages
        for advanced analysis.
 
@@ -797,6 +797,8 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
             'text' (str): Concatenated text of all message bodies (HTML removed, chronological).
             'senders' (List[str]): List of sender emails or usernames (chronological).
             'timestamps' (List[str]): List of message creation timestamps (chronological).
+            'recipients_to' (List[str]): List of 'to' recipient emails per message (chronological).
+            'recipients_cc' (List[str]): List of 'cc' recipient emails per message (chronological).
             'last_message_details': Details for the author of the last message.
             '_structured_messages' (List[Dict[str, Any]]): A list of dicts, each representing a message
                 with fields like 'id', 'body', 'created_at', 'author_id', 'author_email',
@@ -821,6 +823,8 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
     all_messages_text: List[str] = []
     senders: List[str] = []
     timestamps: List[str] = []
+    recipients_to_list: List[str] = []  # Track 'to' recipients
+    recipients_cc_list: List[str] = []  # Track 'cc' recipients
     structured_messages: List[Dict[str, Any]] = [] # New list for structured messages
 
     # Details for the author of the last message
@@ -928,6 +932,24 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
 
                 senders.append(sender_name_for_list)
                 # --- End sender details extraction ---
+
+                # --- Extract recipient details (to and cc) ---
+                msg_recipients_to: List[str] = []
+                msg_recipients_cc: List[str] = []
+                recipients = message_data.get('recipients', [])
+                for recipient in recipients:
+                    rcpt_role = recipient.get('role')
+                    rcpt_handle = recipient.get('handle')  # Usually email address
+                    if rcpt_handle:
+                        if rcpt_role == 'to':
+                            msg_recipients_to.append(rcpt_handle)
+                        elif rcpt_role == 'cc':
+                            msg_recipients_cc.append(rcpt_handle)
+
+                # Store as comma-separated strings for simplicity
+                recipients_to_list.append(", ".join(msg_recipients_to) if msg_recipients_to else "")
+                recipients_cc_list.append(", ".join(msg_recipients_cc) if msg_recipients_cc else "")
+                # --- End recipient details extraction ---
                 
                 formatted_time_str = "Unknown Time"
                 if created_at_ts is not None:
@@ -968,6 +990,8 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
                 'text': full_conversation,
                 'senders': senders,
                 'timestamps': timestamps,
+                'recipients_to': recipients_to_list,
+                'recipients_cc': recipients_cc_list,
                 'last_message_details': {
                     'email': last_message_author_email,
                     'handle': last_message_author_handle,
@@ -980,9 +1004,11 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
             if e.response.status_code == 404:
                 logger.warning(f"Front API returned 404 (Not Found) for messages in conversation {conversation_id}. This might be due to timing, permissions, or if the conversation has no messages or was deleted. Returning empty details.")
                 return {
-                    'text': '', 
-                    'senders': [], 
-                    'timestamps': [], 
+                    'text': '',
+                    'senders': [],
+                    'timestamps': [],
+                    'recipients_to': [],
+                    'recipients_cc': [],
                     'last_message_details': { # Explicitly return empty dict with keys for consistency if preferred, or just {} is fine
                         'email': None,
                         'handle': None,
@@ -996,9 +1022,11 @@ def get_conversation_text(conversation_id: str) -> Dict[str, Any]:
             logger.error(f"Unexpected error fetching messages for conversation {conversation_id}: {str(e)}", exc_info=True)
             # Ensure default structure is returned on other errors too
             return {
-                'text': '', 
-                'senders': [], 
-                'timestamps': [], 
+                'text': '',
+                'senders': [],
+                'timestamps': [],
+                'recipients_to': [],
+                'recipients_cc': [],
                 'last_message_details': {
                     'email': None,
                     'handle': None,

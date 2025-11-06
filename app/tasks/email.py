@@ -553,9 +553,13 @@ def perform_tagging_task(self, email_id: str) -> Dict:
         conversation_text = conversation_data.get('text', '')
         raw_senders = conversation_data.get('senders', ['Unknown Sender'])
         raw_timestamps = conversation_data.get('timestamps', ['Unknown Timestamps'])
-        
+        raw_recipients_to = conversation_data.get('recipients_to', [])
+        raw_recipients_cc = conversation_data.get('recipients_cc', [])
+
         sender_info = ", ".join(map(str, raw_senders)) if raw_senders else "Unknown Sender"
         message_times = ", ".join(map(str, raw_timestamps)) if raw_timestamps else "Unknown Timestamps"
+        recipients_to_info = ", ".join([r for r in raw_recipients_to if r]) if raw_recipients_to else ""
+        recipients_cc_info = ", ".join([r for r in raw_recipients_cc if r]) if raw_recipients_cc else ""
 
         if not conversation_text:
             logger.warning(f"Received empty conversation text for {front_conversation_id}. Tagging might be ineffective.")
@@ -575,7 +579,9 @@ def perform_tagging_task(self, email_id: str) -> Dict:
             conversation_text=conversation_text,
             sender_info=sender_info,
             message_times=message_times,
-            document_analysis_results=document_results
+            document_analysis_results=document_results,
+            recipients_to_info=recipients_to_info,
+            recipients_cc_info=recipients_cc_info
         )
 
         # --- MISSING LIEN ATTACHMENT CHECK ---
