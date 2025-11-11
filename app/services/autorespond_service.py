@@ -9,8 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.services.frontapp_service import send_conversation_reply, get_conversation_text, send_inbound_reply_via_custom_channel, list_all_channels
 from app.crud import patient_conversation_data as pcd_crud
+from app.crud.system_settings import system_settings_crud
 from app.services.ai_helpers.response_generator import (
-    generate_openai_appointment_response, 
+    generate_openai_appointment_response,
     _call_openai_api as _call_openai_api_from_helper
 )
 
@@ -175,10 +176,21 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
     # logger.info(f"PROCESS_AUTORESPOND ENTRY: db object (type: {type(db)}, id: {id(db)})")
     # logger.info(f"PROCESS_AUTORESPOND ENTRY: conversation_text (type: {type(conversation_text)}, length: {len(conversation_text) if isinstance(conversation_text, str) else 'N/A'})")
 
-    # Check if autorespond is enabled
-    if not settings.AUTORESPOND_ENABLED:
-        logger.info(f"Autorespond disabled - skipping appointment autorespond for conversation {conversation_id}")
-        return {"status": "autorespond_disabled", "details": "Autorespond functionality is disabled"}
+    # Check if global autorespond master switch is enabled
+    global_enabled = await system_settings_crud.get_setting_value(
+        db, "global_autorespond_enabled", default=True
+    )
+    if not global_enabled:
+        logger.info(f"🌐 Global autorespond disabled - skipping for conversation {conversation_id}")
+        return {"status": "autorespond_disabled", "details": "Global autorespond master switch is disabled"}
+
+    # Check if appointment inquiry autorespond is enabled
+    appointment_inquiry_enabled = await system_settings_crud.is_autorespond_enabled(
+        db, "autorespond_appointment_inquiry"
+    )
+    if not appointment_inquiry_enabled:
+        logger.info(f"Appointment Inquiry autorespond disabled - skipping for conversation {conversation_id}")
+        return {"status": "autorespond_disabled", "details": "Appointment Inquiry autorespond is disabled"}
 
     try:
         # Log all channels for debugging
