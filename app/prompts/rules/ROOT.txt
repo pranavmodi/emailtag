@@ -17,6 +17,12 @@ When an email contains requests from MULTIPLE categories, use this priority orde
 1. **ATTACHMENT-BASED CLASSIFICATION (RX Documents):**
 If there is ANY attachment with document type "rx" (prescription/referral), classify as 'Scheduling' UNLESS the email content is ONLY requesting to forward/send completed medical records, reports, bills, or imaging data without any scheduling-related content. This rule takes priority over all other rules below.
 
+1a. **PASSWORD-PROTECTED ATTACHMENTS TO SCHEDULING:**
+If the email has a PASSWORD-PROTECTED or ENCRYPTED attachment AND the recipient email address is "scheduling@precisemri.com" (check the "To:" field in email metadata), classify as 'Scheduling'. Password-protected documents sent to the scheduling inbox are typically referral documents or appointment-related files that require security. This rule has high priority and should be considered alongside RX document detection.
+
+1b. **PASSWORD MENTIONED IN EMAIL CONTENT:**
+If the email content includes a password (e.g., "the password is...", "password: xyz", "here is the password", "pw:", "passcode:", or similar password-sharing language), classify as 'Scheduling'. Emails that share passwords are typically providing access to password-protected referral documents or appointment-related attachments.
+
 2. **SCHEDULING PRIORITY (HIGHEST):**
 If the email contains ANY scheduling-related content (e.g., "schedule appointment", "reschedule", "cancel appointment", "appointment confirmation", "did patient attend", "patient no-show", "check appointment status"), classify as 'Scheduling' EVEN IF the email also requests medical records, reports, or billing information.
 

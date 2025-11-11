@@ -477,7 +477,14 @@ def _call_llm_for_classification(
                     confidence = analysis_data.get("confidence", 0.0)
                     debug_logger.debug(f"🔍   Doc {i}: {doc_type} (confidence: {confidence:.3f})")
                 else:
-                    debug_logger.debug(f"🔍   Doc {i}: FAILED - {doc_result.get('document_analysis', {}).get('error', 'Unknown error')}")
+                    error_msg = doc_result.get('document_analysis', {}).get('error', 'Unknown error')
+                    is_password_protected = ('password' in error_msg.lower() or
+                                            'incorrect password' in error_msg.lower() or
+                                            'encrypted' in error_msg.lower())
+                    if is_password_protected:
+                        debug_logger.debug(f"🔍   Doc {i}: ⚠️ PASSWORD-PROTECTED")
+                    else:
+                        debug_logger.debug(f"🔍   Doc {i}: FAILED - {error_msg}")
         
         debug_logger.debug(f"🔍 Final prompt length: {len(final_llm_prompt)} chars")
         
@@ -496,7 +503,21 @@ def _call_llm_for_classification(
         debug_logger.debug("-" * 40 + " PROMPT END " + "-" * 42)
     
     # Always log basic summary info to regular logs
-    doc_summary = f" | {len(document_analysis_results)} docs" if document_analysis_results else ""
+    doc_summary = ""
+    if document_analysis_results:
+        password_protected_count = 0
+        for doc_result in document_analysis_results:
+            if not doc_result.get("document_analysis", {}).get("success"):
+                error_msg = doc_result.get('document_analysis', {}).get('error', '')
+                if ('password' in error_msg.lower() or
+                    'incorrect password' in error_msg.lower() or
+                    'encrypted' in error_msg.lower()):
+                    password_protected_count += 1
+
+        doc_summary = f" | {len(document_analysis_results)} docs"
+        if password_protected_count > 0:
+            doc_summary += f" ({password_protected_count} password-protected)"
+
     logger.info(f"🔍 CLASSIFYING '{classification_level_name}': rule={len(llm_prompt_template)}chars, email={len(conversation_text)}chars{doc_summary}")
 
     try:
