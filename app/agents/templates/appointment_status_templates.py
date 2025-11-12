@@ -1,7 +1,7 @@
 # app/agents/templates/appointment_status_templates.py
 
 TEMPLATE_APPOINTMENT_FOUND_DETAILED = """Patient ID: {patient_id_confirmed}<br/><br/>
-<b>Our direct scheduling phone # is 8186291169 and we can assist with directions, rescheduling, canceling, or any other scheduling-related questions.</b><br/>
+<b>Our direct scheduling phone # is 800-558-2223 and we can assist with directions, rescheduling, canceling, or any other scheduling-related questions.</b><br/>
 {no_show_policy}<br/><br/>
 Here is a summary of the patient's exams we currently have entered into our system:<table border="1" style="border-collapse: collapse; width: 100%;"><thead><tr><th style="border: 1px solid black; padding: 8px; text-align: left;">Study ID</th><th style="border: 1px solid black; padding: 8px; text-align: left;">Exam Description</th><th style="border: 1px solid black; padding: 8px; text-align: left;">Status</th><th style="border: 1px solid black; padding: 8px; text-align: left;">Study Date/Time</th><th style="border: 1px solid black; padding: 8px; text-align: left;">Location</th><th style="border: 1px solid black; padding: 8px; text-align: left;">MRI Type</th><th style="border: 1px solid black; padding: 8px; text-align: left;">Images Available</th><th style="border: 1px solid black; padding: 8px; text-align: left;">Report Available</th></tr></thead><tbody>{studies_table_rows}</tbody></table>
 <br/>

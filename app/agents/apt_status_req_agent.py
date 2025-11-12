@@ -5,6 +5,15 @@ import ast # Import ast for literal_eval
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta # Added for time manipulation
 
+# Helper function to get ordinal suffix for day
+def get_day_suffix(day: int) -> str:
+    """Returns the ordinal suffix for a day (st, nd, rd, th)."""
+    if 10 <= day % 100 <= 20:
+        suffix = 'th'
+    else:
+        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')
+    return suffix
+
 from openai import OpenAIError, AsyncOpenAI
 from agents import Agent, Runner, ModelSettings, function_tool, OpenAIChatCompletionsModel, RunConfig
 import httpx
@@ -41,7 +50,7 @@ TAG_AI_HUMAN_REVIEW_REQUIRED = "AI: Human review required" # Centralized tag for
 # --- Response Templates have been moved to app/agents/templates/appointment_status_templates.py ---
 
 # --- BEGIN: Placeholder Static Information (Ideally from settings_obj) ---
-DEFAULT_SCHEDULING_PHONE = "888-555-1212"
+DEFAULT_SCHEDULING_PHONE = "800-558-2223"
 DEFAULT_NO_SHOW_POLICY = "**If the patient cannot make the appointment please contact us within 48 hours of the appointment to reschedule or cancel to avoid any no-show fees. Two no-shows will require a $50 no-show payment before being scheduled for a 3rd time.**"
 DEFAULT_PORTAL_LINKS = {
     "bills_appointments_liens": "https://example.com/portal/bills",
@@ -233,14 +242,27 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                         # Check if we parsed a date-only value (time is 00:00:00)
                         if parsed_dt.time() == datetime.min.time():
                             # This is a date-only value, show as date with "Time TBD"
-                            appointment_datetime_str = f"{parsed_dt.strftime('%m/%d/%Y')} @ Time TBD"
+                            day_name = parsed_dt.strftime('%A')
+                            month_name = parsed_dt.strftime('%B')
+                            day_num = parsed_dt.day
+                            year = parsed_dt.year
+                            day_suffix = get_day_suffix(day_num)
+                            appointment_datetime_str = f"Date: {day_name} {month_name} {day_num}{day_suffix}, {year}<br/><br/>Time: TBD"
                             arrival_time_str = "Time TBD"
                         else:
-                            # This has both date and time
-                            appointment_datetime_str = parsed_dt.strftime("%m/%d/%Y @ %I:%M %p")
+                            # This has both date and time - format as requested
+                            day_name = parsed_dt.strftime('%A')
+                            month_name = parsed_dt.strftime('%B')
+                            day_num = parsed_dt.day
+                            year = parsed_dt.year
+                            day_suffix = get_day_suffix(day_num)
+                            time_str = parsed_dt.strftime('%I:%M %p').lstrip('0')  # Remove leading zero from hour
+
+                            appointment_datetime_str = f"Date: {day_name} {month_name} {day_num}{day_suffix}, {year}<br/><br/>Time: {time_str}"
+
                             pre_arrival_min = study.get("pre_arrival_minutes", 30)
                             arrival_dt = parsed_dt - timedelta(minutes=pre_arrival_min)
-                            arrival_time_str = arrival_dt.strftime("%I:%M %p")
+                            arrival_time_str = arrival_dt.strftime('%I:%M %p').lstrip('0')  # Remove leading zero
                         
                 except ValueError as e_date:
                     logger.warning(f"Could not parse study_date_time '{service_appt_time_str}' for study {study.get('authorization_number')}: {e_date}")
