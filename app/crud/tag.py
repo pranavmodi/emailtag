@@ -1,7 +1,7 @@
 """CRUD operations for tag data."""
 
-from typing import List, Optional
-from datetime import date, datetime
+from typing import List, Optional, Dict
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -85,6 +85,59 @@ class CRUDTag(CRUDBase[Tag, TagCreate, TagUpdate]):
         )
 
         return list(result.scalars().all())
+
+    async def get_all_tags_by_date(
+        self,
+        db: AsyncSession,
+        *,
+        target_date: date,
+        hour: Optional[int] = None
+    ) -> Dict[str, List[str]]:
+        """
+        Get all tags and their conversation IDs for a specific date, optionally filtered by hour.
+
+        Returns a dictionary mapping tag names to lists of conversation IDs.
+
+        Args:
+            db: Database session
+            target_date: Date to filter emails by (using created_at)
+            hour: Optional hour (0-23) to filter by. If None, returns all hours.
+
+        Returns:
+            Dict[str, List[str]]: Dictionary mapping tag names to conversation ID lists
+        """
+        if hour is not None:
+            # Filter by specific hour
+            start_time = datetime.combine(target_date, datetime.min.time()) + timedelta(hours=hour)
+            end_time = start_time + timedelta(hours=1)
+        else:
+            # Entire day
+            start_time = datetime.combine(target_date, datetime.min.time())
+            end_time = datetime.combine(target_date, datetime.max.time())
+
+        # Query all emails with tags on the specified date/hour
+        result = await db.execute(
+            select(Tag.name, Email.front_conversation_id)
+            .join(email_tag_association, Tag.id == email_tag_association.c.tag_id)
+            .join(Email, Email.id == email_tag_association.c.email_id)
+            .where(
+                and_(
+                    Email.created_at >= start_time,
+                    Email.created_at < end_time
+                )
+            )
+            .order_by(Tag.name, Email.front_conversation_id)
+        )
+
+        # Group conversation IDs by tag name
+        tags_dict: Dict[str, List[str]] = {}
+        for tag_name, conv_id in result.all():
+            if tag_name not in tags_dict:
+                tags_dict[tag_name] = []
+            if conv_id not in tags_dict[tag_name]:
+                tags_dict[tag_name].append(conv_id)
+
+        return tags_dict
 
 
 # Create an instance of the CRUD

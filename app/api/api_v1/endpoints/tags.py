@@ -10,7 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud import tag as tag_crud
 from app.db.session import get_db
-from app.schemas.email import Tag, TagCreate, TagUpdate, ConversationsByTagResponse, TagStatisticsResponse, ConversationTagStatus
+from app.schemas.email import (
+    Tag, TagCreate, TagUpdate, ConversationsByTagResponse,
+    TagStatisticsResponse, ConversationTagStatus,
+    AllTagsStatisticsResponse, TagStatisticsSummary
+)
 from app.services.frontapp import create_tag as create_frontapp_tag
 from app.services.frontapp_service import get_conversation_tags
 
@@ -235,6 +239,128 @@ async def get_tag_statistics(
         still_tagged_percentage=round(still_tagged_pct, 2),
         re_tagged_percentage=round(re_tagged_pct, 2),
         conversations=conversations_status
+    )
+
+
+@router.get("/all-tags-statistics", response_model=AllTagsStatisticsResponse)
+async def get_all_tags_statistics(
+    target_date: date = Query(..., description="Date to analyze (format: YYYY-MM-DD)"),
+    hour: int = Query(None, ge=0, le=23, description="Optional hour (0-23) to filter by"),
+    db: AsyncSession = Depends(get_db),
+) -> AllTagsStatisticsResponse:
+    """
+    Get statistics for all tags applied on a specific date, optionally filtered by hour.
+
+    This endpoint:
+    1. Finds all tags that were applied to conversations on the given date/hour (in our DB)
+    2. For each tag, fetches current tags from Front API for ALL conversations
+    3. Calculates retention statistics for each tag
+
+    Note: Due to Front API limitations (no batch endpoint), this makes one API call per unique conversation.
+    Results are deduplicated - each conversation is fetched only once even if it has multiple tags.
+
+    Args:
+        target_date: Date to analyze (e.g., 2025-11-13)
+        hour: Optional hour (0-23) to filter by. If not provided, analyzes entire day.
+        db: Database session
+
+    Returns:
+        AllTagsStatisticsResponse: Statistics for all tags including retention percentages
+
+    Example:
+        GET /api/v1/tags/all-tags-statistics?target_date=2025-11-13&hour=14
+    """
+    if hour is not None:
+        logger.info(f"Fetching statistics for all tags on date {target_date} hour {hour}")
+    else:
+        logger.info(f"Fetching statistics for all tags on date {target_date}")
+
+    # Get all tags and their conversations for this date/hour
+    tags_dict = await tag_crud.get_all_tags_by_date(db, target_date=target_date, hour=hour)
+
+    if not tags_dict:
+        logger.info(f"No tags found for date {target_date}")
+        return AllTagsStatisticsResponse(
+            date=target_date.isoformat(),
+            total_conversations=0,
+            total_tags=0,
+            tag_statistics=[]
+        )
+
+    # Step 1: Collect ALL unique conversation IDs across all tags
+    # This prevents fetching the same conversation multiple times
+    tag_to_conversations = {}
+    all_unique_conv_ids = set()
+
+    for tag_name, conversation_ids in tags_dict.items():
+        tag_to_conversations[tag_name] = {
+            'conversations_to_check': conversation_ids,  # Check ALL conversations
+            'total_count': len(conversation_ids)
+        }
+        all_unique_conv_ids.update(conversation_ids)
+
+    logger.info(f"Fetching tags for {len(all_unique_conv_ids)} unique conversations (deduplicated across {len(tags_dict)} tags)")
+
+    # Step 2: Fetch current tags from Front for each UNIQUE conversation (once per conversation)
+    conversation_current_tags = {}
+    for conv_id in all_unique_conv_ids:
+        try:
+            front_tags = get_conversation_tags(conv_id)
+
+            if front_tags is None:
+                logger.warning(f"Could not fetch tags from Front for conversation {conv_id}")
+                conversation_current_tags[conv_id] = []
+            else:
+                # Extract tag names
+                tag_names = [t.get('name', '') for t in front_tags if t.get('name')]
+                conversation_current_tags[conv_id] = tag_names
+
+        except Exception as e:
+            logger.error(f"Error fetching tags for conversation {conv_id}: {e}")
+            conversation_current_tags[conv_id] = []
+
+    # Step 3: Calculate statistics for each tag based on fetched data
+    tag_statistics = []
+
+    for tag_name, tag_data in tag_to_conversations.items():
+        still_tagged_count = 0
+        re_tagged_count = 0
+
+        conversations_to_check = tag_data['conversations_to_check']
+        total_for_tag = tag_data['total_count']
+
+        for conv_id in conversations_to_check:
+            current_tags = conversation_current_tags.get(conv_id, [])
+
+            if tag_name in current_tags:
+                still_tagged_count += 1
+            else:
+                re_tagged_count += 1
+
+        # Calculate percentages based on checked conversations
+        checked_count = len(conversations_to_check)
+        still_tagged_pct = (still_tagged_count / checked_count * 100) if checked_count > 0 else 0.0
+        re_tagged_pct = (re_tagged_count / checked_count * 100) if checked_count > 0 else 0.0
+
+        tag_statistics.append(TagStatisticsSummary(
+            tag_name=tag_name,
+            total_conversations=total_for_tag,  # Show actual total, not just checked
+            still_tagged=still_tagged_count,
+            re_tagged=re_tagged_count,
+            still_tagged_percentage=round(still_tagged_pct, 2),
+            re_tagged_percentage=round(re_tagged_pct, 2)
+        ))
+
+    # Sort by total conversations descending
+    tag_statistics.sort(key=lambda x: x.total_conversations, reverse=True)
+
+    logger.info(f"Found {len(tags_dict)} tags with {len(all_unique_conv_ids)} unique conversations checked on {target_date}")
+
+    return AllTagsStatisticsResponse(
+        date=target_date.isoformat(),
+        total_conversations=len(all_unique_conv_ids),
+        total_tags=len(tags_dict),
+        tag_statistics=tag_statistics
     )
 
 

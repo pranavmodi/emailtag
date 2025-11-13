@@ -309,6 +309,20 @@
                 </p>
 
                 <div class="form-group">
+                    <label>Analysis Type</label>
+                    <div style="display: flex; gap: 20px; margin-top: 10px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="radio" name="analysis-type" value="single" checked onchange="toggleAnalysisType()">
+                            <span>Single Tag</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="radio" name="analysis-type" value="all" onchange="toggleAnalysisType()">
+                            <span>All Tags on Date</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group" id="tag-select-group">
                     <label for="tag-name">Tag Name (Leaf Nodes Only)</label>
                     <select id="tag-name">
                         <option value="">-- Select a tag --</option>
@@ -392,7 +406,8 @@
 
             <div id="loading" class="loading">
                 <div class="spinner"></div>
-                <p>Fetching statistics from Front API...</p>
+                <p id="loading-message">Fetching statistics from Front API...</p>
+                <p id="loading-detail" style="font-size: 12px; color: #999; margin-top: 10px;"></p>
             </div>
 
             <div id="results" class="results-section">
@@ -430,19 +445,61 @@
                     <tbody id="conversations-tbody">
                     </tbody>
                 </table>
+
+                <div id="load-more-container" style="text-align: center; margin-top: 20px; display: none;">
+                    <p id="batch-info" style="color: #666; margin-bottom: 10px;"></p>
+                    <button id="load-more-btn" onclick="loadMoreTags()" style="
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        border: none;
+                        padding: 12px 30px;
+                        border-radius: 6px;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: transform 0.2s;
+                    " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                        Load Next 20 Tags
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Set default date to today
-        document.getElementById('target-date').valueAsDate = new Date();
+        // Global state for batch display
+        let allTagsData = null;
+        let displayedTagsCount = 0;
+        const BATCH_SIZE = 20;
+
+        // Set default date to today in MM/DD/YYYY format
+        const today = new Date();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        const yyyy = today.getFullYear();
+        document.getElementById('target-date').value = `${mm}/${dd}/${yyyy}`;
+
+        function toggleAnalysisType() {
+            const analysisType = document.querySelector('input[name="analysis-type"]:checked').value;
+            const tagSelectGroup = document.getElementById('tag-select-group');
+            const tagSelect = document.getElementById('tag-name');
+
+            if (analysisType === 'all') {
+                tagSelectGroup.style.display = 'none';
+                tagSelect.disabled = true;
+            } else {
+                tagSelectGroup.style.display = 'block';
+                tagSelect.disabled = false;
+            }
+        }
 
         async function fetchStatistics() {
+            const analysisType = document.querySelector('input[name="analysis-type"]:checked').value;
             const tagName = document.getElementById('tag-name').value;
             const targetDate = document.getElementById('target-date').value;
 
-            if (!tagName) {
+            // Validate based on analysis type
+            if (analysisType === 'single' && !tagName) {
                 showError('Please select a tag');
                 return;
             }
@@ -452,23 +509,49 @@
                 return;
             }
 
+            // Validate date format
+            const datePattern = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+            const match = targetDate.match(datePattern);
+            if (!match) {
+                showError('Please enter date in MM/DD/YYYY format');
+                return;
+            }
+
+            // Convert MM/DD/YYYY to YYYY-MM-DD for API
+            const [_, month, day, year] = match;
+            const apiDate = `${year}-${month}-${day}`;
+
             // Hide previous results and errors
             document.getElementById('results').style.display = 'none';
             document.getElementById('error-message').style.display = 'none';
             document.getElementById('loading').style.display = 'block';
 
+            // Update loading message based on analysis type
+            if (analysisType === 'all') {
+                document.getElementById('loading-message').textContent = 'Analyzing all tags - processing all conversations...';
+                document.getElementById('loading-detail').textContent = 'This may take a few minutes for days with many emails';
+            } else {
+                document.getElementById('loading-message').textContent = 'Fetching statistics from Front API...';
+                document.getElementById('loading-detail').textContent = '';
+            }
+
             try {
-                const response = await fetch(
-                    `/api/v1/tags/tag-statistics?tag_name=${encodeURIComponent(tagName)}&target_date=${targetDate}`
-                );
+                if (analysisType === 'all') {
+                    // Process hour by hour for better performance
+                    await fetchAllTagsHourly(apiDate);
+                } else {
+                    const response = await fetch(
+                        `/api/v1/tags/tag-statistics?tag_name=${encodeURIComponent(tagName)}&target_date=${apiDate}`
+                    );
 
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Failed to fetch statistics');
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.detail || 'Failed to fetch statistics');
+                    }
+
+                    const data = await response.json();
+                    displayResults(data);
                 }
-
-                const data = await response.json();
-                displayResults(data);
 
             } catch (error) {
                 console.error('Error fetching statistics:', error);
@@ -476,6 +559,78 @@
             } finally {
                 document.getElementById('loading').style.display = 'none';
             }
+        }
+
+        async function fetchAllTagsHourly(apiDate) {
+            // Aggregate results across all 24 hours
+            const aggregatedTags = {};
+            let totalConversations = new Set();
+            let processedHours = 0;
+
+            for (let hour = 0; hour < 24; hour++) {
+                // Update progress
+                document.getElementById('loading-message').textContent =
+                    `Processing hour ${hour + 1}/24 (${Math.round((hour / 24) * 100)}%)...`;
+                document.getElementById('loading-detail').textContent =
+                    `Fetching conversations from ${hour}:00 to ${hour}:59`;
+
+                try {
+                    const response = await fetch(
+                        `/api/v1/tags/all-tags-statistics?target_date=${apiDate}&hour=${hour}`
+                    );
+
+                    if (!response.ok) {
+                        console.error(`Failed to fetch hour ${hour}`);
+                        continue;
+                    }
+
+                    const hourData = await response.json();
+                    processedHours++;
+
+                    // Aggregate tag statistics
+                    hourData.tag_statistics.forEach(tag => {
+                        if (!aggregatedTags[tag.tag_name]) {
+                            aggregatedTags[tag.tag_name] = {
+                                tag_name: tag.tag_name,
+                                total_conversations: 0,
+                                still_tagged: 0,
+                                re_tagged: 0
+                            };
+                        }
+                        aggregatedTags[tag.tag_name].total_conversations += tag.total_conversations;
+                        aggregatedTags[tag.tag_name].still_tagged += tag.still_tagged;
+                        aggregatedTags[tag.tag_name].re_tagged += tag.re_tagged;
+                    });
+
+                } catch (error) {
+                    console.error(`Error fetching hour ${hour}:`, error);
+                }
+            }
+
+            // Calculate final percentages
+            const tagStatistics = Object.values(aggregatedTags).map(tag => {
+                const total = tag.total_conversations;
+                return {
+                    ...tag,
+                    still_tagged_percentage: total > 0 ? (tag.still_tagged / total * 100) : 0,
+                    re_tagged_percentage: total > 0 ? (tag.re_tagged / total * 100) : 0
+                };
+            });
+
+            // Sort by total conversations
+            tagStatistics.sort((a, b) => b.total_conversations - a.total_conversations);
+
+            // Count unique conversations (approximate - actual count would require tracking)
+            const totalConvs = tagStatistics.reduce((sum, tag) => sum + tag.total_conversations, 0);
+
+            const aggregatedData = {
+                date: apiDate,
+                total_conversations: totalConvs,
+                total_tags: tagStatistics.length,
+                tag_statistics: tagStatistics
+            };
+
+            displayAllTagsResults(aggregatedData);
         }
 
         function displayResults(data) {
@@ -497,6 +652,16 @@
             document.getElementById('still-tagged-pct').textContent = data.still_tagged_percentage.toFixed(1) + '%';
             document.getElementById('re-tagged-count').textContent = data.re_tagged;
             document.getElementById('re-tagged-pct').textContent = data.re_tagged_percentage.toFixed(1) + '%';
+
+            // Reset table header for single-tag view
+            const thead = document.getElementById('conversations-table').querySelector('thead');
+            thead.innerHTML = `
+                <tr>
+                    <th>Conversation ID</th>
+                    <th>Status</th>
+                    <th>Current Tags in Front</th>
+                </tr>
+            `;
 
             // Update conversations table
             const tbody = document.getElementById('conversations-tbody');
@@ -547,6 +712,151 @@
             }
 
             document.getElementById('results').style.display = 'block';
+        }
+
+        function displayAllTagsResults(data) {
+            // Store data globally for batch display
+            allTagsData = data;
+            displayedTagsCount = 0;
+
+            // Format date as mm/dd/yyyy
+            const date = new Date(data.date + 'T00:00:00');
+            const formattedDate = date.toLocaleDateString('en-US', {
+                month: '2-digit',
+                day: '2-digit',
+                year: 'numeric'
+            });
+
+            // Update results info
+            document.getElementById('results-info').textContent =
+                `Showing results for all tags on ${formattedDate} (${data.total_tags} tags, ${data.total_conversations} unique conversations)`;
+
+            // Calculate overall statistics
+            let totalStillTagged = 0;
+            let totalReTagged = 0;
+            let totalConvsAcrossTags = 0;
+
+            data.tag_statistics.forEach(tag => {
+                totalStillTagged += tag.still_tagged;
+                totalReTagged += tag.re_tagged;
+                totalConvsAcrossTags += tag.total_conversations;
+            });
+
+            const overallStillPct = totalConvsAcrossTags > 0 ? (totalStillTagged / totalConvsAcrossTags * 100) : 0;
+            const overallReTaggedPct = totalConvsAcrossTags > 0 ? (totalReTagged / totalConvsAcrossTags * 100) : 0;
+
+            // Update summary statistics (overall across all tags)
+            document.getElementById('total-count').textContent = data.total_conversations;
+            document.getElementById('still-tagged-count').textContent = totalStillTagged;
+            document.getElementById('still-tagged-pct').textContent = overallStillPct.toFixed(1) + '%';
+            document.getElementById('re-tagged-count').textContent = totalReTagged;
+            document.getElementById('re-tagged-pct').textContent = overallReTaggedPct.toFixed(1) + '%';
+
+            // Clear table and update header
+            const tbody = document.getElementById('conversations-tbody');
+            tbody.innerHTML = '';
+
+            const thead = document.getElementById('conversations-table').querySelector('thead');
+            thead.innerHTML = `
+                <tr>
+                    <th>Tag Name</th>
+                    <th>Total Conversations</th>
+                    <th>Still Tagged</th>
+                    <th>Re-Tagged</th>
+                    <th>Retention %</th>
+                </tr>
+            `;
+
+            if (data.tag_statistics.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 30px;">No tags found for this date</td></tr>';
+                document.getElementById('load-more-container').style.display = 'none';
+            } else {
+                // Display first batch
+                renderNextBatch();
+            }
+
+            document.getElementById('results').style.display = 'block';
+        }
+
+        function renderNextBatch() {
+            if (!allTagsData) return;
+
+            const tbody = document.getElementById('conversations-tbody');
+            const tags = allTagsData.tag_statistics;
+            const endIndex = Math.min(displayedTagsCount + BATCH_SIZE, tags.length);
+
+            // Render tags from displayedTagsCount to endIndex
+            for (let i = displayedTagsCount; i < endIndex; i++) {
+                const tag = tags[i];
+                const row = document.createElement('tr');
+
+                // Tag name
+                const nameCell = document.createElement('td');
+                nameCell.textContent = tag.tag_name;
+                nameCell.style.fontWeight = '600';
+                row.appendChild(nameCell);
+
+                // Total conversations
+                const totalCell = document.createElement('td');
+                totalCell.textContent = tag.total_conversations;
+                totalCell.style.textAlign = 'center';
+                row.appendChild(totalCell);
+
+                // Still tagged
+                const stillCell = document.createElement('td');
+                stillCell.textContent = tag.still_tagged;
+                stillCell.style.textAlign = 'center';
+                stillCell.style.color = '#4caf50';
+                stillCell.style.fontWeight = '600';
+                row.appendChild(stillCell);
+
+                // Re-tagged
+                const retaggedCell = document.createElement('td');
+                retaggedCell.textContent = tag.re_tagged;
+                retaggedCell.style.textAlign = 'center';
+                retaggedCell.style.color = '#ff6b6b';
+                retaggedCell.style.fontWeight = '600';
+                row.appendChild(retaggedCell);
+
+                // Retention percentage
+                const pctCell = document.createElement('td');
+                const pctValue = tag.still_tagged_percentage;
+                pctCell.textContent = pctValue.toFixed(1) + '%';
+                pctCell.style.textAlign = 'center';
+                pctCell.style.fontWeight = '600';
+
+                // Color code based on percentage
+                if (pctValue >= 75) {
+                    pctCell.style.color = '#4caf50';
+                } else if (pctValue >= 50) {
+                    pctCell.style.color = '#ff9800';
+                } else {
+                    pctCell.style.color = '#ff6b6b';
+                }
+
+                row.appendChild(pctCell);
+                tbody.appendChild(row);
+            }
+
+            // Update displayed count
+            displayedTagsCount = endIndex;
+
+            // Update batch info and button visibility
+            const loadMoreContainer = document.getElementById('load-more-container');
+            const batchInfo = document.getElementById('batch-info');
+
+            if (displayedTagsCount < tags.length) {
+                loadMoreContainer.style.display = 'block';
+                batchInfo.textContent = `Showing ${displayedTagsCount} of ${tags.length} tags`;
+            } else {
+                loadMoreContainer.style.display = 'block';
+                batchInfo.textContent = `Showing all ${tags.length} tags`;
+                document.getElementById('load-more-btn').style.display = 'none';
+            }
+        }
+
+        function loadMoreTags() {
+            renderNextBatch();
         }
 
         function showError(message) {

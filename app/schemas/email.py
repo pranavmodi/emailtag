@@ -176,6 +176,30 @@ class TagStatisticsResponse(BaseModel):
         from_attributes = True
 
 
+class TagStatisticsSummary(BaseModel):
+    """Schema for a single tag's statistics summary."""
+
+    tag_name: str
+    total_conversations: int
+    still_tagged: int
+    re_tagged: int
+    still_tagged_percentage: float
+    re_tagged_percentage: float
+
+
+class AllTagsStatisticsResponse(BaseModel):
+    """Schema for all tags statistics on a specific date."""
+
+    date: str
+    total_conversations: int
+    total_tags: int
+    tag_statistics: List[TagStatisticsSummary]
+
+    class Config:
+        """Pydantic config."""
+        from_attributes = True
+
+
 class FrontAppWebhook(BaseModel):
     """Schema for FrontApp webhook payload."""
     
