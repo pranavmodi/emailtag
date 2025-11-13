@@ -134,8 +134,46 @@ class TagInDBBase(TagBase):
 
 class Tag(TagInDBBase):
     """Schema for tag data returned to the client."""
-    
+
     pass
+
+
+class ConversationsByTagResponse(BaseModel):
+    """Schema for conversations by tag query response."""
+
+    tag_name: str
+    date: str
+    conversation_ids: List[str]
+    count: int
+
+    class Config:
+        """Pydantic config."""
+        from_attributes = True
+
+
+class ConversationTagStatus(BaseModel):
+    """Schema for a single conversation's tag status."""
+
+    conversation_id: str
+    still_has_tag: bool
+    current_tags: List[str]
+
+
+class TagStatisticsResponse(BaseModel):
+    """Schema for tag statistics response."""
+
+    tag_name: str
+    date: str
+    total_conversations: int
+    still_tagged: int
+    re_tagged: int
+    still_tagged_percentage: float
+    re_tagged_percentage: float
+    conversations: List[ConversationTagStatus]
+
+    class Config:
+        """Pydantic config."""
+        from_attributes = True
 
 
 class FrontAppWebhook(BaseModel):

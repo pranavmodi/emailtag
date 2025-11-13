@@ -3,14 +3,16 @@
 import logging
 from typing import Any, Dict, List
 from uuid import UUID
+from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud import tag as tag_crud
 from app.db.session import get_db
-from app.schemas.email import Tag, TagCreate, TagUpdate
+from app.schemas.email import Tag, TagCreate, TagUpdate, ConversationsByTagResponse, TagStatisticsResponse, ConversationTagStatus
 from app.services.frontapp import create_tag as create_frontapp_tag
+from app.services.frontapp_service import get_conversation_tags
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +70,172 @@ async def create_tag(
     
     # Create tag in database
     return await tag_crud.create(db, obj_in=tag_in)
+
+
+@router.get("/conversations-by-date", response_model=ConversationsByTagResponse)
+async def get_conversations_by_tag_and_date(
+    tag_name: str = Query(..., description="Tag name to filter by"),
+    target_date: date = Query(..., description="Date to filter emails by (format: YYYY-MM-DD)"),
+    db: AsyncSession = Depends(get_db),
+) -> ConversationsByTagResponse:
+    """
+    Get all conversation IDs that were tagged with a specific tag on a specific date.
+
+    Note: This uses the email's created_at date to filter, since the email_tag_association
+    table doesn't track when tags are applied.
+
+    Args:
+        tag_name: Name of the tag to filter by (e.g., "Apt Status Req")
+        target_date: Date to filter by (e.g., 2025-11-13)
+        db: Database session
+
+    Returns:
+        ConversationsByTagResponse: Tag name, date, list of conversation IDs, and count
+
+    Example:
+        GET /api/v1/tags/conversations-by-date?tag_name=Apt%20Status%20Req&target_date=2025-11-13
+    """
+    logger.info(f"Fetching conversations for tag '{tag_name}' on date {target_date}")
+
+    # Verify tag exists
+    tag = await tag_crud.get_by_name(db, name=tag_name)
+    if not tag:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tag '{tag_name}' not found"
+        )
+
+    # Get conversation IDs
+    conversation_ids = await tag_crud.get_conversation_ids_by_tag_and_date(
+        db,
+        tag_name=tag_name,
+        target_date=target_date
+    )
+
+    logger.info(f"Found {len(conversation_ids)} conversations for tag '{tag_name}' on {target_date}")
+
+    return ConversationsByTagResponse(
+        tag_name=tag_name,
+        date=target_date.isoformat(),
+        conversation_ids=conversation_ids,
+        count=len(conversation_ids)
+    )
+
+
+@router.get("/tag-statistics", response_model=TagStatisticsResponse)
+async def get_tag_statistics(
+    tag_name: str = Query(..., description="Tag name to analyze"),
+    target_date: date = Query(..., description="Date to analyze (format: YYYY-MM-DD)"),
+    db: AsyncSession = Depends(get_db),
+) -> TagStatisticsResponse:
+    """
+    Get statistics about conversations tagged on a specific date, including their current tag status in Front.
+
+    This endpoint:
+    1. Finds all conversations that were tagged with the specified tag on the given date (in our DB)
+    2. Fetches current tags from Front API for each conversation
+    3. Calculates how many still have the tag vs. have been re-tagged
+
+    Args:
+        tag_name: Name of the tag to analyze (e.g., "Apt Status Req")
+        target_date: Date to analyze (e.g., 2025-11-13)
+        db: Database session
+
+    Returns:
+        TagStatisticsResponse: Statistics including counts, percentages, and per-conversation details
+
+    Example:
+        GET /api/v1/tags/tag-statistics?tag_name=Apt%20Status%20Req&target_date=2025-11-13
+    """
+    logger.info(f"Fetching tag statistics for tag '{tag_name}' on date {target_date}")
+
+    # Verify tag exists
+    tag = await tag_crud.get_by_name(db, name=tag_name)
+    if not tag:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tag '{tag_name}' not found"
+        )
+
+    # Get conversation IDs from our database
+    conversation_ids = await tag_crud.get_conversation_ids_by_tag_and_date(
+        db,
+        tag_name=tag_name,
+        target_date=target_date
+    )
+
+    if not conversation_ids:
+        logger.info(f"No conversations found for tag '{tag_name}' on {target_date}")
+        return TagStatisticsResponse(
+            tag_name=tag_name,
+            date=target_date.isoformat(),
+            total_conversations=0,
+            still_tagged=0,
+            re_tagged=0,
+            still_tagged_percentage=0.0,
+            re_tagged_percentage=0.0,
+            conversations=[]
+        )
+
+    # Fetch current tags from Front for each conversation
+    conversations_status = []
+    still_tagged_count = 0
+    re_tagged_count = 0
+
+    for conv_id in conversation_ids:
+        try:
+            # Get current tags from Front API
+            front_tags = get_conversation_tags(conv_id)
+
+            if front_tags is None:
+                # Error fetching tags, log and skip
+                logger.warning(f"Could not fetch tags from Front for conversation {conv_id}")
+                current_tag_names = []
+                still_has_tag = False
+            else:
+                # Extract tag names from Front response
+                current_tag_names = [t.get('name', '') for t in front_tags if t.get('name')]
+                still_has_tag = tag_name in current_tag_names
+
+            if still_has_tag:
+                still_tagged_count += 1
+            else:
+                re_tagged_count += 1
+
+            conversations_status.append(ConversationTagStatus(
+                conversation_id=conv_id,
+                still_has_tag=still_has_tag,
+                current_tags=current_tag_names
+            ))
+
+        except Exception as e:
+            logger.error(f"Error processing conversation {conv_id}: {e}")
+            # Add conversation with error state
+            conversations_status.append(ConversationTagStatus(
+                conversation_id=conv_id,
+                still_has_tag=False,
+                current_tags=["ERROR_FETCHING_TAGS"]
+            ))
+            re_tagged_count += 1
+
+    total = len(conversation_ids)
+    still_tagged_pct = (still_tagged_count / total * 100) if total > 0 else 0.0
+    re_tagged_pct = (re_tagged_count / total * 100) if total > 0 else 0.0
+
+    logger.info(f"Tag statistics for '{tag_name}' on {target_date}: "
+                f"{still_tagged_count}/{total} still tagged ({still_tagged_pct:.1f}%), "
+                f"{re_tagged_count}/{total} re-tagged ({re_tagged_pct:.1f}%)")
+
+    return TagStatisticsResponse(
+        tag_name=tag_name,
+        date=target_date.isoformat(),
+        total_conversations=total,
+        still_tagged=still_tagged_count,
+        re_tagged=re_tagged_count,
+        still_tagged_percentage=round(still_tagged_pct, 2),
+        re_tagged_percentage=round(re_tagged_pct, 2),
+        conversations=conversations_status
+    )
 
 
 @router.get("/{tag_id}", response_model=Tag)
@@ -153,4 +321,4 @@ async def delete_tag(
         )
     
     await tag_crud.remove(db, id=tag_id)
-    return {"status": "success", "message": f"Tag '{tag.name}' deleted"} 
+    return {"status": "success", "message": f"Tag '{tag.name}' deleted"}

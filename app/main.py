@@ -12,7 +12,7 @@ import uvicorn
 from app.api.api_v1.api import api_router
 from app.api.v1.endpoints.classification_rules_api import router as rules_router
 from app.api.v1.endpoints.trace_viewer_api import router as trace_router
-from app.api.api_v1.endpoints.ui import settings_ui
+from app.api.api_v1.endpoints.ui import settings_ui, template_config_ui, tag_statistics_ui
 from app.core.config import settings
 
 # Configure logging
@@ -62,11 +62,21 @@ def create_application() -> FastAPI:
     application.include_router(rules_router, prefix="/admin", tags=["Classification Rules UI"])
     application.include_router(trace_router, prefix="/admin", tags=["Trace Viewer UI"])
 
-    # Add settings page at root level
+    # Add UI pages at root level
     @application.get("/settings")
     async def settings_page(request: Request):
         """System settings page."""
         return await settings_ui(request)
+
+    @application.get("/template-config")
+    async def template_config_page(request: Request):
+        """Template configuration page."""
+        return await template_config_ui(request)
+
+    @application.get("/tag-statistics")
+    async def tag_statistics_page(request: Request):
+        """Tag statistics page."""
+        return await tag_statistics_ui(request)
 
     @application.get("/health")
     async def health_check():

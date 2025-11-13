@@ -22,7 +22,9 @@ from app.core.config import settings as app_settings_instance # Renamed to avoid
 from celery.utils.log import get_task_logger
 from app.services import frontapp_service # For the actual send_reply_to_front tool
 from app.mcp import default_mcp_client as mcp_client # Import default configured MCP client
-# Import templates from their locations
+from app.db.session import AsyncSessionLocal
+from app.crud.message_template import message_template_crud
+# Import templates from their locations (as fallback)
 from app.agents.templates.appointment_status_templates import (
     TEMPLATE_APPOINTMENT_FOUND_DETAILED,
     TEMPLATE_APPOINTMENT_NOT_FOUND_FOR_ID,
@@ -67,12 +69,27 @@ DEFAULT_PORTAL_LINKS = {
 # --- END: Helper Function ---
 
 # --- BEGIN: Reply Generation Helper ---
-def _generate_response_from_template(scenario: str, data: Dict[str, Any]) -> str:
+async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) -> str:
+    """
+    Generates response from template, fetching from database first, falling back to hardcoded templates.
+    """
+    # Fetch templates from database with fallback to hardcoded templates
+    async with AsyncSessionLocal() as db:
+        template_apt_found = await message_template_crud.get_template_body(
+            db, "apt_status_req_found", default=TEMPLATE_APPOINTMENT_FOUND_DETAILED
+        )
+        template_not_found = await message_template_crud.get_template_body(
+            db, "apt_status_req_not_found", default=TEMPLATE_APPOINTMENT_NOT_FOUND_FOR_ID
+        )
+        template_db_error = await message_template_crud.get_template_body(
+            db, "apt_status_req_db_error", default=TEMPLATE_DB_ERROR
+        )
+
     # logger.info(f"Generating reply for scenario: {scenario} with data: {data}")
     if scenario == "appointments_found" and data.get("studies"):
         studies = data.get("studies", [])
         first_study = studies[0]
-        
+
         studies_table_rows_list = []
         for study in studies:
             # Generate HTML table rows without extra newlines
@@ -89,7 +106,7 @@ def _generate_response_from_template(scenario: str, data: Dict[str, Any]) -> str
                 f"</tr>"
             )
         studies_table_rows = "".join(studies_table_rows_list) # Join without newlines
-        
+
         personal_injury_info_text = ""
         if data.get("is_personal_injury_case"):
             personal_injury_info_text = """<br/>
@@ -98,7 +115,7 @@ A report containing the findings of the exam will also be sent to the attorney.<
 A bill will be sent to the attorney once both the patient and the attorney sign all pending liens.<br/>
 Please make sure to submit a negotiation offer before sending the payment.<br/>
 """
-        formatted_template = TEMPLATE_APPOINTMENT_FOUND_DETAILED.format(
+        formatted_template = template_apt_found.format(
             patient_id_confirmed=data.get("patient_id_confirmed", "N/A"),
             no_show_policy=data.get("no_show_policy", "N/A"),
             studies_table_rows=studies_table_rows,
@@ -113,9 +130,9 @@ Please make sure to submit a negotiation offer before sending the payment.<br/>
     elif scenario == "id_missing_second_attempt":
         return TEMPLATE_REQUEST_PATIENT_ID_AGAIN_ESCALATE
     elif scenario == "id_not_found_in_system":
-        return TEMPLATE_APPOINTMENT_NOT_FOUND_FOR_ID.format(patient_id=data.get("patient_id", "N/A"))
+        return template_not_found.format(patient_id=data.get("patient_id", "N/A"))
     elif scenario == "db_error":
-        return TEMPLATE_DB_ERROR.format(patient_id=data.get("patient_id", "N/A"))
+        return template_db_error.format(patient_id=data.get("patient_id", "N/A"))
     else:
         logger.warning(f"Unknown scenario or missing data for reply generation: {scenario}")
         return "We are looking into your request and will get back to you shortly."
@@ -323,13 +340,13 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
 async def generate_formatted_reply(scenario: str, fetch_details_result: Dict[str, Any], extracted_patient_id: Optional[str] = None) -> Dict[str, str]:
     """
     Generates a formatted reply string based on the scenario and data from fetching appointment details.
-    'scenario' can be: "appointments_found", "id_missing_first_attempt", "id_missing_second_attempt", 
+    'scenario' can be: "appointments_found", "id_missing_first_attempt", "id_missing_second_attempt",
                          "id_not_found_in_system", "db_error".
     'fetch_details_result' is the full dictionary output from 'fetch_appointment_details_by_patient_id' tool.
     'extracted_patient_id' is the patient_id obtained from 'extract_patient_id_from_email' tool, used if fetch_details_result might not have it (e.g. initial fetch failed).
     """
     logger.info(f"Tool 'generate_formatted_reply' called. Scenario: {scenario}")
-    
+
     data_for_template = {}
     if scenario == "appointments_found":
         data_for_template = fetch_details_result.get("data", {})
@@ -338,8 +355,8 @@ async def generate_formatted_reply(scenario: str, fetch_details_result: Dict[str
         data_for_template = {"patient_id": fetch_details_result.get("patient_id") or extracted_patient_id}
     # For id_missing scenarios, 'data' might be empty or not strictly needed by the template
     # but we pass it along in case templates evolve.
-    
-    reply_text = _generate_response_from_template(scenario, data_for_template)
+
+    reply_text = await _generate_response_from_template(scenario, data_for_template)
     logger.info(f"Generated reply text: {reply_text[:200]}...") # Log snippet
     return {"reply_text": reply_text}
 
