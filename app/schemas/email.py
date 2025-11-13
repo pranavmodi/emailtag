@@ -167,6 +167,7 @@ class TagStatisticsResponse(BaseModel):
     total_conversations: int
     still_tagged: int
     re_tagged: int
+    fetch_failed: int
     still_tagged_percentage: float
     re_tagged_percentage: float
     conversations: List[ConversationTagStatus]
@@ -183,6 +184,7 @@ class TagStatisticsSummary(BaseModel):
     total_conversations: int
     still_tagged: int
     re_tagged: int
+    fetch_failed: int
     still_tagged_percentage: float
     re_tagged_percentage: float
 

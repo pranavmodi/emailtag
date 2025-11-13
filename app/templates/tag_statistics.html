@@ -763,12 +763,13 @@
                     <th>Total Conversations</th>
                     <th>Still Tagged</th>
                     <th>Re-Tagged</th>
+                    <th>Fetch Failed</th>
                     <th>Retention %</th>
                 </tr>
             `;
 
             if (data.tag_statistics.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 30px;">No tags found for this date</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 30px;">No tags found for this date</td></tr>';
                 document.getElementById('load-more-container').style.display = 'none';
             } else {
                 // Display first batch
@@ -817,6 +818,14 @@
                 retaggedCell.style.color = '#ff6b6b';
                 retaggedCell.style.fontWeight = '600';
                 row.appendChild(retaggedCell);
+
+                // Fetch Failed
+                const fetchFailedCell = document.createElement('td');
+                fetchFailedCell.textContent = tag.fetch_failed || 0;
+                fetchFailedCell.style.textAlign = 'center';
+                fetchFailedCell.style.color = '#999';
+                fetchFailedCell.style.fontWeight = '600';
+                row.appendChild(fetchFailedCell);
 
                 // Retention percentage
                 const pctCell = document.createElement('td');

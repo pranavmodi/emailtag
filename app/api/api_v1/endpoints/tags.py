@@ -1,5 +1,6 @@
 """Tag management endpoints."""
 
+import asyncio
 import logging
 from typing import Any, Dict, List
 from uuid import UUID
@@ -16,7 +17,7 @@ from app.schemas.email import (
     AllTagsStatisticsResponse, TagStatisticsSummary
 )
 from app.services.frontapp import create_tag as create_frontapp_tag
-from app.services.frontapp_service import get_conversation_tags
+from app.services.frontapp_service import get_conversation_tags_async
 
 logger = logging.getLogger(__name__)
 
@@ -181,46 +182,51 @@ async def get_tag_statistics(
             conversations=[]
         )
 
-    # Fetch current tags from Front for each conversation
-    conversations_status = []
-    still_tagged_count = 0
-    re_tagged_count = 0
-
-    for conv_id in conversation_ids:
+    # Fetch current tags from Front for each conversation (sequentially to avoid rate limits)
+    results = []
+    for idx, conv_id in enumerate(conversation_ids, 1):
         try:
-            # Get current tags from Front API
-            front_tags = get_conversation_tags(conv_id)
+            logger.debug(f"Fetching tags for conversation {idx}/{len(conversation_ids)}: {conv_id}")
+            front_tags = await get_conversation_tags_async(conv_id)
 
             if front_tags is None:
-                # Error fetching tags, log and skip
                 logger.warning(f"Could not fetch tags from Front for conversation {conv_id}")
-                current_tag_names = []
-                still_has_tag = False
+                results.append((conv_id, None, []))
             else:
-                # Extract tag names from Front response
-                current_tag_names = [t.get('name', '') for t in front_tags if t.get('name')]
-                still_has_tag = tag_name in current_tag_names
+                tag_names = [t.get('name', '') for t in front_tags if t.get('name')]
+                results.append((conv_id, front_tags, tag_names))
 
-            if still_has_tag:
-                still_tagged_count += 1
-            else:
-                re_tagged_count += 1
-
-            conversations_status.append(ConversationTagStatus(
-                conversation_id=conv_id,
-                still_has_tag=still_has_tag,
-                current_tags=current_tag_names
-            ))
+            # Small delay between requests to avoid rate limits
+            await asyncio.sleep(0.1)  # 100ms delay between requests
 
         except Exception as e:
             logger.error(f"Error processing conversation {conv_id}: {e}")
-            # Add conversation with error state
-            conversations_status.append(ConversationTagStatus(
-                conversation_id=conv_id,
-                still_has_tag=False,
-                current_tags=["ERROR_FETCHING_TAGS"]
-            ))
+            results.append((conv_id, None, ["ERROR_FETCHING_TAGS"]))
+
+    # Process results
+    conversations_status = []
+    still_tagged_count = 0
+    re_tagged_count = 0
+    fetch_failed_count = 0
+
+    for conv_id, front_tags, current_tag_names in results:
+        # Track fetch failures
+        if front_tags is None:
+            fetch_failed_count += 1
+            still_has_tag = False
+        else:
+            still_has_tag = tag_name in current_tag_names
+
+        if still_has_tag:
+            still_tagged_count += 1
+        else:
             re_tagged_count += 1
+
+        conversations_status.append(ConversationTagStatus(
+            conversation_id=conv_id,
+            still_has_tag=still_has_tag,
+            current_tags=current_tag_names
+        ))
 
     total = len(conversation_ids)
     still_tagged_pct = (still_tagged_count / total * 100) if total > 0 else 0.0
@@ -228,7 +234,8 @@ async def get_tag_statistics(
 
     logger.info(f"Tag statistics for '{tag_name}' on {target_date}: "
                 f"{still_tagged_count}/{total} still tagged ({still_tagged_pct:.1f}%), "
-                f"{re_tagged_count}/{total} re-tagged ({re_tagged_pct:.1f}%)")
+                f"{re_tagged_count}/{total} re-tagged ({re_tagged_pct:.1f}%), "
+                f"{fetch_failed_count} fetch failed")
 
     return TagStatisticsResponse(
         tag_name=tag_name,
@@ -236,6 +243,7 @@ async def get_tag_statistics(
         total_conversations=total,
         still_tagged=still_tagged_count,
         re_tagged=re_tagged_count,
+        fetch_failed=fetch_failed_count,
         still_tagged_percentage=round(still_tagged_pct, 2),
         re_tagged_percentage=round(re_tagged_pct, 2),
         conversations=conversations_status
@@ -301,23 +309,30 @@ async def get_all_tags_statistics(
 
     logger.info(f"Fetching tags for {len(all_unique_conv_ids)} unique conversations (deduplicated across {len(tags_dict)} tags)")
 
-    # Step 2: Fetch current tags from Front for each UNIQUE conversation (once per conversation)
+    # Step 2: Fetch current tags from Front for each UNIQUE conversation (sequentially to avoid rate limits)
     conversation_current_tags = {}
-    for conv_id in all_unique_conv_ids:
+    failed_fetches = set()  # Track which conversations failed to fetch
+
+    for idx, conv_id in enumerate(all_unique_conv_ids, 1):
         try:
-            front_tags = get_conversation_tags(conv_id)
+            logger.debug(f"Fetching tags for conversation {idx}/{len(all_unique_conv_ids)}: {conv_id}")
+            front_tags = await get_conversation_tags_async(conv_id)
 
             if front_tags is None:
                 logger.warning(f"Could not fetch tags from Front for conversation {conv_id}")
                 conversation_current_tags[conv_id] = []
+                failed_fetches.add(conv_id)  # Mark as failed
             else:
-                # Extract tag names
                 tag_names = [t.get('name', '') for t in front_tags if t.get('name')]
                 conversation_current_tags[conv_id] = tag_names
+
+            # Small delay between requests to avoid rate limits
+            await asyncio.sleep(0.1)  # 100ms delay between requests
 
         except Exception as e:
             logger.error(f"Error fetching tags for conversation {conv_id}: {e}")
             conversation_current_tags[conv_id] = []
+            failed_fetches.add(conv_id)  # Mark as failed
 
     # Step 3: Calculate statistics for each tag based on fetched data
     tag_statistics = []
@@ -325,11 +340,18 @@ async def get_all_tags_statistics(
     for tag_name, tag_data in tag_to_conversations.items():
         still_tagged_count = 0
         re_tagged_count = 0
+        fetch_failed_count = 0
 
         conversations_to_check = tag_data['conversations_to_check']
         total_for_tag = tag_data['total_count']
 
         for conv_id in conversations_to_check:
+            # Check if fetch failed for this conversation
+            if conv_id in failed_fetches:
+                fetch_failed_count += 1
+                re_tagged_count += 1  # Count as re-tagged
+                continue
+
             current_tags = conversation_current_tags.get(conv_id, [])
 
             if tag_name in current_tags:
@@ -347,6 +369,7 @@ async def get_all_tags_statistics(
             total_conversations=total_for_tag,  # Show actual total, not just checked
             still_tagged=still_tagged_count,
             re_tagged=re_tagged_count,
+            fetch_failed=fetch_failed_count,
             still_tagged_percentage=round(still_tagged_pct, 2),
             re_tagged_percentage=round(re_tagged_pct, 2)
         ))

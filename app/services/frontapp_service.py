@@ -275,12 +275,13 @@ def list_front_tags() -> List[Dict[str, Any]]:
             # logger.error(f"Error fetching Front tags: {str(e)}")
             raise
 
-def get_conversation(conversation_id: str) -> Optional[Dict]:
+async def get_conversation_async(conversation_id: str, max_retries: int = 5) -> Optional[Dict]:
     """
-    Get a conversation from FrontApp using httpx.
+    Get a conversation from FrontApp using httpx (async version) with retry logic for rate limits.
 
     Args:
         conversation_id: The ID of the conversation
+        max_retries: Maximum number of retries for 429 errors (default 5)
 
     Returns:
         Optional[Dict]: The conversation data or None if not found or on error.
@@ -289,8 +290,13 @@ def get_conversation(conversation_id: str) -> Optional[Dict]:
         ValueError: If required Front configuration is missing.
         httpx.HTTPStatusError: If the request to Front fails with an HTTP error status.
     """
+    import asyncio
+    import logging
+
+    logger = logging.getLogger(__name__)
+
     if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
-        # logger.error("Missing required Front configuration for getting conversation (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
+        logger.error("Missing required Front configuration for getting conversation (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL)")
         raise ValueError("Missing required Front configuration")
 
     auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
@@ -301,52 +307,110 @@ def get_conversation(conversation_id: str) -> Optional[Dict]:
     }
 
     # TODO: Configure SSL verification properly
-    with httpx.Client(verify=False) as client:
-        try:
-            # logger.info(f"Fetching conversation {conversation_id} from Front API: {url}")
-            response = client.get(url, headers=headers)
+    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+        for attempt in range(max_retries):
+            try:
+                response = await client.get(url, headers=headers)
 
-            # Check for 404 explicitly first
-            if response.status_code == 404:
-                # logger.warning(f"Conversation {conversation_id} not found in Front (404).")
+                # Check for 404 explicitly first
+                if response.status_code == 404:
+                    logger.warning(f"Conversation {conversation_id} not found in Front (404).")
+                    return None
+
+                # Handle rate limiting with exponential backoff
+                if response.status_code == 429:
+                    if attempt < max_retries - 1:
+                        # Exponential backoff: 2^(attempt+2) seconds (starts at 4s)
+                        wait_time = 2 ** (attempt + 2)  # 4s, 8s, 16s, 32s, 64s
+                        logger.warning(f"Rate limited for {conversation_id}, waiting {wait_time}s before retry {attempt + 2}/{max_retries}")
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        logger.error(f"Rate limit exceeded for {conversation_id} after {max_retries} attempts")
+                        return None  # Return None instead of raising to allow processing to continue
+
+                # Raise exceptions for other 4xx/5xx errors
+                response.raise_for_status()
+
+                conversation_data = response.json()
+                return conversation_data
+
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429 and attempt < max_retries - 1:
+                    wait_time = 2 ** (attempt + 2)
+                    logger.warning(f"Rate limited (exception) for {conversation_id}, waiting {wait_time}s before retry {attempt + 2}/{max_retries}")
+                    await asyncio.sleep(wait_time)
+                    continue
+                logger.error(f"HTTP error getting conversation {conversation_id}: {e.response.status_code}")
+                return None  # Return None instead of raising
+            except Exception as e:
+                logger.error(f"Unexpected error getting conversation {conversation_id}: {str(e)}")
                 return None
 
-            # Raise exceptions for other 4xx/5xx errors
-            response.raise_for_status()
-            
-            conversation_data = response.json()
-            # logger.info(f"Successfully fetched conversation {conversation_id}.")
-            return conversation_data
-            
-        except httpx.HTTPStatusError as e:
-            # Log the specific HTTP error (other than 404, which is handled above)
-            # logger.error(f"HTTP error getting conversation {conversation_id}: {e.response.status_code} - {e.response.text}")
-            raise # Re-raise the original error for handling upstream if necessary
-        except Exception as e:
-            # Catch other potential errors (network issues, JSON decoding errors, etc.)
-            # logger.error(f"Unexpected error getting conversation {conversation_id}: {str(e)}")
-            # Depending on desired behavior, you might return None or re-raise
-            return None # Return None for general errors similar to the original logic
+        logger.error(f"Failed to fetch {conversation_id} after {max_retries} retries")
+        return None
 
 
-def get_conversation_tags(conversation_id: str) -> Optional[List[Dict]]:
+def get_conversation(conversation_id: str) -> Optional[Dict]:
     """
-    Get the tags for a specific conversation from FrontApp.
-    
+    DEPRECATED: Use get_conversation_async() instead.
+    Synchronous version kept for backward compatibility with scripts.
+    """
+    if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
+        raise ValueError("Missing required Front configuration")
+
+    auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
+    url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}"
+    headers = {
+        "Authorization": auth_header,
+        "Accept": "application/json",
+    }
+
+    with httpx.Client(verify=False) as client:
+        try:
+            response = client.get(url, headers=headers)
+            if response.status_code == 404:
+                return None
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            raise
+        except Exception as e:
+            return None
+
+
+async def get_conversation_tags_async(conversation_id: str) -> Optional[List[Dict]]:
+    """
+    Get the tags for a specific conversation from FrontApp (async version).
+
     Args:
         conversation_id: The ID of the conversation
-        
+
     Returns:
         Optional[List[Dict]]: A list of tag objects or None if an error occurs or no tags are found.
     """
-    conversation_data = get_conversation(conversation_id)
-    
+    conversation_data = await get_conversation_async(conversation_id)
+
     if conversation_data:
         tags = conversation_data.get("tags", [])
         # logger.info(f"Retrieved {len(tags)} tags for conversation {conversation_id}")
         return tags
     else:
         # Error getting conversation logged in get_conversation
+        return None
+
+
+def get_conversation_tags(conversation_id: str) -> Optional[List[Dict]]:
+    """
+    DEPRECATED: Use get_conversation_tags_async() instead.
+    Synchronous version kept for backward compatibility with scripts.
+    """
+    conversation_data = get_conversation(conversation_id)
+
+    if conversation_data:
+        tags = conversation_data.get("tags", [])
+        return tags
+    else:
         return None
 
 
