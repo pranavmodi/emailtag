@@ -20,7 +20,7 @@
         }
 
         .menu-bar {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: white;
             display: flex;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
@@ -28,7 +28,7 @@
         .menu-item {
             flex: 1;
             padding: 20px 30px;
-            color: white;
+            color: #333;
             text-decoration: none;
             transition: all 0.3s ease;
             border-bottom: 3px solid transparent;
@@ -36,13 +36,13 @@
         }
 
         .menu-item:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: #f5f7fa;
             transform: translateY(-2px);
         }
 
         .menu-item.active {
-            background: rgba(255, 255, 255, 0.2);
-            border-bottom-color: white;
+            background: #f0f4ff;
+            border-bottom-color: #667eea;
         }
 
         .menu-item-title {
@@ -381,8 +381,8 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="target-date">Date</label>
-                    <input type="date" id="target-date" required>
+                    <label for="target-date">Date (MM/DD/YYYY)</label>
+                    <input type="text" id="target-date" placeholder="MM/DD/YYYY" pattern="\d{2}/\d{2}/\d{4}" required>
                 </div>
 
                 <button class="btn-primary" onclick="fetchStatistics()">Analyze Tags</button>
@@ -397,6 +397,7 @@
 
             <div id="results" class="results-section">
                 <h2 class="section-title">Results</h2>
+                <p class="info-text" id="results-info"></p>
 
                 <div class="statistics-grid">
                     <div class="stat-card primary">
@@ -478,6 +479,18 @@
         }
 
         function displayResults(data) {
+            // Format date as mm/dd/yyyy
+            const date = new Date(data.date + 'T00:00:00'); // Add time to avoid timezone issues
+            const formattedDate = date.toLocaleDateString('en-US', {
+                month: '2-digit',
+                day: '2-digit',
+                year: 'numeric'
+            });
+
+            // Update results info
+            document.getElementById('results-info').textContent =
+                `Showing results for "${data.tag_name}" on ${formattedDate}`;
+
             // Update summary statistics
             document.getElementById('total-count').textContent = data.total_conversations;
             document.getElementById('still-tagged-count').textContent = data.still_tagged;

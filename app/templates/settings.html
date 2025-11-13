@@ -427,11 +427,11 @@
 
         /* Menu bar styling */
         .menu-bar {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: white;
             padding: 0;
             border-radius: 8px;
             margin-bottom: 30px;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
             display: flex;
             overflow: hidden;
         }
@@ -439,14 +439,14 @@
         .menu-item {
             flex: 1;
             padding: 20px 30px;
-            color: white;
+            color: #333;
             text-decoration: none;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             transition: all 0.3s ease;
-            border-right: 1px solid rgba(255, 255, 255, 0.2);
+            border-right: 1px solid #e0e0e0;
             cursor: pointer;
             position: relative;
         }
@@ -456,12 +456,12 @@
         }
 
         .menu-item:hover {
-            background: rgba(255, 255, 255, 0.15);
+            background: #f5f7fa;
             transform: translateY(-2px);
         }
 
         .menu-item.active {
-            background: rgba(255, 255, 255, 0.25);
+            background: #f0f4ff;
         }
 
         .menu-item.active::after {
@@ -471,7 +471,7 @@
             left: 0;
             right: 0;
             height: 4px;
-            background: white;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
 
         .menu-item-title {
