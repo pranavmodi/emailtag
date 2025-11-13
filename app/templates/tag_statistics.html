@@ -309,17 +309,74 @@
                 </p>
 
                 <div class="form-group">
-                    <label for="tag-name">Tag Name</label>
+                    <label for="tag-name">Tag Name (Leaf Nodes Only)</label>
                     <select id="tag-name">
                         <option value="">-- Select a tag --</option>
-                        <option value="Apt status req">Apt status req</option>
-                        <option value="Appointment Inquiry">Appointment Inquiry</option>
-                        <option value="Medical Records">Medical Records</option>
-                        <option value="Bill or Balance Request">Bill or Balance Request</option>
-                        <option value="Case Updates">Case Updates</option>
-                        <option value="Missing Lien Request">Missing Lien Request</option>
-                        <option value="PSL Lien">PSL Lien</option>
-                        <option value="ASL Lien">ASL Lien</option>
+                        <optgroup label="Scheduling > RX">
+                            <option value="Order Pending">Order Pending</option>
+                            <option value="Order Entered">Order Entered</option>
+                            <option value="Incomplete">Incomplete</option>
+                            <option value="RX">RX</option>
+                            <option value="Apt status req">Apt status req</option>
+                            <option value="No Show">No Show</option>
+                            <option value="Cash Patient">Cash Patient</option>
+                        </optgroup>
+                        <optgroup label="Scheduling">
+                            <option value="Cancelled">Cancelled</option>
+                            <option value="Reschedule Request">Reschedule Request</option>
+                            <option value="Schedule Request">Schedule Request</option>
+                            <option value="Will contact patient">Will contact patient</option>
+                        </optgroup>
+                        <optgroup label="Medical Records & Images">
+                            <option value="Release of Records">Release of Records</option>
+                            <option value="Image Request">Image Request</option>
+                            <option value="CD Requests">CD Requests</option>
+                            <option value="Reports Request">Reports Request</option>
+                            <option value="US Tech Sheet">US Tech Sheet</option>
+                            <option value="Portal Requests">Portal Requests</option>
+                            <option value="Referral pad request">Referral pad request</option>
+                            <option value="Incorrect patient info">Incorrect patient info</option>
+                            <option value="Incorrect study info">Incorrect study info</option>
+                        </optgroup>
+                        <optgroup label="Accounts Receivable > Billing">
+                            <option value="Bill or balance Request">Bill or balance Request</option>
+                        </optgroup>
+                        <optgroup label="Accounts Receivable > Liens">
+                            <option value="Missing Lien Request">Missing Lien Request</option>
+                        </optgroup>
+                        <optgroup label="Accounts Receivable > PSL">
+                            <option value="Rad Lien">Rad Lien (PSL)</option>
+                            <option value="Tech Lien">Tech Lien (PSL)</option>
+                            <option value="Lien Modified">Lien Modified (PSL)</option>
+                        </optgroup>
+                        <optgroup label="Accounts Receivable > ASL">
+                            <option value="Rad Lien">Rad Lien (ASL)</option>
+                            <option value="Tech Lien">Tech Lien (ASL)</option>
+                            <option value="Lien Modified">Lien Modified (ASL)</option>
+                        </optgroup>
+                        <optgroup label="Accounts Receivable > Negotiations">
+                            <option value="Bill Offer">Bill Offer</option>
+                            <option value="Pending Approval">Pending Approval</option>
+                            <option value="Offer Approved">Offer Approved</option>
+                            <option value="Counter Offer Sent">Counter Offer Sent</option>
+                        </optgroup>
+                        <optgroup label="Accounts Receivable > Case Updates">
+                            <option value="New Attorney">New Attorney</option>
+                            <option value="Drop Letter">Drop Letter</option>
+                            <option value="Drop Pending">Drop Pending</option>
+                            <option value="Promise to send payment">Promise to send payment</option>
+                            <option value="Waiting to clear liability">Waiting to clear liability</option>
+                            <option value="Waiting on settlement check">Waiting on settlement check</option>
+                            <option value="Sent payment but not received">Sent payment but not received</option>
+                            <option value="Refund Request">Refund Request</option>
+                            <option value="Payment on way">Payment on way</option>
+                        </optgroup>
+                        <optgroup label="Accounts Receivable > Collections">
+                            <option value="To send to collections">To send to collections</option>
+                            <option value="Sent to Collections">Sent to Collections</option>
+                            <option value="Attorney Non-Payment">Attorney Non-Payment</option>
+                            <option value="To Review">To Review</option>
+                        </optgroup>
                     </select>
                 </div>
 
