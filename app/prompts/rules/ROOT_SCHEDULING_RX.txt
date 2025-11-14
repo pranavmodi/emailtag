@@ -8,8 +8,10 @@ Please use the following rules to sub-classify the provided email content, alrea
 
 1. **RX-Related Status or Request**: Based on the email content, determine the specific status or request concerning a prescription (RX) or related appointment, and classify as follows:
 
-   **PRIORITY RULE - Status Inquiries Come First:**
+   **PRIORITY RULE - Status Inquiries:**
    - If the email is an **inquiry about the status of an appointment, scheduling confirmation, or asking about patient progress/status** (e.g., "Has the client been scheduled?", "What's the appointment status?", "Is the patient scheduled for imaging?", "What's going on with this patient?", "Any update on this patient?", "What's the status?"), classify as 'Apt status req'. This takes priority over other classifications, especially when replying to a previous email that said the order was entered or is being processed.
+
+   - **IMPORTANT**: Requests for authorization/approval are NOT status inquiries - they are ACTION requests. "Can we get the authorization?" should be classified as 'RX', not 'Apt status req'.
 
    - If the email indicates that a **prescription order is awaiting processing, confirmation, or further action**, classify as 'Order Pending'.
 
@@ -24,6 +26,7 @@ Please use the following rules to sub-classify the provided email content, alrea
    Focus ONLY on what the current email is stating, not what previous emails in the conversation requested.
 
    - If the email has an attachment of type RX and/or is a **direct request for a new prescription or a refill**, classify as 'RX'.
+   - If the email is **requesting authorization or approval to proceed with an existing appointment or referral** (e.g., "Can we get the authorization for [patient]?", "Need authorization to proceed", "Requesting approval for scheduled MRI"), classify as 'RX'.
    - If the email has a **PASSWORD-PROTECTED or ENCRYPTED attachment** (indicated in the document analysis section) AND the recipient email address is "scheduling@precisemri.com" (check the "To:" field in email metadata), classify as 'RX'. Password-protected documents sent to the scheduling inbox are typically referral documents (prescriptions/RX) that require security for patient privacy.
    - If the email content **includes a password** (e.g., "the password is...", "password: xyz", "here is the password", "pw:", "passcode:", or similar password-sharing language), classify as 'RX'. Emails that share passwords are typically providing access to password-protected referral documents (prescriptions).
    - If the email reports that a **patient did not attend an appointment associated with a prescription or referral**, classify as 'No Show'.
