@@ -13,19 +13,21 @@ Please use the following rules to sub-classify the provided email content, alrea
 
    **CRITICAL DISTINCTION - Schedule Request vs RX:**
 
-   **Schedule Request** = ACTION to book/schedule OR follow-up on a schedule request (future-focused)
-   Examples: "Please schedule an appointment", "Book this patient for MRI", "Schedule imaging for this patient", "Contact patient and schedule", "Set up appointment", "Any update on my schedule request?", "Following up on scheduling", "When can we get the patient scheduled?", "Please confirm if client has been scheduled", "Has the patient been scheduled?", "Confirm if patient has been scheduled for MRI", "Please advise when was the patient last called to schedule his appointment"
+   **Schedule Request** = ACTION to book/schedule OR providing information to facilitate scheduling (future-focused)
+   Examples: "Please schedule an appointment", "Book this patient for MRI", "Schedule imaging for this patient", "Contact patient and schedule", "Set up appointment", "When can we get the patient scheduled?", "Please advise when was the patient last called to schedule his appointment", "Here are the phone numbers for the patient" (when providing contact info for scheduling purposes)
 
-   **RX** = STATUS inquiry about an already-booked appointment OR prescription processing (checking confirmed appointments or orders)
-   Examples: "What's the confirmed appointment date?", "Did you receive the referral?", "Is the order entered?", "Can you confirm the appointment time?", "What date is the patient coming in?"
+   **RX** = STATUS inquiry about whether scheduling was completed OR details about an already-booked appointment OR prescription processing (checking confirmed appointments or orders)
+   Examples: "Has the patient been scheduled?", "Were you able to schedule the client?", "Please confirm if client has been scheduled", "Did you schedule the appointment?", "What's the confirmed appointment date?", "Did you receive the referral?", "Is the order entered?", "Can you confirm the appointment time?", "What date is the patient coming in?", "Any update on my schedule request?", "Following up on scheduling"
 
    **Classification Rules:**
 
    - If the email contains an **active request to schedule, book, or set up an appointment** (using words like "please schedule", "book appointment", "set up imaging", "contact and schedule", "arrange appointment"), classify as 'Schedule Request'. This takes priority even if the email mentions prescriptions, referrals, or provides patient information for scheduling purposes.
 
-   - If the email is a **follow-up or status inquiry about a PREVIOUS SCHEDULE REQUEST** (e.g., "Any update on my request to schedule?", "Following up on my scheduling request", "Has the patient been scheduled yet from my request?", "Update on this schedule request?", "Please confirm if client has been scheduled", "Has the patient been scheduled?"), classify as 'Schedule Request'. The key is that the original request was to GET the patient scheduled, and the follow-up is asking if that action was completed. This includes any variation of "has been scheduled" when asking WHETHER the scheduling action has been done.
+   - If the email is **providing information that was requested to facilitate scheduling** (e.g., patient contact phone numbers, demographics, availability) in response to Precise Imaging's attempt to schedule or contact the patient, classify as 'Schedule Request'. Examples: "Here are the phone numbers for the patient", "Patient's correct contact info is...", "Patient is available on these dates".
 
-   - If the email is a **status inquiry about an ALREADY-BOOKED/CONFIRMED appointment** (e.g., "What time is the patient's appointment?", "Can you confirm the appointment details?", "What date is already scheduled?", "Is the appointment still on?"), classify as 'RX'. The key is that an appointment already exists and they're asking for details about it.
+   - If the email is a **status inquiry asking WHETHER an appointment was scheduled or completed** (e.g., "Has the patient been scheduled?", "Were you able to schedule the client?", "Did you schedule the appointment?", "Please confirm if client has been scheduled", "Any update on my schedule request?", "Following up on scheduling"), classify as 'RX'. This includes follow-ups on previous schedule requests asking if the scheduling action was completed.
+
+   - If the email is a **status inquiry about details of an ALREADY-BOOKED/CONFIRMED appointment** (e.g., "What time is the patient's appointment?", "Can you confirm the appointment details?", "What date is already scheduled?", "Is the appointment still on?"), classify as 'RX'.
 
    - If the email concerns **prescription/referral processing, order entry status, or pharmacy coordination** WITHOUT actively requesting to schedule an appointment (e.g., "Order was entered", "Referral received", "Prescription being processed", "Has the referral been received?"), classify as 'RX'.
 
