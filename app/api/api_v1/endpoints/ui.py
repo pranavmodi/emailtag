@@ -73,3 +73,14 @@ async def login_ui(request: Request):
     This page allows users to authenticate to access admin pages.
     """
     return templates.TemplateResponse("login.html", {"request": request})
+
+
+@router.get("/email-extraction", response_class=HTMLResponse)
+async def email_extraction_ui(request: Request):
+    """
+    Serve the email chain extraction UI.
+
+    This page allows users to extract and view structured individual emails
+    from a Front conversation thread.
+    """
+    return templates.TemplateResponse("email_extraction.html", {"request": request})

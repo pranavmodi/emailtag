@@ -13,7 +13,7 @@ import uvicorn
 from app.api.api_v1.api import api_router
 from app.api.v1.endpoints.classification_rules_api import router as rules_router
 from app.api.v1.endpoints.trace_viewer_api import router as trace_router
-from app.api.api_v1.endpoints.ui import settings_ui, template_config_ui, tag_statistics_ui, login_ui
+from app.api.api_v1.endpoints.ui import settings_ui, template_config_ui, tag_statistics_ui, login_ui, email_extraction_ui
 from app.api.api_v1.dependencies import check_authenticated
 from app.core.config import settings
 
@@ -99,6 +99,16 @@ def create_application() -> FastAPI:
     async def login_page(request: Request):
         """Login page."""
         return await login_ui(request)
+
+    @application.get("/email-extraction")
+    async def email_extraction_page(
+        request: Request,
+        is_authenticated: bool = Depends(check_authenticated)
+    ):
+        """Email chain extraction page."""
+        if not is_authenticated:
+            return RedirectResponse(url="/login", status_code=303)
+        return await email_extraction_ui(request)
 
     @application.get("/health")
     async def health_check():

@@ -138,12 +138,16 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
     try:
         async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
             logger.info("STEP 1: Extracting email chain structure...")
-            
+            logger.info(f"📤 Sending extraction request to OpenAI (model: {payload['model']}, conversation_length: {len(conversation_text)} chars)")
+
             if CLASSIFICATION_DEBUG:
                 debug_logger.debug("🔍 EMAIL EXTRACTION: Sending request to OpenAI API")
                 debug_logger.debug(f"🔍 EMAIL EXTRACTION: Request payload: {json.dumps(payload, indent=2)}")
-            
+
+            import time
+            start_time = time.time()
             response = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+            elapsed_time = time.time() - start_time
             
             # Log response details before raising error
             if response.status_code != 200:
@@ -154,10 +158,17 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
                     debug_logger.debug(f"🔍 EMAIL EXTRACTION ERROR: API Status {response.status_code}, Body: {response.text}")
             
             response.raise_for_status()
-            
+
             completion = response.json()
             ai_response_text = completion.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
-            
+
+            # Log token usage and timing
+            usage = completion.get('usage', {})
+            prompt_tokens = usage.get('prompt_tokens', 0)
+            completion_tokens = usage.get('completion_tokens', 0)
+            total_tokens = usage.get('total_tokens', 0)
+            logger.info(f"📊 OpenAI response received: elapsed_time={elapsed_time:.2f}s, tokens={total_tokens} (prompt={prompt_tokens}, completion={completion_tokens})")
+
             if CLASSIFICATION_DEBUG:
                 debug_logger.debug("🔍 EMAIL EXTRACTION: Raw OpenAI response:")
                 debug_logger.debug("-" * 50 + " RESPONSE START " + "-" * 50)
@@ -166,22 +177,26 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
 
             try:
                 extraction_result = json.loads(ai_response_text)
-                
+
+                num_emails = len(extraction_result.get('emails', []))
+                logger.info(f"✅ Successfully parsed extraction result: {num_emails} emails found")
+
                 if CLASSIFICATION_DEBUG:
-                    debug_logger.debug(f"🔍 EMAIL EXTRACTION: Parsed {len(extraction_result.get('emails', []))} emails from response")
+                    debug_logger.debug(f"🔍 EMAIL EXTRACTION: Parsed {num_emails} emails from response")
                     for i, email in enumerate(extraction_result.get('emails', []), 1):
                         debug_logger.debug(f"🔍 EMAIL EXTRACTION: Email {i} - From: {email.get('sender', 'N/A')}, Subject: {email.get('subject', 'N/A')}")
-                
+
                 final_result = {
                     "success": True,
                     "emails": extraction_result.get("emails", []),
                     "total_emails": extraction_result.get("total_emails", 0),
-                    "parsing_notes": extraction_result.get("parsing_notes", "")
+                    "parsing_notes": extraction_result.get("parsing_notes", ""),
+                    "openai_prompt": prompt  # Include the prompt that was sent
                 }
-                
+
                 if CLASSIFICATION_DEBUG:
                     debug_logger.debug(f"🔍 EMAIL EXTRACTION: Final result: {final_result}")
-                
+
                 return final_result
                 
             except (json.JSONDecodeError, KeyError) as e:
