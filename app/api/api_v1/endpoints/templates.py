@@ -1,14 +1,21 @@
-"""API endpoints for message template management."""
+"""API endpoints for message template and tag settings management."""
 import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.crud.message_template import message_template_crud
+from app.crud.tag_settings import tag_settings_crud
 from app.schemas.message_template import (
     MessageTemplateResponse,
     MessageTemplateListResponse,
     MessageTemplateCreate,
     MessageTemplateUpdate
+)
+from app.schemas.tag_settings import (
+    TagSettingsResponse,
+    TagSettingsListResponse,
+    TagSettingsCreate,
+    TagSettingsUpdate
 )
 
 logger = logging.getLogger(__name__)
@@ -155,4 +162,173 @@ async def update_template(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to update template: {str(e)}"
+        )
+
+
+# ============================================================================
+# TAG SETTINGS ENDPOINTS
+# ============================================================================
+
+
+@router.get("/tag-settings", response_model=TagSettingsListResponse)
+async def list_tag_settings(db: AsyncSession = Depends(get_db)):
+    """
+    Get all tag settings.
+
+    Returns:
+        List of all tag settings with their configurations
+    """
+    try:
+        tag_settings = await tag_settings_crud.get_all(db)
+        return TagSettingsListResponse(
+            items=tag_settings,
+            total=len(tag_settings)
+        )
+    except Exception as e:
+        logger.error(f"Error fetching tag settings: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch tag settings: {str(e)}"
+        )
+
+
+@router.get("/tag-settings/{tag_name}", response_model=TagSettingsResponse)
+async def get_tag_settings(
+    tag_name: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get settings for a specific tag.
+
+    Args:
+        tag_name: Name of the tag
+
+    Returns:
+        TagSettingsResponse with configuration details
+    """
+    try:
+        tag_settings = await tag_settings_crud.get_by_tag_name(db, tag_name)
+        if not tag_settings:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Settings for tag '{tag_name}' not found"
+            )
+        return tag_settings
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching settings for tag '{tag_name}': {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch tag settings: {str(e)}"
+        )
+
+
+@router.post("/tag-settings", response_model=TagSettingsResponse)
+async def create_tag_settings(
+    tag_settings: TagSettingsCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Create new tag settings.
+
+    Args:
+        tag_settings: Tag settings data to create
+
+    Returns:
+        TagSettingsResponse with created settings
+    """
+    try:
+        # Check if settings already exist for this tag
+        existing = await tag_settings_crud.get_by_tag_name(db, tag_settings.tag_name)
+        if existing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Settings for tag '{tag_settings.tag_name}' already exist. Use PATCH to update."
+            )
+
+        new_settings = await tag_settings_crud.create(
+            db,
+            tag_name=tag_settings.tag_name,
+            settings=tag_settings.settings,
+            updated_by=tag_settings.updated_by
+        )
+
+        logger.warning(f"⚙️ Tag settings for '{tag_settings.tag_name}' CREATED by {tag_settings.updated_by or 'unknown user'}")
+        return new_settings
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating tag settings: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create tag settings: {str(e)}"
+        )
+
+
+@router.patch("/tag-settings/{tag_name}", response_model=TagSettingsResponse)
+async def update_tag_settings(
+    tag_name: str,
+    tag_settings: TagSettingsUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update existing tag settings or create if doesn't exist.
+
+    Args:
+        tag_name: Name of the tag
+        tag_settings: Tag settings data to update
+
+    Returns:
+        TagSettingsResponse with updated settings
+    """
+    try:
+        updated_settings = await tag_settings_crud.update(
+            db,
+            tag_name=tag_name,
+            settings=tag_settings.settings,
+            updated_by=tag_settings.updated_by
+        )
+
+        logger.warning(f"⚙️ Tag settings for '{tag_name}' UPDATED by {tag_settings.updated_by or 'unknown user'}")
+        return updated_settings
+    except Exception as e:
+        logger.error(f"Error updating tag settings for '{tag_name}': {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update tag settings: {str(e)}"
+        )
+
+
+@router.delete("/tag-settings/{tag_name}")
+async def delete_tag_settings(
+    tag_name: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete tag settings.
+
+    Args:
+        tag_name: Name of the tag
+
+    Returns:
+        Success message
+    """
+    try:
+        deleted = await tag_settings_crud.delete(db, tag_name)
+        if not deleted:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Settings for tag '{tag_name}' not found"
+            )
+
+        logger.warning(f"⚙️ Tag settings for '{tag_name}' DELETED")
+        return {"message": f"Settings for tag '{tag_name}' deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting tag settings for '{tag_name}': {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete tag settings: {str(e)}"
         )

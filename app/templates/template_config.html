@@ -319,6 +319,175 @@
         .logout-btn:active {
             transform: translateY(0);
         }
+
+        /* Tab Styles */
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 0;
+            border-bottom: 3px solid #e0e0e0;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.3s ease;
+            position: relative;
+            bottom: -3px;
+        }
+
+        .tab:hover {
+            background: #f0f4ff;
+            color: #667eea;
+        }
+
+        .tab.active {
+            background: white;
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Tag Settings Styles */
+        .tag-selector {
+            margin-bottom: 30px;
+        }
+
+        .tag-selector label {
+            display: block;
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .tag-selector select {
+            width: 100%;
+            padding: 12px;
+            font-size: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        .tag-selector select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .settings-form {
+            display: none;
+        }
+
+        .settings-form.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            font-size: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .form-group .hint {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .add-field-btn {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: background 0.2s;
+        }
+
+        .add-field-btn:hover {
+            background: #45a049;
+        }
+
+        .custom-field {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            position: relative;
+        }
+
+        .remove-field-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .remove-field-btn:hover {
+            background: #ff5252;
+        }
+
+        .no-settings-message {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+            font-size: 16px;
+        }
     </style>
 </head>
 <body>
@@ -348,12 +517,24 @@
     </div>
 
     <div class="container">
-        <h1 class="page-title">Autorespond Template Configuration</h1>
+        <h1 class="page-title">Autorespond Configuration</h1>
 
         <div class="content-card">
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('templates')">
+                    📝 Message Templates
+                </button>
+                <button class="tab" onclick="switchTab('tag-settings')">
+                    ⚙️ Tag Settings
+                </button>
+            </div>
+
             <div id="status-message" class="status-message"></div>
 
-            <!-- Template Selector -->
+            <!-- Tab 1: Message Templates -->
+            <div id="tab-templates" class="tab-content active">
+                <!-- Template Selector -->
             <div class="template-selector">
                 <label for="template-select">Select Template to Edit:</label>
                 <select id="template-select" onchange="loadTemplate()">
@@ -407,6 +588,70 @@
                 <div class="spinner"></div>
                 <p>Loading template...</p>
             </div>
+            </div>
+            <!-- End Tab 1: Message Templates -->
+
+            <!-- Tab 2: Tag Settings -->
+            <div id="tab-tag-settings" class="tab-content">
+                <div class="settings-header">
+                    <h2>Appointment Status Request Settings</h2>
+                    <p style="color: #666; margin-top: 10px;">Configure the contact information and policies used in appointment status responses.</p>
+                </div>
+
+                <div id="tag-settings-form" class="settings-form active">
+                    <form id="settings-form">
+                        <!-- Predefined Fields -->
+                        <div class="form-group">
+                            <label for="field-scheduling_phone_number">📞 Scheduling Phone Number</label>
+                            <input type="tel" id="field-scheduling_phone_number" data-key="scheduling_phone_number" placeholder="e.g., 800-558-2223">
+                            <div class="hint">The phone number patients can call for scheduling assistance</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="field-no_show_policy">📋 No-Show Policy</label>
+                            <textarea id="field-no_show_policy" data-key="no_show_policy" rows="4" placeholder="Policy text..."></textarea>
+                            <div class="hint">Policy text regarding cancellations and no-show fees</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="field-portal_link_bills">🔗 Bills & Appointments Portal Link</label>
+                            <input type="url" id="field-portal_link_bills" data-key="portal_link_bills" placeholder="https://...">
+                            <div class="hint">Link for patients to access bills, appointments, and e-sign liens</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="field-portal_link_reports">🔗 Reports & Images Portal Link</label>
+                            <input type="url" id="field-portal_link_reports" data-key="portal_link_reports" placeholder="https://...">
+                            <div class="hint">Link for patients to access medical reports and images</div>
+                        </div>
+
+                        <!-- Metadata -->
+                        <div id="tag-metadata" class="metadata" style="display: none;">
+                            <div class="metadata-row">
+                                <span class="metadata-label">Last Updated:</span>
+                                <span id="tag-last-updated"></span>
+                            </div>
+                            <div class="metadata-row">
+                                <span class="metadata-label">Updated By:</span>
+                                <span id="tag-updated-by"></span>
+                            </div>
+                        </div>
+
+                        <!-- Buttons -->
+                        <div class="button-group">
+                            <button type="button" class="btn btn-secondary" onclick="resetTagSettings()">Reset Changes</button>
+                            <button type="button" class="btn btn-primary" onclick="saveTagSettings()">Save Settings</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="tag-loading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Loading settings...</p>
+                </div>
+            </div>
+            <!-- End Tab 2: Tag Settings -->
+
         </div>
     </div>
 
@@ -671,6 +916,162 @@ Access reports & images (Request login here for reports): <a href="{reports_link
         function hideStatusMessage() {
             const statusDiv = document.getElementById('status-message');
             statusDiv.style.display = 'none';
+        }
+
+        // ============================================================================
+        // TAB SWITCHING
+        // ============================================================================
+
+        function switchTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show selected tab content
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+
+            // Hide status message when switching tabs
+            hideStatusMessage();
+
+            // Auto-load tag settings when switching to tag-settings tab
+            if (tabName === 'tag-settings') {
+                loadTagSettings();
+            }
+        }
+
+        // ============================================================================
+        // TAG SETTINGS
+        // ============================================================================
+
+        let currentTagSettings = null;
+        let originalTagSettings = {};
+        const TAG_NAME = "Apt status req"; // Fixed tag for this UI
+
+        async function loadTagSettings() {
+            document.getElementById('tag-loading').style.display = 'block';
+            document.getElementById('tag-settings-form').style.display = 'none';
+
+            try {
+                const response = await fetch(`/api/v1/templates/tag-settings/${encodeURIComponent(TAG_NAME)}`);
+
+                let settings = {};
+                let metadata = {};
+
+                if (response.ok) {
+                    const data = await response.json();
+                    settings = data.settings || {};
+                    metadata = {
+                        updated_at: data.updated_at,
+                        updated_by: data.updated_by
+                    };
+                } else if (response.status === 404) {
+                    // No settings exist yet, use defaults
+                    settings = {};
+                } else {
+                    throw new Error('Failed to load tag settings');
+                }
+
+                currentTagSettings = { tag_name: TAG_NAME, settings };
+                originalTagSettings = JSON.parse(JSON.stringify(settings));
+
+                renderTagSettingsForm(settings, metadata);
+
+                document.getElementById('tag-loading').style.display = 'none';
+                document.getElementById('tag-settings-form').style.display = 'block';
+            } catch (error) {
+                console.error('Error loading tag settings:', error);
+                showStatusMessage('Failed to load tag settings: ' + error.message, 'error');
+                document.getElementById('tag-loading').style.display = 'none';
+            }
+        }
+
+        function renderTagSettingsForm(settings, metadata) {
+            // Populate the predefined form fields directly
+            document.getElementById('field-scheduling_phone_number').value = settings.scheduling_phone_number || '';
+            document.getElementById('field-no_show_policy').value = settings.no_show_policy || '';
+            document.getElementById('field-portal_link_bills').value = settings.portal_link_bills || '';
+            document.getElementById('field-portal_link_reports').value = settings.portal_link_reports || '';
+
+            // Show/hide metadata
+            if (metadata.updated_at) {
+                document.getElementById('tag-last-updated').textContent = new Date(metadata.updated_at).toLocaleString();
+                document.getElementById('tag-updated-by').textContent = metadata.updated_by || 'Unknown';
+                document.getElementById('tag-metadata').style.display = 'block';
+            } else {
+                document.getElementById('tag-metadata').style.display = 'none';
+            }
+        }
+
+
+
+
+
+        async function saveTagSettings() {
+            if (!currentTagSettings) return;
+
+            const tagName = TAG_NAME;
+
+            // Collect all field values
+            const settings = {};
+
+            // Predefined fields
+            document.querySelectorAll('#settings-form [data-key]').forEach(input => {
+                const key = input.dataset.key;
+                settings[key] = input.value;
+            });
+
+            // No custom fields in simplified UI
+
+            try {
+                // Get current user
+                const authResponse = await fetch('/api/v1/auth/check');
+                const authData = await authResponse.json();
+                const username = authData.username || 'unknown';
+
+                const response = await fetch(`/api/v1/templates/tag-settings/${encodeURIComponent(TAG_NAME)}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        settings: settings,
+                        updated_by: username
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to save tag settings');
+                }
+
+                const data = await response.json();
+                originalTagSettings = JSON.parse(JSON.stringify(settings));
+
+                showStatusMessage(`✅ Settings for "${TAG_NAME}" saved successfully!`, 'success');
+
+                // Refresh to show new metadata
+                await loadTagSettings();
+            } catch (error) {
+                console.error('Error saving tag settings:', error);
+                showStatusMessage('Failed to save tag settings: ' + error.message, 'error');
+            }
+        }
+
+        function resetTagSettings() {
+            if (!currentTagSettings) return;
+
+            if (confirm('Reset all changes to last saved state?')) {
+                renderTagSettingsForm(originalTagSettings, {});
+                showStatusMessage('Changes reset to last saved state', 'info');
+            }
         }
     </script>
 </body>

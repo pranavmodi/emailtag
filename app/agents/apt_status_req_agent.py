@@ -24,6 +24,7 @@ from app.services import frontapp_service # For the actual send_reply_to_front t
 from app.mcp import default_mcp_client as mcp_client # Import default configured MCP client
 from app.db.session import AsyncSessionLocal
 from app.crud.message_template import message_template_crud
+from app.crud.tag_settings import tag_settings_crud
 # Import templates from their locations (as fallback)
 from app.agents.templates.appointment_status_templates import (
     TEMPLATE_APPOINTMENT_FOUND_DETAILED,
@@ -51,7 +52,7 @@ TAG_AI_HUMAN_REVIEW_REQUIRED = "AI: Human review required" # Centralized tag for
 
 # --- Response Templates have been moved to app/agents/templates/appointment_status_templates.py ---
 
-# --- BEGIN: Placeholder Static Information (Ideally from settings_obj) ---
+# --- BEGIN: Placeholder Static Information (Fallback if DB fetch fails) ---
 DEFAULT_SCHEDULING_PHONE = "800-558-2223"
 DEFAULT_NO_SHOW_POLICY = "**If the patient cannot make the appointment please contact us within 48 hours of the appointment to reschedule or cancel to avoid any no-show fees. Two no-shows will require a $50 no-show payment before being scheduled for a 3rd time.**"
 DEFAULT_PORTAL_LINKS = {
@@ -59,6 +60,43 @@ DEFAULT_PORTAL_LINKS = {
     "reports_images": "https://example.com/portal/reports"
 }
 # --- END: Placeholder Static Information ---
+
+# --- BEGIN: Database Settings Helper ---
+async def get_tag_settings_from_db(tag_name: str = "Apt status req") -> dict:
+    """
+    Fetch tag settings from database.
+
+    Returns a dict with settings, falling back to defaults if not found.
+    """
+    try:
+        async with AsyncSessionLocal() as db:
+            settings_dict = await tag_settings_crud.get_settings_dict(db, tag_name)
+
+            if settings_dict:
+                logger.info(f"✅ Loaded settings for '{tag_name}' from database")
+                return {
+                    "scheduling_phone": settings_dict.get("scheduling_phone_number", DEFAULT_SCHEDULING_PHONE),
+                    "no_show_policy": settings_dict.get("no_show_policy", DEFAULT_NO_SHOW_POLICY),
+                    "portal_links": {
+                        "bills_appointments_liens": settings_dict.get("portal_link_bills", DEFAULT_PORTAL_LINKS["bills_appointments_liens"]),
+                        "reports_images": settings_dict.get("portal_link_reports", DEFAULT_PORTAL_LINKS["reports_images"])
+                    }
+                }
+            else:
+                logger.warning(f"⚠️ No settings found for '{tag_name}' in database, using defaults")
+                return {
+                    "scheduling_phone": DEFAULT_SCHEDULING_PHONE,
+                    "no_show_policy": DEFAULT_NO_SHOW_POLICY,
+                    "portal_links": DEFAULT_PORTAL_LINKS
+                }
+    except Exception as e:
+        logger.error(f"❌ Error fetching tag settings from database: {e}, using defaults")
+        return {
+            "scheduling_phone": DEFAULT_SCHEDULING_PHONE,
+            "no_show_policy": DEFAULT_NO_SHOW_POLICY,
+            "portal_links": DEFAULT_PORTAL_LINKS
+        }
+# --- END: Database Settings Helper ---
 
 # --- BEGIN: MCP Client instance ---
 # The global MCP client is now imported from app.mcp
@@ -150,10 +188,11 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
     """
     logger.info(f"Tool 'fetch_appointment_details_by_patient_id' called for Patient ID: {patient_id}")
 
-    # Get static info from settings_obj or use defaults
-    scheduling_phone = getattr(settings_obj, "SCHEDULING_PHONE_NUMBER", DEFAULT_SCHEDULING_PHONE)
-    no_show_policy = getattr(settings_obj, "NO_SHOW_POLICY", DEFAULT_NO_SHOW_POLICY)
-    portal_links = getattr(settings_obj, "PORTAL_LINKS", DEFAULT_PORTAL_LINKS)
+    # Fetch settings from database (with fallback to defaults)
+    db_settings = await get_tag_settings_from_db("Apt status req")
+    scheduling_phone = db_settings["scheduling_phone"]
+    no_show_policy = db_settings["no_show_policy"]
+    portal_links = db_settings["portal_links"]
 
     try:
         # 1. Fetch data using the shared helper
