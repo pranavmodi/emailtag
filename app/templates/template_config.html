@@ -267,9 +267,70 @@
         .metadata-label {
             font-weight: 600;
         }
+        /* User bar styling */
+        .user-bar {
+            background: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #333;
+            font-size: 0.95em;
+        }
+
+        .user-icon {
+            font-size: 1.2em;
+        }
+
+        .username {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .logout-btn {
+            padding: 8px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .logout-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .logout-btn:active {
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body>
+    <!-- User Bar -->
+    <div class="user-bar">
+        <div class="user-info">
+            <span class="user-icon">👤</span>
+            <span>Logged in as: <span class="username" id="current-username">Loading...</span></span>
+        </div>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+
     <!-- Menu Bar -->
     <div class="menu-bar">
         <a href="/settings" class="menu-item">
@@ -354,6 +415,44 @@
         let currentTemplate = null;
         let originalContent = '';
 
+        // Load current user
+        async function loadCurrentUser() {
+            try {
+                const response = await fetch('/api/v1/auth/check');
+                if (!response.ok) {
+                    window.location.href = '/login';
+                    return;
+                }
+                const data = await response.json();
+                if (data.authenticated) {
+                    document.getElementById('current-username').textContent = data.username;
+                } else {
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Error checking authentication:', error);
+                window.location.href = '/login';
+            }
+        }
+
+        // Logout function
+        async function logout() {
+            try {
+                const response = await fetch('/api/v1/auth/logout', {
+                    method: 'POST'
+                });
+                if (response.ok) {
+                    window.location.href = '/login';
+                } else {
+                    console.error('Logout failed');
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Error during logout:', error);
+                window.location.href = '/login';
+            }
+        }
+
         // Template definitions with their metadata
         const templateDefinitions = {
             'apt_status_req_found': {
@@ -395,6 +494,7 @@ Access reports & images (Request login here for reports): <a href="{reports_link
 
         // Initialize Quill editor
         document.addEventListener('DOMContentLoaded', function() {
+            loadCurrentUser();
             quill = new Quill('#editor', {
                 theme: 'snow',
                 modules: {

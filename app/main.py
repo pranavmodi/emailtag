@@ -1,10 +1,11 @@
 """Main FastAPI application instance."""
 
 import logging
-from typing import Callable
+from typing import Callable, Optional
 import os
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, Cookie, Depends
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
@@ -12,7 +13,8 @@ import uvicorn
 from app.api.api_v1.api import api_router
 from app.api.v1.endpoints.classification_rules_api import router as rules_router
 from app.api.v1.endpoints.trace_viewer_api import router as trace_router
-from app.api.api_v1.endpoints.ui import settings_ui, template_config_ui, tag_statistics_ui
+from app.api.api_v1.endpoints.ui import settings_ui, template_config_ui, tag_statistics_ui, login_ui
+from app.api.api_v1.dependencies import check_authenticated
 from app.core.config import settings
 
 # Configure logging
@@ -64,19 +66,39 @@ def create_application() -> FastAPI:
 
     # Add UI pages at root level
     @application.get("/settings")
-    async def settings_page(request: Request):
+    async def settings_page(
+        request: Request,
+        is_authenticated: bool = Depends(check_authenticated)
+    ):
         """System settings page."""
+        if not is_authenticated:
+            return RedirectResponse(url="/login", status_code=303)
         return await settings_ui(request)
 
     @application.get("/template-config")
-    async def template_config_page(request: Request):
+    async def template_config_page(
+        request: Request,
+        is_authenticated: bool = Depends(check_authenticated)
+    ):
         """Template configuration page."""
+        if not is_authenticated:
+            return RedirectResponse(url="/login", status_code=303)
         return await template_config_ui(request)
 
     @application.get("/tag-statistics")
-    async def tag_statistics_page(request: Request):
+    async def tag_statistics_page(
+        request: Request,
+        is_authenticated: bool = Depends(check_authenticated)
+    ):
         """Tag statistics page."""
+        if not is_authenticated:
+            return RedirectResponse(url="/login", status_code=303)
         return await tag_statistics_ui(request)
+
+    @application.get("/login")
+    async def login_page(request: Request):
+        """Login page."""
+        return await login_ui(request)
 
     @application.get("/health")
     async def health_check():

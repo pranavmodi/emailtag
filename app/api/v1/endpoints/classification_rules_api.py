@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from app.services.file_based_rules_service import get_file_based_rules_service
+from app.api.api_v1.dependencies import check_authenticated
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +19,13 @@ templates = Jinja2Templates(directory="app/templates")
 
 
 @router.get("/rules", response_class=HTMLResponse, name="view_classification_rules_ui")
-async def view_rules_ui(request: Request):
+async def view_rules_ui(
+    request: Request,
+    is_authenticated: bool = Depends(check_authenticated)
+):
     """Display the UI for managing file-based classification rules."""
+    if not is_authenticated:
+        return RedirectResponse(url="/login", status_code=303)
     try:
         rules_service = get_file_based_rules_service()
         all_rules = rules_service.list_all_rules()

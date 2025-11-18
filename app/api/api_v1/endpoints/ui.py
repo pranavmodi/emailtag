@@ -63,3 +63,13 @@ async def tag_statistics_ui(request: Request):
     still retain that tag in Front.
     """
     return templates.TemplateResponse("tag_statistics.html", {"request": request})
+
+
+@router.get("/login", response_class=HTMLResponse)
+async def login_ui(request: Request):
+    """
+    Serve the login page.
+
+    This page allows users to authenticate to access admin pages.
+    """
+    return templates.TemplateResponse("login.html", {"request": request})

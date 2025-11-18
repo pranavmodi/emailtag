@@ -76,3 +76,5 @@ scikit-image==0.25.2
 pytesseract==0.3.13
 pyzxing==1.1.1
 pylibdmtx==0.1.10
+passlib==1.7.4
+bcrypt==4.2.1

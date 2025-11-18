@@ -4,12 +4,13 @@ import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.services.trace_service import get_conversation_traces, get_conversation_traces_async
 from app.crud.sync import processing_trace as trace_crud_sync
 from app.db.session import SessionLocal
+from app.api.api_v1.dependencies import check_authenticated
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +21,14 @@ templates = Jinja2Templates(directory="app/templates")
 
 
 @router.get("/traces", response_class=HTMLResponse, name="view_traces_ui")
-async def view_traces_ui(request: Request, conversation_id: Optional[str] = Query(None)):
+async def view_traces_ui(
+    request: Request,
+    conversation_id: Optional[str] = Query(None),
+    is_authenticated: bool = Depends(check_authenticated)
+):
     """Display the UI for viewing email processing traces."""
+    if not is_authenticated:
+        return RedirectResponse(url="/login", status_code=303)
     try:
         traces = []
         summary = {}

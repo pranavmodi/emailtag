@@ -5,4 +5,6 @@ from .patient_conversation_data import PatientConversationData  # noqa
 from .classification_rule import ClassificationRule  # noqa
 from .processing_trace import EmailProcessingTrace  # noqa
 from .system_settings import SystemSetting  # noqa
-from .message_template import MessageTemplate  # noqa 
+from .message_template import MessageTemplate  # noqa
+from .user import User  # noqa
+from .session import Session  # noqa 
