@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classification Trace Viewer</title>
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            color: #2d3748;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 700;
+        }
+
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.95;
+            font-size: 1.1em;
+        }
+
+        .search-section {
+            background-color: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+        }
+
+        .search-form {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .search-form label {
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .search-form input {
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            min-width: 350px;
+            flex: 1;
+            transition: all 0.3s;
+        }
+
+        .search-form input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .search-form button {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .search-form button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .summary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(245, 87, 108, 0.3);
+        }
+
+        .summary h2 {
+            margin: 0 0 15px 0;
+            font-size: 1.5em;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .summary-item {
+            background-color: rgba(255,255,255,0.2);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .summary-number {
+            font-size: 2.2em;
+            font-weight: 700;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .summary-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .traces-section {
+            margin-top: 30px;
+        }
+
+        .trace-card {
+            background-color: white;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+            overflow: hidden;
+            border-left: 5px solid #667eea;
+            transition: all 0.3s;
+        }
+
+        .trace-card:hover {
+            box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+            transform: translateX(2px);
+        }
+
+        .trace-header {
+            padding: 20px 25px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(to right, #f7fafc, white);
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .trace-header:hover {
+            background: linear-gradient(to right, #edf2f7, #f7fafc);
+        }
+
+        .trace-header-left {
+            flex: 1;
+        }
+
+        .trace-step-number {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 36px;
+            font-weight: 700;
+            margin-right: 15px;
+            font-size: 16px;
+        }
+
+        .trace-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+
+        .trace-subtitle {
+            color: #718096;
+            font-size: 0.95em;
+        }
+
+        .trace-result {
+            display: inline-block;
+            background-color: #48bb78;
+            color: white;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+            margin-left: 15px;
+        }
+
+        .trace-meta {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            color: #718096;
+            font-size: 0.9em;
+        }
+
+        .trace-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .trace-body {
+            display: none;
+            padding: 0;
+        }
+
+        .trace-body.active {
+            display: block;
+        }
+
+        .trace-section {
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .section-header {
+            background-color: #f7fafc;
+            padding: 15px 25px;
+            font-weight: 600;
+            color: #4a5568;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        .section-header:hover {
+            background-color: #edf2f7;
+        }
+
+        .section-header .toggle-icon {
+            transition: transform 0.3s;
+        }
+
+        .section-header.active .toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        .section-content {
+            display: none;
+            padding: 20px 25px;
+            background-color: #fafafa;
+        }
+
+        .section-content.active {
+            display: block;
+        }
+
+        .code-block {
+            background-color: #1e293b;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .code-block pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .badge-format {
+            background-color: #bee3f8;
+            color: #2c5282;
+        }
+
+        .badge-model {
+            background-color: #fed7d7;
+            color: #742a2a;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #718096;
+        }
+
+        .empty-state svg {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .user-bar {
+            background-color: white;
+            padding: 15px 25px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-info {
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 20px;
+        }
+
+        .nav-links a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- User Bar -->
+        <div class="user-bar">
+            <div class="user-info">📊 Classification Trace Viewer</div>
+            <div class="nav-links">
+                <a href="/settings">Settings</a>
+                <a href="/tag-stats">Tag Stats</a>
+                <a href="/traces">Processing Traces</a>
+                <a href="/logout">Logout</a>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <div class="header">
+            <h1>🔍 Classification Trace Viewer</h1>
+            <p>View detailed classification steps, prompts, and LLM responses</p>
+        </div>
+
+        <!-- Search Section -->
+        <div class="search-section">
+            <form class="search-form" method="get">
+                <label for="conversation_id">Conversation ID:</label>
+                <input
+                    type="text"
+                    id="conversation_id"
+                    name="conversation_id"
+                    placeholder="Enter Front conversation ID (e.g., cnv_1fu8gs5u)"
+                    value="{{ conversation_id }}"
+                    required
+                >
+                <button type="submit">🔎 View Traces</button>
+            </form>
+        </div>
+
+        {% if conversation_id and traces %}
+        <!-- Summary -->
+        <div class="summary">
+            <h2>📈 Classification Summary</h2>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <span class="summary-number">{{ total_traces }}</span>
+                    <span class="summary-label">Total Steps</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-number">{{ total_duration }}ms</span>
+                    <span class="summary-label">Total Duration</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-number">{{ total_tokens }}</span>
+                    <span class="summary-label">Total Tokens</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-number">{{ traces[-1].chosen_option if traces else 'N/A' }}</span>
+                    <span class="summary-label">Final Tag</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Traces -->
+        <div class="traces-section">
+            {% for trace in traces %}
+            <div class="trace-card">
+                <div class="trace-header" onclick="toggleTrace({{ loop.index0 }})">
+                    <div class="trace-header-left">
+                        <span class="trace-step-number">{{ trace.step_order + 1 }}</span>
+                        <div style="display: inline-block; vertical-align: top;">
+                            <div class="trace-title">
+                                {{ trace.step_name }}
+                                <span class="trace-result">→ {{ trace.chosen_option }}</span>
+                            </div>
+                            <div class="trace-subtitle">
+                                {% if trace.classification_path %}{{ trace.classification_path }}{% else %}Root Level{% endif %}
+                                <span class="badge badge-format">{{ trace.email_format }}</span>
+                                <span class="badge badge-model">{{ trace.llm_model }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="trace-meta">
+                        <div class="trace-meta-item">
+                            ⏱️ {{ trace.duration_ms }}ms
+                        </div>
+                        <div class="trace-meta-item">
+                            🎯 {{ trace.total_tokens }} tokens
+                        </div>
+                        <div class="trace-meta-item">
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="trace-body" id="trace-{{ loop.index0 }}">
+                    <!-- Prompt Template Section -->
+                    <div class="trace-section">
+                        <div class="section-header" onclick="toggleSection('prompt-{{ loop.index0 }}')">
+                            <span>📝 Prompt Template (Classification Rules)</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="section-content" id="prompt-{{ loop.index0 }}">
+                            <div class="code-block">
+                                <pre>{{ trace.prompt_template if trace.prompt_template else 'No prompt template available' }}</pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Full Prompt Section -->
+                    <div class="trace-section">
+                        <div class="section-header" onclick="toggleSection('full-prompt-{{ loop.index0 }}')">
+                            <span>📤 Full Prompt Sent to LLM</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="section-content" id="full-prompt-{{ loop.index0 }}">
+                            <div class="code-block">
+                                <pre>{{ trace.full_prompt if trace.full_prompt else 'No full prompt available' }}</pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- LLM Response Section -->
+                    <div class="trace-section">
+                        <div class="section-header" onclick="toggleSection('response-{{ loop.index0 }}')">
+                            <span>📥 LLM Response</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="section-content" id="response-{{ loop.index0 }}">
+                            <div class="code-block">
+                                <pre>{{ trace.llm_response if trace.llm_response else 'No response available' }}</pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Token Usage Section -->
+                    <div class="trace-section">
+                        <div class="section-header" onclick="toggleSection('tokens-{{ loop.index0 }}')">
+                            <span>📊 Token Usage & Performance</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="section-content" id="tokens-{{ loop.index0 }}">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Prompt Tokens</div>
+                                    <div style="font-size: 1.8em; font-weight: 600; color: #667eea;">{{ trace.prompt_tokens if trace.prompt_tokens else 'N/A' }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Completion Tokens</div>
+                                    <div style="font-size: 1.8em; font-weight: 600; color: #48bb78;">{{ trace.completion_tokens if trace.completion_tokens else 'N/A' }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Total Tokens</div>
+                                    <div style="font-size: 1.8em; font-weight: 600; color: #f5576c;">{{ trace.total_tokens if trace.total_tokens else 'N/A' }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Duration</div>
+                                    <div style="font-size: 1.8em; font-weight: 600; color: #ed8936;">{{ trace.duration_ms }}ms</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% elif conversation_id %}
+        <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h2>No Traces Found</h2>
+            <p>No classification traces found for conversation ID: <strong>{{ conversation_id }}</strong></p>
+            <p>This conversation may not have been classified yet, or the ID is incorrect.</p>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <h2>Enter a Conversation ID</h2>
+            <p>Enter a Front conversation ID above to view its classification trace.</p>
+            <p style="font-size: 0.9em; margin-top: 20px;">Example: cnv_1fu8gs5u</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function toggleTrace(index) {
+            const traceBody = document.getElementById('trace-' + index);
+            const header = traceBody.previousElementSibling;
+            const icon = header.querySelector('.toggle-icon');
+
+            traceBody.classList.toggle('active');
+            icon.style.transform = traceBody.classList.contains('active') ? 'rotate(180deg)' : 'rotate(0deg)';
+        }
+
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            const header = section.previousElementSibling;
+            const icon = header.querySelector('.toggle-icon');
+
+            section.classList.toggle('active');
+            header.classList.toggle('active');
+        }
+
+        // Auto-expand first trace if traces exist
+        window.addEventListener('DOMContentLoaded', () => {
+            const firstTrace = document.getElementById('trace-0');
+            if (firstTrace) {
+                firstTrace.classList.add('active');
+                const icon = firstTrace.previousElementSibling.querySelector('.toggle-icon');
+                icon.style.transform = 'rotate(180deg)';
+            }
+        });
+    </script>
+</body>
+</html>

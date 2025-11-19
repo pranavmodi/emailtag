@@ -6,6 +6,8 @@ Service to classify email conversations into top-level categories using predefin
 import os
 import json
 import functools # Import functools
+import time
+from datetime import datetime
 from typing import Dict, List, Any, Tuple, Optional
 from dotenv import load_dotenv
 import openai
@@ -21,6 +23,8 @@ from app.services.frontapp_service import remove_conversation_tags
 from app.services.file_based_rules_service import get_file_based_rules_service
 from app.services.trace_service import create_tracer
 from app.models.processing_trace import StepTypes, TraceSteps, TraceStatus
+from app.models.classification_trace import ClassificationTrace
+from app.db.session import SessionLocal
 
 # Load environment variables if needed (though settings should handle this)
 load_dotenv()
@@ -412,7 +416,10 @@ def _call_llm_for_classification(
     message_times: str = "",
     recipients_to_info: str = "",
     recipients_cc_info: str = "",
-    structured_messages: Optional[List[Dict[str, Any]]] = None
+    structured_messages: Optional[List[Dict[str, Any]]] = None,
+    front_conversation_id: Optional[str] = None,
+    email_id: Optional[str] = None,
+    step_order: Optional[int] = None
 ) -> Optional[str]:
     """
     Helper function to call the LLM using a pre-fetched and pre-formatted prompt template.
@@ -591,10 +598,14 @@ def _call_llm_for_classification(
 
     logger.info(f"🔍 CLASSIFYING '{classification_level_name}': rule={len(llm_prompt_template)}chars, email={len(conversation_text)}chars{doc_summary}")
 
+    # Start timing
+    start_time = time.time()
+    started_at = datetime.utcnow()
+
     try:
         # Use dedicated classification model if available, otherwise fall back to general model
         classification_model = settings.OPENAI_CLASSIFICATION_MODEL or settings.OPENAI_MODEL_VERSION
-        
+
         # Prepare parameters based on model version
         api_params = {
             "model": classification_model,
@@ -603,7 +614,7 @@ def _call_llm_for_classification(
                 {"role": "user", "content": final_llm_prompt}
             ]
         }
-        
+
         # Add parameters based on model type
         if "o3-mini" in classification_model.lower():
             api_params["max_completion_tokens"] = 50
@@ -612,17 +623,22 @@ def _call_llm_for_classification(
             # For 4o and other models
             api_params["temperature"] = 0.0
             api_params["max_tokens"] = 50
-        
-        # Log API call details 
+
+        # Log API call details
         if CLASSIFICATION_DEBUG:
             debug_logger.debug(f"🔍 Making API call with model: {classification_model}")
             debug_logger.debug(f"🔍 API params: temperature={api_params.get('temperature', 'N/A')}, max_tokens={api_params.get('max_tokens', api_params.get('max_completion_tokens', 'N/A'))}")
             debug_logger.debug("🔍 Full API request:")
             debug_logger.debug(f"Model: {api_params['model']}")
             debug_logger.debug(f"Messages: {api_params['messages']}")
-        
+
         # The system message can be very generic as instructions are in the user prompt.
         response = client.chat.completions.create(**api_params)
+
+        # Calculate timing
+        end_time = time.time()
+        duration_ms = int((end_time - start_time) * 1000)
+        completed_at = datetime.utcnow()
         
         # 🔍 DETAILED RESPONSE DEBUG
         raw_response = response.choices[0].message.content
@@ -645,6 +661,44 @@ def _call_llm_for_classification(
             logger.error(f"🚨 EMPTY PREDICTION: '{classification_level_name}' (path: [{' → '.join(current_path)}])")
             logger.error(f"🚨 Full prompt (first 1000 chars): {final_llm_prompt[:1000]}...")
             logger.error(f"🚨 RAW RESPONSE: '{raw_response}'")
+
+        # Save classification trace to database
+        if front_conversation_id and step_order is not None:
+            try:
+                db = SessionLocal()
+                try:
+                    trace = ClassificationTrace(
+                        front_conversation_id=front_conversation_id,
+                        email_id=email_id,
+                        step_name=classification_level_name,
+                        step_order=step_order,
+                        classification_path=' → '.join(current_path) if current_path else None,
+                        llm_model=classification_model,
+                        prompt_template=llm_prompt_template,
+                        full_prompt=final_llm_prompt,
+                        llm_response=raw_response,
+                        chosen_option=prediction,
+                        email_format='structured_chain' if structured_messages else 'raw_text',
+                        message_count=len(structured_messages) if structured_messages else None,
+                        started_at=started_at,
+                        completed_at=completed_at,
+                        duration_ms=duration_ms,
+                        prompt_tokens=response.usage.prompt_tokens if response.usage else None,
+                        completion_tokens=response.usage.completion_tokens if response.usage else None,
+                        total_tokens=response.usage.total_tokens if response.usage else None,
+                        document_analysis=document_analysis_results if document_analysis_results else None,
+                        created_at=datetime.utcnow()
+                    )
+                    db.add(trace)
+                    db.commit()
+                    logger.debug(f"💾 Saved classification trace for {classification_level_name} (step {step_order})")
+                except Exception as db_error:
+                    logger.error(f"Failed to save classification trace: {db_error}", exc_info=True)
+                    db.rollback()
+                finally:
+                    db.close()
+            except Exception as session_error:
+                logger.error(f"Failed to create database session for trace: {session_error}")
 
         # Validation of prediction against options must happen *after* this call,
         # in the calling function (classify_email_tags_hierarchical), as this function
@@ -961,8 +1015,9 @@ def classify_email_tags_hierarchical(
 
     try:
         current_level_dict = settings.EMAIL_CATEGORIES # This defines the structure to traverse
-        classification_path = [] 
-        level_name_for_logging = "Category" 
+        classification_path = []
+        level_name_for_logging = "Category"
+        step_order = 0  # Track classification step sequence for tracing
 
         while isinstance(current_level_dict, dict):
             options = list(current_level_dict.keys())
@@ -997,8 +1052,12 @@ def classify_email_tags_hierarchical(
                 message_times,
                 recipients_to_info,
                 recipients_cc_info,
-                structured_messages
+                structured_messages,
+                front_conversation_id,
+                None,  # email_id - will be added later if needed
+                step_order
             )
+            step_order += 1  # Increment for next step
 
             if not chosen_option or chosen_option not in options: # Validate prediction against current options
                 logger.warning(f"LLM failed to classify or returned invalid option '{chosen_option}' at level '{level_name_for_logging}' with options {options} for {front_conversation_id}. Path: {classification_path}. Assigning review.")
@@ -1047,8 +1106,12 @@ def classify_email_tags_hierarchical(
                     message_times,
                     recipients_to_info,
                     recipients_cc_info,
-                    structured_messages
+                    structured_messages,
+                    front_conversation_id,
+                    None,  # email_id
+                    step_order
                 )
+                step_order += 1  # Increment for next step
 
                 if chosen_final_tag and chosen_final_tag in final_options_in_list:
                     tags_to_return = [chosen_final_tag]

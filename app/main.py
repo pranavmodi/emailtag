@@ -110,6 +110,20 @@ def create_application() -> FastAPI:
             return RedirectResponse(url="/login", status_code=303)
         return await email_extraction_ui(request)
 
+    @application.get("/classification-traces")
+    async def classification_traces_page(
+        request: Request,
+        conversation_id: Optional[str] = None,
+        is_authenticated: bool = Depends(check_authenticated)
+    ):
+        """Classification trace viewer page."""
+        if not is_authenticated:
+            return RedirectResponse(url="/login", status_code=303)
+        # Delegate to the trace router's view function
+        from app.api.v1.endpoints.trace_viewer_api import view_classification_traces_ui
+        from fastapi import Query
+        return await view_classification_traces_ui(request, conversation_id, is_authenticated)
+
     @application.get("/health")
     async def health_check():
         """Health check endpoint."""
