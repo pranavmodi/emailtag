@@ -486,6 +486,36 @@
                         </div>
                     </div>
 
+                    <!-- Conversation Summary Section -->
+                    {% if trace.conversation_summary %}
+                    <div class="trace-section">
+                        <div class="section-header" onclick="toggleSection('summary-{{ loop.index0 }}')">
+                            <span>💬 Conversation Summary</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="section-content active" id="summary-{{ loop.index0 }}">
+                            <div style="background-color: white; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea;">
+                                <p style="margin: 0; color: #2d3748; line-height: 1.6; font-size: 1.05em;">{{ trace.conversation_summary }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Classification Reason Section -->
+                    {% if trace.classification_reason %}
+                    <div class="trace-section">
+                        <div class="section-header active" onclick="toggleSection('reason-{{ loop.index0 }}')">
+                            <span>🎯 Classification Reason</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="section-content active" id="reason-{{ loop.index0 }}">
+                            <div style="background-color: white; padding: 20px; border-radius: 8px; border-left: 4px solid #48bb78;">
+                                <p style="margin: 0; color: #2d3748; line-height: 1.6; font-size: 1.05em;">{{ trace.classification_reason }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <!-- Token Usage Section -->
                     <div class="trace-section">
                         <div class="section-header" onclick="toggleSection('tokens-{{ loop.index0 }}')">

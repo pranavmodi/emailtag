@@ -36,6 +36,8 @@ class ClassificationTrace(Base):
     full_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Complete prompt sent to LLM
     llm_response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Raw response from LLM
     chosen_option: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)  # The selected option
+    conversation_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Brief summary of conversation
+    classification_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Reason for classification choice
 
     # Email content format tracking
     email_format: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # "structured_chain" or "raw_text"

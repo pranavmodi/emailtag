@@ -419,7 +419,8 @@ def _call_llm_for_classification(
     structured_messages: Optional[List[Dict[str, Any]]] = None,
     front_conversation_id: Optional[str] = None,
     email_id: Optional[str] = None,
-    step_order: Optional[int] = None
+    step_order: Optional[int] = None,
+    valid_options: Optional[List[str]] = None
 ) -> Optional[str]:
     """
     Helper function to call the LLM using a pre-fetched and pre-formatted prompt template.
@@ -604,7 +605,8 @@ def _call_llm_for_classification(
 
     try:
         # Use dedicated classification model if available, otherwise fall back to general model
-        classification_model = settings.OPENAI_CLASSIFICATION_MODEL or settings.OPENAI_MODEL_VERSION
+        # Default to gpt-5-mini if not specified
+        classification_model = settings.OPENAI_CLASSIFICATION_MODEL or settings.OPENAI_MODEL_VERSION or "gpt-5-mini"
 
         # Prepare parameters based on model version
         api_params = {
@@ -615,19 +617,59 @@ def _call_llm_for_classification(
             ]
         }
 
+        # Add structured outputs if valid options are provided
+        if valid_options:
+            # Use JSON schema to constrain output to valid options
+            api_params["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "classification_response",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "chosen_option": {
+                                "type": "string",
+                                "enum": valid_options,
+                                "description": f"The chosen classification option from: {', '.join(valid_options)}"
+                            },
+                            "conversation_summary": {
+                                "type": "string",
+                                "description": "A brief 1-2 sentence summary of what the email conversation is about"
+                            },
+                            "reason": {
+                                "type": "string",
+                                "description": "Explanation for why this classification option was chosen, citing specific details from the email"
+                            }
+                        },
+                        "required": ["chosen_option", "conversation_summary", "reason"],
+                        "additionalProperties": False
+                    }
+                }
+            }
+            logger.info(f"📋 Using structured outputs with {len(valid_options)} valid options: {valid_options}")
+
         # Add parameters based on model type
-        if "o3-mini" in classification_model.lower():
-            api_params["max_completion_tokens"] = 50
+        if "gpt-5" in classification_model.lower():
+            # GPT-5 models: use reasoning_effort='minimal' for fast classification
+            # Supported values: 'minimal', 'low', 'medium', 'high'
+            api_params["reasoning_effort"] = "medium"
+            # GPT-5 reasoning models need high token limits because reasoning tokens count toward max_completion_tokens
+            # With medium/high reasoning_effort, internal reasoning can use thousands of tokens
+            api_params["max_completion_tokens"] = 16000  # Sufficient for reasoning + JSON response
+            logger.info(f"🤖 Using GPT-5 model with reasoning_effort='medium' for classification (max_tokens=16000)")
+        elif "o3-mini" in classification_model.lower():
+            api_params["max_completion_tokens"] = 200  # Increased for JSON response
             # Don't add temperature for o3-mini
         else:
             # For 4o and other models
             api_params["temperature"] = 0.0
-            api_params["max_tokens"] = 50
+            api_params["max_tokens"] = 200  # Increased for JSON response
 
         # Log API call details
         if CLASSIFICATION_DEBUG:
             debug_logger.debug(f"🔍 Making API call with model: {classification_model}")
-            debug_logger.debug(f"🔍 API params: temperature={api_params.get('temperature', 'N/A')}, max_tokens={api_params.get('max_tokens', api_params.get('max_completion_tokens', 'N/A'))}")
+            debug_logger.debug(f"🔍 API params: temperature={api_params.get('temperature', 'N/A')}, max_tokens={api_params.get('max_tokens', api_params.get('max_completion_tokens', 'N/A'))}, reasoning_effort={api_params.get('reasoning_effort', 'N/A')}")
             debug_logger.debug("🔍 Full API request:")
             debug_logger.debug(f"Model: {api_params['model']}")
             debug_logger.debug(f"Messages: {api_params['messages']}")
@@ -639,10 +681,61 @@ def _call_llm_for_classification(
         end_time = time.time()
         duration_ms = int((end_time - start_time) * 1000)
         completed_at = datetime.utcnow()
-        
-        # 🔍 DETAILED RESPONSE DEBUG
-        raw_response = response.choices[0].message.content
-        prediction = raw_response.strip().strip("'\"") if raw_response else ""
+
+        # 🔍 DETAILED RESPONSE DEBUG - Log full response object first
+        logger.info(f"🔍 Response object type: {type(response)}")
+        logger.info(f"🔍 Response model: {response.model if hasattr(response, 'model') else 'N/A'}")
+        logger.info(f"🔍 Number of choices: {len(response.choices) if hasattr(response, 'choices') else 'N/A'}")
+        if response.choices:
+            logger.info(f"🔍 First choice: {response.choices[0]}")
+            logger.info(f"🔍 Message: {response.choices[0].message}")
+            logger.info(f"🔍 Finish reason: {response.choices[0].finish_reason}")
+            logger.info(f"🔍 Message content type: {type(response.choices[0].message.content)}")
+            logger.info(f"🔍 Message content: '{response.choices[0].message.content}'")
+            if hasattr(response.choices[0].message, 'refusal'):
+                logger.info(f"🔍 Refusal: {response.choices[0].message.refusal}")
+
+        # Handle different response formats for reasoning models
+        # GPT-5 reasoning models may return content as an array: content[0].text
+        # Standard models return content as a string
+        message_content = response.choices[0].message.content
+
+        if isinstance(message_content, list) and len(message_content) > 0:
+            # Reasoning model format: content is a list with text objects
+            if hasattr(message_content[0], 'text'):
+                raw_response = message_content[0].text
+            elif isinstance(message_content[0], dict) and 'text' in message_content[0]:
+                raw_response = message_content[0]['text']
+            else:
+                # Fallback: try to get the first item as string
+                raw_response = str(message_content[0])
+            logger.info(f"🔍 Extracted content from array format: '{raw_response[:200]}...'")
+        else:
+            # Standard format: content is a string
+            raw_response = message_content
+            logger.info(f"🔍 Using standard string format: '{raw_response[:200] if raw_response else 'EMPTY'}...'")
+
+
+        # Parse response based on whether structured outputs were used
+        conversation_summary = None
+        classification_reason = None
+
+        if valid_options and raw_response:
+            try:
+                # Parse JSON response from structured outputs
+                response_json = json.loads(raw_response)
+                prediction = response_json.get("chosen_option", "")
+                conversation_summary = response_json.get("conversation_summary", "")
+                classification_reason = response_json.get("reason", "")
+                logger.debug(f"📦 Parsed structured output: {prediction}")
+                logger.debug(f"📝 Summary: {conversation_summary[:100]}...")
+                logger.debug(f"💡 Reason: {classification_reason[:100]}...")
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse structured output JSON: {e}")
+                prediction = ""
+        else:
+            # Fallback to plain text parsing
+            prediction = raw_response.strip().strip("'\"") if raw_response else ""
         
         if CLASSIFICATION_DEBUG:
             debug_logger.debug("🚨 FULL LLM RESPONSE:")
@@ -678,6 +771,8 @@ def _call_llm_for_classification(
                         full_prompt=final_llm_prompt,
                         llm_response=raw_response,
                         chosen_option=prediction,
+                        conversation_summary=conversation_summary,
+                        classification_reason=classification_reason,
                         email_format='structured_chain' if structured_messages else 'raw_text',
                         message_count=len(structured_messages) if structured_messages else None,
                         started_at=started_at,
@@ -1055,7 +1150,8 @@ def classify_email_tags_hierarchical(
                 structured_messages,
                 front_conversation_id,
                 None,  # email_id - will be added later if needed
-                step_order
+                step_order,
+                options  # Pass valid options for structured outputs
             )
             step_order += 1  # Increment for next step
 
@@ -1109,7 +1205,8 @@ def classify_email_tags_hierarchical(
                     structured_messages,
                     front_conversation_id,
                     None,  # email_id
-                    step_order
+                    step_order,
+                    final_options_in_list  # Pass valid options for structured outputs
                 )
                 step_order += 1  # Increment for next step
 
