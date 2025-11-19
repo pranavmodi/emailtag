@@ -59,4 +59,11 @@ migrations/versions/*
 !migrations/versions/.gitkeep
 
 # Debug images and temporary files
-tmp/ 
+tmp/
+
+# Node / Next.js artifacts
+node_modules/
+.next/
+frontend/settings2/node_modules/
+frontend/settings2/.next/
+frontend/settings2/out/
