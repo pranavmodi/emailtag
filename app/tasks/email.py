@@ -555,6 +555,13 @@ def perform_tagging_task(self, email_id: str) -> Dict:
         raw_timestamps = conversation_data.get('timestamps', ['Unknown Timestamps'])
         raw_recipients_to = conversation_data.get('recipients_to', [])
         raw_recipients_cc = conversation_data.get('recipients_cc', [])
+        structured_messages = conversation_data.get('_structured_messages', [])
+
+        # Log structured messages extraction
+        if structured_messages:
+            logger.info(f"📬 EXTRACTED {len(structured_messages)} structured messages from Front API for {front_conversation_id}")
+        else:
+            logger.warning(f"⚠️ NO structured messages found for {front_conversation_id} - will use raw text format")
 
         sender_info = ", ".join(map(str, raw_senders)) if raw_senders else "Unknown Sender"
         message_times = ", ".join(map(str, raw_timestamps)) if raw_timestamps else "Unknown Timestamps"
@@ -581,7 +588,8 @@ def perform_tagging_task(self, email_id: str) -> Dict:
             message_times=message_times,
             document_analysis_results=document_results,
             recipients_to_info=recipients_to_info,
-            recipients_cc_info=recipients_cc_info
+            recipients_cc_info=recipients_cc_info,
+            structured_messages=structured_messages
         )
 
         # --- MISSING LIEN ATTACHMENT CHECK ---

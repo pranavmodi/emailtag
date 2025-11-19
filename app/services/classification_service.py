@@ -72,6 +72,35 @@ def get_openai_client() -> OpenAI:
             raise
     return _openai_client
 
+def format_structured_messages_as_email_chain(structured_messages: List[Dict[str, Any]]) -> str:
+    """
+    Formats structured messages from Front API as an email chain similar to archival detection.
+
+    Args:
+        structured_messages: List of structured message data from Front API.
+
+    Returns:
+        str: Formatted email chain with clear message boundaries and metadata.
+    """
+    if not structured_messages:
+        return ""
+
+    email_chain_summary = "EMAIL CHAIN (Chronological Order):\n\n"
+
+    for i, msg in enumerate(structured_messages, 1):
+        sender = msg.get('author_email') or msg.get('author_handle') or msg.get('author_name', 'Unknown')
+        date = msg.get('created_at', 'Unknown')
+        body = msg.get('body', '')
+
+        email_chain_summary += f"EMAIL #{i}:\n"
+        email_chain_summary += f"From: {sender}\n"
+        email_chain_summary += f"Date: {date}\n"
+        email_chain_summary += f"Subject: Message {i}\n"
+        email_chain_summary += f"Body: {body}\n"
+        email_chain_summary += "---\n\n"
+
+    return email_chain_summary
+
 def get_classification_rules_for_category(category_name: str) -> str:
     """
     Load active classification rules from file for a specific category.
@@ -382,11 +411,32 @@ def _call_llm_for_classification(
     sender_info: str = "",
     message_times: str = "",
     recipients_to_info: str = "",
-    recipients_cc_info: str = ""
+    recipients_cc_info: str = "",
+    structured_messages: Optional[List[Dict[str, Any]]] = None
 ) -> Optional[str]:
     """
     Helper function to call the LLM using a pre-fetched and pre-formatted prompt template.
     It injects the conversation text and metadata into the prompt.
+
+    If structured_messages is provided, the conversation will be formatted as an email chain
+    with clear message boundaries (similar to archival detection). Otherwise, it falls back
+    to raw concatenated text with metadata.
+
+    Args:
+        client: OpenAI client
+        conversation_text: Raw conversation text (used as fallback)
+        llm_prompt_template: The classification rule prompt
+        classification_level_name: Name of current classification level (for logging)
+        current_path: Current path in hierarchy (for logging)
+        document_analysis_results: Optional document processing results
+        sender_info: Sender information
+        message_times: Message timestamps
+        recipients_to_info: To recipients
+        recipients_cc_info: CC recipients
+        structured_messages: Optional structured messages from Front API for email chain formatting
+
+    Returns:
+        The chosen option from the LLM, or None if classification fails
     """
     # The placeholder check is no longer needed as llm_prompt_template is now just instructions.
     # if "{EMAIL_CONTENT_PLACEHOLDER}" not in llm_prompt_template: 
@@ -434,27 +484,48 @@ def _call_llm_for_classification(
         
         document_section += "--- END ATTACHED DOCUMENTS ANALYSIS ---\n"
 
-    # Construct metadata section
-    metadata_section = ""
-    if sender_info or recipients_to_info or recipients_cc_info or message_times:
-        metadata_section = "--- EMAIL METADATA ---\n"
-        if sender_info:
-            metadata_section += f"From: {sender_info}\n"
-        if recipients_to_info:
-            metadata_section += f"To: {recipients_to_info}\n"
-        if recipients_cc_info:
-            metadata_section += f"CC: {recipients_cc_info}\n"
-        if message_times:
-            metadata_section += f"Timestamps: {message_times}\n"
-        metadata_section += "--- EMAIL METADATA END ---\n\n"
+    # Format email content - use structured email chain if available, otherwise raw text
+    email_content_section = ""
+    if structured_messages:
+        # Use structured email chain format (similar to archival detection)
+        formatted_chain = format_structured_messages_as_email_chain(structured_messages)
+        email_content_section = (
+            f"--- EMAIL CONTENT TO CLASSIFY START ---\n"
+            f"{formatted_chain}"
+            f"--- EMAIL CONTENT TO CLASSIFY END ---"
+        )
+        logger.info(f"📧 EMAIL FORMAT: Using structured email chain ({len(structured_messages)} messages)")
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug(f"🔍 Using structured email chain format ({len(structured_messages)} messages)")
+    else:
+        # Fallback to raw concatenated text with metadata
+        metadata_section = ""
+        if sender_info or recipients_to_info or recipients_cc_info or message_times:
+            metadata_section = "--- EMAIL METADATA ---\n"
+            if sender_info:
+                metadata_section += f"From: {sender_info}\n"
+            if recipients_to_info:
+                metadata_section += f"To: {recipients_to_info}\n"
+            if recipients_cc_info:
+                metadata_section += f"CC: {recipients_cc_info}\n"
+            if message_times:
+                metadata_section += f"Timestamps: {message_times}\n"
+            metadata_section += "--- EMAIL METADATA END ---\n\n"
 
-    # Construct the final prompt by appending metadata, email content, document analysis, and cue to the instructions
+        email_content_section = (
+            f"{metadata_section}"
+            f"--- EMAIL CONTENT TO CLASSIFY START ---\n"
+            f"{conversation_text}\n"
+            f"--- EMAIL CONTENT TO CLASSIFY END ---"
+        )
+        logger.info(f"📧 EMAIL FORMAT: Using raw concatenated text (fallback - no structured messages)")
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug(f"🔍 Using raw concatenated text format (fallback)")
+
+    # Construct the final prompt by appending email content, document analysis, and cue to the instructions
     final_llm_prompt = (
         f"{llm_prompt_template}\n\n"
-        f"{metadata_section}"
-        f"--- EMAIL CONTENT TO CLASSIFY START ---\n"
-        f"{conversation_text}\n"
-        f"--- EMAIL CONTENT TO CLASSIFY END ---"
+        f"{email_content_section}"
         f"{document_section}\n"
         f"Chosen Option:"
     )
@@ -821,7 +892,8 @@ def classify_email_tags_hierarchical(
     message_times: str,
     document_analysis_results: Optional[List[Dict[str, Any]]] = None,
     recipients_to_info: str = "",
-    recipients_cc_info: str = ""
+    recipients_cc_info: str = "",
+    structured_messages: Optional[List[Dict[str, Any]]] = None
 ) -> List[str]:
     """
     Classifies an email conversation by traversing the EMAIL_CATEGORIES hierarchy,
@@ -829,12 +901,14 @@ def classify_email_tags_hierarchical(
 
     Args:
         front_conversation_id: The Front conversation ID
-        conversation_text: Full conversation text
+        conversation_text: Full conversation text (fallback if structured_messages not provided)
         sender_info: Information about senders
         message_times: Message timestamps
         document_analysis_results: Optional document analysis results
         recipients_to_info: Information about 'to' recipients
         recipients_cc_info: Information about 'cc' recipients
+        structured_messages: Optional list of structured message data from Front API.
+                           If provided, will be formatted as email chain for better context.
 
     Returns:
         List of tag names for the classified conversation
@@ -922,7 +996,8 @@ def classify_email_tags_hierarchical(
                 sender_info,
                 message_times,
                 recipients_to_info,
-                recipients_cc_info
+                recipients_cc_info,
+                structured_messages
             )
 
             if not chosen_option or chosen_option not in options: # Validate prediction against current options
@@ -971,7 +1046,8 @@ def classify_email_tags_hierarchical(
                     sender_info,
                     message_times,
                     recipients_to_info,
-                    recipients_cc_info
+                    recipients_cc_info,
+                    structured_messages
                 )
 
                 if chosen_final_tag and chosen_final_tag in final_options_in_list:
