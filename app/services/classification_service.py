@@ -33,7 +33,7 @@ load_dotenv()
 _openai_client: Optional[OpenAI] = None
 
 # Define top-level categories explicitly for the conflict check and initial rule loading
-_TOP_LEVEL_CATEGORIES = ["Scheduling", "Medical Records & Images", "Accounts Receivable"]
+_TOP_LEVEL_CATEGORIES = ["Scheduling", "Medical Records & Images", "Accounts Receivable", "No Tag"]
 _TOP_LEVEL_RULES_CATEGORY_NAME = "ROOT" # Changed to use ROOT which contains top-level differentiation rules
 
 logger = logging.getLogger(__name__)

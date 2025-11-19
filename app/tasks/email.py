@@ -787,6 +787,13 @@ def perform_tagging_task(self, email_id: str) -> Dict:
             final_tagging_status = "tagging_completed_no_tags"
             email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_tagging_status))
             # No tags to apply to DB or Front in this case. is_processed remains False by default.
+        elif "No Tag" in new_tags:
+            # Special handling for "No Tag" classification - skip all Front tagging and downstream processing
+            logger.info(f"🚫 Email {email_id} classified as 'No Tag' (unrelated/promotional). Skipping Front tagging and downstream processing.")
+            final_tagging_status = "no_tag_no_action_needed"
+            email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_tagging_status, is_processed=True))
+            # Skip Front tagging, inbox routing, case update checks, and autoresponse for "No Tag" emails
+            return {"status": "no_tag_no_action", "email_id": email_id, "classification": "No Tag"}
         else:
             logger.info(f"Hierarchical classification for {front_conversation_id} resulted in tags: {new_tags}")
 

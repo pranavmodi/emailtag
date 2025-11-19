@@ -1,7 +1,7 @@
 Classification Rules for Email Categories
 ========================================
 
-**Categories:** Scheduling, Medical Records & Images, Accounts Receivable
+**Categories:** Scheduling, Medical Records & Images, Accounts Receivable, No Tag
 
 Please use the following rules to classify the provided email content into one of the above categories.
 
@@ -10,7 +10,8 @@ Please use the following rules to classify the provided email content into one o
 When an email contains requests from MULTIPLE categories, use this priority order:
 1. **Scheduling** (HIGHEST PRIORITY)
 2. **Medical Records & Images** (SECOND PRIORITY)
-3. **Accounts Receivable** (LOWEST PRIORITY)
+3. **Accounts Receivable** (THIRD PRIORITY)
+4. **No Tag** (LOWEST PRIORITY - Only if email is unrelated to business operations)
 
 **SPECIFIC PRIORITY RULES:**
 
@@ -24,17 +25,31 @@ If the email has a PASSWORD-PROTECTED or ENCRYPTED attachment AND the recipient 
 If the email content includes a password (e.g., "the password is...", "password: xyz", "here is the password", "pw:", "passcode:", or similar password-sharing language), classify as 'Scheduling'. Emails that share passwords are typically providing access to password-protected referral documents or appointment-related attachments.
 
 2. **SCHEDULING PRIORITY (HIGHEST):**
-If the email contains ANY scheduling-related content (e.g., "schedule appointment", "reschedule", "cancel appointment", "appointment confirmation", "did patient attend", "patient no-show", "check appointment status"), classify as 'Scheduling' EVEN IF the email also requests medical records, reports, or billing information.
+If the email's PRIMARY PURPOSE is an ACTIVE scheduling request (e.g., "schedule appointment", "reschedule", "cancel appointment", "did patient attend", "patient no-show", "check appointment status"), classify as 'Scheduling' EVEN IF the email also requests medical records, reports, or billing information.
+
+**IMPORTANT**: Passive scheduling information does NOT trigger Scheduling classification. The following are considered passive scheduling context and should NOT override the primary purpose:
+- Being sent from scheduling@precisemri.com or scheduling department
+- Mentioning completed appointments or past exam dates
+- Including Study IDs, exam dates, or appointment metadata
+- Providing scheduling portal links as supplementary information
+- Forwarding confirmation emails about completed procedures
+
+Only classify as Scheduling if there is an ACTIVE request related to scheduling (booking, rescheduling, canceling, or checking status of appointments).
 
 Examples that should be classified as Scheduling:
-- "Did the patient attend their appointment? Also, please send the report."
-- "Please confirm appointment status and forward the bill."
-- "The patient wants to reschedule. Can you also send the medical records?"
+- "Did the patient attend their appointment? Also, please send the report." (PRIMARY: attendance check)
+- "Please confirm appointment status and forward the bill." (PRIMARY: status confirmation)
+- "The patient wants to reschedule. Can you also send the medical records?" (PRIMARY: reschedule request)
+
+Examples that should NOT be classified as Scheduling:
+- "Patient's MRI was completed on 1/15/24. Please send the imaging report." (PRIMARY: report request → Medical Records & Images)
+- Email from scheduling@precisemri.com forwarding a request: "Can you provide the images from study #12345?" (PRIMARY: image request → Medical Records & Images)
+- "The exam is done. Please forward the bill to the attorney." (PRIMARY: billing request → Accounts Receivable)
 
 3. **MEDICAL RECORDS PRIORITY (SECOND):**
-If the email requests medical records, reports, images, or imaging data (e.g., "provide records", "send records", "forward report", "medical records", "imaging results", "send images") AND does NOT contain any scheduling-related content, classify as 'Medical Records & Images'.
+If the email's PRIMARY PURPOSE is requesting medical records, reports, images, or imaging data (e.g., "provide records", "send records", "forward report", "medical records", "imaging results", "send images"), classify as 'Medical Records & Images'.
 
-Note: If medical records are requested ALONG WITH scheduling content, classify as 'Scheduling' per rule #2.
+Note: Only classify as 'Scheduling' per rule #2 if there is an ACTIVE scheduling request (not just passive scheduling information). If the primary purpose is requesting records and there is only passive scheduling context (e.g., mentions completed appointments, from scheduling dept), classify as 'Medical Records & Images'.
 
 4. **CASE UPDATE ATTACHMENT PRIORITY:**
 If there is ANY attachment with document type "case_update" (e.g., attorney case status updates, new attorney notifications, settlement/payment status updates) AND the attachment is a substantial document (not a small logo or letterhead image) AND the email does NOT contain scheduling or medical records requests, classify as 'Accounts Receivable'. Small image files (< 20KB) classified as case_update should be ignored for this rule as they are likely logos.
@@ -134,3 +149,55 @@ Classification Rules for Accounts Receivable:
  b. Any email referencing a financial contact (e.g., "PI Billing Coordinator", "Cedar Financial", or similar) should be classified as Accounts Receivable regardless of any incidental imaging references.
 
 --- END ACCOUNTS RECEIVABLE RULES ---
+
+
+--- START NO TAG RULES ---
+
+Classification Rules for No Tag:
+
+Use "No Tag" for emails that are unrelated to the core business operations of scheduling, medical records, or accounts receivable.
+
+1. **General Inquiries and Test Emails**:
+   - "Is this email still active?"
+   - "Testing email system"
+   - "Can someone confirm receipt?"
+   - "Hello, is anyone there?"
+   - General questions not related to patients, appointments, records, or billing
+
+2. **Promotional and Marketing Emails**:
+   - Advertisements for products or services
+   - Marketing campaigns
+   - Newsletter subscriptions
+   - Vendor promotions
+   - Sales pitches
+   - Conference invitations unrelated to patient care
+
+3. **Spam and Irrelevant Content**:
+   - Obvious spam messages
+   - Phishing attempts
+   - Unrelated business solicitations
+   - Job offers or recruitment emails
+   - Social media notifications
+
+4. **Out-of-Office and Auto-Replies**:
+   - Automated out-of-office responses
+   - Vacation auto-replies
+   - Delivery status notifications (unless related to patient communication)
+
+5. **Personal Communications**:
+   - Personal messages not related to business operations
+   - Social invitations
+   - Non-work-related discussions
+
+6. **Misdirected Emails**:
+   - Emails clearly sent to wrong address
+   - Messages intended for different departments/organizations
+
+**IMPORTANT**: Only use "No Tag" if the email is clearly unrelated to:
+- Scheduling appointments or referrals
+- Medical records, reports, or imaging requests
+- Billing, payments, liens, or financial matters
+
+If there is ANY patient-related content, scheduling information, records request, or billing discussion, classify under the appropriate category (Scheduling, Medical Records & Images, or Accounts Receivable) instead of "No Tag".
+
+--- END NO TAG RULES ---
