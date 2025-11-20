@@ -1023,9 +1023,9 @@ def eval_single_conversation_task(conversation_id: str) -> Dict[str, Any]:
     Celery task to evaluate classification for a single conversation.
     Runs classification WITHOUT applying tags and compares with actual tags.
 
-    This is the async version for use in bulk evaluations.
+    This is the async/non-blocking version that runs in Celery workers.
     """
-    from app.crud import email as email_crud_sync
+    from app.crud.sync import email as email_crud_sync  # Use sync CRUD for Celery tasks
     from app.services.classification_service import classify_email_tags_hierarchical
     from app.services.frontapp_service import get_conversation_text
     from app.db.session import SessionLocal
@@ -1055,8 +1055,11 @@ def eval_single_conversation_task(conversation_id: str) -> Dict[str, Any]:
         recipients_cc_info = conversation_data.get("recipients_cc_info", {})
         structured_messages = conversation_data.get("_structured_messages", [])
 
-        # Get email object to retrieve document analysis results
-        email = email_crud_sync.get_by_front_conversation_id(db, front_conversation_id=conversation_id)
+        # Get email object to retrieve document analysis results and actual tags
+        # Use load_tags=True to eagerly load tags
+        email = email_crud_sync.get_by_front_conversation_id(
+            db, front_conversation_id=conversation_id, load_tags=True
+        )
         document_results = None
         if email and hasattr(email, 'ocr_results') and email.ocr_results:
             document_results = email.ocr_results
@@ -1074,7 +1077,7 @@ def eval_single_conversation_task(conversation_id: str) -> Dict[str, Any]:
             structured_messages=structured_messages
         )
 
-        # Get actual tags from database
+        # Get actual tags from database (already eagerly loaded)
         actual_tags = []
         if email and email.tags:
             actual_tags = [tag.name for tag in email.tags]

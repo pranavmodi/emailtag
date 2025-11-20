@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.crud.base import CRUDBase
 from app.models.email import Email
@@ -15,12 +16,23 @@ class CRUDEmail(CRUDBase[Email, EmailCreate, EmailUpdate]):
     """CRUD operations for emails."""
 
     async def get_by_front_conversation_id(
-        self, db: AsyncSession, *, front_conversation_id: str
+        self, db: AsyncSession, *, front_conversation_id: str, load_tags: bool = False
     ) -> Optional[Email]:
-        """Get email by FrontApp conversation ID."""
-        result = await db.execute(
-            select(self.model).filter(self.model.front_conversation_id == front_conversation_id)
-        )
+        """
+        Get email by FrontApp conversation ID.
+
+        Args:
+            db: Database session
+            front_conversation_id: Front conversation ID
+            load_tags: If True, eagerly load the tags relationship
+        """
+        query = select(self.model).filter(self.model.front_conversation_id == front_conversation_id)
+
+        if load_tags:
+            # Eagerly load tags to avoid lazy-loading issues in async context
+            query = query.options(selectinload(self.model.tags))
+
+        result = await db.execute(query)
         return result.scalars().first()
 
     async def get_conversation_content(

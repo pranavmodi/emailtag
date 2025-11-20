@@ -510,24 +510,20 @@ async def eval_classification(
         )
 
     if conversation_id:
-        # Single conversation - run synchronously
-        logger.info(f"🧪 EVAL MODE (SYNC): Running classification for conversation {conversation_id}")
-        result = await _eval_single_conversation(conversation_id, db)
+        # Single conversation - queue Celery task for non-blocking execution
+        logger.info(f"🧪 EVAL MODE (ASYNC): Queuing classification task for conversation {conversation_id}")
 
-        # Calculate summary
-        summary = {
-            "total": 1,
-            "exact_matches": 1 if result["exact_match"] else 0,
-            "partial_matches": 1 if result["partial_match"] and not result["exact_match"] else 0,
-            "no_matches": 0 if result["exact_match"] or result["partial_match"] else 1,
-            "accuracy": result["accuracy"]
-        }
+        task = eval_single_conversation_task.apply_async(
+            args=[conversation_id],
+            queue='processing'
+        )
 
         return {
-            "mode": "sync",
+            "mode": "async",
             "conversation_id": conversation_id,
-            "results": [result],
-            "summary": summary
+            "task_id": task.id,
+            "message": f"Eval task queued for {conversation_id}. Use task_id to check status.",
+            "status_url": f"/api/v1/tags/eval-status/{task.id}"
         }
 
     else:
@@ -562,6 +558,42 @@ async def eval_classification(
         }
 
 
+@router.get("/eval-status/{task_id}", response_model=Dict[str, Any])
+async def get_eval_status(task_id: str) -> Dict[str, Any]:
+    """
+    Get the status and result of an eval classification task.
+
+    Args:
+        task_id: Celery task ID
+
+    Returns:
+        Dict with task status and result (if completed)
+    """
+    from celery.result import AsyncResult
+    from app.tasks.worker import celery_app
+
+    task_result = AsyncResult(task_id, app=celery_app)
+
+    response = {
+        "task_id": task_id,
+        "status": task_result.state,  # PENDING, STARTED, SUCCESS, FAILURE, RETRY
+    }
+
+    if task_result.ready():
+        # Task completed
+        if task_result.successful():
+            response["result"] = task_result.result
+            response["message"] = "Eval completed successfully"
+        else:
+            response["error"] = str(task_result.result)
+            response["message"] = "Eval failed"
+    else:
+        # Task still running
+        response["message"] = f"Eval task is {task_result.state.lower()}"
+
+    return response
+
+
 async def _eval_single_conversation(conversation_id: str, db: AsyncSession) -> Dict[str, Any]:
     """
     Evaluate classification for a single conversation.
@@ -593,8 +625,11 @@ async def _eval_single_conversation(conversation_id: str, db: AsyncSession) -> D
         recipients_cc_info = conversation_data.get("recipients_cc_info", {})
         structured_messages = conversation_data.get("_structured_messages", [])
 
-        # Get email object to retrieve document analysis results
-        email = await email_crud.get_by_front_conversation_id(db, front_conversation_id=conversation_id)
+        # Get email object to retrieve document analysis results and actual tags
+        # Use load_tags=True to eagerly load tags and avoid lazy-loading issues
+        email = await email_crud.get_by_front_conversation_id(
+            db, front_conversation_id=conversation_id, load_tags=True
+        )
         document_results = None
         if email and hasattr(email, 'ocr_results') and email.ocr_results:
             document_results = email.ocr_results
@@ -612,7 +647,7 @@ async def _eval_single_conversation(conversation_id: str, db: AsyncSession) -> D
             structured_messages=structured_messages
         )
 
-        # Get actual tags from database
+        # Get actual tags from database (already eagerly loaded)
         actual_tags = []
         if email and email.tags:
             actual_tags = [tag.name for tag in email.tags]

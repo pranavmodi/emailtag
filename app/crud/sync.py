@@ -25,10 +25,25 @@ class SyncCRUDEmail:
         return db.query(self.model).filter(self.model.id == id).first()
     
     def get_by_front_conversation_id(
-        self, db: Session, *, front_conversation_id: str
+        self, db: Session, *, front_conversation_id: str, load_tags: bool = False
     ) -> Optional[Email]:
-        """Get email by FrontApp conversation ID."""
-        return db.query(self.model).filter(self.model.front_conversation_id == front_conversation_id).first()
+        """
+        Get email by FrontApp conversation ID.
+
+        Args:
+            db: Database session
+            front_conversation_id: Front conversation ID
+            load_tags: If True, eagerly load the tags relationship
+        """
+        from sqlalchemy.orm import joinedload
+
+        query = db.query(self.model).filter(self.model.front_conversation_id == front_conversation_id)
+
+        if load_tags:
+            # Eagerly load tags to avoid N+1 queries
+            query = query.options(joinedload(self.model.tags))
+
+        return query.first()
     
     def get_unprocessed(
         self, db: Session, *, skip: int = 0, limit: int = 100

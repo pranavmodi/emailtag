@@ -602,11 +602,123 @@ export default function TagStatisticsPage() {
 }
 
 function SingleTagResult({ result }: { result: TagStatisticsResponse }) {
+  const [evalResults, setEvalResults] = useState<Record<string, any>>({});
+  const [evalLoading, setEvalLoading] = useState<Record<string, boolean>>({});
+  const [bulkEvalLoading, setBulkEvalLoading] = useState(false);
+
+  const pollTaskStatus = async (taskId: string, conversationId: string, maxAttempts = 150) => {
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        const statusResponse = await TagsApi.getEvalStatus(taskId);
+
+        if (statusResponse.status === "SUCCESS" && statusResponse.result) {
+          // Task completed successfully
+          setEvalResults((prev) => ({ ...prev, [conversationId]: statusResponse.result }));
+          setEvalLoading((prev) => ({ ...prev, [conversationId]: false }));
+          return true;
+        } else if (statusResponse.status === "FAILURE") {
+          // Task failed
+          console.error(`Eval task failed for ${conversationId}:`, statusResponse.error);
+          setEvalLoading((prev) => ({ ...prev, [conversationId]: false }));
+          return true;
+        } else if (attempts >= maxAttempts) {
+          // Timeout after 5 minutes (150 attempts × 2 seconds)
+          console.error(`Eval task timeout for ${conversationId} after ${maxAttempts * 2 / 60} minutes`);
+          setEvalLoading((prev) => ({ ...prev, [conversationId]: false }));
+          return true;
+        }
+
+        // Still pending/running, poll again after 2 seconds
+        attempts++;
+        setTimeout(() => poll(), 2000);
+        return false;
+      } catch (error) {
+        console.error(`Error polling task status for ${conversationId}:`, error);
+        setEvalLoading((prev) => ({ ...prev, [conversationId]: false }));
+        return true;
+      }
+    };
+
+    await poll();
+  };
+
+  const runEval = async (conversationId: string) => {
+    setEvalLoading((prev) => ({ ...prev, [conversationId]: true }));
+    try {
+      const response = await TagsApi.evalClassification({ conversationId });
+
+      // Response now contains task_id instead of results
+      if (response.task_id) {
+        // Start polling for results
+        await pollTaskStatus(response.task_id, conversationId);
+      } else if (response.results && response.results.length > 0) {
+        // Fallback for sync mode (if still supported)
+        setEvalResults((prev) => ({ ...prev, [conversationId]: response.results[0] }));
+        setEvalLoading((prev) => ({ ...prev, [conversationId]: false }));
+      }
+    } catch (error) {
+      console.error(`Failed to eval conversation ${conversationId}:`, error);
+      setEvalLoading((prev) => ({ ...prev, [conversationId]: false }));
+    }
+  };
+
+  const runBulkEval = async () => {
+    setBulkEvalLoading(true);
+    try {
+      // Queue eval tasks sequentially (one at a time, in order)
+      for (const conv of result.conversations) {
+        try {
+          // Mark this conversation as loading
+          setEvalLoading((prev) => ({ ...prev, [conv.conversation_id]: true }));
+
+          const response = await TagsApi.evalClassification({ conversationId: conv.conversation_id });
+
+          if (response.task_id) {
+            // Poll for this task's results
+            await pollTaskStatus(response.task_id, conv.conversation_id);
+          } else if (response.results && response.results.length > 0) {
+            setEvalResults((prev) => ({ ...prev, [conv.conversation_id]: response.results[0] }));
+            setEvalLoading((prev) => ({ ...prev, [conv.conversation_id]: false }));
+          }
+        } catch (error) {
+          console.error(`Failed to eval ${conv.conversation_id}:`, error);
+          setEvalLoading((prev) => ({ ...prev, [conv.conversation_id]: false }));
+        }
+      }
+    } finally {
+      setBulkEvalLoading(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-2xl">Retention for {result.tag_name}</CardTitle>
-        <CardDescription>Tag impressions originally applied on {result.date}</CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-2xl">Retention for {result.tag_name}</CardTitle>
+            <CardDescription>Tag impressions originally applied on {result.date}</CardDescription>
+          </div>
+          <Button
+            onClick={runBulkEval}
+            disabled={bulkEvalLoading}
+            variant="outline"
+            className="border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+          >
+            {bulkEvalLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Evaluating...
+              </>
+            ) : (
+              <>
+                <Zap className="h-4 w-4" />
+                Run Bulk Eval
+              </>
+            )}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="overflow-x-auto rounded-2xl border border-slate-200">
@@ -616,39 +728,111 @@ function SingleTagResult({ result }: { result: TagStatisticsResponse }) {
                 <th className="px-4 py-3 text-left">Conversation ID</th>
                 <th className="px-4 py-3 text-left">Status</th>
                 <th className="px-4 py-3 text-left">Current Tags</th>
+                <th className="px-4 py-3 text-left">Eval</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
-              {result.conversations.map((conversation) => (
-                <tr key={conversation.conversation_id}>
-                  <td className="px-4 py-3 font-mono text-xs">{conversation.conversation_id}</td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      className={
-                        conversation.still_has_tag ? STAT_BADGE.success : STAT_BADGE.warn
-                      }
-                    >
-                      {conversation.still_has_tag ? "Still tagged" : "Re-tagged"}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-500">
-                    {conversation.current_tags.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {conversation.current_tags.map((tag) => (
-                          <span
-                            key={`${conversation.conversation_id}-${tag}`}
-                            className="rounded-full bg-slate-100 px-2 py-0.5"
+              {result.conversations.map((conversation) => {
+                const evalResult = evalResults[conversation.conversation_id];
+                return (
+                  <tr key={conversation.conversation_id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 font-mono text-xs">
+                      <a
+                        href={`https://app.frontapp.com/open/${conversation.conversation_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 hover:text-indigo-800 hover:underline"
+                      >
+                        {conversation.conversation_id}
+                      </a>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge
+                        className={
+                          conversation.still_has_tag ? STAT_BADGE.success : STAT_BADGE.warn
+                        }
+                      >
+                        {conversation.still_has_tag ? "Still tagged" : "Re-tagged"}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-500">
+                      {conversation.current_tags.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {conversation.current_tags.map((tag) => (
+                            <span
+                              key={`${conversation.conversation_id}-${tag}`}
+                              className="rounded-full bg-slate-100 px-2 py-0.5"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400">No tags returned</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {evalResult ? (
+                        <div className="space-y-1">
+                          <Badge
+                            className={
+                              evalResult.exact_match
+                                ? STAT_BADGE.success
+                                : evalResult.partial_match
+                                ? STAT_BADGE.warn
+                                : STAT_BADGE.danger
+                            }
                           >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-slate-400">No tags returned</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                            {evalResult.exact_match
+                              ? "✓ Exact"
+                              : evalResult.partial_match
+                              ? "≈ Partial"
+                              : "✗ Miss"}
+                          </Badge>
+                          <div className="text-xs text-slate-500">
+                            Accuracy: {evalResult.accuracy}%
+                          </div>
+                          {evalResult.predicted_tags && evalResult.predicted_tags.length > 0 && (
+                            <div className="text-xs text-slate-600">
+                              <span className="font-semibold">Predicted:</span>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {evalResult.predicted_tags.map((tag: string) => (
+                                  <span
+                                    key={tag}
+                                    className="rounded-full bg-indigo-100 px-2 py-0.5 text-indigo-700"
+                                  >
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <Button
+                          onClick={() => runEval(conversation.conversation_id)}
+                          disabled={evalLoading[conversation.conversation_id]}
+                          size="sm"
+                          variant="outline"
+                          className="text-xs"
+                        >
+                          {evalLoading[conversation.conversation_id] ? (
+                            <>
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              ...
+                            </>
+                          ) : (
+                            <>
+                              <Zap className="h-3 w-3" />
+                              Eval
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
