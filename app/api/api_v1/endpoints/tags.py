@@ -471,3 +471,188 @@ async def delete_tag(
     
     await tag_crud.remove(db, id=tag_id)
     return {"status": "success", "message": f"Tag '{tag.name}' deleted"}
+
+
+@router.post("/eval-classification", response_model=Dict[str, Any])
+async def eval_classification(
+    conversation_id: str = Query(None, description="Front conversation ID to evaluate"),
+    target_date: date = Query(None, description="Date to evaluate all conversations (format: YYYY-MM-DD)"),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Run classification in eval mode - predict tags without applying them to Front.
+    Compare predicted tags with actual tags that were applied.
+
+    Args:
+        conversation_id: Optional - Single conversation ID to evaluate
+        target_date: Optional - Date to evaluate all conversations
+        db: Database session
+
+    Returns:
+        Dict with comparison results: {
+            "conversation_id" or "date": ...,
+            "results": [
+                {
+                    "conversation_id": str,
+                    "predicted_tags": [str],
+                    "actual_tags": [str],
+                    "match": bool,
+                    "accuracy": float
+                }
+            ],
+            "summary": {
+                "total": int,
+                "exact_matches": int,
+                "partial_matches": int,
+                "no_matches": int,
+                "accuracy": float
+            }
+        }
+    """
+    from app.crud import email as email_crud
+    from app.services.classification_service import classify_email_tags_hierarchical
+    from app.services.frontapp_service import get_conversation_text
+    from app.services.document_processing import perform_document_processing
+
+    if not conversation_id and not target_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Must provide either conversation_id or target_date"
+        )
+
+    results = []
+
+    if conversation_id:
+        # Eval single conversation
+        logger.info(f"🧪 EVAL MODE: Running classification for conversation {conversation_id}")
+        result = await _eval_single_conversation(conversation_id, db)
+        results.append(result)
+    else:
+        # Eval all conversations for a date
+        logger.info(f"🧪 EVAL MODE: Running classification for all conversations on {target_date}")
+        # Get all emails created on target date
+        from app.crud import email as email_crud_sync
+        from app.db.session import SessionLocal
+
+        sync_db = SessionLocal()
+        try:
+            emails = await email_crud.get_emails_by_date(db, target_date)
+
+            for email in emails:
+                if email.front_conversation_id:
+                    result = await _eval_single_conversation(email.front_conversation_id, db)
+                    results.append(result)
+        finally:
+            sync_db.close()
+
+    # Calculate summary statistics
+    total = len(results)
+    exact_matches = sum(1 for r in results if r["exact_match"])
+    partial_matches = sum(1 for r in results if r["partial_match"] and not r["exact_match"])
+    no_matches = sum(1 for r in results if not r["exact_match"] and not r["partial_match"])
+
+    overall_accuracy = (exact_matches / total * 100) if total > 0 else 0
+
+    summary = {
+        "total": total,
+        "exact_matches": exact_matches,
+        "partial_matches": partial_matches,
+        "no_matches": no_matches,
+        "accuracy": round(overall_accuracy, 2)
+    }
+
+    return {
+        "conversation_id": conversation_id if conversation_id else None,
+        "date": str(target_date) if target_date else None,
+        "results": results,
+        "summary": summary
+    }
+
+
+async def _eval_single_conversation(conversation_id: str, db: AsyncSession) -> Dict[str, Any]:
+    """
+    Evaluate classification for a single conversation.
+
+    Returns dict with predicted vs actual tags comparison.
+    """
+    from app.crud import email as email_crud
+    from app.services.classification_service import classify_email_tags_hierarchical
+    from app.services.frontapp_service import get_conversation_text
+
+    try:
+        # Get conversation data
+        conversation_data = get_conversation_text(conversation_id)
+        if not conversation_data or "error" in conversation_data:
+            return {
+                "conversation_id": conversation_id,
+                "error": "Failed to retrieve conversation",
+                "predicted_tags": [],
+                "actual_tags": [],
+                "exact_match": False,
+                "partial_match": False,
+                "accuracy": 0.0
+            }
+
+        conversation_text = conversation_data.get("text", "")
+        sender_info = conversation_data.get("sender_info", {})
+        message_times = conversation_data.get("message_times", {})
+        recipients_to_info = conversation_data.get("recipients_to_info", {})
+        recipients_cc_info = conversation_data.get("recipients_cc_info", {})
+        structured_messages = conversation_data.get("_structured_messages", [])
+
+        # Run classification WITHOUT applying tags (eval mode)
+        predicted_tags = classify_email_tags_hierarchical(
+            front_conversation_id=conversation_id,
+            conversation_text=conversation_text,
+            sender_info=sender_info,
+            message_times=message_times,
+            document_analysis_results=None,  # Skip document processing in eval mode
+            recipients_to_info=recipients_to_info,
+            recipients_cc_info=recipients_cc_info,
+            structured_messages=structured_messages
+        )
+
+        # Get actual tags from database
+        email = await email_crud.get_by_front_conversation_id(db, front_conversation_id=conversation_id)
+        actual_tags = []
+        if email and email.tags:
+            actual_tags = [tag.name for tag in email.tags]
+
+        # Calculate match metrics
+        predicted_set = set(predicted_tags)
+        actual_set = set(actual_tags)
+
+        exact_match = predicted_set == actual_set
+        partial_match = len(predicted_set & actual_set) > 0
+
+        # Calculate accuracy (Jaccard similarity)
+        if predicted_set or actual_set:
+            intersection = len(predicted_set & actual_set)
+            union = len(predicted_set | actual_set)
+            accuracy = (intersection / union * 100) if union > 0 else 0
+        else:
+            accuracy = 100.0 if not predicted_set and not actual_set else 0.0
+
+        return {
+            "conversation_id": conversation_id,
+            "predicted_tags": predicted_tags,
+            "actual_tags": actual_tags,
+            "exact_match": exact_match,
+            "partial_match": partial_match,
+            "accuracy": round(accuracy, 2),
+            "matching_tags": list(predicted_set & actual_set),
+            "missing_tags": list(actual_set - predicted_set),
+            "extra_tags": list(predicted_set - actual_set)
+        }
+
+    except Exception as e:
+        logger.error(f"Error evaluating conversation {conversation_id}: {e}", exc_info=True)
+        return {
+            "conversation_id": conversation_id,
+            "error": str(e),
+            "predicted_tags": [],
+            "actual_tags": [],
+            "exact_match": False,
+            "partial_match": False,
+            "accuracy": 0.0
+        }

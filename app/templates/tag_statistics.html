@@ -360,9 +360,24 @@
     </div>
 
     <div class="container">
-        <h1 class="page-title">Tag Retention Statistics</h1>
+        <h1 class="page-title">Tag Retention Statistics & Eval Mode</h1>
 
-        <div class="content-card">
+        <!-- Mode Selection -->
+        <div class="content-card" style="margin-bottom: 20px; padding: 20px;">
+            <div style="display: flex; gap: 30px; justify-content: center;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 16px; font-weight: 600;">
+                    <input type="radio" name="page-mode" value="statistics" checked onchange="togglePageMode()" style="width: 20px; height: 20px;">
+                    <span>📊 Tag Retention Analysis</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 16px; font-weight: 600;">
+                    <input type="radio" name="page-mode" value="eval" onchange="togglePageMode()" style="width: 20px; height: 20px;">
+                    <span>🧪 Eval Mode (Classification Testing)</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Tag Retention Section -->
+        <div class="content-card" id="statistics-section">
             <div class="form-section">
                 <h2 class="section-title">Query Parameters</h2>
                 <p class="info-text">
@@ -523,6 +538,95 @@
                         Load Next 20 Tags
                     </button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Eval Mode Section -->
+        <div class="content-card" id="eval-section" style="display: none;">
+            <div class="form-section">
+                <h2 class="section-title">🧪 Classification Eval Mode</h2>
+                <p class="info-text">
+                    Test classification accuracy by running classification WITHOUT applying tags to Front.
+                    Compare predicted tags with actual tags stored in the database.
+                </p>
+
+                <div class="form-group">
+                    <label>Eval Type</label>
+                    <div style="display: flex; gap: 20px; margin-top: 10px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="radio" name="eval-type" value="single" checked onchange="toggleEvalType()">
+                            <span>Single Conversation</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="radio" name="eval-type" value="date" onchange="toggleEvalType()">
+                            <span>All Conversations on Date</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group" id="eval-conversation-group">
+                    <label for="eval-conversation-id">Front Conversation ID</label>
+                    <input type="text" id="eval-conversation-id" placeholder="cnv_xxxxxxx">
+                </div>
+
+                <div class="form-group" id="eval-date-group" style="display: none;">
+                    <label for="eval-date">Date (MM/DD/YYYY)</label>
+                    <input type="text" id="eval-date" placeholder="MM/DD/YYYY" pattern="\d{2}/\d{2}/\d{4}">
+                </div>
+
+                <button class="btn-primary" onclick="runEvalMode()">Run Eval Classification</button>
+            </div>
+
+            <div id="eval-error-message" class="error-message"></div>
+
+            <div id="eval-loading" class="loading">
+                <div class="spinner"></div>
+                <p id="eval-loading-message">Running classification in eval mode...</p>
+                <p id="eval-loading-detail" style="font-size: 12px; color: #999; margin-top: 10px;"></p>
+            </div>
+
+            <div id="eval-results" class="results-section">
+                <h2 class="section-title">Eval Results</h2>
+
+                <div class="statistics-grid">
+                    <div class="stat-card primary">
+                        <div class="stat-label">Total Conversations</div>
+                        <div class="stat-value" id="eval-total">0</div>
+                    </div>
+
+                    <div class="stat-card success">
+                        <div class="stat-label">Exact Matches</div>
+                        <div class="stat-value" id="eval-exact">0</div>
+                        <div class="stat-percentage" id="eval-exact-pct">0%</div>
+                    </div>
+
+                    <div class="stat-card warning">
+                        <div class="stat-label">Partial Matches</div>
+                        <div class="stat-value" id="eval-partial">0</div>
+                        <div class="stat-percentage" id="eval-partial-pct">0%</div>
+                    </div>
+
+                    <div class="stat-card" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white;">
+                        <div class="stat-label">No Matches</div>
+                        <div class="stat-value" id="eval-no-match">0</div>
+                        <div class="stat-percentage" id="eval-no-match-pct">0%</div>
+                    </div>
+                </div>
+
+                <h3 class="section-title">Detailed Comparison</h3>
+                <table class="conversations-table" id="eval-table">
+                    <thead>
+                        <tr>
+                            <th>Conversation ID</th>
+                            <th>Accuracy</th>
+                            <th>Predicted Tags</th>
+                            <th>Actual Tags</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="eval-tbody">
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -972,6 +1076,224 @@
 
         function showError(message) {
             const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        // === EVAL MODE FUNCTIONS ===
+
+        function togglePageMode() {
+            const mode = document.querySelector('input[name="page-mode"]:checked').value;
+            const statisticsSection = document.getElementById('statistics-section');
+            const evalSection = document.getElementById('eval-section');
+
+            if (mode === 'eval') {
+                statisticsSection.style.display = 'none';
+                evalSection.style.display = 'block';
+            } else {
+                statisticsSection.style.display = 'block';
+                evalSection.style.display = 'none';
+            }
+        }
+
+        function toggleEvalType() {
+            const evalType = document.querySelector('input[name="eval-type"]:checked').value;
+            const conversationGroup = document.getElementById('eval-conversation-group');
+            const dateGroup = document.getElementById('eval-date-group');
+
+            if (evalType === 'date') {
+                conversationGroup.style.display = 'none';
+                dateGroup.style.display = 'block';
+            } else {
+                conversationGroup.style.display = 'block';
+                dateGroup.style.display = 'none';
+            }
+        }
+
+        async function runEvalMode() {
+            const evalType = document.querySelector('input[name="eval-type"]:checked').value;
+            const conversationId = document.getElementById('eval-conversation-id').value.trim();
+            const evalDate = document.getElementById('eval-date').value;
+
+            // Validate inputs
+            if (evalType === 'single' && !conversationId) {
+                showEvalError('Please enter a conversation ID');
+                return;
+            }
+
+            if (evalType === 'date' && !evalDate) {
+                showEvalError('Please enter a date');
+                return;
+            }
+
+            // Validate date format if date mode
+            if (evalType === 'date') {
+                const datePattern = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+                const match = evalDate.match(datePattern);
+                if (!match) {
+                    showEvalError('Please enter date in MM/DD/YYYY format');
+                    return;
+                }
+            }
+
+            // Hide previous results and errors
+            document.getElementById('eval-results').style.display = 'none';
+            document.getElementById('eval-error-message').style.display = 'none';
+            document.getElementById('eval-loading').style.display = 'block';
+
+            // Update loading message
+            if (evalType === 'date') {
+                document.getElementById('eval-loading-message').textContent = 'Running classification on all conversations...';
+                document.getElementById('eval-loading-detail').textContent = 'This may take several minutes';
+            } else {
+                document.getElementById('eval-loading-message').textContent = 'Running classification in eval mode...';
+                document.getElementById('eval-loading-detail').textContent = '';
+            }
+
+            try {
+                let apiUrl = '/api/v1/tags/eval-classification?';
+
+                if (evalType === 'single') {
+                    apiUrl += `conversation_id=${encodeURIComponent(conversationId)}`;
+                } else {
+                    // Convert MM/DD/YYYY to YYYY-MM-DD
+                    const datePattern = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+                    const [_, month, day, year] = evalDate.match(datePattern);
+                    const apiDate = `${year}-${month}-${day}`;
+                    apiUrl += `target_date=${apiDate}`;
+                }
+
+                const response = await fetch(apiUrl, { method: 'POST' });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to run eval classification');
+                }
+
+                const data = await response.json();
+                displayEvalResults(data);
+
+            } catch (error) {
+                console.error('Error running eval mode:', error);
+                showEvalError('Failed to run eval classification: ' + error.message);
+            } finally {
+                document.getElementById('eval-loading').style.display = 'none';
+            }
+        }
+
+        function displayEvalResults(data) {
+            // Update summary statistics
+            const summary = data.summary;
+            document.getElementById('eval-total').textContent = summary.total;
+            document.getElementById('eval-exact').textContent = summary.exact_matches;
+            document.getElementById('eval-exact-pct').textContent =
+                (summary.total > 0 ? (summary.exact_matches / summary.total * 100).toFixed(1) : 0) + '%';
+            document.getElementById('eval-partial').textContent = summary.partial_matches;
+            document.getElementById('eval-partial-pct').textContent =
+                (summary.total > 0 ? (summary.partial_matches / summary.total * 100).toFixed(1) : 0) + '%';
+            document.getElementById('eval-no-match').textContent = summary.no_matches;
+            document.getElementById('eval-no-match-pct').textContent =
+                (summary.total > 0 ? (summary.no_matches / summary.total * 100).toFixed(1) : 0) + '%';
+
+            // Update results table
+            const tbody = document.getElementById('eval-tbody');
+            tbody.innerHTML = '';
+
+            if (data.results.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 30px;">No results found</td></tr>';
+            } else {
+                data.results.forEach(result => {
+                    const row = document.createElement('tr');
+
+                    // Conversation ID (with link)
+                    const idCell = document.createElement('td');
+                    const frontLink = document.createElement('a');
+                    frontLink.href = `https://app.frontapp.com/open/${result.conversation_id}`;
+                    frontLink.target = '_blank';
+                    frontLink.textContent = result.conversation_id;
+                    frontLink.style.color = '#667eea';
+                    frontLink.style.textDecoration = 'none';
+                    idCell.appendChild(frontLink);
+                    row.appendChild(idCell);
+
+                    // Accuracy
+                    const accuracyCell = document.createElement('td');
+                    accuracyCell.textContent = result.accuracy + '%';
+                    accuracyCell.style.textAlign = 'center';
+                    accuracyCell.style.fontWeight = '600';
+                    if (result.accuracy === 100) {
+                        accuracyCell.style.color = '#4caf50';
+                    } else if (result.accuracy >= 50) {
+                        accuracyCell.style.color = '#ff9800';
+                    } else {
+                        accuracyCell.style.color = '#ff6b6b';
+                    }
+                    row.appendChild(accuracyCell);
+
+                    // Predicted tags
+                    const predictedCell = document.createElement('td');
+                    if (result.predicted_tags && result.predicted_tags.length > 0) {
+                        result.predicted_tags.forEach(tag => {
+                            const tagPill = document.createElement('span');
+                            tagPill.className = 'tag-pill';
+                            tagPill.textContent = tag;
+                            tagPill.style.backgroundColor = '#e7e9fc';
+                            tagPill.style.color = '#667eea';
+                            predictedCell.appendChild(tagPill);
+                        });
+                    } else {
+                        predictedCell.textContent = 'None';
+                        predictedCell.style.color = '#999';
+                    }
+                    row.appendChild(predictedCell);
+
+                    // Actual tags
+                    const actualCell = document.createElement('td');
+                    if (result.actual_tags && result.actual_tags.length > 0) {
+                        result.actual_tags.forEach(tag => {
+                            const tagPill = document.createElement('span');
+                            tagPill.className = 'tag-pill';
+                            tagPill.textContent = tag;
+                            tagPill.style.backgroundColor = '#e8f5e9';
+                            tagPill.style.color = '#4caf50';
+                            actualCell.appendChild(tagPill);
+                        });
+                    } else {
+                        actualCell.textContent = 'None';
+                        actualCell.style.color = '#999';
+                    }
+                    row.appendChild(actualCell);
+
+                    // Status badge
+                    const statusCell = document.createElement('td');
+                    const statusBadge = document.createElement('span');
+                    statusBadge.className = 'status-badge';
+                    if (result.exact_match) {
+                        statusBadge.classList.add('active');
+                        statusBadge.textContent = '✓ Exact Match';
+                        statusBadge.style.backgroundColor = '#4caf50';
+                    } else if (result.partial_match) {
+                        statusBadge.classList.add('warning');
+                        statusBadge.textContent = '◐ Partial';
+                        statusBadge.style.backgroundColor = '#ff9800';
+                        statusBadge.style.color = 'white';
+                    } else {
+                        statusBadge.classList.add('inactive');
+                        statusBadge.textContent = '✗ No Match';
+                        statusBadge.style.backgroundColor = '#ff6b6b';
+                    }
+                    statusCell.appendChild(statusBadge);
+                    row.appendChild(statusCell);
+
+                    tbody.appendChild(row);
+                });
+            }
+
+            document.getElementById('eval-results').style.display = 'block';
+        }
+
+        function showEvalError(message) {
+            const errorDiv = document.getElementById('eval-error-message');
             errorDiv.textContent = message;
             errorDiv.style.display = 'block';
         }

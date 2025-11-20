@@ -1,6 +1,7 @@
 "use client";
 
 import type { ComponentType, SVGProps } from "react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -10,7 +11,7 @@ import {
   FileWarning,
   FolderOpen,
   LogOut,
-  MailCog,
+  MailSearch,
   MessageSquare,
   PiggyBank,
   ShieldCheck,
@@ -80,7 +81,7 @@ const AUTORESPOND_LAYOUT: Array<{
     key: "psl_lien",
     settingKey: "autorespond_psl_lien",
     accent: "from-cyan-500 to-emerald-500",
-    icon: MailCog,
+    icon: MailSearch,
   },
   {
     key: "asl_lien",
@@ -102,6 +103,28 @@ const STATUS_BADGE = {
   enabled: "bg-emerald-50 text-emerald-600 border-emerald-200",
   disabled: "bg-rose-50 text-rose-600 border-rose-200",
 } as const;
+
+const MENU_ITEMS = [
+  {
+    href: "/settings2",
+    label: "System Settings",
+    description: "Configure email processing behavior",
+    icon: "⚙️",
+    active: true,
+  },
+  {
+    href: "/template-config",
+    label: "Autorespond Templates",
+    description: "Edit message templates",
+    icon: "📝",
+  },
+  {
+    href: "/settings2/tag-statistics",
+    label: "Tag Statistics",
+    description: "Analyze tag retention and changes",
+    icon: "📊",
+  },
+] as const;
 
 const formatDate = (value: string | null) =>
   value ? new Date(value).toLocaleString() : "Never";
@@ -273,6 +296,35 @@ export default function Settings2Page() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-10">
+      <nav className="grid gap-3 rounded-3xl border border-white/60 bg-white/80 p-3 shadow-xl shadow-slate-900/5 backdrop-blur lg:grid-cols-3">
+        {MENU_ITEMS.map((item) => {
+          const isActive = item.active;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`rounded-2xl border p-4 transition hover:-translate-y-1 hover:shadow-lg ${
+                isActive
+                  ? "border-slate-900 bg-slate-900 text-white shadow-lg"
+                  : "border-slate-200 bg-white text-slate-700"
+              }`}
+            >
+              <div className="flex items-center gap-3 text-lg font-semibold">
+                <span>{item.icon}</span>
+                {item.label}
+              </div>
+              <p
+                className={`mt-1 text-sm ${
+                  isActive ? "text-white/80" : "text-slate-500"
+                }`}
+              >
+                {item.description}
+              </p>
+            </Link>
+          );
+        })}
+      </nav>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -332,7 +384,10 @@ export default function Settings2Page() {
               <CardTitle className="flex items-center gap-3 text-2xl">
                 <ShieldCheck className="h-6 w-6 text-brand.indigo" /> Email Processing Master Switch
               </CardTitle>
-              <CardDescription>{status?.description}</CardDescription>
+              <CardDescription>
+                {status?.description ??
+                  "This toggle pauses the entire classification + tagging pipeline while still accepting webhook payloads."}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
@@ -345,20 +400,32 @@ export default function Settings2Page() {
                   >
                     {status?.processing_enabled ? "Enabled" : "Disabled"}
                   </Badge>
+                  <p className="text-xs text-slate-500">
+                    Last updated {formatDate(status?.last_updated ?? null)} by{" "}
+                    {status?.updated_by ?? "system"}
+                  </p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold text-slate-500">Off</span>
-                  <Switch
-                    checked={status?.processing_enabled ?? false}
-                    disabled={busy.processing}
-                    onCheckedChange={handleProcessingToggle}
-                  />
-                  <span className="text-sm font-semibold text-slate-900">On</span>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-semibold uppercase tracking-wide text-rose-500">
+                    Pause
+                  </span>
+                  <div className="rounded-full bg-gradient-to-r from-slate-100 to-white p-1 shadow-inner">
+                    <Switch
+                      size="lg"
+                      checked={status?.processing_enabled ?? false}
+                      disabled={busy.processing}
+                      onCheckedChange={handleProcessingToggle}
+                    />
+                  </div>
+                  <span className="text-sm font-semibold uppercase tracking-wide text-emerald-600">
+                    Resume
+                  </span>
                 </div>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
-                Processing offloads inbound Front conversations to Celery queues. Disabling this
-                switch allows safe maintenance windows while still persisting webhooks.
+                When the switch is ON, inbound Front conversations are handed to Celery queues for
+                tag/agent processing. Turning it OFF keeps the webhook listener alive but stops
+                classification so you can perform maintenance safely.
               </div>
               {statusError && <ErrorBanner message={statusError} />}
             </CardContent>
@@ -374,7 +441,7 @@ export default function Settings2Page() {
           <Card className="h-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-3 text-2xl">
-                <MailCog className="h-6 w-6 text-brand.indigo" /> Global Autorespond
+                <MailSearch className="h-6 w-6 text-brand.indigo" /> Global Autorespond
               </CardTitle>
               <CardDescription>
                 Acts as the fail-safe for every autorespond workflow powered by `app/agents`.
@@ -394,14 +461,21 @@ export default function Settings2Page() {
                     {autorespond?.global_autorespond_enabled ? "Enabled" : "Disabled"}
                   </Badge>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold text-slate-500">Off</span>
-                  <Switch
-                    checked={autorespond?.global_autorespond_enabled ?? false}
-                    disabled={busy.global}
-                    onCheckedChange={handleGlobalAutorespondToggle}
-                  />
-                  <span className="text-sm font-semibold text-slate-900">On</span>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                    Off
+                  </span>
+                  <div className="rounded-full bg-gradient-to-r from-amber-50 to-white p-1 shadow-inner">
+                    <Switch
+                      size="lg"
+                      checked={autorespond?.global_autorespond_enabled ?? false}
+                      disabled={busy.global}
+                      onCheckedChange={handleGlobalAutorespondToggle}
+                    />
+                  </div>
+                  <span className="text-sm font-semibold uppercase tracking-wide text-slate-900">
+                    On
+                  </span>
                 </div>
               </div>
               <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800">
@@ -420,7 +494,7 @@ export default function Settings2Page() {
         transition={{ ...easing, delay: 0.1 }}
         className="space-y-6"
       >
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-2xl font-semibold text-slate-900">Autorespond Teams</h2>
             <p className="text-sm text-slate-500">
