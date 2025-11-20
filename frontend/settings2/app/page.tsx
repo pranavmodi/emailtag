@@ -1,5 +1,584 @@
-import { redirect } from "next/navigation";
+"use client";
 
-export default function Home() {
-  redirect("/settings2");
+import type { ComponentType, SVGProps } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import {
+  BadgeCheck,
+  CalendarDays,
+  ClipboardList,
+  FileWarning,
+  FolderOpen,
+  LogOut,
+  MailSearch,
+  MessageSquare,
+  PiggyBank,
+  ShieldCheck,
+} from "lucide-react";
+
+import { ApiError, SettingsApi } from "@/lib/api";
+import type {
+  AutorespondSettingsResponse,
+  EmailProcessingStatus,
+} from "@/lib/types";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+
+const easing = { duration: 0.45, ease: [0.16, 1, 0.3, 1] };
+
+const AUTORESPOND_LAYOUT: Array<{
+  key: keyof Omit<AutorespondSettingsResponse, "global_autorespond_enabled">;
+  settingKey: string;
+  accent: string;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+}> = [
+  {
+    key: "appointment_inquiry",
+    settingKey: "autorespond_appointment_inquiry",
+    accent: "from-sky-500 to-indigo-500",
+    icon: CalendarDays,
+  },
+  {
+    key: "apt_status_req",
+    settingKey: "autorespond_apt_status_req",
+    accent: "from-indigo-500 to-purple-500",
+    icon: ClipboardList,
+  },
+  {
+    key: "medical_records",
+    settingKey: "autorespond_medical_records",
+    accent: "from-emerald-500 to-teal-500",
+    icon: FolderOpen,
+  },
+  {
+    key: "bill_balance_request",
+    settingKey: "autorespond_bill_balance_request",
+    accent: "from-amber-500 to-orange-500",
+    icon: PiggyBank,
+  },
+  {
+    key: "case_updates",
+    settingKey: "autorespond_case_updates",
+    accent: "from-pink-500 to-rose-500",
+    icon: MessageSquare,
+  },
+  {
+    key: "missing_lien_request",
+    settingKey: "autorespond_missing_lien_request",
+    accent: "from-fuchsia-500 to-rose-500",
+    icon: FileWarning,
+  },
+  {
+    key: "psl_lien",
+    settingKey: "autorespond_psl_lien",
+    accent: "from-cyan-500 to-emerald-500",
+    icon: MailSearch,
+  },
+  {
+    key: "asl_lien",
+    settingKey: "autorespond_asl_lien",
+    accent: "from-blue-500 to-indigo-600",
+    icon: ShieldCheck,
+  },
+];
+
+const AUTORESPOND_LOOKUP = AUTORESPOND_LAYOUT.reduce(
+  (acc, item) => {
+    acc[item.settingKey] = item.key;
+    return acc;
+  },
+  {} as Record<string, keyof Omit<AutorespondSettingsResponse, "global_autorespond_enabled">>
+);
+
+const STATUS_BADGE = {
+  enabled: "bg-emerald-50 text-emerald-600 border-emerald-200",
+  disabled: "bg-rose-50 text-rose-600 border-rose-200",
+} as const;
+
+const MENU_ITEMS = [
+  {
+    href: "/",
+    label: "System Settings",
+    description: "Configure email processing behavior",
+    icon: "⚙️",
+    active: true,
+  },
+  {
+    href: "/template-config",
+    label: "Autorespond Templates",
+    description: "Edit message templates",
+    icon: "📝",
+  },
+  {
+    href: "/tag-statistics",
+    label: "Tag Statistics",
+    description: "Analyze tag retention and changes",
+    icon: "📊",
+  },
+] as const;
+
+const formatDate = (value: string | null) =>
+  value ? new Date(value).toLocaleString() : "Never";
+
+const ErrorBanner = ({ message }: { message: string }) => (
+  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+    {message}
+  </div>
+);
+
+export default function Settings2Page() {
+  const [user, setUser] = useState<string>("Admin");
+  const [status, setStatus] = useState<EmailProcessingStatus | null>(null);
+  const [autorespond, setAutorespond] =
+    useState<AutorespondSettingsResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [autorespondError, setAutorespondError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    let mounted = true;
+
+    const bootstrap = async () => {
+      try {
+        const auth = await SettingsApi.getAuthStatus();
+        if (!auth.authenticated) {
+          window.location.href = "/login";
+          return;
+        }
+        if (!mounted) return;
+        setUser(auth.username ?? "Admin");
+
+        const [processingPayload, autorespondPayload] = await Promise.all([
+          SettingsApi.getProcessingStatus(),
+          SettingsApi.getAutorespondSettings(),
+        ]);
+        if (!mounted) return;
+        setStatus(processingPayload);
+        setAutorespond(autorespondPayload);
+        setStatusError(null);
+        setAutorespondError(null);
+      } catch (error) {
+        if (!mounted) return;
+        if (error instanceof ApiError && error.status === 401) {
+          window.location.href = "/login";
+          return;
+        }
+        const message =
+          error instanceof Error ? error.message : "Unexpected error occurred";
+        setStatusError(message);
+        setAutorespondError(message);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    };
+
+    bootstrap();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const setBusyFlag = (key: string, value: boolean) =>
+    setBusy((prev) => ({ ...prev, [key]: value }));
+
+  const isGlobalDisabled = useMemo(
+    () => !autorespond?.global_autorespond_enabled,
+    [autorespond]
+  );
+
+  const handleProcessingToggle = async (enabled: boolean) => {
+    setBusyFlag("processing", true);
+    try {
+      const payload = await SettingsApi.toggleProcessing(enabled);
+      setStatus(payload);
+      setStatusError(null);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const message =
+        error instanceof Error ? error.message : "Failed to update setting";
+      setStatusError(message);
+    } finally {
+      setBusyFlag("processing", false);
+    }
+  };
+
+  const handleGlobalAutorespondToggle = async (enabled: boolean) => {
+    setBusyFlag("global", true);
+    try {
+      const payload = await SettingsApi.toggleGlobalAutorespond(enabled);
+      setAutorespond((prev) =>
+        prev
+          ? {
+              ...prev,
+              global_autorespond_enabled: payload.global_autorespond_enabled,
+            }
+          : prev
+      );
+      setAutorespondError(null);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const message =
+        error instanceof Error ? error.message : "Failed to update global toggle";
+      setAutorespondError(message);
+    } finally {
+      setBusyFlag("global", false);
+    }
+  };
+
+  const handleAutorespondToggle = async (type: string, enabled: boolean) => {
+    setBusyFlag(type, true);
+    try {
+      await SettingsApi.toggleAutorespond(type, enabled);
+      setAutorespond((prev) =>
+        prev
+          ? {
+              ...prev,
+              ...mapAutorespondUpdate(prev, type, enabled),
+            }
+          : prev
+      );
+      setAutorespondError(null);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to update autorespond";
+      setAutorespondError(message);
+    } finally {
+      setBusyFlag(type, false);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await SettingsApi.logout();
+    } catch (error) {
+      console.error("Failed to logout", error);
+    } finally {
+      window.location.href = "/login";
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <section className="flex min-h-screen items-center justify-center px-6 py-16">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={easing}
+          className="rounded-3xl border border-slate-200/80 bg-white/80 px-10 py-12 text-center shadow-2xl"
+        >
+          <p className="text-base font-medium text-slate-500">Loading settings…</p>
+        </motion.div>
+      </section>
+    );
+  }
+
+  return (
+    <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-10">
+      <nav className="grid gap-3 rounded-3xl border border-white/60 bg-white/80 p-3 shadow-xl shadow-slate-900/5 backdrop-blur lg:grid-cols-3">
+        {MENU_ITEMS.map((item) => {
+          const isActive = item.active;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`rounded-2xl border p-4 transition hover:-translate-y-1 hover:shadow-lg ${
+                isActive
+                  ? "border-slate-900 bg-slate-900 text-white shadow-lg"
+                  : "border-slate-200 bg-white text-slate-700"
+              }`}
+            >
+              <div className="flex items-center gap-3 text-lg font-semibold">
+                <span>{item.icon}</span>
+                {item.label}
+              </div>
+              <p
+                className={`mt-1 text-sm ${
+                  isActive ? "text-white/80" : "text-slate-500"
+                }`}
+              >
+                {item.description}
+              </p>
+            </Link>
+          );
+        })}
+      </nav>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={easing}
+        className="flex flex-col gap-4 rounded-3xl border border-white/40 bg-gradient-to-br from-indigo-500 via-purple-500 to-sky-500 p-8 text-white shadow-2xl"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm uppercase tracking-[0.3em] text-white/70">EmailTag Control Center</p>
+            <h1 className="text-3xl font-semibold">Automation Switchboard</h1>
+            <p className="text-white/80">
+              Toggle core processing pipelines and autorespond teams without redeploying the
+              backend.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 rounded-2xl bg-white/15 px-4 py-2 text-sm backdrop-blur">
+            <BadgeCheck className="h-4 w-4 text-emerald-200" />
+            <span>{user}</span>
+            <span className="text-white/60">•</span>
+            <Button
+              onClick={logout}
+              variant="ghost"
+              className="border-white/30 text-white/90 hover:bg-white/10 hover:text-white"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </Button>
+          </div>
+        </div>
+        <div className="grid gap-3 text-sm text-white/80 sm:grid-cols-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-white/60">Processing</p>
+            <p className="text-lg font-semibold">
+              {status?.processing_enabled ? "Enabled" : "Paused"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-white/60">Last Updated</p>
+            <p className="text-lg font-semibold">{formatDate(status?.last_updated ?? null)}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-white/60">Updated by</p>
+            <p className="text-lg font-semibold">{status?.updated_by ?? "System"}</p>
+          </div>
+        </div>
+      </motion.div>
+
+      <div className="grid gap-8 lg:grid-cols-5">
+        <motion.section
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={easing}
+          className="lg:col-span-3"
+        >
+          <Card className="h-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3 text-2xl">
+                <ShieldCheck className="h-6 w-6 text-brand.indigo" /> Email Processing Master Switch
+              </CardTitle>
+              <CardDescription>
+                {status?.description ??
+                  "This toggle pauses the entire classification + tagging pipeline while still accepting webhook payloads."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-slate-900">Status</p>
+                  <Badge
+                    className={
+                      status?.processing_enabled ? STATUS_BADGE.enabled : STATUS_BADGE.disabled
+                    }
+                  >
+                    {status?.processing_enabled ? "Enabled" : "Disabled"}
+                  </Badge>
+                  <p className="text-xs text-slate-500">
+                    Last updated {formatDate(status?.last_updated ?? null)} by{" "}
+                    {status?.updated_by ?? "system"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-semibold uppercase tracking-wide text-rose-500">
+                    Pause
+                  </span>
+                  <div className="rounded-full bg-gradient-to-r from-slate-100 to-white p-1 shadow-inner">
+                    <Switch
+                      size="lg"
+                      checked={status?.processing_enabled ?? false}
+                      disabled={busy.processing}
+                      onCheckedChange={handleProcessingToggle}
+                    />
+                  </div>
+                  <span className="text-sm font-semibold uppercase tracking-wide text-emerald-600">
+                    Resume
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
+                When the switch is ON, inbound Front conversations are handed to Celery queues for
+                tag/agent processing. Turning it OFF keeps the webhook listener alive but stops
+                classification so you can perform maintenance safely.
+              </div>
+              {statusError && <ErrorBanner message={statusError} />}
+            </CardContent>
+          </Card>
+        </motion.section>
+
+        <motion.section
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...easing, delay: 0.05 }}
+          className="lg:col-span-2"
+        >
+          <Card className="h-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3 text-2xl">
+                <MailSearch className="h-6 w-6 text-brand.indigo" /> Global Autorespond
+              </CardTitle>
+              <CardDescription>
+                Acts as the fail-safe for every autorespond workflow powered by `app/agents`.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-slate-900">Status</p>
+                  <Badge
+                    className={
+                      autorespond?.global_autorespond_enabled
+                        ? STATUS_BADGE.enabled
+                        : STATUS_BADGE.disabled
+                    }
+                  >
+                    {autorespond?.global_autorespond_enabled ? "Enabled" : "Disabled"}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                    Off
+                  </span>
+                  <div className="rounded-full bg-gradient-to-r from-amber-50 to-white p-1 shadow-inner">
+                    <Switch
+                      size="lg"
+                      checked={autorespond?.global_autorespond_enabled ?? false}
+                      disabled={busy.global}
+                      onCheckedChange={handleGlobalAutorespondToggle}
+                    />
+                  </div>
+                  <span className="text-sm font-semibold uppercase tracking-wide text-slate-900">
+                    On
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800">
+                When disabled, all autorespond toggles below are locked. Re-enable this switch to
+                tune per-tag experiences.
+              </div>
+              {autorespondError && <ErrorBanner message={autorespondError} />}
+            </CardContent>
+          </Card>
+        </motion.section>
+      </div>
+
+      <motion.section
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ ...easing, delay: 0.1 }}
+        className="space-y-6"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-2xl font-semibold text-slate-900">Autorespond Teams</h2>
+            <p className="text-sm text-slate-500">
+              Toggle the AI agent that drafts each outbound reply. Settings inherit the global
+              master switch.
+            </p>
+          </div>
+          <Badge className="bg-slate-900 text-white border-slate-900">
+            {autorespond?.global_autorespond_enabled ? "Live" : "Paused"}
+          </Badge>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          {AUTORESPOND_LAYOUT.map(({ key, settingKey, accent, icon: Icon }) => {
+            const detail = autorespond?.[key];
+            const toggleKey = settingKey;
+            const disabled = isGlobalDisabled || busy[settingKey];
+            return (
+              <motion.div
+                key={key}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ ...easing, delay: 0.08 }}
+                className="h-full"
+              >
+                <Card className={isGlobalDisabled ? "opacity-60" : "opacity-100"}>
+                  <CardContent className="space-y-4 pt-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br ${accent} text-white shadow-lg`}
+                          >
+                            <Icon className="h-5 w-5" />
+                          </span>
+                          <div>
+                            <p className="text-base font-semibold text-slate-900">
+                              {detail?.label}
+                            </p>
+                            <p className="text-xs uppercase tracking-wide text-slate-400">
+                              {settingKey.replace("autorespond_", "").replace(/_/g, " ")}
+                            </p>
+                          </div>
+                        </div>
+                        <p className="text-sm text-slate-500">{detail?.description}</p>
+                      </div>
+                      <Switch
+                        checked={detail?.enabled ?? false}
+                        disabled={disabled}
+                        onCheckedChange={(value) =>
+                          handleAutorespondToggle(settingKey, value)
+                        }
+                      />
+                    </div>
+                    <Badge
+                      className={detail?.enabled ? STATUS_BADGE.enabled : STATUS_BADGE.disabled}
+                    >
+                      {detail?.enabled ? "Enabled" : "Disabled"}
+                    </Badge>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          })}
+        </div>
+      </motion.section>
+    </div>
+  );
+}
+
+function mapAutorespondUpdate(
+  prev: AutorespondSettingsResponse,
+  type: string,
+  enabled: boolean
+): Partial<AutorespondSettingsResponse> {
+  const mapped = AUTORESPOND_LOOKUP[type];
+  if (mapped) {
+    return {
+      [mapped]: {
+        ...prev[mapped],
+        enabled,
+      },
+    } as Partial<AutorespondSettingsResponse>;
+  }
+
+  return {};
 }

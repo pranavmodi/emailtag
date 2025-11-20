@@ -27,7 +27,7 @@ import { Switch } from "@/components/ui/switch";
 
 const MENU_ITEMS = [
   {
-    href: "/settings2",
+    href: "/",
     label: "System Settings",
     description: "Configure email processing behavior",
     icon: "⚙️",
@@ -39,7 +39,7 @@ const MENU_ITEMS = [
     icon: "📝",
   },
   {
-    href: "/settings2/tag-statistics",
+    href: "/tag-statistics",
     label: "Tag Statistics",
     description: "Analyze tag retention and changes",
     icon: "📊",
@@ -667,40 +667,35 @@ function AllTagsResult({ result }: { result: AllTagsStatisticsResponse }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          {result.tag_statistics.map((tagStat) => (
-            <div key={tagStat.tag_name} className="rounded-2xl border border-slate-200 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-slate-500 uppercase">{tagStat.tag_name}</p>
-                  <p className="text-2xl font-bold text-slate-900">{tagStat.total_conversations}</p>
-                </div>
-                <Badge className={STAT_BADGE.success}>
-                  {percent(tagStat.still_tagged_percentage)} retained
-                </Badge>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
-                <div>
-                  <p className="text-slate-400">Still tagged</p>
-                  <p className="text-base font-semibold text-slate-900">{tagStat.still_tagged}</p>
-                </div>
-                <div>
-                  <p className="text-slate-400">Re-tagged</p>
-                  <p className="text-base font-semibold text-slate-900">{tagStat.re_tagged}</p>
-                </div>
-                <div>
-                  <p className="text-slate-400">Fetch failed</p>
-                  <p className="text-base font-semibold text-slate-900">{tagStat.fetch_failed}</p>
-                </div>
-                <div>
-                  <p className="text-slate-400">Retained</p>
-                  <p className="text-base font-semibold text-emerald-600">
-                    {percent(tagStat.still_tagged_percentage)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="overflow-x-auto rounded-2xl border border-slate-200">
+          <table className="min-w-full divide-y divide-slate-200 text-sm text-slate-700">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-4 py-3 text-left">Tag</th>
+                <th className="px-4 py-3 text-left">Conversations</th>
+                <th className="px-4 py-3 text-left">Still tagged</th>
+                <th className="px-4 py-3 text-left">Re-tagged</th>
+                <th className="px-4 py-3 text-left">Fetch failed</th>
+                <th className="px-4 py-3 text-left">% retained</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {result.tag_statistics.map((tagStat) => (
+                <tr key={tagStat.tag_name}>
+                  <td className="px-4 py-3 font-semibold text-slate-900">{tagStat.tag_name}</td>
+                  <td className="px-4 py-3">{tagStat.total_conversations}</td>
+                  <td className="px-4 py-3">{tagStat.still_tagged}</td>
+                  <td className="px-4 py-3">{tagStat.re_tagged}</td>
+                  <td className="px-4 py-3">{tagStat.fetch_failed}</td>
+                  <td className="px-4 py-3">
+                    <Badge className={STAT_BADGE.success}>
+                      {percent(tagStat.still_tagged_percentage)}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </CardContent>
     </Card>

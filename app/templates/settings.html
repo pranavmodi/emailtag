@@ -1,9 +1,18 @@
 <!DOCTYPE html>
+<!--
+    ⚠️ DEPRECATION WARNING ⚠️
+
+    This template (/settings) is DEPRECATED and maintained for backwards compatibility only.
+
+    All new features and changes should be made to /settings2 (Next.js frontend in frontend/settings2/).
+
+    DO NOT add new features to this file. Use the modern Next.js UI instead.
+-->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Processing Settings</title>
+    <title>Email Processing Settings (DEPRECATED - Use /settings2)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -550,6 +559,17 @@
 </head>
 <body>
     <div class="container">
+        <!-- DEPRECATION WARNING -->
+        <div class="warning-box" style="background: linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%); border-left: 6px solid #ff6b6b; margin-bottom: 25px; box-shadow: 0 4px 12px rgba(255, 107, 107, 0.2);">
+            <h3 style="margin-top: 0; color: #d63031; font-size: 1.4em;">⚠️ This UI is Deprecated</h3>
+            <p style="font-size: 1.1em; margin: 10px 0;">
+                <strong>All new features and changes should be made to <a href="/settings2" style="color: #667eea; text-decoration: underline; font-weight: 600;">/settings2</a></strong>
+            </p>
+            <p style="margin: 8px 0; color: #555;">
+                This legacy Jinja2 template is maintained for backwards compatibility only. Please use the modern Next.js UI at <strong>/settings2</strong> for the best experience.
+            </p>
+        </div>
+
         <!-- User Bar -->
         <div class="user-bar">
             <div class="user-info">

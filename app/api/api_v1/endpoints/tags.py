@@ -483,6 +483,9 @@ async def eval_classification(
     Run classification in eval mode - predict tags without applying them to Front.
     Compare predicted tags with actual tags that were applied.
 
+    For bulk evaluations (by date), tasks are queued via Celery to avoid blocking.
+    For single conversation eval, runs synchronously.
+
     Args:
         conversation_id: Optional - Single conversation ID to evaluate
         target_date: Optional - Date to evaluate all conversations
@@ -491,28 +494,14 @@ async def eval_classification(
     Returns:
         Dict with comparison results: {
             "conversation_id" or "date": ...,
-            "results": [
-                {
-                    "conversation_id": str,
-                    "predicted_tags": [str],
-                    "actual_tags": [str],
-                    "match": bool,
-                    "accuracy": float
-                }
-            ],
-            "summary": {
-                "total": int,
-                "exact_matches": int,
-                "partial_matches": int,
-                "no_matches": int,
-                "accuracy": float
-            }
+            "mode": "sync" or "async",
+            "results": [...] (sync only),
+            "queued_tasks": int (async only),
+            "summary": {...}
         }
     """
     from app.crud import email as email_crud
-    from app.services.classification_service import classify_email_tags_hierarchical
-    from app.services.frontapp_service import get_conversation_text
-    from app.services.document_processing import perform_document_processing
+    from app.tasks.email import eval_single_conversation_task
 
     if not conversation_id and not target_date:
         raise HTTPException(
@@ -520,53 +509,57 @@ async def eval_classification(
             detail="Must provide either conversation_id or target_date"
         )
 
-    results = []
-
     if conversation_id:
-        # Eval single conversation
-        logger.info(f"🧪 EVAL MODE: Running classification for conversation {conversation_id}")
+        # Single conversation - run synchronously
+        logger.info(f"🧪 EVAL MODE (SYNC): Running classification for conversation {conversation_id}")
         result = await _eval_single_conversation(conversation_id, db)
-        results.append(result)
+
+        # Calculate summary
+        summary = {
+            "total": 1,
+            "exact_matches": 1 if result["exact_match"] else 0,
+            "partial_matches": 1 if result["partial_match"] and not result["exact_match"] else 0,
+            "no_matches": 0 if result["exact_match"] or result["partial_match"] else 1,
+            "accuracy": result["accuracy"]
+        }
+
+        return {
+            "mode": "sync",
+            "conversation_id": conversation_id,
+            "results": [result],
+            "summary": summary
+        }
+
     else:
-        # Eval all conversations for a date
-        logger.info(f"🧪 EVAL MODE: Running classification for all conversations on {target_date}")
+        # Bulk evaluation - queue Celery tasks for non-blocking execution
+        logger.info(f"🧪 EVAL MODE (ASYNC): Queuing classification tasks for all conversations on {target_date}")
+
         # Get all emails created on target date
-        from app.crud import email as email_crud_sync
-        from app.db.session import SessionLocal
+        emails = await email_crud.get_emails_by_date(db, target_date)
 
-        sync_db = SessionLocal()
-        try:
-            emails = await email_crud.get_emails_by_date(db, target_date)
+        # Queue Celery tasks
+        queued_count = 0
+        conversation_ids = []
+        for email in emails:
+            if email.front_conversation_id:
+                # Queue the task in Celery
+                eval_single_conversation_task.apply_async(
+                    args=[email.front_conversation_id],
+                    queue='processing'
+                )
+                queued_count += 1
+                conversation_ids.append(email.front_conversation_id)
 
-            for email in emails:
-                if email.front_conversation_id:
-                    result = await _eval_single_conversation(email.front_conversation_id, db)
-                    results.append(result)
-        finally:
-            sync_db.close()
+        logger.info(f"🧪 EVAL: Queued {queued_count} evaluation tasks for {target_date}")
 
-    # Calculate summary statistics
-    total = len(results)
-    exact_matches = sum(1 for r in results if r["exact_match"])
-    partial_matches = sum(1 for r in results if r["partial_match"] and not r["exact_match"])
-    no_matches = sum(1 for r in results if not r["exact_match"] and not r["partial_match"])
-
-    overall_accuracy = (exact_matches / total * 100) if total > 0 else 0
-
-    summary = {
-        "total": total,
-        "exact_matches": exact_matches,
-        "partial_matches": partial_matches,
-        "no_matches": no_matches,
-        "accuracy": round(overall_accuracy, 2)
-    }
-
-    return {
-        "conversation_id": conversation_id if conversation_id else None,
-        "date": str(target_date) if target_date else None,
-        "results": results,
-        "summary": summary
-    }
+        return {
+            "mode": "async",
+            "date": str(target_date),
+            "queued_tasks": queued_count,
+            "conversation_ids": conversation_ids,
+            "message": f"Queued {queued_count} evaluation tasks. Results will be logged. Check Celery logs for individual results.",
+            "note": "Future version will support result collection via task IDs or database storage."
+        }
 
 
 async def _eval_single_conversation(conversation_id: str, db: AsyncSession) -> Dict[str, Any]:
@@ -600,20 +593,26 @@ async def _eval_single_conversation(conversation_id: str, db: AsyncSession) -> D
         recipients_cc_info = conversation_data.get("recipients_cc_info", {})
         structured_messages = conversation_data.get("_structured_messages", [])
 
-        # Run classification WITHOUT applying tags (eval mode)
+        # Get email object to retrieve document analysis results
+        email = await email_crud.get_by_front_conversation_id(db, front_conversation_id=conversation_id)
+        document_results = None
+        if email and hasattr(email, 'ocr_results') and email.ocr_results:
+            document_results = email.ocr_results
+            logger.info(f"🧪 EVAL: Using {len(document_results)} OCR results for classification")
+
+        # Run classification WITH document analysis (production-like, but without applying tags)
         predicted_tags = classify_email_tags_hierarchical(
             front_conversation_id=conversation_id,
             conversation_text=conversation_text,
             sender_info=sender_info,
             message_times=message_times,
-            document_analysis_results=None,  # Skip document processing in eval mode
+            document_analysis_results=document_results,  # ✅ Include document analysis
             recipients_to_info=recipients_to_info,
             recipients_cc_info=recipients_cc_info,
             structured_messages=structured_messages
         )
 
         # Get actual tags from database
-        email = await email_crud.get_by_front_conversation_id(db, front_conversation_id=conversation_id)
         actual_tags = []
         if email and email.tags:
             actual_tags = [tag.name for tag in email.tags]

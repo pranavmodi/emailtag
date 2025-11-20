@@ -70,7 +70,13 @@ def create_application() -> FastAPI:
         request: Request,
         is_authenticated: bool = Depends(check_authenticated)
     ):
-        """System settings page."""
+        """
+        System settings page.
+
+        ⚠️ DEPRECATED: This endpoint serves the legacy Jinja2 template.
+        All new features should be added to /settings2 (Next.js frontend in frontend/settings2/).
+        This endpoint is maintained for backwards compatibility only.
+        """
         if not is_authenticated:
             return RedirectResponse(url="/login", status_code=303)
         return await settings_ui(request)

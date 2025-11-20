@@ -92,3 +92,7 @@ When executing Python scripts, always use the Python interpreter from the virtua
 `emailtag/bin/python`
 
 This ensures all dependencies and environment variables are properly loaded for the project.
+
+## Settings UI
+
+**⚠️ DEPRECATION NOTICE**: `/settings` (Jinja2 template) is **DEPRECATED**. All new features and UI improvements should be made to `/settings2` (Next.js frontend located in `frontend/settings2/`). The legacy `/settings` endpoint is maintained for backwards compatibility only.

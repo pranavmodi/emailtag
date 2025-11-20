@@ -2,6 +2,8 @@
 
 A dedicated Next.js (TypeScript) UI that modernizes the legacy `/settings` template. It consumes the existing FastAPI backend without any backend changes and surfaces the controls at `/settings2` on the Next dev server.
 
+> **⚠️ IMPORTANT**: `/settings` is **DEPRECATED**. All new features and changes should be made to `/settings2`. The legacy `/settings` endpoint (Jinja2 template) is maintained for backwards compatibility only.
+
 ## Stack
 - Next.js App Router, React 18, and TypeScript
 - Tailwind CSS, Radix Switch (shadcn-style atoms), lucide-react icons, and Framer Motion animations
