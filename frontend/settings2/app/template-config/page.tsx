@@ -95,7 +95,7 @@ Access reports & images (Request login here for reports): <a href="{reports_link
 
 type TemplateKey = keyof typeof TEMPLATE_DEFINITIONS;
 
-const TAG_NAME = "Apt status req";
+const TAG_OPTIONS = [{ value: "Apt status req", label: "Apt Status Req" }];
 
 const DEFAULT_TAG_SETTINGS = {
   scheduling_phone_number: "",
@@ -103,6 +103,9 @@ const DEFAULT_TAG_SETTINGS = {
   portal_link_bills: "",
   portal_link_reports: "",
 };
+
+const getTagLabel = (value: string) =>
+  TAG_OPTIONS.find((option) => option.value === value)?.label ?? value;
 
 export default function TemplateConfigPage() {
   const [currentUser, setCurrentUser] = useState("Admin");
@@ -124,12 +127,12 @@ export default function TemplateConfigPage() {
   const [templateOriginal, setTemplateOriginal] = useState("");
 
   // Tag settings state
+  const [selectedTag, setSelectedTag] = useState(TAG_OPTIONS[0].value);
   const [tagSettings, setTagSettings] = useState(DEFAULT_TAG_SETTINGS);
   const [tagOriginal, setTagOriginal] = useState(DEFAULT_TAG_SETTINGS);
   const [tagMeta, setTagMeta] = useState<TagSettingsResponse | null>(null);
   const [tagStatus, setTagStatus] = useState<StatusMessage | null>(null);
   const [tagLoading, setTagLoading] = useState(false);
-  const [tagInitialized, setTagInitialized] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -161,11 +164,10 @@ export default function TemplateConfigPage() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === "tag-settings" && !tagInitialized) {
-      void loadTagSettings();
-      setTagInitialized(true);
+    if (activeTab === "tag-settings") {
+      void loadTagSettings(selectedTag);
     }
-  }, [activeTab, tagInitialized]);
+  }, [activeTab, selectedTag]);
 
   const quillModules = useMemo(
     () => ({
@@ -267,11 +269,11 @@ export default function TemplateConfigPage() {
     });
   };
 
-  const loadTagSettings = async () => {
+  const loadTagSettings = async (tagName: string) => {
     setTagLoading(true);
     setTagStatus(null);
     try {
-      const response = await TemplatesApi.getTagSettings(TAG_NAME);
+      const response = await TemplatesApi.getTagSettings(tagName);
       const nextSettings = {
         scheduling_phone_number:
           response.settings.scheduling_phone_number ?? "",
@@ -289,7 +291,7 @@ export default function TemplateConfigPage() {
         setTagMeta(null);
         setTagStatus({
           type: "info",
-          message: "No settings saved yet. Fill in the fields below.",
+          message: `No settings saved yet for ${getTagLabel(tagName)}. Fill in the fields below.`,
         });
       } else {
         setTagStatus({
@@ -313,14 +315,14 @@ export default function TemplateConfigPage() {
         updated_by: currentUser,
       };
       const response = await TemplatesApi.updateTagSettings(
-        TAG_NAME,
+        selectedTag,
         payload
       );
       setTagMeta(response);
       setTagOriginal(tagSettings);
       setTagStatus({
         type: "success",
-        message: "Apt status req settings saved.",
+        message: `${getTagLabel(selectedTag)} settings saved.`,
       });
     } catch (error) {
       setTagStatus({
@@ -452,6 +454,9 @@ export default function TemplateConfigPage() {
             />
           ) : (
             <TagSettingsForm
+              selectedTag={selectedTag}
+              tagOptions={TAG_OPTIONS}
+              onTagSelect={(value) => setSelectedTag(value)}
               tagSettings={tagSettings}
               onFieldChange={(key, value) =>
                 setTagSettings((prev) => ({ ...prev, [key]: value }))
@@ -587,6 +592,9 @@ function TemplateEditor({
 }
 
 interface TagSettingsFormProps {
+  selectedTag: string;
+  tagOptions: typeof TAG_OPTIONS;
+  onTagSelect: (value: string) => void;
   tagSettings: typeof DEFAULT_TAG_SETTINGS;
   onFieldChange: (key: keyof typeof DEFAULT_TAG_SETTINGS, value: string) => void;
   tagMeta: TagSettingsResponse | null;
@@ -597,6 +605,9 @@ interface TagSettingsFormProps {
 }
 
 function TagSettingsForm({
+  selectedTag,
+  tagOptions,
+  onTagSelect,
   tagSettings,
   onFieldChange,
   tagMeta,
@@ -605,14 +616,15 @@ function TagSettingsForm({
   onSave,
   onReset,
 }: TagSettingsFormProps) {
+  const selectedTagLabel = getTagLabel(selectedTag);
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-600">
         <div className="flex items-center gap-2 text-slate-900">
-          <Cog className="h-4 w-4 text-brand.indigo" /> Apt status req settings
+          <Cog className="h-4 w-4 text-brand.indigo" /> {selectedTagLabel} settings
         </div>
         <p className="mt-2">
-          These values feed the autoresponder when the Apt status req agent
+          These values feed the autoresponder when the {selectedTagLabel} agent
           drafts replies (phone numbers, policy text, and portal links).
         </p>
       </div>
@@ -625,6 +637,21 @@ function TagSettingsForm({
         </div>
       ) : (
         <>
+          <label className="space-y-2 text-sm font-medium text-slate-700">
+            Select autorespond tag
+            <select
+              value={selectedTag}
+              onChange={(event) => onTagSelect(event.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-white/80 p-3 text-base shadow-inner focus:border-brand.indigo focus:outline-none"
+            >
+              {tagOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <div className="space-y-4">
             <label className="space-y-2 text-sm font-medium text-slate-700">
               Scheduling phone number
