@@ -372,12 +372,11 @@ export default function Settings2Page() {
         </div>
       </motion.div>
 
-      <div className="grid gap-8 lg:grid-cols-5">
+      <div className="space-y-8">
         <motion.section
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={easing}
-          className="lg:col-span-3"
         >
           <Card className="h-full">
             <CardHeader>
@@ -436,7 +435,6 @@ export default function Settings2Page() {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ ...easing, delay: 0.05 }}
-          className="lg:col-span-2"
         >
           <Card className="h-full">
             <CardHeader>
