@@ -17,6 +17,7 @@ import {
 import { ApiError, SettingsApi, TagsApi } from "@/lib/api";
 import type {
   AllTagsStatisticsResponse,
+  EvalClassificationEntry,
   EvalClassificationResponse,
   TagStatisticsResponse,
 } from "@/lib/types";
@@ -602,7 +603,7 @@ export default function TagStatisticsPage() {
 }
 
 function SingleTagResult({ result }: { result: TagStatisticsResponse }) {
-  const [evalResults, setEvalResults] = useState<Record<string, any>>({});
+  const [evalResults, setEvalResults] = useState<Record<string, EvalClassificationEntry>>({});
   const [evalLoading, setEvalLoading] = useState<Record<string, boolean>>({});
   const [bulkEvalLoading, setBulkEvalLoading] = useState(false);
 
@@ -774,28 +775,10 @@ function SingleTagResult({ result }: { result: TagStatisticsResponse }) {
                     <td className="px-4 py-3">
                       {evalResult ? (
                         <div className="space-y-1">
-                          <Badge
-                            className={
-                              evalResult.exact_match
-                                ? STAT_BADGE.success
-                                : evalResult.partial_match
-                                ? STAT_BADGE.warn
-                                : STAT_BADGE.danger
-                            }
-                          >
-                            {evalResult.exact_match
-                              ? "✓ Exact"
-                              : evalResult.partial_match
-                              ? "≈ Partial"
-                              : "✗ Miss"}
-                          </Badge>
-                          <div className="text-xs text-slate-500">
-                            Accuracy: {evalResult.accuracy}%
-                          </div>
-                          {evalResult.predicted_tags && evalResult.predicted_tags.length > 0 && (
+                          {evalResult.predicted_tags && evalResult.predicted_tags.length > 0 ? (
                             <div className="text-xs text-slate-600">
-                              <span className="font-semibold">Predicted:</span>
-                              <div className="flex flex-wrap gap-1 mt-1">
+                              <div className="text-slate-400">Predicted tags</div>
+                              <div className="mt-1 flex flex-wrap gap-1">
                                 {evalResult.predicted_tags.map((tag: string) => (
                                   <span
                                     key={tag}
@@ -806,6 +789,8 @@ function SingleTagResult({ result }: { result: TagStatisticsResponse }) {
                                 ))}
                               </div>
                             </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">No prediction returned</span>
                           )}
                         </div>
                       ) : (
