@@ -6,6 +6,11 @@ Please use the following rules to sub-classify the provided email content, alrea
 
 --- START RX Sub-Classification RULES ---
 
+**🔴 HIGHEST PRIORITY RULE - RX Document Type Detection:**
+   - If the document analysis section includes ANY document with type "rx" (case-insensitive), immediately classify as 'RX' regardless of email content. This rule takes precedence over ALL other rules below.
+   - Check the document_analysis_results for any entry where `document_type` equals "rx".
+   - If found, skip all other analysis and return 'RX' classification.
+
 1. **RX-Related Status or Request**: Based on the email content, determine the specific status or request concerning a prescription (RX) or related appointment, and classify as follows:
 
    **PRIORITY RULE - Status Inquiries:**

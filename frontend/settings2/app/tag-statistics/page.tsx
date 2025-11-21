@@ -9,6 +9,7 @@ import {
   Calendar,
   CheckCircle2,
   Loader2,
+  RefreshCw,
   Search,
   Tag,
   Zap,
@@ -774,7 +775,7 @@ function SingleTagResult({ result }: { result: TagStatisticsResponse }) {
                     </td>
                     <td className="px-4 py-3">
                       {evalResult ? (
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                           {evalResult.predicted_tags && evalResult.predicted_tags.length > 0 ? (
                             <div className="text-xs text-slate-600">
                               <div className="text-slate-400">Predicted tags</div>
@@ -792,6 +793,25 @@ function SingleTagResult({ result }: { result: TagStatisticsResponse }) {
                           ) : (
                             <span className="text-xs text-slate-400">No prediction returned</span>
                           )}
+                          <Button
+                            onClick={() => runEval(conversation.conversation_id)}
+                            disabled={evalLoading[conversation.conversation_id]}
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-xs text-slate-500 hover:text-slate-700"
+                          >
+                            {evalLoading[conversation.conversation_id] ? (
+                              <>
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                ...
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="h-3 w-3" />
+                                Re-run
+                              </>
+                            )}
+                          </Button>
                         </div>
                       ) : (
                         <Button
