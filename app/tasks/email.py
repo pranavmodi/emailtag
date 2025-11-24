@@ -4,7 +4,7 @@ import nest_asyncio # Import nest_asyncio
 nest_asyncio.apply() # Apply the patch
 
 import logging
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from uuid import UUID
 import asyncio # Add asyncio import
 
@@ -1123,5 +1123,196 @@ def eval_single_conversation_task(conversation_id: str) -> Dict[str, Any]:
             "partial_match": False,
             "accuracy": 0.0
         }
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.tasks.email.analyze_all_tags_task", bind=True)
+def analyze_all_tags_task(self, target_date_str: str, hour: Optional[int] = None) -> Dict[str, Any]:
+    """
+    Celery task to analyze all tags for a specific date with progress reporting.
+
+    Args:
+        self: Bound task instance for progress updates
+        target_date_str: Date string in YYYY-MM-DD format
+        hour: Optional hour (0-23) to filter by
+
+    Returns:
+        Dict with tag statistics
+    """
+    from datetime import date as date_type
+    from app.crud.sync import tag as tag_crud_sync
+    from app.services.frontapp_service import get_conversation_tags
+    from app.db.session import SessionLocal
+    import time
+
+    target_date = date_type.fromisoformat(target_date_str)
+    db = SessionLocal()
+
+    try:
+        # Update state: Fetching tags from database
+        self.update_state(
+            state='PROGRESS',
+            meta={
+                'stage': 'database',
+                'message': 'Fetching tags from database...',
+                'progress': 0
+            }
+        )
+
+        # Get all tags and their conversations for this date/hour
+        # Note: We need to implement a sync version of get_all_tags_by_date
+        from sqlalchemy import select, func
+        from app.models.email import Email, Tag, email_tag_association
+
+        query = select(
+            Tag.name,
+            func.array_agg(Email.front_conversation_id).label('conversation_ids')
+        ).select_from(email_tag_association).join(
+            Tag, email_tag_association.c.tag_id == Tag.id
+        ).join(
+            Email, email_tag_association.c.email_id == Email.id
+        ).where(
+            func.date(Email.created_at) == target_date
+        )
+
+        if hour is not None:
+            query = query.where(func.extract('hour', Email.created_at) == hour)
+
+        query = query.group_by(Tag.name)
+
+        result = db.execute(query)
+        tags_data = result.fetchall()
+
+        if not tags_data:
+            return {
+                'date': target_date_str,
+                'total_conversations': 0,
+                'total_tags': 0,
+                'tag_statistics': []
+            }
+
+        # Build tag to conversations mapping
+        tags_dict = {row[0]: row[1] for row in tags_data}
+
+        # Collect all unique conversation IDs
+        tag_to_conversations = {}
+        all_unique_conv_ids = set()
+
+        for tag_name, conversation_ids in tags_dict.items():
+            tag_to_conversations[tag_name] = {
+                'conversations_to_check': conversation_ids,
+                'total_count': len(conversation_ids)
+            }
+            all_unique_conv_ids.update(conversation_ids)
+
+        all_unique_conv_ids = list(all_unique_conv_ids)
+        total_conversations = len(all_unique_conv_ids)
+
+        # Update state: Starting to fetch from Front
+        self.update_state(
+            state='PROGRESS',
+            meta={
+                'stage': 'fetching',
+                'message': f'Fetching tags from Front for {total_conversations} conversations...',
+                'progress': 0,
+                'total': total_conversations,
+                'current': 0
+            }
+        )
+
+        # Fetch current tags from Front for each unique conversation
+        conversation_current_tags = {}
+        failed_fetches = set()
+
+        for idx, conv_id in enumerate(all_unique_conv_ids, 1):
+            try:
+                front_tags = get_conversation_tags(conv_id)
+
+                if front_tags is None:
+                    logger.warning(f"Could not fetch tags from Front for conversation {conv_id}")
+                    conversation_current_tags[conv_id] = []
+                    failed_fetches.add(conv_id)
+                else:
+                    tag_names = [t.get('name', '') for t in front_tags if t.get('name')]
+                    conversation_current_tags[conv_id] = tag_names
+
+                # Update progress every 5 conversations or on last one
+                if idx % 5 == 0 or idx == total_conversations:
+                    progress_pct = int((idx / total_conversations) * 100)
+                    self.update_state(
+                        state='PROGRESS',
+                        meta={
+                            'stage': 'fetching',
+                            'message': f'Fetching conversation {idx}/{total_conversations} ({conv_id[:12]}...)',
+                            'progress': progress_pct,
+                            'total': total_conversations,
+                            'current': idx
+                        }
+                    )
+
+                # Small delay to avoid rate limits
+                time.sleep(0.1)
+
+            except Exception as e:
+                logger.error(f"Error fetching tags for conversation {conv_id}: {e}")
+                conversation_current_tags[conv_id] = []
+                failed_fetches.add(conv_id)
+
+        # Update state: Calculating statistics
+        self.update_state(
+            state='PROGRESS',
+            meta={
+                'stage': 'calculating',
+                'message': 'Calculating statistics for all tags...',
+                'progress': 95
+            }
+        )
+
+        # Calculate statistics for each tag
+        tag_statistics = []
+
+        for tag_name, tag_data in tag_to_conversations.items():
+            still_tagged_count = 0
+            re_tagged_count = 0
+            fetch_failed_count = 0
+
+            conversations_to_check = tag_data['conversations_to_check']
+            total_for_tag = tag_data['total_count']
+
+            for conv_id in conversations_to_check:
+                if conv_id in failed_fetches:
+                    fetch_failed_count += 1
+                    re_tagged_count += 1
+                else:
+                    current_tags = conversation_current_tags.get(conv_id, [])
+                    if tag_name in current_tags:
+                        still_tagged_count += 1
+                    else:
+                        re_tagged_count += 1
+
+            still_tagged_pct = (still_tagged_count / total_for_tag * 100) if total_for_tag > 0 else 0.0
+            re_tagged_pct = (re_tagged_count / total_for_tag * 100) if total_for_tag > 0 else 0.0
+
+            tag_statistics.append({
+                'tag_name': tag_name,
+                'total_conversations': total_for_tag,
+                'still_tagged': still_tagged_count,
+                're_tagged': re_tagged_count,
+                'fetch_failed': fetch_failed_count,
+                'still_tagged_percentage': round(still_tagged_pct, 2),
+                're_tagged_percentage': round(re_tagged_pct, 2)
+            })
+
+        # Sort by total conversations descending
+        tag_statistics.sort(key=lambda x: x['total_conversations'], reverse=True)
+
+        return {
+            'date': target_date_str,
+            'total_conversations': total_conversations,
+            'total_tags': len(tag_statistics),
+            'tag_statistics': tag_statistics
+        }
+
     finally:
         db.close() 

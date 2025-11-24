@@ -143,6 +143,13 @@ export default function TagStatisticsPage() {
   const [allResult, setAllResult] = useState<AllTagsStatisticsResponse | null>(null);
   const [statisticsError, setStatisticsError] = useState<string | null>(null);
   const [statisticsLoading, setStatisticsLoading] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState<{
+    stage?: string;
+    message?: string;
+    progress?: number;
+    total?: number;
+    current?: number;
+  } | null>(null);
 
   const [evalConversationId, setEvalConversationId] = useState("");
   const [evalDate, setEvalDate] = useState(defaultDate());
@@ -184,6 +191,54 @@ export default function TagStatisticsPage() {
     setStatisticsError(null);
   };
 
+  const pollAnalysisStatus = async (taskId: string, maxAttempts = 300) => {
+    let attempts = 0;
+
+    const poll = async (): Promise<void> => {
+      try {
+        const statusResponse = await TagsApi.getAnalysisStatus(taskId);
+
+        if (statusResponse.status === "SUCCESS" && statusResponse.result) {
+          setAllResult(statusResponse.result);
+          setAnalysisProgress(null);
+          setStatisticsLoading(false);
+          return;
+        } else if (statusResponse.status === "PROGRESS") {
+          setAnalysisProgress({
+            stage: statusResponse.stage,
+            message: statusResponse.message,
+            progress: statusResponse.progress,
+            total: statusResponse.total,
+            current: statusResponse.current,
+          });
+        } else if (statusResponse.status === "FAILURE") {
+          setStatisticsError(statusResponse.error || "Analysis failed");
+          setAnalysisProgress(null);
+          setStatisticsLoading(false);
+          return;
+        }
+
+        if (attempts >= maxAttempts) {
+          console.error(`Analysis task timeout after 10 minutes`);
+          setStatisticsError("Analysis timed out. Please try again.");
+          setAnalysisProgress(null);
+          setStatisticsLoading(false);
+          return;
+        }
+
+        attempts++;
+        setTimeout(() => poll(), 2000);
+      } catch (error) {
+        console.error("Error polling analysis status:", error);
+        setStatisticsError("Failed to check analysis status");
+        setAnalysisProgress(null);
+        setStatisticsLoading(false);
+      }
+    };
+
+    await poll();
+  };
+
   const runStatistics = async () => {
     if (!date) {
       setStatisticsError("Select a date to analyze.");
@@ -205,15 +260,31 @@ export default function TagStatisticsPage() {
 
     setStatisticsLoading(true);
     setStatisticsError(null);
+    setAnalysisProgress(null);
     try {
       if (analysisType === "single") {
         const result = await TagsApi.getTagStatistics(tagName, date);
         setSingleResult(result);
         setAllResult(null);
+        setStatisticsLoading(false);
       } else {
+        // For "all tags" analysis, use async mode with progress tracking
         const parsedHour = hour !== "" ? Number(hour) : undefined;
-        const result = await TagsApi.getAllTagsStatistics(date, parsedHour);
-        setAllResult(result);
+        const response: any = await TagsApi.getAllTagsStatistics(date, parsedHour);
+
+        if (response.task_id) {
+          // Async mode: poll for progress
+          setAnalysisProgress({
+            stage: "queued",
+            message: "Analysis queued, starting...",
+            progress: 0,
+          });
+          await pollAnalysisStatus(response.task_id);
+        } else {
+          // Sync mode (shouldn't happen with async_mode=true by default)
+          setAllResult(response);
+          setStatisticsLoading(false);
+        }
         setSingleResult(null);
       }
     } catch (error) {
@@ -222,7 +293,7 @@ export default function TagStatisticsPage() {
       setStatisticsError(message);
       setSingleResult(null);
       setAllResult(null);
-    } finally {
+      setAnalysisProgress(null);
       setStatisticsLoading(false);
     }
   };
@@ -493,6 +564,41 @@ export default function TagStatisticsPage() {
                   </>
                 )}
               </Button>
+
+              {analysisProgress && (
+                <div className="space-y-3 rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-indigo-900">
+                      {analysisProgress.message || "Processing..."}
+                    </span>
+                    {analysisProgress.progress !== undefined && (
+                      <span className="text-indigo-700 font-semibold">
+                        {analysisProgress.progress}%
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-indigo-100">
+                    <div
+                      className="h-full bg-indigo-600 transition-all duration-300 ease-out"
+                      style={{ width: `${analysisProgress.progress || 0}%` }}
+                    />
+                  </div>
+
+                  {/* Detailed info */}
+                  {analysisProgress.stage && (
+                    <div className="text-xs text-indigo-600">
+                      Stage: <span className="font-medium">{analysisProgress.stage}</span>
+                      {analysisProgress.current && analysisProgress.total && (
+                        <span className="ml-2">
+                          ({analysisProgress.current}/{analysisProgress.total} conversations)
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {statisticsError && (
                 <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">

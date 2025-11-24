@@ -250,12 +250,13 @@ async def get_tag_statistics(
     )
 
 
-@router.get("/all-tags-statistics", response_model=AllTagsStatisticsResponse)
+@router.get("/all-tags-statistics")
 async def get_all_tags_statistics(
     target_date: date = Query(..., description="Date to analyze (format: YYYY-MM-DD)"),
     hour: int = Query(None, ge=0, le=23, description="Optional hour (0-23) to filter by"),
+    async_mode: bool = Query(True, description="Use async Celery task for progress tracking"),
     db: AsyncSession = Depends(get_db),
-) -> AllTagsStatisticsResponse:
+):
     """
     Get statistics for all tags applied on a specific date, optionally filtered by hour.
 
@@ -270,18 +271,41 @@ async def get_all_tags_statistics(
     Args:
         target_date: Date to analyze (e.g., 2025-11-13)
         hour: Optional hour (0-23) to filter by. If not provided, analyzes entire day.
+        async_mode: If True, queue as Celery task and return task_id for progress tracking
         db: Database session
 
     Returns:
-        AllTagsStatisticsResponse: Statistics for all tags including retention percentages
+        If async_mode=True: Task info with task_id and status_url
+        If async_mode=False: AllTagsStatisticsResponse with statistics
 
     Example:
-        GET /api/v1/tags/all-tags-statistics?target_date=2025-11-13&hour=14
+        GET /api/v1/tags/all-tags-statistics?target_date=2025-11-13&hour=14&async_mode=true
     """
     if hour is not None:
-        logger.info(f"Fetching statistics for all tags on date {target_date} hour {hour}")
+        logger.info(f"Fetching statistics for all tags on date {target_date} hour {hour} (async={async_mode})")
     else:
-        logger.info(f"Fetching statistics for all tags on date {target_date}")
+        logger.info(f"Fetching statistics for all tags on date {target_date} (async={async_mode})")
+
+    # ASYNC MODE: Queue Celery task and return task_id immediately
+    if async_mode:
+        from app.tasks.email import analyze_all_tags_task
+
+        logger.info(f"🔄 ASYNC MODE: Queuing all-tags analysis task for {target_date}")
+
+        task = analyze_all_tags_task.apply_async(
+            args=[target_date.isoformat(), hour],
+            queue='processing'
+        )
+
+        return {
+            "mode": "async",
+            "task_id": task.id,
+            "message": f"Analysis task queued for {target_date}",
+            "status_url": f"/api/v1/tags/analysis-status/{task.id}"
+        }
+
+    # SYNC MODE: Process inline and return results immediately (backward compatibility)
+    logger.info(f"⚙️ SYNC MODE: Running all-tags analysis inline for {target_date}")
 
     # Get all tags and their conversations for this date/hour
     tags_dict = await tag_crud.get_all_tags_by_date(db, target_date=target_date, hour=hour)
@@ -590,6 +614,50 @@ async def get_eval_status(task_id: str) -> Dict[str, Any]:
     else:
         # Task still running
         response["message"] = f"Eval task is {task_result.state.lower()}"
+
+    return response
+
+
+@router.get("/analysis-status/{task_id}", response_model=Dict[str, Any])
+async def get_analysis_status(task_id: str) -> Dict[str, Any]:
+    """
+    Get the status and progress of an all-tags analysis task.
+
+    Args:
+        task_id: Celery task ID
+
+    Returns:
+        Dict with task status, progress info, and result (if completed)
+    """
+    from celery.result import AsyncResult
+    from app.tasks.worker import celery_app
+
+    task_result = AsyncResult(task_id, app=celery_app)
+
+    response = {
+        "task_id": task_id,
+        "status": task_result.state,  # PENDING, PROGRESS, SUCCESS, FAILURE
+    }
+
+    if task_result.state == 'PROGRESS':
+        # Task is running, return progress info
+        info = task_result.info or {}
+        response["stage"] = info.get('stage', 'unknown')
+        response["message"] = info.get('message', 'Processing...')
+        response["progress"] = info.get('progress', 0)
+        response["total"] = info.get('total')
+        response["current"] = info.get('current')
+    elif task_result.ready():
+        # Task completed
+        if task_result.successful():
+            response["result"] = task_result.result
+            response["message"] = "Analysis completed successfully"
+        else:
+            response["error"] = str(task_result.result)
+            response["message"] = "Analysis failed"
+    else:
+        # Task still pending
+        response["message"] = f"Analysis task is {task_result.state.lower()}"
 
     return response
 
