@@ -351,9 +351,26 @@ export default function TagStatisticsPage() {
     }
 
     if (allResult) {
+      // Calculate overall statistics across all tags
+      const totalTagApplications = allResult.tag_statistics.reduce(
+        (sum, tag) => sum + tag.total_conversations, 0
+      );
+      const totalStillTagged = allResult.tag_statistics.reduce(
+        (sum, tag) => sum + tag.still_tagged, 0
+      );
+      const totalReTagged = allResult.tag_statistics.reduce(
+        (sum, tag) => sum + tag.re_tagged, 0
+      );
+      const totalFetchFailed = allResult.tag_statistics.reduce(
+        (sum, tag) => sum + tag.fetch_failed, 0
+      );
+      const overallRetentionPct = totalTagApplications > 0
+        ? (totalStillTagged / totalTagApplications) * 100
+        : 0;
+
       return [
         {
-          label: "Total Conversations",
+          label: "Unique Conversations",
           value: allResult.total_conversations,
           icon: <Activity className="h-5 w-5" />,
         },
@@ -361,6 +378,28 @@ export default function TagStatisticsPage() {
           label: "Tags Evaluated",
           value: allResult.total_tags,
           icon: <Tag className="h-5 w-5" />,
+        },
+        {
+          label: "Total Tag Applications",
+          value: totalTagApplications,
+          icon: <BarChart3 className="h-5 w-5" />,
+        },
+        {
+          label: "Still Tagged (Overall)",
+          value: totalStillTagged,
+          pill: percent(overallRetentionPct),
+          tone: STAT_BADGE.success,
+        },
+        {
+          label: "Re-Tagged (Overall)",
+          value: totalReTagged,
+          pill: percent((totalReTagged / totalTagApplications) * 100),
+          tone: STAT_BADGE.warn,
+        },
+        {
+          label: "Fetch Errors (Overall)",
+          value: totalFetchFailed,
+          tone: STAT_BADGE.danger,
         },
       ];
     }
