@@ -33,7 +33,15 @@ Please use the following rules to sub-classify the provided email content, alrea
 
    - If the email clearly indicates that an **appointment is no longer happening or has been voided WITHOUT any mention of rescheduling**, classify as 'Cancel Request'.
 
+   - **Cancel Request also includes:**
+     - Canceling a **previously proposed reschedule** and keeping the original appointment time (e.g., "Please keep the appointment at the original time" after discussing moving it, "Never mind, keep it as scheduled", "Disregard the reschedule request")
+     - Voiding or withdrawing a **proposed change** to an appointment
+     - Any communication that **reverses a reschedule request** and maintains the current/original appointment
+     - The key indicator: The appointment itself remains scheduled, but a proposed change is being canceled
+
    - If the email expresses a **request to change the date or time of an existing appointment**, classify as 'Reschedule Request'.
+
+   - **NOTE**: If an email says "keep the appointment at [original time]" after a reschedule was discussed, this is a 'Cancel Request' (canceling the reschedule), NOT a 'Reschedule Request'.
 
    - If the email mentions both a **missed/no-show appointment AND an intent to reschedule** (e.g., "did not attend...reschedule", "no-show...need to reschedule", "missed appointment...call to reschedule"), classify as 'Reschedule Request'.
  If there is ANY attachment with document type "rx" (prescription/referral), ALWAYS classify as 'RX' regardless of email content. However this rule applies only if there is document of type RX
