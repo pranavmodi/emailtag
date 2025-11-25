@@ -102,6 +102,10 @@ const DEFAULT_TAG_SETTINGS = {
   no_show_policy: "",
   portal_link_bills: "",
   portal_link_reports: "",
+  intro_text: "",
+  table_intro_text: "",
+  personal_injury_text: "",
+  footer_text: "",
 };
 
 const getTagLabel = (value: string) =>
@@ -280,6 +284,10 @@ export default function TemplateConfigPage() {
         no_show_policy: response.settings.no_show_policy ?? "",
         portal_link_bills: response.settings.portal_link_bills ?? "",
         portal_link_reports: response.settings.portal_link_reports ?? "",
+        intro_text: response.settings.intro_text ?? "",
+        table_intro_text: response.settings.table_intro_text ?? "",
+        personal_injury_text: response.settings.personal_injury_text ?? "",
+        footer_text: response.settings.footer_text ?? "",
       };
       setTagSettings(nextSettings);
       setTagOriginal(nextSettings);
@@ -711,6 +719,76 @@ function TagSettingsForm({
                 className="w-full rounded-xl border border-slate-300 bg-white/80 p-3 text-base shadow-inner focus:border-brand.indigo focus:outline-none"
               />
             </label>
+
+            <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4">
+              <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                📧 Response Body Configuration
+              </h3>
+              <p className="mb-4 text-xs text-slate-600">
+                Customize the text sections of the autoresponse email. The table structure itself is not configurable.
+              </p>
+
+              <label className="space-y-2 text-sm font-medium text-slate-700">
+                Intro Text (before table)
+                <textarea
+                  value={tagSettings.intro_text}
+                  onChange={(event) =>
+                    onFieldChange("intro_text", event.target.value)
+                  }
+                  placeholder="Patient ID: {patient_id_confirmed}&#10;&#10;Our direct scheduling phone # is {scheduling_phone}..."
+                  className="min-h-[150px] w-full rounded-xl border border-slate-300 bg-white/80 p-3 font-mono text-sm shadow-inner focus:border-brand.indigo focus:outline-none"
+                />
+                <span className="text-xs text-slate-500">
+                  HTML and placeholders supported: {"{patient_id_confirmed}"}, {"{scheduling_phone}"}, {"{no_show_policy}"}
+                </span>
+              </label>
+
+              <label className="mt-4 space-y-2 text-sm font-medium text-slate-700">
+                Table Introduction Text
+                <input
+                  type="text"
+                  value={tagSettings.table_intro_text}
+                  onChange={(event) =>
+                    onFieldChange("table_intro_text", event.target.value)
+                  }
+                  placeholder="Here is a summary of the patient's exams..."
+                  className="w-full rounded-xl border border-slate-300 bg-white/80 p-3 text-base shadow-inner focus:border-brand.indigo focus:outline-none"
+                />
+                <span className="text-xs text-slate-500">
+                  Text displayed immediately before the appointment table.
+                </span>
+              </label>
+
+              <label className="mt-4 space-y-2 text-sm font-medium text-slate-700">
+                Personal Injury Text
+                <textarea
+                  value={tagSettings.personal_injury_text}
+                  onChange={(event) =>
+                    onFieldChange("personal_injury_text", event.target.value)
+                  }
+                  placeholder="If this is also a personal injury case:&#10;A report containing the findings..."
+                  className="min-h-[120px] w-full rounded-xl border border-slate-300 bg-white/80 p-3 font-mono text-sm shadow-inner focus:border-brand.indigo focus:outline-none"
+                />
+                <span className="text-xs text-slate-500">
+                  HTML supported. Shown only when patient is flagged as personal injury case.
+                </span>
+              </label>
+
+              <label className="mt-4 space-y-2 text-sm font-medium text-slate-700">
+                Footer Text (after table)
+                <textarea
+                  value={tagSettings.footer_text}
+                  onChange={(event) =>
+                    onFieldChange("footer_text", event.target.value)
+                  }
+                  placeholder="{personal_injury_info}&#10;Access bills: <a href='{bills_link}'>Click Here</a>..."
+                  className="min-h-[120px] w-full rounded-xl border border-slate-300 bg-white/80 p-3 font-mono text-sm shadow-inner focus:border-brand.indigo focus:outline-none"
+                />
+                <span className="text-xs text-slate-500">
+                  HTML and placeholders supported: {"{personal_injury_info}"}, {"{bills_link}"}, {"{reports_link}"}
+                </span>
+              </label>
+            </div>
           </div>
 
           {tagMeta && (

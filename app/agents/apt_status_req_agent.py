@@ -59,6 +59,19 @@ DEFAULT_PORTAL_LINKS = {
     "bills_appointments_liens": "https://example.com/portal/bills",
     "reports_images": "https://example.com/portal/reports"
 }
+DEFAULT_INTRO_TEXT = """Patient ID: {patient_id_confirmed}<br/><br/>
+<b>Our direct scheduling phone # is {scheduling_phone} and we can assist with directions, rescheduling, canceling, or any other scheduling-related questions.</b><br/>
+{no_show_policy}<br/><br/>"""
+DEFAULT_TABLE_INTRO_TEXT = "Here is a summary of the patient's exams we currently have entered into our system:"
+DEFAULT_PERSONAL_INJURY_TEXT = """<br/>
+If this is also a personal injury case:<br/>
+A report containing the findings of the exam will also be sent to the attorney.<br/>
+A bill will be sent to the attorney once both the patient and the attorney sign all pending liens.<br/>
+Please make sure to submit a negotiation offer before sending the payment.<br/>"""
+DEFAULT_FOOTER_TEXT = """<br/>
+{personal_injury_info}
+Access bills, appointment times, and e-sign liens (Click request login if you don't have an account): <a href="{bills_link}">Click Here</a><br/>
+Access reports & images (Request login here for reports): <a href="{reports_link}">Click Here</a><br/>"""
 # --- END: Placeholder Static Information ---
 
 # --- BEGIN: Database Settings Helper ---
@@ -80,21 +93,33 @@ async def get_tag_settings_from_db(tag_name: str = "Apt status req") -> dict:
                     "portal_links": {
                         "bills_appointments_liens": settings_dict.get("portal_link_bills", DEFAULT_PORTAL_LINKS["bills_appointments_liens"]),
                         "reports_images": settings_dict.get("portal_link_reports", DEFAULT_PORTAL_LINKS["reports_images"])
-                    }
+                    },
+                    "intro_text": settings_dict.get("intro_text", DEFAULT_INTRO_TEXT),
+                    "table_intro_text": settings_dict.get("table_intro_text", DEFAULT_TABLE_INTRO_TEXT),
+                    "personal_injury_text": settings_dict.get("personal_injury_text", DEFAULT_PERSONAL_INJURY_TEXT),
+                    "footer_text": settings_dict.get("footer_text", DEFAULT_FOOTER_TEXT)
                 }
             else:
                 logger.warning(f"⚠️ No settings found for '{tag_name}' in database, using defaults")
                 return {
                     "scheduling_phone": DEFAULT_SCHEDULING_PHONE,
                     "no_show_policy": DEFAULT_NO_SHOW_POLICY,
-                    "portal_links": DEFAULT_PORTAL_LINKS
+                    "portal_links": DEFAULT_PORTAL_LINKS,
+                    "intro_text": DEFAULT_INTRO_TEXT,
+                    "table_intro_text": DEFAULT_TABLE_INTRO_TEXT,
+                    "personal_injury_text": DEFAULT_PERSONAL_INJURY_TEXT,
+                    "footer_text": DEFAULT_FOOTER_TEXT
                 }
     except Exception as e:
         logger.error(f"❌ Error fetching tag settings from database: {e}, using defaults")
         return {
             "scheduling_phone": DEFAULT_SCHEDULING_PHONE,
             "no_show_policy": DEFAULT_NO_SHOW_POLICY,
-            "portal_links": DEFAULT_PORTAL_LINKS
+            "portal_links": DEFAULT_PORTAL_LINKS,
+            "intro_text": DEFAULT_INTRO_TEXT,
+            "table_intro_text": DEFAULT_TABLE_INTRO_TEXT,
+            "personal_injury_text": DEFAULT_PERSONAL_INJURY_TEXT,
+            "footer_text": DEFAULT_FOOTER_TEXT
         }
 # --- END: Database Settings Helper ---
 
@@ -145,22 +170,51 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
             )
         studies_table_rows = "".join(studies_table_rows_list) # Join without newlines
 
+        # Build the table structure (not configurable)
+        table_html = f"""<table border="1" style="border-collapse: collapse; width: 100%;">
+<thead>
+<tr>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Study ID</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Exam Description</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Status</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Study Date/Time</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Location</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">MRI Type</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Images Available</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Report Available</th>
+</tr>
+</thead>
+<tbody>{studies_table_rows}</tbody>
+</table>"""
+
+        # Get configurable text sections from data (these come from tag_settings)
+        intro_text = data.get("intro_text", DEFAULT_INTRO_TEXT)
+        table_intro_text = data.get("table_intro_text", DEFAULT_TABLE_INTRO_TEXT)
+        personal_injury_template = data.get("personal_injury_text", DEFAULT_PERSONAL_INJURY_TEXT)
+        footer_text = data.get("footer_text", DEFAULT_FOOTER_TEXT)
+
+        # Prepare personal injury info (conditionally included)
         personal_injury_info_text = ""
         if data.get("is_personal_injury_case"):
-            personal_injury_info_text = """<br/>
-If this is also a personal injury case:<br/>
-A report containing the findings of the exam will also be sent to the attorney.<br/>
-A bill will be sent to the attorney once both the patient and the attorney sign all pending liens.<br/>
-Please make sure to submit a negotiation offer before sending the payment.<br/>
-"""
-        formatted_template = template_apt_found.format(
+            personal_injury_info_text = personal_injury_template
+
+        # Format intro text with placeholders
+        formatted_intro = intro_text.format(
             patient_id_confirmed=data.get("patient_id_confirmed", "N/A"),
-            no_show_policy=data.get("no_show_policy", "N/A"),
-            studies_table_rows=studies_table_rows,
+            scheduling_phone=data.get("scheduling_phone", DEFAULT_SCHEDULING_PHONE),
+            no_show_policy=data.get("no_show_policy", DEFAULT_NO_SHOW_POLICY)
+        )
+
+        # Format footer text with placeholders
+        formatted_footer = footer_text.format(
             personal_injury_info=personal_injury_info_text,
             bills_link=data.get("links", {}).get("bills_appointments_liens", "#"),
             reports_link=data.get("links", {}).get("reports_images", "#")
         )
+
+        # Assemble final response
+        formatted_template = formatted_intro + table_intro_text + table_html + formatted_footer
+
         # logger.info(f"DEBUG: Generated HTML response: {formatted_template}")
         return formatted_template
     elif scenario == "id_missing_first_attempt":
@@ -367,7 +421,11 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                 "is_personal_injury_case": is_personal_injury_case,
                 "scheduling_phone": scheduling_phone,
                 "no_show_policy": no_show_policy,
-                "links": portal_links
+                "links": portal_links,
+                "intro_text": db_settings.get("intro_text", DEFAULT_INTRO_TEXT),
+                "table_intro_text": db_settings.get("table_intro_text", DEFAULT_TABLE_INTRO_TEXT),
+                "personal_injury_text": db_settings.get("personal_injury_text", DEFAULT_PERSONAL_INJURY_TEXT),
+                "footer_text": db_settings.get("footer_text", DEFAULT_FOOTER_TEXT)
             }
         }
 
