@@ -97,6 +97,28 @@ type TemplateKey = keyof typeof TEMPLATE_DEFINITIONS;
 
 const TAG_OPTIONS = [{ value: "Apt status req", label: "Apt Status Req" }];
 
+// Dummy data for preview
+const DUMMY_TABLE_DATA = `<tr>
+<td style="border: 1px solid black; padding: 8px;">PRE1234567</td>
+<td style="border: 1px solid black; padding: 8px;">MRI Brain W/O Contrast</td>
+<td style="border: 1px solid black; padding: 8px;">Scheduled</td>
+<td style="border: 1px solid black; padding: 8px;">Date: Monday January 15th, 2024<br/><br/>Time: 2:30 PM</td>
+<td style="border: 1px solid black; padding: 8px;">Precise Imaging - Main Office - 123 Medical Blvd, Los Angeles, CA 90001</td>
+<td style="border: 1px solid black; padding: 8px;">Standard</td>
+<td style="border: 1px solid black; padding: 8px;">No</td>
+<td style="border: 1px solid black; padding: 8px;">No</td>
+</tr>
+<tr>
+<td style="border: 1px solid black; padding: 8px;">PRE1234568</td>
+<td style="border: 1px solid black; padding: 8px;">X-Ray Chest 2 Views</td>
+<td style="border: 1px solid black; padding: 8px;">Completed</td>
+<td style="border: 1px solid black; padding: 8px;">Date: Friday January 5th, 2024<br/><br/>Time: 10:00 AM</td>
+<td style="border: 1px solid black; padding: 8px;">Precise Imaging - Downtown - 456 Health St, Los Angeles, CA 90012</td>
+<td style="border: 1px solid black; padding: 8px;">N/A</td>
+<td style="border: 1px solid black; padding: 8px;">Yes</td>
+<td style="border: 1px solid black; padding: 8px;">Yes</td>
+</tr>`;
+
 const DEFAULT_TAG_SETTINGS = {
   scheduling_phone_number: "",
   no_show_policy: "",
@@ -110,6 +132,51 @@ const DEFAULT_TAG_SETTINGS = {
 
 const getTagLabel = (value: string) =>
   TAG_OPTIONS.find((option) => option.value === value)?.label ?? value;
+
+// Generate preview HTML
+const generatePreviewHtml = (settings: typeof DEFAULT_TAG_SETTINGS, showPersonalInjury: boolean = true): string => {
+  const intro = settings.intro_text || DEFAULT_TAG_SETTINGS.intro_text || "";
+  const tableIntro = settings.table_intro_text || DEFAULT_TAG_SETTINGS.table_intro_text || "";
+  const personalInjuryText = settings.personal_injury_text || DEFAULT_TAG_SETTINGS.personal_injury_text || "";
+  const footer = settings.footer_text || DEFAULT_TAG_SETTINGS.footer_text || "";
+
+  const schedulingPhone = settings.scheduling_phone_number || "800-558-2223";
+  const noShowPolicy = settings.no_show_policy || "**If the patient cannot make the appointment please contact us within 48 hours of the appointment to reschedule or cancel to avoid any no-show fees.**";
+  const billsLink = settings.portal_link_bills || "https://example.com/portal/bills";
+  const reportsLink = settings.portal_link_reports || "https://example.com/portal/reports";
+
+  // Format intro text with placeholders
+  let formattedIntro = intro
+    .replace(/\{patient_id_confirmed\}/g, "PRE1234567")
+    .replace(/\{scheduling_phone\}/g, schedulingPhone)
+    .replace(/\{no_show_policy\}/g, noShowPolicy);
+
+  // Build table
+  const tableHtml = `<table border="1" style="border-collapse: collapse; width: 100%;">
+<thead>
+<tr>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Study ID</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Exam Description</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Status</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Study Date/Time</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Location</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">MRI Type</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Images Available</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Report Available</th>
+</tr>
+</thead>
+<tbody>${DUMMY_TABLE_DATA}</tbody>
+</table>`;
+
+  // Format footer with placeholders
+  const personalInjuryInfo = showPersonalInjury ? personalInjuryText : "";
+  let formattedFooter = footer
+    .replace(/\{personal_injury_info\}/g, personalInjuryInfo)
+    .replace(/\{bills_link\}/g, billsLink)
+    .replace(/\{reports_link\}/g, reportsLink);
+
+  return formattedIntro + tableIntro + tableHtml + formattedFooter;
+};
 
 export default function TemplateConfigPage() {
   const [currentUser, setCurrentUser] = useState("Admin");
@@ -137,6 +204,8 @@ export default function TemplateConfigPage() {
   const [tagMeta, setTagMeta] = useState<TagSettingsResponse | null>(null);
   const [tagStatus, setTagStatus] = useState<StatusMessage | null>(null);
   const [tagLoading, setTagLoading] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
+  const [showPersonalInjuryInPreview, setShowPersonalInjuryInPreview] = useState(true);
 
   useEffect(() => {
     let mounted = true;
@@ -474,6 +543,10 @@ export default function TemplateConfigPage() {
               tagLoading={tagLoading}
               onSave={handleSaveTagSettings}
               onReset={handleResetTagSettings}
+              showPreview={showPreview}
+              setShowPreview={setShowPreview}
+              showPersonalInjuryInPreview={showPersonalInjuryInPreview}
+              setShowPersonalInjuryInPreview={setShowPersonalInjuryInPreview}
             />
           )}
         </CardContent>
@@ -610,6 +683,10 @@ interface TagSettingsFormProps {
   tagLoading: boolean;
   onSave: () => void;
   onReset: () => void;
+  showPreview: boolean;
+  setShowPreview: (show: boolean) => void;
+  showPersonalInjuryInPreview: boolean;
+  setShowPersonalInjuryInPreview: (show: boolean) => void;
 }
 
 function TagSettingsForm({
@@ -623,8 +700,14 @@ function TagSettingsForm({
   tagLoading,
   onSave,
   onReset,
+  showPreview,
+  setShowPreview,
+  showPersonalInjuryInPreview,
+  setShowPersonalInjuryInPreview,
 }: TagSettingsFormProps) {
   const selectedTagLabel = getTagLabel(selectedTag);
+  const previewHtml = generatePreviewHtml(tagSettings, showPersonalInjuryInPreview);
+
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-600">
@@ -789,6 +872,44 @@ function TagSettingsForm({
                 </span>
               </label>
             </div>
+          </div>
+
+          {/* Preview Section */}
+          <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50 to-indigo-50 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                👁️ Live Preview
+                <span className="text-xs font-normal text-slate-500">
+                  (using dummy patient data)
+                </span>
+              </h3>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-xs text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={showPersonalInjuryInPreview}
+                    onChange={(e) => setShowPersonalInjuryInPreview(e.target.checked)}
+                    className="rounded border-slate-300"
+                  />
+                  Show Personal Injury Info
+                </label>
+                <button
+                  onClick={() => setShowPreview(!showPreview)}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                >
+                  {showPreview ? "Hide" : "Show"} Preview
+                </button>
+              </div>
+            </div>
+
+            {showPreview && (
+              <div className="rounded-xl border border-slate-300 bg-white p-4 shadow-inner">
+                <div
+                  className="prose prose-sm max-w-none"
+                  dangerouslySetInnerHTML={{ __html: previewHtml }}
+                />
+              </div>
+            )}
           </div>
 
           {tagMeta && (
