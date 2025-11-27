@@ -1162,7 +1162,7 @@ def send_conversation_reply_with_attachment(conversation_id: str, text: str, att
         logger.error(f"Error getting conversation details for {conversation_id}: {e}")
         return False
 
-    html_body = _plain_text_to_html(text)
+    html_body = text
     
     # Prepare multipart form data
     files = {
@@ -1253,7 +1253,7 @@ def send_conversation_reply(conversation_id: str, text: str) -> bool:
         logger.error(f"Error getting conversation details for {conversation_id}: {e}")
         return False
 
-    html_body = _plain_text_to_html(text)
+    html_body = text
     
     headers = {
         "Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}",

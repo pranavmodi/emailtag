@@ -158,11 +158,11 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
             # Generate HTML table rows without extra newlines
             studies_table_rows_list.append(
                 f"<tr>"
-                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('study_id','N/A')}</td>"
+                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('study_id','Not Available')}</td>"
                 f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('exam_description','N/A')}</td>"
                 f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('status','N/A')}</td>"
-                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('appointment_datetime_str','N/A')}</td>"
-                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('location_name','N/A')}</td>"
+                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('appointment_datetime_str','Not Available')}</td>"
+                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('location_name','Not Available')}</td>"
                 f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('mri_type','N/A')}</td>"
                 f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('images_available','N/A')}</td>"
                 f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('report_available','N/A')}</td>"
