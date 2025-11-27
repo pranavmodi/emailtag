@@ -42,12 +42,6 @@ const AUTORESPOND_LAYOUT: Array<{
   icon: ComponentType<SVGProps<SVGSVGElement>>;
 }> = [
   {
-    key: "appointment_inquiry",
-    settingKey: "autorespond_appointment_inquiry",
-    accent: "from-sky-500 to-indigo-500",
-    icon: CalendarDays,
-  },
-  {
     key: "apt_status_req",
     settingKey: "autorespond_apt_status_req",
     accent: "from-indigo-500 to-purple-500",
