@@ -95,4 +95,4 @@ This ensures all dependencies and environment variables are properly loaded for 
 
 ## Settings UI
 
-**⚠️ DEPRECATION NOTICE**: `/settings` (Jinja2 template) is **DEPRECATED**. All new features and UI improvements should be made to `/settings2` (Next.js frontend located in `frontend/settings2/`). The legacy `/settings` endpoint is maintained for backwards compatibility only.
+The `/settings` endpoint serves a Next.js frontend application (located in `frontend/settings2/`) for managing email processing settings, autorespond templates, and tag configurations.

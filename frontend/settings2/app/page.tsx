@@ -110,7 +110,6 @@ const MENU_ITEMS = [
     label: "System Settings",
     description: "Configure email processing behavior",
     icon: "⚙️",
-    active: true,
   },
   {
     href: "/template-config",
@@ -124,7 +123,7 @@ const MENU_ITEMS = [
     description: "Analyze tag retention and changes",
     icon: "📊",
   },
-] as const;
+];
 
 const formatDate = (value: string | null) =>
   value ? new Date(value).toLocaleString() : "Never";
@@ -298,7 +297,7 @@ export default function Settings2Page() {
     <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-10">
       <nav className="grid gap-3 rounded-3xl border border-white/60 bg-white/80 p-3 shadow-xl shadow-slate-900/5 backdrop-blur lg:grid-cols-3">
         {MENU_ITEMS.map((item) => {
-          const isActive = item.active;
+          const isActive = item.href === "/";
           return (
             <Link
               key={item.href}

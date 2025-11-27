@@ -420,29 +420,32 @@ export default function TagStatisticsPage() {
   return (
     <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-10">
       <nav className="grid gap-3 rounded-3xl border border-white/60 bg-white/80 p-3 shadow-xl shadow-slate-900/5 backdrop-blur lg:grid-cols-3">
-        {MENU_ITEMS.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`rounded-2xl border p-4 transition hover:-translate-y-1 hover:shadow-lg ${
-              item.active
-                ? "border-slate-900 bg-slate-900 text-white shadow-lg"
-                : "border-slate-200 bg-white text-slate-700"
-            }`}
-          >
-            <div className="flex items-center gap-3 text-lg font-semibold">
-              <span>{item.icon}</span>
-              {item.label}
-            </div>
-            <p
-              className={`mt-1 text-sm ${
-                item.active ? "text-white/80" : "text-slate-500"
+        {MENU_ITEMS.map((item) => {
+          const isActive = item.href === "/tag-statistics";
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`rounded-2xl border p-4 transition hover:-translate-y-1 hover:shadow-lg ${
+                isActive
+                  ? "border-slate-900 bg-slate-900 text-white shadow-lg"
+                  : "border-slate-200 bg-white text-slate-700"
               }`}
             >
-              {item.description}
-            </p>
-          </Link>
-        ))}
+              <div className="flex items-center gap-3 text-lg font-semibold">
+                <span>{item.icon}</span>
+                {item.label}
+              </div>
+              <p
+                className={`mt-1 text-sm ${
+                  isActive ? "text-white/80" : "text-slate-500"
+                }`}
+              >
+                {item.description}
+              </p>
+            </Link>
+          );
+        })}
       </nav>
 
       <motion.section
@@ -762,7 +765,7 @@ function SingleTagResult({ result }: { result: TagStatisticsResponse }) {
 
         if (statusResponse.status === "SUCCESS" && statusResponse.result) {
           // Task completed successfully
-          setEvalResults((prev) => ({ ...prev, [conversationId]: statusResponse.result }));
+          setEvalResults((prev) => ({ ...prev, [conversationId]: statusResponse.result! }));
           setEvalLoading((prev) => ({ ...prev, [conversationId]: false }));
           return true;
         } else if (statusResponse.status === "FAILURE") {
@@ -850,8 +853,8 @@ function SingleTagResult({ result }: { result: TagStatisticsResponse }) {
           <Button
             onClick={runBulkEval}
             disabled={bulkEvalLoading}
-            variant="outline"
-            className="border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+            variant="ghost"
+            className="border border-indigo-200 text-indigo-600 hover:bg-indigo-50"
           >
             {bulkEvalLoading ? (
               <>
@@ -941,9 +944,8 @@ function SingleTagResult({ result }: { result: TagStatisticsResponse }) {
                           <Button
                             onClick={() => runEval(conversation.conversation_id)}
                             disabled={evalLoading[conversation.conversation_id]}
-                            size="sm"
                             variant="ghost"
-                            className="h-6 text-xs text-slate-500 hover:text-slate-700"
+                            className="h-6 px-2 text-xs text-slate-500 hover:text-slate-700"
                           >
                             {evalLoading[conversation.conversation_id] ? (
                               <>
@@ -962,9 +964,8 @@ function SingleTagResult({ result }: { result: TagStatisticsResponse }) {
                         <Button
                           onClick={() => runEval(conversation.conversation_id)}
                           disabled={evalLoading[conversation.conversation_id]}
-                          size="sm"
-                          variant="outline"
-                          className="text-xs"
+                          variant="ghost"
+                          className="border border-slate-300 px-2 py-1 text-xs"
                         >
                           {evalLoading[conversation.conversation_id] ? (
                             <>

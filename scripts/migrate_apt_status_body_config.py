@@ -124,7 +124,7 @@ async def migrate_apt_status_settings():
         print(f"   • footer_text: {len(final_settings.get('footer_text', ''))} chars")
 
     print("\n✅ Migration completed successfully!")
-    print("\n💡 You can now customize these text sections in the UI at /settings2/template-config")
+    print("\n💡 You can now customize these text sections in the UI at /settings/template-config")
 
 
 if __name__ == "__main__":
