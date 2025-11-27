@@ -449,12 +449,14 @@ export default function Settings2Page() {
                   <span className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
                     Master toggle
                   </span>
-                  <ToggleRail
-                    checked={globalEnabled}
-                    disabled={busy.global}
-                    onCheckedChange={handleGlobalAutorespondToggle}
-                    variant="dark"
-                  />
+                  <div className="rounded-2xl bg-gradient-to-r from-slate-900 to-indigo-900 p-2 shadow-lg shadow-indigo-900/30">
+                    <ToggleRail
+                      checked={globalEnabled}
+                      disabled={busy.global}
+                      onCheckedChange={handleGlobalAutorespondToggle}
+                      variant="dark"
+                    />
+                  </div>
                 </div>
               </div>
               <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800">
@@ -575,12 +577,12 @@ function ToggleRail({
 }: ToggleRailProps) {
   const baseClass =
     variant === "dark"
-      ? "border border-white/30 bg-white/10 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]"
+      ? "bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-[0_10px_25px_rgba(12,14,40,0.65)] border border-white/20"
       : "border border-slate-200 bg-white/90 text-slate-700 shadow-inner";
   const offActive =
-    variant === "dark" ? "bg-white/20 text-white" : "bg-rose-50 text-rose-600";
+    variant === "dark" ? "bg-white/25 text-white" : "bg-rose-50 text-rose-600";
   const onActive =
-    variant === "dark" ? "bg-emerald-200/80 text-slate-900" : "bg-emerald-50 text-emerald-700";
+    variant === "dark" ? "bg-lime-200 text-slate-900" : "bg-emerald-50 text-emerald-700";
 
   return (
     <div
