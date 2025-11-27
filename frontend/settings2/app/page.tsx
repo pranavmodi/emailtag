@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { ApiError, SettingsApi } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import type {
   AutorespondSettingsResponse,
   EmailProcessingStatus,
@@ -29,7 +30,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -188,6 +188,7 @@ export default function Settings2Page() {
     () => !autorespond?.global_autorespond_enabled,
     [autorespond]
   );
+  const globalEnabled = autorespond?.global_autorespond_enabled ?? false;
 
   const handleProcessingToggle = async (enabled: boolean) => {
     setBusyFlag("processing", true);
@@ -397,22 +398,11 @@ export default function Settings2Page() {
                     {status?.updated_by ?? "system"}
                   </p>
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-semibold uppercase tracking-wide text-rose-500">
-                    Pause
-                  </span>
-                  <div className="rounded-full bg-gradient-to-r from-slate-100 to-white p-1 shadow-inner">
-                    <Switch
-                      size="lg"
-                      checked={status?.processing_enabled ?? false}
-                      disabled={busy.processing}
-                      onCheckedChange={handleProcessingToggle}
-                    />
-                  </div>
-                  <span className="text-sm font-semibold uppercase tracking-wide text-emerald-600">
-                    Resume
-                  </span>
-                </div>
+                <ToggleRail
+                  checked={status?.processing_enabled ?? false}
+                  disabled={busy.processing}
+                  onCheckedChange={handleProcessingToggle}
+                />
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
                 When the switch is ON, inbound Front conversations are handed to Celery queues for
@@ -444,29 +434,27 @@ export default function Settings2Page() {
                   <p className="text-sm font-medium text-slate-900">Status</p>
                   <Badge
                     className={
-                      autorespond?.global_autorespond_enabled
-                        ? STATUS_BADGE.enabled
-                        : STATUS_BADGE.disabled
+                      globalEnabled ? STATUS_BADGE.enabled : STATUS_BADGE.disabled
                     }
                   >
-                    {autorespond?.global_autorespond_enabled ? "Enabled" : "Disabled"}
+                    {globalEnabled ? "Enabled" : "Disabled"}
                   </Badge>
+                  <p className="text-xs text-slate-500">
+                    {globalEnabled
+                      ? "Automation is live for all autorespond teams."
+                      : "All autorespond teams are paused until you re-enable this switch."}
+                  </p>
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                    Off
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+                    Master toggle
                   </span>
-                  <div className="rounded-full bg-gradient-to-r from-amber-50 to-white p-1 shadow-inner">
-                    <Switch
-                      size="lg"
-                      checked={autorespond?.global_autorespond_enabled ?? false}
-                      disabled={busy.global}
-                      onCheckedChange={handleGlobalAutorespondToggle}
-                    />
-                  </div>
-                  <span className="text-sm font-semibold uppercase tracking-wide text-slate-900">
-                    On
-                  </span>
+                  <ToggleRail
+                    checked={globalEnabled}
+                    disabled={busy.global}
+                    onCheckedChange={handleGlobalAutorespondToggle}
+                    variant="dark"
+                  />
                 </div>
               </div>
               <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800">
@@ -513,7 +501,7 @@ export default function Settings2Page() {
               >
                 <Card className={isGlobalDisabled ? "opacity-60" : "opacity-100"}>
                   <CardContent className="space-y-4 pt-6">
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="space-y-1">
                         <div className="flex items-center gap-3">
                           <span
@@ -532,12 +520,10 @@ export default function Settings2Page() {
                         </div>
                         <p className="text-sm text-slate-500">{detail?.description}</p>
                       </div>
-                      <Switch
+                      <ToggleRail
                         checked={detail?.enabled ?? false}
                         disabled={disabled}
-                        onCheckedChange={(value) =>
-                          handleAutorespondToggle(settingKey, value)
-                        }
+                        onCheckedChange={(value) => handleAutorespondToggle(settingKey, value)}
                       />
                     </div>
                     <Badge
@@ -572,4 +558,62 @@ function mapAutorespondUpdate(
   }
 
   return {};
+}
+
+interface ToggleRailProps {
+  checked: boolean;
+  disabled?: boolean;
+  onCheckedChange: (value: boolean) => void;
+  variant?: "light" | "dark";
+}
+
+function ToggleRail({
+  checked,
+  disabled,
+  onCheckedChange,
+  variant = "light",
+}: ToggleRailProps) {
+  const baseClass =
+    variant === "dark"
+      ? "border border-white/30 bg-white/10 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]"
+      : "border border-slate-200 bg-white/90 text-slate-700 shadow-inner";
+  const offActive =
+    variant === "dark" ? "bg-white/20 text-white" : "bg-rose-50 text-rose-600";
+  const onActive =
+    variant === "dark" ? "bg-emerald-200/80 text-slate-900" : "bg-emerald-50 text-emerald-700";
+
+  return (
+    <div
+      className={cn(
+        "inline-flex items-center gap-2 rounded-full p-1 text-xs font-semibold uppercase tracking-[0.2em]",
+        baseClass,
+        disabled && "opacity-60"
+      )}
+      role="group"
+      aria-label="Toggle"
+    >
+      <button
+        type="button"
+        disabled={disabled || !checked}
+        onClick={() => onCheckedChange(false)}
+        className={cn(
+          "min-w-[4.5rem] rounded-full px-3 py-2 transition",
+          checked ? "text-slate-400" : offActive
+        )}
+      >
+        Off
+      </button>
+      <button
+        type="button"
+        disabled={disabled || checked}
+        onClick={() => onCheckedChange(true)}
+        className={cn(
+          "min-w-[4.5rem] rounded-full px-3 py-2 transition",
+          checked ? onActive : "text-slate-400"
+        )}
+      >
+        On
+      </button>
+    </div>
+  );
 }

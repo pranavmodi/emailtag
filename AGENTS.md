@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 - `app/` contains the FastAPI entry (`main.py`), routers (`api/`), Celery workers (`tasks/`), agents, shared services, and SQLAlchemy models; configure shared settings in `app/core`.
-- UI and email templates live in `app/templates` and `app/static`. Docs, datasets, and prompt rules live in `docs/`, `training/`, and `data/`.
+- The admin UI is implemented in `frontend/settings2` (Next.js); legacy Jinja templates were removed, but static assets still live in `app/static`. Docs, datasets, and prompt rules live in `docs/`, `training/`, and `data/`.
 - Alembic tracks schemas under `migrations/`. Automated tests live in `test/`, and webhook simulators (`test_webhook.py`, `generate_test_data.sh`) reside at the repo root.
 
 ## Build, Test, and Development Commands
@@ -11,6 +11,7 @@
 - `uvicorn app.main:app --reload --host 0.0.0.0 --port 8444` for the API, plus `celery -A app.tasks.worker worker -l info -Q emails,ocr,processing,tagging`.
 - `docker-compose up -d` launches API, Celery, RabbitMQ, Postgres, and Flower locally.
 - `pytest`, `./test_webhook.py --template 2`, and `./generate_test_data.sh --count 10` cover automated and manual validation paths.
+- UI work: `cd frontend/settings2 && npm install && npm run dev` to serve the modern `/settings2` experience on port 3000 (or the next free port).
 
 ## Coding Style & Naming Conventions
 - Python 3.11, four-space indentation, and ~100-character lines; prefer type hints and Pydantic schemas for all request/response payloads.
