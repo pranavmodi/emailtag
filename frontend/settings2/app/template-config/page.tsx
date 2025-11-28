@@ -1203,7 +1203,7 @@ function TagSettingsForm({
             {showPreview && (
               <div className="rounded-xl border border-slate-300 bg-white p-4 shadow-inner">
                 <div
-                  className="prose prose-sm max-w-none"
+                  className="max-w-none [&_ul]:list-disc [&_ul]:ml-6 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:ml-6 [&_ol]:my-2 [&_li]:my-1 [&_p]:my-2 [&_br]:block [&_a]:text-blue-600 [&_a]:underline [&_b]:font-bold [&_strong]:font-bold"
                   dangerouslySetInnerHTML={{ __html: previewHtml }}
                 />
               </div>
