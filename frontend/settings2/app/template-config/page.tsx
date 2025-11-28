@@ -825,6 +825,20 @@ function TagSettingsForm({
   const selectedTagLabel = getTagLabel(selectedTag);
   const previewHtml = generatePreviewHtml(tagSettings, showPersonalInjuryInPreview);
 
+  // State for expandable custom placeholders section
+  const [isPlaceholdersExpanded, setIsPlaceholdersExpanded] = useState(true);
+  const [selectedPlaceholder, setSelectedPlaceholder] = useState<string>("");
+
+  // Initialize selected placeholder when custom_placeholders change
+  useEffect(() => {
+    if (tagSettings.custom_placeholders && Object.keys(tagSettings.custom_placeholders).length > 0) {
+      const firstKey = Object.keys(tagSettings.custom_placeholders)[0];
+      if (!selectedPlaceholder || !(selectedPlaceholder in tagSettings.custom_placeholders)) {
+        setSelectedPlaceholder(firstKey);
+      }
+    }
+  }, [tagSettings.custom_placeholders]);
+
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-600">
@@ -847,20 +861,87 @@ function TagSettingsForm({
         <>
           {/* Placeholder Management Section */}
           <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-5">
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <span className="text-lg">🔧</span>
-              Custom Placeholders
-              <span className="ml-auto rounded-full bg-amber-600 px-2 py-0.5 text-xs text-white">
-                Global
+            <div
+              className="flex cursor-pointer items-center justify-between"
+              onClick={() => setIsPlaceholdersExpanded(!isPlaceholdersExpanded)}
+            >
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <span className="text-lg">🔧</span>
+                Custom Placeholders
+                <span className="ml-2 rounded-full bg-amber-600 px-2 py-0.5 text-xs text-white">
+                  {Object.keys(tagSettings.custom_placeholders || {}).length}
+                </span>
+              </h3>
+              <span className="text-2xl text-slate-500">
+                {isPlaceholdersExpanded ? "−" : "+"}
               </span>
-            </h3>
-            <p className="mb-4 text-xs text-slate-600">
-              Define custom placeholders that are available across all autorespond templates. These values will be replaced when emails are sent.
-            </p>
+            </div>
 
-            {/* Custom Placeholders List */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-end">
+            {isPlaceholdersExpanded && (
+              <div className="mt-4 space-y-4">
+                <p className="text-xs text-slate-600">
+                  Define custom placeholders that are available across all autorespond templates. These values will be replaced when emails are sent.
+                </p>
+
+                {/* Placeholder Selector and Editor */}
+                {tagSettings.custom_placeholders && Object.keys(tagSettings.custom_placeholders).length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-medium text-slate-700">
+                        Select Placeholder:
+                      </label>
+                      <select
+                        value={selectedPlaceholder}
+                        onChange={(e) => setSelectedPlaceholder(e.target.value)}
+                        className="flex-1 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-amber-500 focus:outline-none"
+                      >
+                        {Object.keys(tagSettings.custom_placeholders).map((key) => (
+                          <option key={key} value={key}>
+                            {`{${key}}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {selectedPlaceholder && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-slate-700">
+                          Value for {`{${selectedPlaceholder}}`}:
+                        </label>
+                        <textarea
+                          value={tagSettings.custom_placeholders[selectedPlaceholder] || ""}
+                          onChange={(e) => {
+                            const customPlaceholders = { ...tagSettings.custom_placeholders };
+                            customPlaceholders[selectedPlaceholder] = e.target.value;
+                            onFieldChange("custom_placeholders", customPlaceholders);
+                          }}
+                          placeholder={`Enter value for {${selectedPlaceholder}}`}
+                          rows={6}
+                          className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-amber-500 focus:outline-none"
+                        />
+                        <button
+                          onClick={() => {
+                            const customPlaceholders = { ...tagSettings.custom_placeholders };
+                            delete customPlaceholders[selectedPlaceholder];
+                            onFieldChange("custom_placeholders", customPlaceholders);
+                            // Select first remaining placeholder or empty
+                            const remaining = Object.keys(customPlaceholders);
+                            setSelectedPlaceholder(remaining.length > 0 ? remaining[0] : "");
+                          }}
+                          className="rounded-lg bg-red-100 px-3 py-2 text-xs font-medium text-red-700 transition hover:bg-red-200"
+                        >
+                          Delete {`{${selectedPlaceholder}}`}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs italic text-slate-500">
+                    No custom placeholders yet. Click &ldquo;+ Add Placeholder&rdquo; to create one.
+                  </p>
+                )}
+
+                {/* Add New Placeholder Button */}
                 <button
                   onClick={() => {
                     const name = prompt("Enter placeholder name (without braces):");
@@ -870,55 +951,17 @@ function TagSettingsForm({
                         ...customPlaceholders,
                         [name]: ""
                       });
+                      setSelectedPlaceholder(name);
                     } else if (name) {
                       alert("Invalid placeholder name. Use only letters, numbers, and underscores, starting with a letter.");
                     }
                   }}
-                  className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-amber-700"
+                  className="w-full rounded-lg border-2 border-dashed border-amber-400 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 transition hover:border-amber-500 hover:bg-amber-100"
                 >
-                  + Add Custom
+                  + Add Placeholder
                 </button>
               </div>
-
-              {tagSettings.custom_placeholders && Object.keys(tagSettings.custom_placeholders).length > 0 ? (
-                <div className="space-y-2">
-                  {Object.entries(tagSettings.custom_placeholders).map(([key, value]) => (
-                    <div key={key} className="flex gap-2">
-                      <div className="flex-1">
-                        <label className="text-xs font-medium text-slate-700">
-                          {`{${key}}`}
-                        </label>
-                        <input
-                          type="text"
-                          value={value}
-                          onChange={(e) => {
-                            const customPlaceholders = { ...tagSettings.custom_placeholders };
-                            customPlaceholders[key] = e.target.value;
-                            onFieldChange("custom_placeholders", customPlaceholders);
-                          }}
-                          placeholder={`Value for {${key}}`}
-                          className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-amber-500 focus:outline-none"
-                        />
-                      </div>
-                      <button
-                        onClick={() => {
-                          const customPlaceholders = { ...tagSettings.custom_placeholders };
-                          delete customPlaceholders[key];
-                          onFieldChange("custom_placeholders", customPlaceholders);
-                        }}
-                        className="mt-6 rounded-lg bg-red-100 px-3 py-2 text-xs font-medium text-red-700 transition hover:bg-red-200"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs italic text-slate-500">
-                  No custom placeholders yet. Click &ldquo;+ Add Custom&rdquo; to create one.
-                </p>
-              )}
-            </div>
+            )}
 
             {/* Save Button for Placeholders */}
             <div className="mt-4 flex justify-end gap-2 border-t border-amber-300 pt-4">
