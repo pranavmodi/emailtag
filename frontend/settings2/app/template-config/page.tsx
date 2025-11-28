@@ -119,9 +119,52 @@ const DUMMY_TABLE_DATA = `<tr>
 <td style="border: 1px solid black; padding: 8px;">Yes</td>
 </tr>`;
 
+const DEFAULT_UNIFIED_TEMPLATE = `Dear {first_name} {last_name},<br/>
+In regards to patient ID (MRN): {patient_id_confirmed}<br/><br/>
+
+<b>How to Schedule:</b><br/><br/>
+
+<ul>
+  <li>Schedule online 24/7 via the <a href="https://app.radflow360.com/patient-portal" target="_blank">patient portal</a></li>
+  <li>Call <b>800-558-2223</b></li>
+</ul><br/>
+
+<b>Rescheduling / No Show Policy:</b><br/>
+**If the patient cannot make the appointment please contact us within 48 hours of the appointment to reschedule or cancel to avoid any no-show fees. Two no-shows will require a $50 no-show payment before being scheduled for a 3rd time.**<br/><br/>
+
+Here is a summary of the patient's exams we currently have entered into our system:<br/>
+{appointment_table}<br/>
+
+{personal_injury_info}
+
+<b>What You Can Access in the RadFlow 360 Portal</b><br/><br/>
+
+<ul>
+  <li>View all patient exams and status</li>
+  <li>Reports & Documents</li>
+  <li>View Images, Download, and Burn to CD</li>
+  <li>Provide Case Updates</li>
+  <li>Submit & Approve Bill Offers</li>
+  <li>Pay online via credit card and ACH</li>
+</ul><br/>
+
+<a href="https://app.radflow360.com/patient-portal" target="_blank"><b>Login or Create Your Free Account Today</b></a>`;
+
+// Default custom placeholders (pre-populated, user can edit/delete/add more)
+const DEFAULT_CUSTOM_PLACEHOLDERS: Record<string, string> = {
+  scheduling_phone: "800-558-2223",
+  no_show_policy: "**If the patient cannot make the appointment please contact us within 48 hours of the appointment to reschedule or cancel to avoid any no-show fees. Two no-shows will require a $50 no-show payment before being scheduled for a 3rd time.**",
+  bills_link: "https://app.radflow360.com/patient-portal",
+  reports_link: "https://app.radflow360.com/patient-portal",
+};
+
 const DEFAULT_TAG_SETTINGS = {
+  // Custom placeholders (global, available across all autoresponds)
+  custom_placeholders: DEFAULT_CUSTOM_PLACEHOLDERS,
+  // Unified template
+  unified_template: DEFAULT_UNIFIED_TEMPLATE,
+  // Legacy fields (for backward compatibility)
   scheduling_phone_number: "",
-  no_show_policy: "",
   portal_link_bills: "",
   portal_link_reports: "",
   intro_text: "",
@@ -140,10 +183,11 @@ const generatePreviewHtml = (settings: typeof DEFAULT_TAG_SETTINGS, showPersonal
   const personalInjuryText = settings.personal_injury_text || DEFAULT_TAG_SETTINGS.personal_injury_text || "";
   const footer = settings.footer_text || DEFAULT_TAG_SETTINGS.footer_text || "";
 
-  const schedulingPhone = settings.scheduling_phone_number || "800-558-2223";
-  const noShowPolicy = settings.no_show_policy || "**If the patient cannot make the appointment please contact us within 48 hours of the appointment to reschedule or cancel to avoid any no-show fees.**";
-  const billsLink = settings.portal_link_bills || "https://example.com/portal/bills";
-  const reportsLink = settings.portal_link_reports || "https://example.com/portal/reports";
+  // Get values from custom_placeholders or use defaults
+  const schedulingPhone = settings.custom_placeholders?.scheduling_phone || settings.scheduling_phone_number || "800-558-2223";
+  const noShowPolicy = settings.custom_placeholders?.no_show_policy || "**If the patient cannot make the appointment please contact us within 48 hours of the appointment to reschedule or cancel to avoid any no-show fees.**";
+  const billsLink = settings.custom_placeholders?.bills_link || settings.portal_link_bills || "https://example.com/portal/bills";
+  const reportsLink = settings.custom_placeholders?.reports_link || settings.portal_link_reports || "https://example.com/portal/reports";
 
   // Dummy patient data for preview
   const dummyPatient = {
@@ -185,20 +229,49 @@ const generatePreviewHtml = (settings: typeof DEFAULT_TAG_SETTINGS, showPersonal
 <tbody>${DUMMY_TABLE_DATA}</tbody>
 </table>`;
 
-  // Format footer with placeholders (including patient demographics)
-  const personalInjuryInfo = showPersonalInjury ? personalInjuryText : "";
-  let formattedFooter = footer
-    .replace(/\{personal_injury_info\}/g, personalInjuryInfo)
-    .replace(/\{bills_link\}/g, billsLink)
-    .replace(/\{reports_link\}/g, reportsLink)
-    .replace(/\{first_name\}/g, dummyPatient.firstName)
-    .replace(/\{last_name\}/g, dummyPatient.lastName)
-    .replace(/\{dob\}/g, dummyPatient.dob)
-    .replace(/\{address\}/g, dummyPatient.address)
-    .replace(/\{home_phone\}/g, dummyPatient.homePhone)
-    .replace(/\{cell_phone\}/g, dummyPatient.cellPhone);
+  // Check if unified template exists (new approach)
+  const unifiedTemplate = settings.unified_template;
 
-  return formattedIntro + tableIntro + tableHtml + formattedFooter;
+  if (unifiedTemplate) {
+    // NEW APPROACH: Use unified template with all placeholders
+    const personalInjuryInfo = showPersonalInjury ? (settings.personal_injury_text || "Important Information regarding personal injury cases<br/>A report containing the findings of the exam will also be sent to the attorney.<br/>A bill will be sent to the attorney once both the patient and the attorney sign all pending liens.<br/>Please make sure to submit a negotiation offer before sending the payment.<br/><br/>") : "";
+
+    let formattedTemplate = unifiedTemplate
+      .replace(/\{appointment_table\}/g, tableHtml)
+      .replace(/\{personal_injury_info\}/g, personalInjuryInfo)
+      .replace(/\{patient_id_confirmed\}/g, dummyPatient.patientId)
+      .replace(/\{first_name\}/g, dummyPatient.firstName)
+      .replace(/\{last_name\}/g, dummyPatient.lastName)
+      .replace(/\{dob\}/g, dummyPatient.dob)
+      .replace(/\{address\}/g, dummyPatient.address)
+      .replace(/\{home_phone\}/g, dummyPatient.homePhone)
+      .replace(/\{cell_phone\}/g, dummyPatient.cellPhone);
+
+    // Replace all custom placeholders (includes scheduling_phone, no_show_policy, bills_link, reports_link, etc.)
+    if (settings.custom_placeholders) {
+      Object.entries(settings.custom_placeholders).forEach(([key, value]) => {
+        const regex = new RegExp(`\\{${key}\\}`, 'g');
+        formattedTemplate = formattedTemplate.replace(regex, value);
+      });
+    }
+
+    return formattedTemplate;
+  } else {
+    // LEGACY APPROACH: Assemble from separate parts (backward compatibility)
+    const personalInjuryInfo = showPersonalInjury ? personalInjuryText : "";
+    let formattedFooter = footer
+      .replace(/\{personal_injury_info\}/g, personalInjuryInfo)
+      .replace(/\{bills_link\}/g, billsLink)
+      .replace(/\{reports_link\}/g, reportsLink)
+      .replace(/\{first_name\}/g, dummyPatient.firstName)
+      .replace(/\{last_name\}/g, dummyPatient.lastName)
+      .replace(/\{dob\}/g, dummyPatient.dob)
+      .replace(/\{address\}/g, dummyPatient.address)
+      .replace(/\{home_phone\}/g, dummyPatient.homePhone)
+      .replace(/\{cell_phone\}/g, dummyPatient.cellPhone);
+
+    return formattedIntro + tableIntro + tableHtml + formattedFooter;
+  }
 };
 
 export default function TemplateConfigPage() {
@@ -370,10 +443,28 @@ export default function TemplateConfigPage() {
     setTagStatus(null);
     try {
       const response = await TemplatesApi.getTagSettings(tagName);
+
+      // Merge custom placeholders with any legacy separate fields for backward compatibility
+      const customPlaceholders = (response.settings.custom_placeholders as unknown as Record<string, string>) || {};
+
+      // If old separate fields exist, merge them into custom_placeholders
+      if (response.settings.scheduling_phone) customPlaceholders.scheduling_phone = response.settings.scheduling_phone;
+      if (response.settings.no_show_policy) customPlaceholders.no_show_policy = response.settings.no_show_policy;
+      if (response.settings.bills_link) customPlaceholders.bills_link = response.settings.bills_link;
+      if (response.settings.reports_link) customPlaceholders.reports_link = response.settings.reports_link;
+
+      // If custom_placeholders is empty, use defaults
+      const finalCustomPlaceholders = Object.keys(customPlaceholders).length > 0
+        ? customPlaceholders
+        : DEFAULT_CUSTOM_PLACEHOLDERS;
+
       const nextSettings = {
-        scheduling_phone_number:
-          response.settings.scheduling_phone_number ?? "",
-        no_show_policy: response.settings.no_show_policy ?? "",
+        // Custom placeholders (global, available across all autoresponds)
+        custom_placeholders: finalCustomPlaceholders,
+        // Unified template
+        unified_template: response.settings.unified_template ?? "",
+        // Legacy fields (for backward compatibility)
+        scheduling_phone_number: response.settings.scheduling_phone_number ?? "",
         portal_link_bills: response.settings.portal_link_bills ?? "",
         portal_link_reports: response.settings.portal_link_reports ?? "",
         intro_text: response.settings.intro_text ?? "",
@@ -703,7 +794,7 @@ interface TagSettingsFormProps {
   tagOptions: typeof TAG_OPTIONS;
   onTagSelect: (value: string) => void;
   tagSettings: typeof DEFAULT_TAG_SETTINGS;
-  onFieldChange: (key: keyof typeof DEFAULT_TAG_SETTINGS, value: string) => void;
+  onFieldChange: (key: keyof typeof DEFAULT_TAG_SETTINGS, value: string | Record<string, string>) => void;
   tagMeta: TagSettingsResponse | null;
   tagStatus: StatusMessage | null;
   tagLoading: boolean;
@@ -754,6 +845,98 @@ function TagSettingsForm({
         </div>
       ) : (
         <>
+          {/* Placeholder Management Section */}
+          <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-5">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <span className="text-lg">🔧</span>
+              Custom Placeholders
+              <span className="ml-auto rounded-full bg-amber-600 px-2 py-0.5 text-xs text-white">
+                Global
+              </span>
+            </h3>
+            <p className="mb-4 text-xs text-slate-600">
+              Define custom placeholders that are available across all autorespond templates. These values will be replaced when emails are sent.
+            </p>
+
+            {/* Custom Placeholders List */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-end">
+                <button
+                  onClick={() => {
+                    const name = prompt("Enter placeholder name (without braces):");
+                    if (name && /^[a-z_][a-z0-9_]*$/i.test(name)) {
+                      const customPlaceholders = tagSettings.custom_placeholders || {};
+                      onFieldChange("custom_placeholders", {
+                        ...customPlaceholders,
+                        [name]: ""
+                      });
+                    } else if (name) {
+                      alert("Invalid placeholder name. Use only letters, numbers, and underscores, starting with a letter.");
+                    }
+                  }}
+                  className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-amber-700"
+                >
+                  + Add Custom
+                </button>
+              </div>
+
+              {tagSettings.custom_placeholders && Object.keys(tagSettings.custom_placeholders).length > 0 ? (
+                <div className="space-y-2">
+                  {Object.entries(tagSettings.custom_placeholders).map(([key, value]) => (
+                    <div key={key} className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="text-xs font-medium text-slate-700">
+                          {`{${key}}`}
+                        </label>
+                        <input
+                          type="text"
+                          value={value}
+                          onChange={(e) => {
+                            const customPlaceholders = { ...tagSettings.custom_placeholders };
+                            customPlaceholders[key] = e.target.value;
+                            onFieldChange("custom_placeholders", customPlaceholders);
+                          }}
+                          placeholder={`Value for {${key}}`}
+                          className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-amber-500 focus:outline-none"
+                        />
+                      </div>
+                      <button
+                        onClick={() => {
+                          const customPlaceholders = { ...tagSettings.custom_placeholders };
+                          delete customPlaceholders[key];
+                          onFieldChange("custom_placeholders", customPlaceholders);
+                        }}
+                        className="mt-6 rounded-lg bg-red-100 px-3 py-2 text-xs font-medium text-red-700 transition hover:bg-red-200"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs italic text-slate-500">
+                  No custom placeholders yet. Click &ldquo;+ Add Custom&rdquo; to create one.
+                </p>
+              )}
+            </div>
+
+            {/* Save Button for Placeholders */}
+            <div className="mt-4 flex justify-end gap-2 border-t border-amber-300 pt-4">
+              <button
+                onClick={onReset}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                Reset
+              </button>
+              <button
+                onClick={onSave}
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+              >
+                Save Placeholders
+              </button>
+            </div>
+          </div>
+
           <label className="space-y-2 text-sm font-medium text-slate-700">
             Select autorespond tag
             <select
@@ -770,133 +953,54 @@ function TagSettingsForm({
           </label>
 
           <div className="space-y-4">
-            <label className="space-y-2 text-sm font-medium text-slate-700">
-              Scheduling phone number
-              <input
-                type="tel"
-                value={tagSettings.scheduling_phone_number}
-                onChange={(event) =>
-                  onFieldChange(
-                    "scheduling_phone_number",
-                    event.target.value
-                  )
-                }
-                placeholder="800-558-2223"
-                className="w-full rounded-xl border border-slate-300 bg-white/80 p-3 text-base shadow-inner focus:border-brand.indigo focus:outline-none"
-              />
-              <span className="text-xs text-slate-500">
-                Displayed as the primary call-to-action.
-              </span>
-            </label>
-
-            <label className="space-y-2 text-sm font-medium text-slate-700">
-              No show policy
-              <textarea
-                value={tagSettings.no_show_policy}
-                onChange={(event) =>
-                  onFieldChange("no_show_policy", event.target.value)
-                }
-                className="min-h-[120px] w-full rounded-xl border border-slate-300 bg-white/80 p-3 text-base shadow-inner focus:border-brand.indigo focus:outline-none"
-              />
-              <span className="text-xs text-slate-500">
-                HTML supported. Appears under the scheduling guidance block.
-              </span>
-            </label>
-
-            <label className="space-y-2 text-sm font-medium text-slate-700">
-              Bills & portal link
-              <input
-                type="url"
-                value={tagSettings.portal_link_bills}
-                onChange={(event) =>
-                  onFieldChange("portal_link_bills", event.target.value)
-                }
-                placeholder="https://..."
-                className="w-full rounded-xl border border-slate-300 bg-white/80 p-3 text-base shadow-inner focus:border-brand.indigo focus:outline-none"
-              />
-            </label>
-
-            <label className="space-y-2 text-sm font-medium text-slate-700">
-              Reports & images link
-              <input
-                type="url"
-                value={tagSettings.portal_link_reports}
-                onChange={(event) =>
-                  onFieldChange("portal_link_reports", event.target.value)
-                }
-                placeholder="https://..."
-                className="w-full rounded-xl border border-slate-300 bg-white/80 p-3 text-base shadow-inner focus:border-brand.indigo focus:outline-none"
-              />
-            </label>
-
             <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4">
               <h3 className="mb-3 text-sm font-semibold text-slate-900">
-                📧 Response Body Configuration
+                📧 Complete Email Template
               </h3>
               <p className="mb-4 text-xs text-slate-600">
-                Customize the text sections of the autoresponse email. The table structure itself is not configurable.
+                Customize the complete autoresponse email template. Use {"{appointment_table}"} where you want the appointment information to appear.
               </p>
 
-              <label className="space-y-2 text-sm font-medium text-slate-700">
-                Intro Text (before table)
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-slate-700">
+                    Email Template
+                  </label>
+                  <button
+                    onClick={() => onFieldChange("unified_template", DEFAULT_UNIFIED_TEMPLATE)}
+                    className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-200 hover:text-slate-900"
+                  >
+                    ↻ Restore to Default
+                  </button>
+                </div>
                 <textarea
-                  value={tagSettings.intro_text}
+                  value={tagSettings.unified_template || ""}
                   onChange={(event) =>
-                    onFieldChange("intro_text", event.target.value)
+                    onFieldChange("unified_template", event.target.value)
                   }
-                  placeholder="Dear {first_name} {last_name},&#10;&#10;Patient ID: {patient_id_confirmed}&#10;DOB: {dob}&#10;&#10;Our direct scheduling phone # is {scheduling_phone}..."
-                  className="min-h-[150px] w-full rounded-xl border border-slate-300 bg-white/80 p-3 font-mono text-sm shadow-inner focus:border-brand.indigo focus:outline-none"
+                  placeholder="Patient ID: {patient_id_confirmed}&#10;&#10;Dear {first_name} {last_name},&#10;&#10;Our phone: {scheduling_phone}&#10;{no_show_policy}&#10;&#10;Here are your appointments:&#10;{appointment_table}&#10;&#10;{personal_injury_info}&#10;&#10;Access bills: {bills_link}"
+                  className="min-h-[400px] w-full rounded-xl border border-slate-300 bg-white/80 p-3 font-mono text-sm shadow-inner focus:border-brand.indigo focus:outline-none"
                 />
                 <span className="text-xs text-slate-500">
-                  HTML and placeholders supported. See available placeholders below.
+                  HTML and placeholders supported. Use {"{appointment_table}"} for the appointment table. See all available placeholders below.
                 </span>
-              </label>
+              </div>
 
-              <label className="mt-4 space-y-2 text-sm font-medium text-slate-700">
-                Table Introduction Text
-                <input
-                  type="text"
-                  value={tagSettings.table_intro_text}
-                  onChange={(event) =>
-                    onFieldChange("table_intro_text", event.target.value)
-                  }
-                  placeholder="Here is a summary of the patient's exams..."
-                  className="w-full rounded-xl border border-slate-300 bg-white/80 p-3 text-base shadow-inner focus:border-brand.indigo focus:outline-none"
-                />
-                <span className="text-xs text-slate-500">
-                  Text displayed immediately before the appointment table.
-                </span>
-              </label>
-
-              <label className="mt-4 space-y-2 text-sm font-medium text-slate-700">
-                Personal Injury Text
-                <textarea
-                  value={tagSettings.personal_injury_text}
-                  onChange={(event) =>
-                    onFieldChange("personal_injury_text", event.target.value)
-                  }
-                  placeholder="If this is also a personal injury case:&#10;A report containing the findings..."
-                  className="min-h-[120px] w-full rounded-xl border border-slate-300 bg-white/80 p-3 font-mono text-sm shadow-inner focus:border-brand.indigo focus:outline-none"
-                />
-                <span className="text-xs text-slate-500">
-                  HTML supported. Shown only when patient is flagged as personal injury case.
-                </span>
-              </label>
-
-              <label className="mt-4 space-y-2 text-sm font-medium text-slate-700">
-                Footer Text (after table)
-                <textarea
-                  value={tagSettings.footer_text}
-                  onChange={(event) =>
-                    onFieldChange("footer_text", event.target.value)
-                  }
-                  placeholder="{personal_injury_info}&#10;&#10;Patient: {first_name} {last_name}&#10;Contact: {home_phone}&#10;&#10;Access bills: <a href='{bills_link}'>Click Here</a>..."
-                  className="min-h-[120px] w-full rounded-xl border border-slate-300 bg-white/80 p-3 font-mono text-sm shadow-inner focus:border-brand.indigo focus:outline-none"
-                />
-                <span className="text-xs text-slate-500">
-                  HTML and placeholders supported. See available placeholders below.
-                </span>
-              </label>
+              {/* Save Button for Template */}
+              <div className="mt-4 flex justify-end gap-2 border-t border-indigo-300 pt-4">
+                <button
+                  onClick={onReset}
+                  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                >
+                  Reset
+                </button>
+                <button
+                  onClick={onSave}
+                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                >
+                  Save Template
+                </button>
+              </div>
             </div>
           </div>
 
@@ -944,27 +1048,37 @@ function TagSettingsForm({
               </div>
 
               <div>
-                <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-purple-700">
-                  System & Settings
+                <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-blue-700">
+                  Special Placeholders
                 </h4>
-                <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
-                  <code className="block rounded-lg border border-purple-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-purple-500 hover:shadow-md">
-                    {"{scheduling_phone}"}
+                <div className="grid grid-cols-1 gap-2">
+                  <code className="block rounded-lg border-2 border-blue-400 bg-blue-50 px-3 py-2 text-xs font-mono font-semibold text-blue-900 shadow-sm transition hover:border-blue-600 hover:shadow-md">
+                    {"{appointment_table}"} - Complete appointment information table
                   </code>
-                  <code className="block rounded-lg border border-purple-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-purple-500 hover:shadow-md">
-                    {"{no_show_policy}"}
-                  </code>
-                  <code className="block rounded-lg border border-purple-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-purple-500 hover:shadow-md">
-                    {"{bills_link}"}
-                  </code>
-                  <code className="block rounded-lg border border-purple-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-purple-500 hover:shadow-md">
-                    {"{reports_link}"}
-                  </code>
-                  <code className="block rounded-lg border border-purple-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-purple-500 hover:shadow-md">
-                    {"{personal_injury_info}"}
+                  <code className="block rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-blue-500 hover:shadow-md">
+                    {"{personal_injury_info}"} - Shown only for PI cases
                   </code>
                 </div>
               </div>
+
+              {/* Custom Placeholders Section - Show all custom placeholders */}
+              {tagSettings.custom_placeholders && Object.keys(tagSettings.custom_placeholders).length > 0 && (
+                <div>
+                  <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700">
+                    Custom Placeholders
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+                    {Object.keys(tagSettings.custom_placeholders).map((key) => (
+                      <code
+                        key={key}
+                        className="block rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-amber-500 hover:shadow-md"
+                      >
+                        {`{${key}}`}
+                      </code>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50/50 p-3 text-xs text-amber-800">

@@ -59,19 +59,52 @@ DEFAULT_PORTAL_LINKS = {
     "bills_appointments_liens": "https://example.com/portal/bills",
     "reports_images": "https://example.com/portal/reports"
 }
+
+# Legacy individual template parts (kept for backward compatibility during migration)
 DEFAULT_INTRO_TEXT = """Patient ID: {patient_id_confirmed}<br/><br/>
 <b>Our direct scheduling phone # is {scheduling_phone} and we can assist with directions, rescheduling, canceling, or any other scheduling-related questions.</b><br/>
 {no_show_policy}<br/><br/>"""
 DEFAULT_TABLE_INTRO_TEXT = "Here is a summary of the patient's exams we currently have entered into our system:"
-DEFAULT_PERSONAL_INJURY_TEXT = """<br/>
-If this is also a personal injury case:<br/>
+DEFAULT_PERSONAL_INJURY_TEXT = """<b>Important Information regarding personal injury cases</b><br/>
 A report containing the findings of the exam will also be sent to the attorney.<br/>
 A bill will be sent to the attorney once both the patient and the attorney sign all pending liens.<br/>
-Please make sure to submit a negotiation offer before sending the payment.<br/>"""
+Please make sure to submit a negotiation offer before sending the payment.<br/><br/>"""
 DEFAULT_FOOTER_TEXT = """<br/>
 {personal_injury_info}
 Access bills, appointment times, and e-sign liens (Click request login if you don't have an account): <a href="{bills_link}">Click Here</a><br/>
 Access reports & images (Request login here for reports): <a href="{reports_link}">Click Here</a><br/>"""
+
+# New unified template (combines all parts above with {appointment_table} placeholder)
+DEFAULT_UNIFIED_TEMPLATE = """Dear {first_name} {last_name},<br/>
+In regards to patient ID (MRN): {patient_id_confirmed}<br/><br/>
+
+<b>How to Schedule:</b><br/><br/>
+
+<ul>
+  <li>Schedule online 24/7 via the <a href="https://app.radflow360.com/patient-portal" target="_blank">patient portal</a></li>
+  <li>Call <b>800-558-2223</b></li>
+</ul><br/>
+
+<b>Rescheduling / No Show Policy:</b><br/>
+**If the patient cannot make the appointment please contact us within 48 hours of the appointment to reschedule or cancel to avoid any no-show fees. Two no-shows will require a $50 no-show payment before being scheduled for a 3rd time.**<br/><br/>
+
+Here is a summary of the patient's exams we currently have entered into our system:<br/>
+{appointment_table}<br/>
+
+{personal_injury_info}
+
+<b>What You Can Access in the RadFlow 360 Portal</b><br/><br/>
+
+<ul>
+  <li>View all patient exams and status</li>
+  <li>Reports & Documents</li>
+  <li>View Images, Download, and Burn to CD</li>
+  <li>Provide Case Updates</li>
+  <li>Submit & Approve Bill Offers</li>
+  <li>Pay online via credit card and ACH</li>
+</ul><br/>
+
+<a href="https://app.radflow360.com/patient-portal" target="_blank"><b>Login or Create Your Free Account Today</b></a>"""
 # --- END: Placeholder Static Information ---
 
 # --- BEGIN: Database Settings Helper ---
@@ -87,17 +120,27 @@ async def get_tag_settings_from_db(tag_name: str = "Apt status req") -> dict:
 
             if settings_dict:
                 logger.info(f"✅ Loaded settings for '{tag_name}' from database")
+
+                # Get custom placeholders (new approach)
+                custom_placeholders = settings_dict.get("custom_placeholders", {})
+
+                # Get values from custom_placeholders first, then fall back to legacy fields, then defaults
                 return {
-                    "scheduling_phone": settings_dict.get("scheduling_phone_number", DEFAULT_SCHEDULING_PHONE),
-                    "no_show_policy": settings_dict.get("no_show_policy", DEFAULT_NO_SHOW_POLICY),
+                    "scheduling_phone": custom_placeholders.get("scheduling_phone") or settings_dict.get("scheduling_phone_number", DEFAULT_SCHEDULING_PHONE),
+                    "no_show_policy": custom_placeholders.get("no_show_policy") or settings_dict.get("no_show_policy", DEFAULT_NO_SHOW_POLICY),
                     "portal_links": {
-                        "bills_appointments_liens": settings_dict.get("portal_link_bills", DEFAULT_PORTAL_LINKS["bills_appointments_liens"]),
-                        "reports_images": settings_dict.get("portal_link_reports", DEFAULT_PORTAL_LINKS["reports_images"])
+                        "bills_appointments_liens": custom_placeholders.get("bills_link") or settings_dict.get("portal_link_bills", DEFAULT_PORTAL_LINKS["bills_appointments_liens"]),
+                        "reports_images": custom_placeholders.get("reports_link") or settings_dict.get("portal_link_reports", DEFAULT_PORTAL_LINKS["reports_images"])
                     },
+                    # Unified template (new approach) - use this if available
+                    "unified_template": settings_dict.get("unified_template", DEFAULT_UNIFIED_TEMPLATE),
+                    # Legacy individual fields (kept for backward compatibility)
                     "intro_text": settings_dict.get("intro_text", DEFAULT_INTRO_TEXT),
                     "table_intro_text": settings_dict.get("table_intro_text", DEFAULT_TABLE_INTRO_TEXT),
                     "personal_injury_text": settings_dict.get("personal_injury_text", DEFAULT_PERSONAL_INJURY_TEXT),
-                    "footer_text": settings_dict.get("footer_text", DEFAULT_FOOTER_TEXT)
+                    "footer_text": settings_dict.get("footer_text", DEFAULT_FOOTER_TEXT),
+                    # Store custom placeholders for template rendering
+                    "custom_placeholders": custom_placeholders
                 }
             else:
                 logger.warning(f"⚠️ No settings found for '{tag_name}' in database, using defaults")
@@ -105,6 +148,7 @@ async def get_tag_settings_from_db(tag_name: str = "Apt status req") -> dict:
                     "scheduling_phone": DEFAULT_SCHEDULING_PHONE,
                     "no_show_policy": DEFAULT_NO_SHOW_POLICY,
                     "portal_links": DEFAULT_PORTAL_LINKS,
+                    "unified_template": DEFAULT_UNIFIED_TEMPLATE,
                     "intro_text": DEFAULT_INTRO_TEXT,
                     "table_intro_text": DEFAULT_TABLE_INTRO_TEXT,
                     "personal_injury_text": DEFAULT_PERSONAL_INJURY_TEXT,
@@ -116,6 +160,7 @@ async def get_tag_settings_from_db(tag_name: str = "Apt status req") -> dict:
             "scheduling_phone": DEFAULT_SCHEDULING_PHONE,
             "no_show_policy": DEFAULT_NO_SHOW_POLICY,
             "portal_links": DEFAULT_PORTAL_LINKS,
+            "unified_template": DEFAULT_UNIFIED_TEMPLATE,
             "intro_text": DEFAULT_INTRO_TEXT,
             "table_intro_text": DEFAULT_TABLE_INTRO_TEXT,
             "personal_injury_text": DEFAULT_PERSONAL_INJURY_TEXT,
@@ -130,6 +175,57 @@ async def get_tag_settings_from_db(tag_name: str = "Apt status req") -> dict:
 # --- BEGIN: Helper Function for openai-agents SDK ---
 # This function is now imported from agent_helpers
 # --- END: Helper Function ---
+
+# --- BEGIN: Table Generation Helper ---
+def _generate_appointment_table_html(studies: List[Dict[str, Any]]) -> str:
+    """
+    Generate HTML table for appointment/study information.
+
+    Args:
+        studies: List of study dictionaries with appointment details
+
+    Returns:
+        str: Complete HTML table with all studies
+    """
+    if not studies:
+        return "<p>No appointments found.</p>"
+
+    # Generate table rows
+    studies_table_rows_list = []
+    for study in studies:
+        studies_table_rows_list.append(
+            f"<tr>"
+            f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('study_id','Not Available')}</td>"
+            f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('exam_description','N/A')}</td>"
+            f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('status','N/A')}</td>"
+            f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('appointment_datetime_str','Not Available')}</td>"
+            f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('location_name','Not Available')}</td>"
+            f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('mri_type','N/A')}</td>"
+            f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('images_available','N/A')}</td>"
+            f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('report_available','N/A')}</td>"
+            f"</tr>"
+        )
+    studies_table_rows = "".join(studies_table_rows_list)
+
+    # Build the complete table structure
+    table_html = f"""<table border="1" style="border-collapse: collapse; width: 100%;">
+<thead>
+<tr>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Study ID</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Exam Description</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Status</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Study Date/Time</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Location</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">MRI Type</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Images Available</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Report Available</th>
+</tr>
+</thead>
+<tbody>{studies_table_rows}</tbody>
+</table>"""
+
+    return table_html
+# --- END: Table Generation Helper ---
 
 # --- BEGIN: Reply Generation Helper ---
 async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) -> str:
@@ -151,43 +247,14 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
     # logger.info(f"Generating reply for scenario: {scenario} with data: {data}")
     if scenario == "appointments_found" and data.get("studies"):
         studies = data.get("studies", [])
-        first_study = studies[0]
 
-        studies_table_rows_list = []
-        for study in studies:
-            # Generate HTML table rows without extra newlines
-            studies_table_rows_list.append(
-                f"<tr>"
-                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('study_id','Not Available')}</td>"
-                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('exam_description','N/A')}</td>"
-                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('status','N/A')}</td>"
-                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('appointment_datetime_str','Not Available')}</td>"
-                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('location_name','Not Available')}</td>"
-                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('mri_type','N/A')}</td>"
-                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('images_available','N/A')}</td>"
-                f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('report_available','N/A')}</td>"
-                f"</tr>"
-            )
-        studies_table_rows = "".join(studies_table_rows_list) # Join without newlines
+        # Generate appointment table HTML using dedicated function
+        table_html = _generate_appointment_table_html(studies)
 
-        # Build the table structure (not configurable)
-        table_html = f"""<table border="1" style="border-collapse: collapse; width: 100%;">
-<thead>
-<tr>
-<th style="border: 1px solid black; padding: 8px; text-align: left;">Study ID</th>
-<th style="border: 1px solid black; padding: 8px; text-align: left;">Exam Description</th>
-<th style="border: 1px solid black; padding: 8px; text-align: left;">Status</th>
-<th style="border: 1px solid black; padding: 8px; text-align: left;">Study Date/Time</th>
-<th style="border: 1px solid black; padding: 8px; text-align: left;">Location</th>
-<th style="border: 1px solid black; padding: 8px; text-align: left;">MRI Type</th>
-<th style="border: 1px solid black; padding: 8px; text-align: left;">Images Available</th>
-<th style="border: 1px solid black; padding: 8px; text-align: left;">Report Available</th>
-</tr>
-</thead>
-<tbody>{studies_table_rows}</tbody>
-</table>"""
+        # Get template configuration (unified or legacy)
+        unified_template = data.get("unified_template")
 
-        # Get configurable text sections from data (these come from tag_settings)
+        # Get legacy template parts for backward compatibility
         intro_text = data.get("intro_text", DEFAULT_INTRO_TEXT)
         table_intro_text = data.get("table_intro_text", DEFAULT_TABLE_INTRO_TEXT)
         personal_injury_template = data.get("personal_injury_text", DEFAULT_PERSONAL_INJURY_TEXT)
@@ -212,8 +279,14 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
             "personal_injury_info": personal_injury_info_text,
             "bills_link": data.get("links", {}).get("bills_appointments_liens", "#"),
             "reports_link": data.get("links", {}).get("reports_images", "#"),
+            "appointment_table": table_html,  # NEW: Add table to placeholders
             "is_personal_injury_case": data.get("is_personal_injury_case", False)
         }
+
+        # Add all custom placeholders to placeholder_values
+        custom_placeholders = data.get("custom_placeholders", {})
+        if custom_placeholders:
+            placeholder_values.update(custom_placeholders)
 
         # Log all placeholder values for debugging
         logger.info(f"📝 Template placeholder values for {placeholder_values['patient_id_confirmed']}:")
@@ -223,35 +296,41 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
         logger.info(f"   System: Scheduling Phone={placeholder_values['scheduling_phone']}")
         logger.info(f"   Links: Bills={placeholder_values['bills_link']}, Reports={placeholder_values['reports_link']}")
         logger.info(f"   Personal Injury Case: {placeholder_values['is_personal_injury_case']}")
+        logger.info(f"   Using {'UNIFIED' if unified_template else 'LEGACY'} template format")
 
-        # Format intro text with placeholders (including patient demographics)
-        formatted_intro = intro_text.format(
-            patient_id_confirmed=placeholder_values["patient_id_confirmed"],
-            scheduling_phone=placeholder_values["scheduling_phone"],
-            no_show_policy=placeholder_values["no_show_policy"],
-            first_name=placeholder_values["first_name"],
-            last_name=placeholder_values["last_name"],
-            dob=placeholder_values["dob"],
-            address=placeholder_values["address"],
-            home_phone=placeholder_values["home_phone"],
-            cell_phone=placeholder_values["cell_phone"]
-        )
+        # Choose between unified template or legacy assembly
+        if unified_template:
+            # NEW APPROACH: Use unified template with all placeholders
+            logger.info("Using unified template format")
+            formatted_template = unified_template.format(**placeholder_values)
+        else:
+            # LEGACY APPROACH: Assemble from separate parts (backward compatibility)
+            logger.info("Using legacy template format (separate parts)")
+            formatted_intro = intro_text.format(
+                patient_id_confirmed=placeholder_values["patient_id_confirmed"],
+                scheduling_phone=placeholder_values["scheduling_phone"],
+                no_show_policy=placeholder_values["no_show_policy"],
+                first_name=placeholder_values["first_name"],
+                last_name=placeholder_values["last_name"],
+                dob=placeholder_values["dob"],
+                address=placeholder_values["address"],
+                home_phone=placeholder_values["home_phone"],
+                cell_phone=placeholder_values["cell_phone"]
+            )
 
-        # Format footer text with placeholders (including patient demographics)
-        formatted_footer = footer_text.format(
-            personal_injury_info=placeholder_values["personal_injury_info"],
-            bills_link=placeholder_values["bills_link"],
-            reports_link=placeholder_values["reports_link"],
-            first_name=placeholder_values["first_name"],
-            last_name=placeholder_values["last_name"],
-            dob=placeholder_values["dob"],
-            address=placeholder_values["address"],
-            home_phone=placeholder_values["home_phone"],
-            cell_phone=placeholder_values["cell_phone"]
-        )
+            formatted_footer = footer_text.format(
+                personal_injury_info=placeholder_values["personal_injury_info"],
+                bills_link=placeholder_values["bills_link"],
+                reports_link=placeholder_values["reports_link"],
+                first_name=placeholder_values["first_name"],
+                last_name=placeholder_values["last_name"],
+                dob=placeholder_values["dob"],
+                address=placeholder_values["address"],
+                home_phone=placeholder_values["home_phone"],
+                cell_phone=placeholder_values["cell_phone"]
+            )
 
-        # Assemble final response
-        formatted_template = formatted_intro + table_intro_text + table_html + formatted_footer
+            formatted_template = formatted_intro + table_intro_text + table_html + formatted_footer
 
         # logger.info(f"DEBUG: Generated HTML response: {formatted_template}")
         return formatted_template
@@ -472,10 +551,15 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                 "scheduling_phone": scheduling_phone,
                 "no_show_policy": no_show_policy,
                 "links": portal_links,
+                # Unified template (new approach)
+                "unified_template": db_settings.get("unified_template", DEFAULT_UNIFIED_TEMPLATE),
+                # Legacy template parts (for backward compatibility)
                 "intro_text": db_settings.get("intro_text", DEFAULT_INTRO_TEXT),
                 "table_intro_text": db_settings.get("table_intro_text", DEFAULT_TABLE_INTRO_TEXT),
                 "personal_injury_text": db_settings.get("personal_injury_text", DEFAULT_PERSONAL_INJURY_TEXT),
                 "footer_text": db_settings.get("footer_text", DEFAULT_FOOTER_TEXT),
+                # Custom placeholders (new approach - global placeholders)
+                "custom_placeholders": db_settings.get("custom_placeholders", {}),
                 # Patient demographics for template placeholders
                 "first_name": patient_demographics.get("first_name", "Not Available"),
                 "last_name": patient_demographics.get("last_name", "Not Available"),

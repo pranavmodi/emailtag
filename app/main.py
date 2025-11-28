@@ -13,7 +13,7 @@ import uvicorn
 from app.api.api_v1.api import api_router
 from app.api.v1.endpoints.classification_rules_api import router as rules_router
 from app.api.v1.endpoints.trace_viewer_api import router as trace_router
-from app.api.api_v1.endpoints.ui import settings_ui, template_config_ui, tag_statistics_ui, login_ui, email_extraction_ui
+from app.api.api_v1.endpoints.ui import login_ui, email_extraction_ui
 from app.api.api_v1.dependencies import check_authenticated
 from app.core.config import settings
 
@@ -65,41 +65,10 @@ def create_application() -> FastAPI:
     application.include_router(trace_router, prefix="/admin", tags=["Trace Viewer UI"])
 
     # Add UI pages at root level
-    @application.get("/settings")
-    async def settings_page(
-        request: Request,
-        is_authenticated: bool = Depends(check_authenticated)
-    ):
-        """
-        System settings page.
-
-        ⚠️ DEPRECATED: This endpoint serves the legacy Jinja2 template.
-        All new features should be added to /settings2 (Next.js frontend in frontend/settings2/).
-        This endpoint is maintained for backwards compatibility only.
-        """
-        if not is_authenticated:
-            return RedirectResponse(url="/login", status_code=303)
-        return await settings_ui(request)
-
-    @application.get("/template-config")
-    async def template_config_page(
-        request: Request,
-        is_authenticated: bool = Depends(check_authenticated)
-    ):
-        """Template configuration page."""
-        if not is_authenticated:
-            return RedirectResponse(url="/login", status_code=303)
-        return await template_config_ui(request)
-
-    @application.get("/tag-statistics")
-    async def tag_statistics_page(
-        request: Request,
-        is_authenticated: bool = Depends(check_authenticated)
-    ):
-        """Tag statistics page."""
-        if not is_authenticated:
-            return RedirectResponse(url="/login", status_code=303)
-        return await tag_statistics_ui(request)
+    # Legacy /settings endpoints removed - Next.js app serves these routes:
+    # - /settings → Next.js settings homepage (port 3001 via nginx)
+    # - /settings/template-config → Next.js template configuration
+    # - /settings/tag-statistics → Next.js tag statistics
 
     @application.get("/login")
     async def login_page(request: Request):

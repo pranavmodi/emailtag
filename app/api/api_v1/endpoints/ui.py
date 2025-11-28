@@ -31,38 +31,11 @@ async def document_processor_ui():
     return HTMLResponse(content=html_content)
 
 
-@router.get("/settings", response_class=HTMLResponse)
-async def settings_ui(request: Request):
-    """
-    Serve the system settings UI.
-
-    This page allows administrators to control system-wide settings such as
-    the email processing master switch.
-    """
-    return templates.TemplateResponse("settings.html", {"request": request})
-
-
-@router.get("/template-config", response_class=HTMLResponse)
-async def template_config_ui(request: Request):
-    """
-    Serve the template configuration UI.
-
-    This page allows administrators to edit autorespond message templates
-    for various email categories.
-    """
-    return templates.TemplateResponse("template_config.html", {"request": request})
-
-
-@router.get("/tag-statistics", response_class=HTMLResponse)
-async def tag_statistics_ui(request: Request):
-    """
-    Serve the tag statistics UI.
-
-    This page allows administrators to analyze tag retention statistics,
-    showing how many conversations initially tagged on a specific date
-    still retain that tag in Front.
-    """
-    return templates.TemplateResponse("tag_statistics.html", {"request": request})
+# Legacy settings endpoints removed - use Next.js frontend at /settings instead
+# The following routes are now served by the Next.js app on port 3001:
+# - /settings → Next.js homepage
+# - /settings/template-config → Next.js template configuration
+# - /settings/tag-statistics → Next.js tag statistics
 
 
 @router.get("/login", response_class=HTMLResponse)
