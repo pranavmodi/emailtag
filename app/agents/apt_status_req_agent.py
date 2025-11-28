@@ -518,7 +518,15 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
             
             # Parse resources field for MRI type
             resources = study.get("resources", "")
-            mri_type = "Open" if "OPEN" in resources.upper() else "N/A" if not resources else "Standard"
+            mri_type = "N/A"
+            if resources:
+                resources_upper = resources.upper()
+                if "STAND" in resources_upper:
+                    mri_type = "Stand Up"
+                elif "OPEN" in resources_upper:
+                    mri_type = "Open"
+                elif "CLOSED" in resources_upper:
+                    mri_type = "Closed"
             
             transformed_study = {
                 "study_id": study.get("authorization_number", "N/A"),
