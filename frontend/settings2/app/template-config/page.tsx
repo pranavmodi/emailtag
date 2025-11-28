@@ -145,11 +145,28 @@ const generatePreviewHtml = (settings: typeof DEFAULT_TAG_SETTINGS, showPersonal
   const billsLink = settings.portal_link_bills || "https://example.com/portal/bills";
   const reportsLink = settings.portal_link_reports || "https://example.com/portal/reports";
 
-  // Format intro text with placeholders
+  // Dummy patient data for preview
+  const dummyPatient = {
+    firstName: "Jane",
+    lastName: "Smith",
+    dob: "05/12/1985",
+    address: "456 Oak Avenue, Los Angeles, CA 90210",
+    homePhone: "555-123-4567",
+    cellPhone: "555-987-6543",
+    patientId: "PRE1234567"
+  };
+
+  // Format intro text with placeholders (including patient demographics)
   let formattedIntro = intro
-    .replace(/\{patient_id_confirmed\}/g, "PRE1234567")
+    .replace(/\{patient_id_confirmed\}/g, dummyPatient.patientId)
     .replace(/\{scheduling_phone\}/g, schedulingPhone)
-    .replace(/\{no_show_policy\}/g, noShowPolicy);
+    .replace(/\{no_show_policy\}/g, noShowPolicy)
+    .replace(/\{first_name\}/g, dummyPatient.firstName)
+    .replace(/\{last_name\}/g, dummyPatient.lastName)
+    .replace(/\{dob\}/g, dummyPatient.dob)
+    .replace(/\{address\}/g, dummyPatient.address)
+    .replace(/\{home_phone\}/g, dummyPatient.homePhone)
+    .replace(/\{cell_phone\}/g, dummyPatient.cellPhone);
 
   // Build table
   const tableHtml = `<table border="1" style="border-collapse: collapse; width: 100%;">
@@ -168,12 +185,18 @@ const generatePreviewHtml = (settings: typeof DEFAULT_TAG_SETTINGS, showPersonal
 <tbody>${DUMMY_TABLE_DATA}</tbody>
 </table>`;
 
-  // Format footer with placeholders
+  // Format footer with placeholders (including patient demographics)
   const personalInjuryInfo = showPersonalInjury ? personalInjuryText : "";
   let formattedFooter = footer
     .replace(/\{personal_injury_info\}/g, personalInjuryInfo)
     .replace(/\{bills_link\}/g, billsLink)
-    .replace(/\{reports_link\}/g, reportsLink);
+    .replace(/\{reports_link\}/g, reportsLink)
+    .replace(/\{first_name\}/g, dummyPatient.firstName)
+    .replace(/\{last_name\}/g, dummyPatient.lastName)
+    .replace(/\{dob\}/g, dummyPatient.dob)
+    .replace(/\{address\}/g, dummyPatient.address)
+    .replace(/\{home_phone\}/g, dummyPatient.homePhone)
+    .replace(/\{cell_phone\}/g, dummyPatient.cellPhone);
 
   return formattedIntro + tableIntro + tableHtml + formattedFooter;
 };
@@ -821,11 +844,11 @@ function TagSettingsForm({
                   onChange={(event) =>
                     onFieldChange("intro_text", event.target.value)
                   }
-                  placeholder="Patient ID: {patient_id_confirmed}&#10;&#10;Our direct scheduling phone # is {scheduling_phone}..."
+                  placeholder="Dear {first_name} {last_name},&#10;&#10;Patient ID: {patient_id_confirmed}&#10;DOB: {dob}&#10;&#10;Our direct scheduling phone # is {scheduling_phone}..."
                   className="min-h-[150px] w-full rounded-xl border border-slate-300 bg-white/80 p-3 font-mono text-sm shadow-inner focus:border-brand.indigo focus:outline-none"
                 />
                 <span className="text-xs text-slate-500">
-                  HTML and placeholders supported: {"{patient_id_confirmed}"}, {"{scheduling_phone}"}, {"{no_show_policy}"}
+                  HTML and placeholders supported. See available placeholders below.
                 </span>
               </label>
 
@@ -867,13 +890,85 @@ function TagSettingsForm({
                   onChange={(event) =>
                     onFieldChange("footer_text", event.target.value)
                   }
-                  placeholder="{personal_injury_info}&#10;Access bills: <a href='{bills_link}'>Click Here</a>..."
+                  placeholder="{personal_injury_info}&#10;&#10;Patient: {first_name} {last_name}&#10;Contact: {home_phone}&#10;&#10;Access bills: <a href='{bills_link}'>Click Here</a>..."
                   className="min-h-[120px] w-full rounded-xl border border-slate-300 bg-white/80 p-3 font-mono text-sm shadow-inner focus:border-brand.indigo focus:outline-none"
                 />
                 <span className="text-xs text-slate-500">
-                  HTML and placeholders supported: {"{personal_injury_info}"}, {"{bills_link}"}, {"{reports_link}"}
+                  HTML and placeholders supported. See available placeholders below.
                 </span>
               </label>
+            </div>
+          </div>
+
+          {/* Placeholder Reference Card */}
+          <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 p-5">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <span className="text-lg">📋</span>
+              Available Placeholders
+              <span className="ml-auto rounded-full bg-emerald-600 px-2 py-0.5 text-xs text-white">
+                Copy & Paste
+              </span>
+            </h3>
+            <p className="mb-4 text-xs text-slate-600">
+              Use these placeholders in any text field above. They will be automatically replaced with actual patient data when sending autoresponds.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                  Patient Information
+                </h4>
+                <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+                  <code className="block rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-emerald-500 hover:shadow-md">
+                    {"{first_name}"}
+                  </code>
+                  <code className="block rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-emerald-500 hover:shadow-md">
+                    {"{last_name}"}
+                  </code>
+                  <code className="block rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-emerald-500 hover:shadow-md">
+                    {"{dob}"}
+                  </code>
+                  <code className="block rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-emerald-500 hover:shadow-md">
+                    {"{address}"}
+                  </code>
+                  <code className="block rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-emerald-500 hover:shadow-md">
+                    {"{home_phone}"}
+                  </code>
+                  <code className="block rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-emerald-500 hover:shadow-md">
+                    {"{cell_phone}"}
+                  </code>
+                  <code className="block rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-emerald-500 hover:shadow-md">
+                    {"{patient_id_confirmed}"}
+                  </code>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-purple-700">
+                  System & Settings
+                </h4>
+                <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+                  <code className="block rounded-lg border border-purple-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-purple-500 hover:shadow-md">
+                    {"{scheduling_phone}"}
+                  </code>
+                  <code className="block rounded-lg border border-purple-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-purple-500 hover:shadow-md">
+                    {"{no_show_policy}"}
+                  </code>
+                  <code className="block rounded-lg border border-purple-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-purple-500 hover:shadow-md">
+                    {"{bills_link}"}
+                  </code>
+                  <code className="block rounded-lg border border-purple-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-purple-500 hover:shadow-md">
+                    {"{reports_link}"}
+                  </code>
+                  <code className="block rounded-lg border border-purple-300 bg-white px-3 py-2 text-xs font-mono text-slate-800 shadow-sm transition hover:border-purple-500 hover:shadow-md">
+                    {"{personal_injury_info}"}
+                  </code>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50/50 p-3 text-xs text-amber-800">
+              <span className="font-semibold">💡 Tip:</span> If a patient field is missing, it will display as &ldquo;Not Available&rdquo; in the email.
             </div>
           </div>
 

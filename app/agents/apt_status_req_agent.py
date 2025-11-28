@@ -198,18 +198,56 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
         if data.get("is_personal_injury_case"):
             personal_injury_info_text = personal_injury_template
 
-        # Format intro text with placeholders
+        # Prepare all placeholder variables for logging and formatting
+        placeholder_values = {
+            "patient_id_confirmed": data.get("patient_id_confirmed", "N/A"),
+            "scheduling_phone": data.get("scheduling_phone", DEFAULT_SCHEDULING_PHONE),
+            "no_show_policy": data.get("no_show_policy", DEFAULT_NO_SHOW_POLICY),
+            "first_name": data.get("first_name", "Not Available"),
+            "last_name": data.get("last_name", "Not Available"),
+            "dob": data.get("dob", "Not Available"),
+            "address": data.get("address", "Not Available"),
+            "home_phone": data.get("home_phone", "Not Available"),
+            "cell_phone": data.get("cell_phone", "Not Available"),
+            "personal_injury_info": personal_injury_info_text,
+            "bills_link": data.get("links", {}).get("bills_appointments_liens", "#"),
+            "reports_link": data.get("links", {}).get("reports_images", "#"),
+            "is_personal_injury_case": data.get("is_personal_injury_case", False)
+        }
+
+        # Log all placeholder values for debugging
+        logger.info(f"📝 Template placeholder values for {placeholder_values['patient_id_confirmed']}:")
+        logger.info(f"   Patient Info: {placeholder_values['first_name']} {placeholder_values['last_name']}, DOB: {placeholder_values['dob']}")
+        logger.info(f"   Address: {placeholder_values['address']}")
+        logger.info(f"   Phones: Home={placeholder_values['home_phone']}, Cell={placeholder_values['cell_phone']}")
+        logger.info(f"   System: Scheduling Phone={placeholder_values['scheduling_phone']}")
+        logger.info(f"   Links: Bills={placeholder_values['bills_link']}, Reports={placeholder_values['reports_link']}")
+        logger.info(f"   Personal Injury Case: {placeholder_values['is_personal_injury_case']}")
+
+        # Format intro text with placeholders (including patient demographics)
         formatted_intro = intro_text.format(
-            patient_id_confirmed=data.get("patient_id_confirmed", "N/A"),
-            scheduling_phone=data.get("scheduling_phone", DEFAULT_SCHEDULING_PHONE),
-            no_show_policy=data.get("no_show_policy", DEFAULT_NO_SHOW_POLICY)
+            patient_id_confirmed=placeholder_values["patient_id_confirmed"],
+            scheduling_phone=placeholder_values["scheduling_phone"],
+            no_show_policy=placeholder_values["no_show_policy"],
+            first_name=placeholder_values["first_name"],
+            last_name=placeholder_values["last_name"],
+            dob=placeholder_values["dob"],
+            address=placeholder_values["address"],
+            home_phone=placeholder_values["home_phone"],
+            cell_phone=placeholder_values["cell_phone"]
         )
 
-        # Format footer text with placeholders
+        # Format footer text with placeholders (including patient demographics)
         formatted_footer = footer_text.format(
-            personal_injury_info=personal_injury_info_text,
-            bills_link=data.get("links", {}).get("bills_appointments_liens", "#"),
-            reports_link=data.get("links", {}).get("reports_images", "#")
+            personal_injury_info=placeholder_values["personal_injury_info"],
+            bills_link=placeholder_values["bills_link"],
+            reports_link=placeholder_values["reports_link"],
+            first_name=placeholder_values["first_name"],
+            last_name=placeholder_values["last_name"],
+            dob=placeholder_values["dob"],
+            address=placeholder_values["address"],
+            home_phone=placeholder_values["home_phone"],
+            cell_phone=placeholder_values["cell_phone"]
         )
 
         # Assemble final response
@@ -269,12 +307,24 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
         # Parse patient data from MCP response
         patient_data = None
         is_personal_injury_case = False
-        
+        patient_demographics = {}
+
         if patient_result.get("patients") and len(patient_result["patients"]) > 0:
             patient_data = patient_result["patients"][0]
             financial_type = patient_data.get("financial_type", "").lower()
             if "pi" in financial_type or "lien" in financial_type or "personal injury" in financial_type:
                 is_personal_injury_case = True
+
+            # Extract patient demographics for template use
+            patient_demographics = {
+                "first_name": patient_data.get("first_name", "Not Available"),
+                "last_name": patient_data.get("last_name", "Not Available"),
+                "dob": patient_data.get("birth_date", "Not Available"),
+                "address": patient_data.get("address", "Not Available"),
+                "home_phone": patient_data.get("phone", "Not Available"),
+                "cell_phone": patient_data.get("phone", "Not Available"),  # API may not distinguish
+            }
+            logger.info(f"Extracted patient demographics for {patient_id}: {patient_demographics.get('first_name')} {patient_demographics.get('last_name')}")
         else:
             logger.warning(f"Patient details response for {patient_id} was successful but no patient data in 'patients' list.")
             return {"status": "not_found", "message": f"Patient record found for ID {patient_id}, but no detailed data available.", "patient_id": patient_id}
@@ -425,7 +475,14 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                 "intro_text": db_settings.get("intro_text", DEFAULT_INTRO_TEXT),
                 "table_intro_text": db_settings.get("table_intro_text", DEFAULT_TABLE_INTRO_TEXT),
                 "personal_injury_text": db_settings.get("personal_injury_text", DEFAULT_PERSONAL_INJURY_TEXT),
-                "footer_text": db_settings.get("footer_text", DEFAULT_FOOTER_TEXT)
+                "footer_text": db_settings.get("footer_text", DEFAULT_FOOTER_TEXT),
+                # Patient demographics for template placeholders
+                "first_name": patient_demographics.get("first_name", "Not Available"),
+                "last_name": patient_demographics.get("last_name", "Not Available"),
+                "dob": patient_demographics.get("dob", "Not Available"),
+                "address": patient_demographics.get("address", "Not Available"),
+                "home_phone": patient_demographics.get("home_phone", "Not Available"),
+                "cell_phone": patient_demographics.get("cell_phone", "Not Available")
             }
         }
 
