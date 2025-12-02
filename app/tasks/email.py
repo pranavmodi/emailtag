@@ -6,6 +6,7 @@ nest_asyncio.apply() # Apply the patch
 import logging
 from typing import Dict, List, Any, Optional
 from uuid import UUID
+from datetime import datetime
 import asyncio # Add asyncio import
 
 from sqlalchemy.orm import Session
@@ -22,7 +23,7 @@ from app.db.session import AsyncSessionLocal # Add AsyncSessionLocal import
 from app.services.classification_service import classify_email_tags_hierarchical, remove_conflicting_tags
 from app.services.frontapp_service import add_conversation_tags, get_conversation_text, get_conversation_tags, remove_conversation_tags, create_new_conversation_for_split, send_conversation_reply # Added send_conversation_reply
 from app.services.autorespond_service import process_autorespond  # Add this import
-from app.services.topic_analysis_service import is_new_unresolved_topic_present # Added topic analysis service
+# Topic analysis imports are done dynamically within the function to avoid circular imports
 from app.tasks.worker import celery_app
 from app.crud import email as email_crud
 from app.agents.agent_helpers import extract_all_patient_ids_from_email_logic
@@ -316,52 +317,92 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
             email_id=email_id
         )
 
-        # --- TOPIC SPLIT DETECTION --- (Copied and adapted from tag_email)
+        # --- TOPIC SPLIT DETECTION --- (Uses comprehensive tag-based split detection)
         logger.info(f"🔀 TOPIC SPLIT CHECK: Starting split analysis for email {email_id} in conversation {front_conversation_id}")
         is_potential_split = False
+        split_analysis_result = None
+
         try:
-            logger.info(f"🔀 TOPIC SPLIT CHECK: Retrieving conversation history for {front_conversation_id}")
-            conversation_data_for_split = get_conversation_text(front_conversation_id)
-            structured_messages_for_analysis = conversation_data_for_split.get('_structured_messages', [])
+            # Import the new split detection functions
+            from app.services.topic_analysis_service import (
+                detect_topic_change_with_openai,
+                filter_to_classification_tags
+            )
 
-            if not structured_messages_for_analysis:
-                logger.warning(f"🔀 TOPIC SPLIT CHECK: Could not retrieve structured message history for {front_conversation_id}. Skipping split check.")
-            elif len(structured_messages_for_analysis) <= 1:
-                logger.info(f"🔀 TOPIC SPLIT CHECK: Conversation {front_conversation_id} has only {len(structured_messages_for_analysis)} message(s). No split analysis needed for first message.")
+            # Step 1: Get existing tags on the conversation
+            logger.info(f"🔀 TOPIC SPLIT CHECK: Retrieving current tags for conversation {front_conversation_id}")
+            existing_tags_objects = get_conversation_tags(front_conversation_id)
+
+            # Extract tag names from tag objects (get_conversation_tags returns dicts, not strings)
+            existing_tags = []
+            if existing_tags_objects:
+                for tag in existing_tags_objects:
+                    if isinstance(tag, dict):
+                        existing_tags.append(tag.get('name', ''))
+                    else:
+                        existing_tags.append(str(tag))
+
+            logger.info(f"🔀 TOPIC SPLIT CHECK: Found {len(existing_tags)} tags on conversation: {existing_tags}")
+
+            # Step 2: Filter to only classification tags (exclude system tags)
+            classification_tags = filter_to_classification_tags(existing_tags)
+
+            if not classification_tags:
+                logger.info(f"🔀 TOPIC SPLIT CHECK: No classification tags found on conversation yet. Skipping split detection - will proceed to normal classification.")
             else:
-                logger.info(f"🔀 TOPIC SPLIT CHECK: Found {len(structured_messages_for_analysis)} messages in conversation history. Analyzing last {min(settings.TOPIC_SPLIT_MESSAGE_HISTORY_COUNT, len(structured_messages_for_analysis)-1)} messages for topic shift.")
+                current_tag = classification_tags[0]  # Use the first classification tag as the reference
+                logger.info(f"🔀 TOPIC SPLIT CHECK: Conversation is tagged as '{current_tag}'. Will check if new message matches this topic.")
 
-                history_for_prompt = structured_messages_for_analysis[:-1]
-                transformed_history_for_analysis = []
-                for msg in history_for_prompt:
-                    transformed_history_for_analysis.append({
-                        "sender_type": msg.get("author_role", "user"),
-                        "body": msg.get("body", "")
-                    })
+                # Step 3: Get full conversation history
+                logger.info(f"🔀 TOPIC SPLIT CHECK: Retrieving full conversation history for {front_conversation_id}")
+                conversation_data_for_split = get_conversation_text(front_conversation_id)
+                structured_messages_for_analysis = conversation_data_for_split.get('_structured_messages', [])
 
-                new_message_text_for_analysis = email_obj.content_text
-                new_message_sender_role_for_analysis = "User"
+                if not structured_messages_for_analysis:
+                    logger.warning(f"🔀 TOPIC SPLIT CHECK: Could not retrieve structured message history. Skipping split check.")
+                else:
+                    # Get all messages EXCEPT the latest one (which is the new message we're analyzing)
+                    history_messages = structured_messages_for_analysis[:-1] if len(structured_messages_for_analysis) > 1 else []
 
-                logger.info(f"🔀 TOPIC SPLIT CHECK: Prepared {len(transformed_history_for_analysis)} history messages for AI analysis")
-                logger.info(f"🔀 TOPIC SPLIT CHECK: New message preview: {new_message_text_for_analysis[:150]}..." if len(new_message_text_for_analysis) > 150 else f"🔀 TOPIC SPLIT CHECK: New message: {new_message_text_for_analysis}")
+                    logger.info(f"🔀 TOPIC SPLIT CHECK: Analyzing {len(history_messages)} history messages + 1 new message against tag '{current_tag}'")
 
-                split_decision = False
-                async def _run_topic_analysis_async():
-                    nonlocal split_decision
-                    split_decision = await is_new_unresolved_topic_present(
-                        conversation_messages=transformed_history_for_analysis,
-                        new_message_text=new_message_text_for_analysis,
-                        new_message_sender_role=new_message_sender_role_for_analysis
+                    # Prepare history for analysis
+                    transformed_history = []
+                    for msg in history_messages:
+                        transformed_history.append({
+                            "sender_type": msg.get("author_role", "user"),
+                            "body": msg.get("body", ""),
+                            "timestamp": msg.get("created_at", "N/A")
+                        })
+
+                    # Prepare new message metadata
+                    new_message_metadata = {
+                        "sender_type": "User",
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+
+                    # Step 4: Call comprehensive AI split detection with full context
+                    logger.info(f"🔀 TOPIC SPLIT CHECK: Calling comprehensive AI split detection with full conversation context...")
+
+                    split_analysis_result = detect_topic_change_with_openai(
+                        full_conversation_history=transformed_history,
+                        current_tag=current_tag,
+                        latest_message=email_obj.content_text or "",
+                        latest_message_metadata=new_message_metadata,
+                        tag_hierarchy=settings.EMAIL_CATEGORIES
                     )
 
-                logger.info(f"🔀 TOPIC SPLIT CHECK: Calling OpenAI to analyze topic shift...")
-                asyncio.run(_run_topic_analysis_async())
-
-                if split_decision:
-                    is_potential_split = True
-                    logger.info(f"✅ TOPIC SPLIT DECISION: AI detected NEW UNRESOLVED TOPIC for email {email_id} in conversation {front_conversation_id}. Will attempt to split conversation.")
-                else:
-                    logger.info(f"➡️ TOPIC SPLIT DECISION: AI determined message continues SAME TOPIC for email {email_id}. No split needed - proceeding normally.")
+                    # Step 5: Process the AI decision
+                    if split_analysis_result.decision == "SPLIT":
+                        is_potential_split = True
+                        logger.info(f"✅ TOPIC SPLIT DECISION: AI recommends SPLIT (confidence: {split_analysis_result.confidence})")
+                        logger.info(f"✅ TOPIC SPLIT DECISION: Rationale: {split_analysis_result.detailed_rationale}")
+                        if split_analysis_result.suggested_new_tag:
+                            logger.info(f"✅ TOPIC SPLIT DECISION: Suggested new tag: '{split_analysis_result.suggested_new_tag}'")
+                    else:
+                        logger.info(f"➡️ TOPIC SPLIT DECISION: AI recommends CONTINUE (confidence: {split_analysis_result.confidence})")
+                        logger.info(f"➡️ TOPIC SPLIT DECISION: Rationale: {split_analysis_result.detailed_rationale}")
+                        is_potential_split = False
 
         except Exception as e_topic_detect:
             logger.error(f"❌ TOPIC SPLIT ERROR: Error during topic split detection for {front_conversation_id}: {e_topic_detect}", exc_info=True)
@@ -403,12 +444,40 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
                 if split_response and split_response.get("conversation_reference"):
                     new_front_conv_ref = split_response.get("conversation_reference")
                     logger.info(f"✅ SPLIT SUCCESS: Created new Front conversation {new_front_conv_ref} for split message from email {email_id}")
+
+                    # Tag the original conversation with system tag
                     try:
                         logger.info(f"🔀 SPLIT EXECUTION: Tagging original conversation {front_conversation_id} with 'System: Split - New Topic'")
                         add_conversation_tags(front_conversation_id, ["System: Split - New Topic"])
                         logger.info(f"✅ SPLIT SUCCESS: Tagged original conversation {front_conversation_id}")
                     except Exception as tag_err:
                         logger.error(f"❌ SPLIT ERROR: Failed to tag original conversation {front_conversation_id} after split: {tag_err}")
+
+                    # Apply suggested tag to new conversation if valid
+                    if split_analysis_result and split_analysis_result.suggested_new_tag:
+                        try:
+                            from app.services.topic_analysis_service import validate_and_extract_leaf_tag
+
+                            logger.info(f"🏷️ TAG APPLICATION: AI suggested tag '{split_analysis_result.suggested_new_tag}' for new conversation")
+
+                            # Validate and extract the leaf tag
+                            validated_tag = validate_and_extract_leaf_tag(
+                                split_analysis_result.suggested_new_tag,
+                                settings.EMAIL_CATEGORIES
+                            )
+
+                            if validated_tag:
+                                logger.info(f"🏷️ TAG APPLICATION: Applying validated tag '{validated_tag}' to new conversation {new_front_conv_ref}")
+                                add_conversation_tags(new_front_conv_ref, [validated_tag])
+                                logger.info(f"✅ TAG SUCCESS: Successfully tagged new conversation {new_front_conv_ref} with '{validated_tag}'")
+                            else:
+                                logger.warning(f"⚠️ TAG WARNING: Suggested tag '{split_analysis_result.suggested_new_tag}' is not a valid leaf tag. New conversation will be untagged.")
+
+                        except Exception as tag_new_err:
+                            logger.error(f"❌ TAG ERROR: Failed to tag new conversation {new_front_conv_ref}: {tag_new_err}", exc_info=True)
+                            logger.warning(f"⚠️ TAG WARNING: New conversation {new_front_conv_ref} will remain untagged due to error")
+                    else:
+                        logger.warning(f"⚠️ TAG WARNING: No suggested tag available for new conversation {new_front_conv_ref}. It will remain untagged.")
 
                     email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="split_off", is_processed=True))
                     logger.info(f"✅ SPLIT SUCCESS: Marked email {email_id} as 'split_off' and processed. Split operation complete!")

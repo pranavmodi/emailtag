@@ -56,6 +56,14 @@ from app.models.processing_trace import StepTypes, TraceSteps
 logger = get_task_logger(__name__)
 
 
+def _append_autoresponse_signature(reply_text: str) -> str:
+    """Append the configured autoresponse signature if one is set."""
+    signature = app_settings_instance.AUTORESPONSE_SIGNATURE
+    if signature:
+        return f"{reply_text}\n\n---\n{signature}"
+    return reply_text
+
+
 def _extract_meaningful_content_from_forwards(email_content: str) -> str:
     """
     Extracts meaningful content from heavily forwarded emails by identifying
@@ -345,9 +353,7 @@ async def send_reply_to_front_with_attachment(
     """
     logger.info(f"Helper 'send_reply_to_front_with_attachment' called for conv_id {conversation_id}.")
     try:
-        # Add autoresponse signature to identify our bot emails
-        autoresponse_signature = f"\n\n---\n{app_settings_instance.AUTORESPONSE_SIGNATURE}"
-        final_reply_text = reply_text + autoresponse_signature
+        final_reply_text = _append_autoresponse_signature(reply_text)
         
         reply_sent_successfully = await asyncio.to_thread(
             frontapp_service.send_conversation_reply_with_attachment,
@@ -394,9 +400,7 @@ async def send_reply_to_front_direct(
     """
     logger.info(f"Helper 'send_reply_to_front_direct' called for conv_id {conversation_id}.")
     try:
-        # Add autoresponse signature to identify our bot emails
-        autoresponse_signature = f"\n\n---\n{app_settings_instance.AUTORESPONSE_SIGNATURE}"
-        final_reply_text = reply_text + autoresponse_signature
+        final_reply_text = _append_autoresponse_signature(reply_text)
         
         reply_sent_successfully = await asyncio.to_thread(
             frontapp_service.send_conversation_reply,
@@ -1159,9 +1163,7 @@ async def send_reply_to_front(
     """
     logger.info(f"Tool 'send_reply_to_front' called for conv_id {conversation_id}.")
     try:
-        # Add autoresponse signature to identify our bot emails
-        autoresponse_signature = f"\n\n---\n{app_settings_instance.AUTORESPONSE_SIGNATURE}"
-        final_reply_text = reply_text + autoresponse_signature
+        final_reply_text = _append_autoresponse_signature(reply_text)
         
         reply_sent_successfully = await asyncio.to_thread(
             frontapp_service.send_conversation_reply,

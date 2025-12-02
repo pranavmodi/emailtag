@@ -206,7 +206,9 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
             """Detect if this is an autoresponse email that should be skipped."""
             # Check if content contains our autoresponse signature from settings
             autoresponse_signature = settings.AUTORESPONSE_SIGNATURE
-            
+            if not autoresponse_signature:
+                return False
+
             # Check in both text and body content
             content_to_check = f"{content_text} {content_body}"
             
@@ -256,7 +258,7 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         ) as (trace_id, output_data):
             is_autoresponse = is_autoresponse_email(final_content_text, content_body)
             output_data["is_autoresponse"] = is_autoresponse
-            
+
             if is_autoresponse:
                 logger.info(f"🤖 AUTORESPONSE DETECTED: Skipping email from {sender}")
                 output_data["action"] = "skipped"
