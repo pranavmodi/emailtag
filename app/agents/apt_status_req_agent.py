@@ -195,11 +195,11 @@ def _generate_appointment_table_html(studies: List[Dict[str, Any]]) -> str:
     for study in studies:
         studies_table_rows_list.append(
             f"<tr>"
-            f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('study_id','Not Available')}</td>"
+            f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('study_id','N/A')}</td>"
             f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('exam_description','N/A')}</td>"
             f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('status','N/A')}</td>"
-            f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('appointment_datetime_str','Not Available')}</td>"
-            f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('location_name','Not Available')}</td>"
+            f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('appointment_datetime_str','N/A')}</td>"
+            f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('location_name','N/A')}</td>"
             f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('mri_type','N/A')}</td>"
             f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('images_available','N/A')}</td>"
             f"<td style=\"border: 1px solid black; padding: 8px;\">{study.get('report_available','N/A')}</td>"
@@ -270,12 +270,12 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
             "patient_id_confirmed": data.get("patient_id_confirmed", "N/A"),
             "scheduling_phone": data.get("scheduling_phone", DEFAULT_SCHEDULING_PHONE),
             "no_show_policy": data.get("no_show_policy", DEFAULT_NO_SHOW_POLICY),
-            "first_name": data.get("first_name", "Not Available"),
-            "last_name": data.get("last_name", "Not Available"),
-            "dob": data.get("dob", "Not Available"),
-            "address": data.get("address", "Not Available"),
-            "home_phone": data.get("home_phone", "Not Available"),
-            "cell_phone": data.get("cell_phone", "Not Available"),
+            "first_name": data.get("first_name", "N/A"),
+            "last_name": data.get("last_name", "N/A"),
+            "dob": data.get("dob", "N/A"),
+            "address": data.get("address", "N/A"),
+            "home_phone": data.get("home_phone", "N/A"),
+            "cell_phone": data.get("cell_phone", "N/A"),
             "personal_injury_info": personal_injury_info_text,
             "bills_link": data.get("links", {}).get("bills_appointments_liens", "#"),
             "reports_link": data.get("links", {}).get("reports_images", "#"),
@@ -396,12 +396,12 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
 
             # Extract patient demographics for template use
             patient_demographics = {
-                "first_name": patient_data.get("first_name", "Not Available"),
-                "last_name": patient_data.get("last_name", "Not Available"),
-                "dob": patient_data.get("birth_date", "Not Available"),
-                "address": patient_data.get("address", "Not Available"),
-                "home_phone": patient_data.get("phone", "Not Available"),
-                "cell_phone": patient_data.get("phone", "Not Available"),  # API may not distinguish
+                "first_name": patient_data.get("first_name", "N/A"),
+                "last_name": patient_data.get("last_name", "N/A"),
+                "dob": patient_data.get("birth_date", "N/A"),
+                "address": patient_data.get("address", "N/A"),
+                "home_phone": patient_data.get("phone", "N/A"),
+                "cell_phone": patient_data.get("phone", "N/A"),  # API may not distinguish
             }
             logger.info(f"Extracted patient demographics for {patient_id}: {patient_demographics.get('first_name')} {patient_demographics.get('last_name')}")
         else:
@@ -428,7 +428,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
         # 3. Transform Study Data for template compatibility
         transformed_studies_for_template = []
         for i, study in enumerate(raw_studies):
-            appointment_datetime_str = "Date/Time N/A"
+            appointment_datetime_str = "N/A"
             arrival_time_str = "N/A"
             
             service_appt_time_str = study.get("study_date_time", "")
@@ -486,8 +486,8 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                             day_num = parsed_dt.day
                             year = parsed_dt.year
                             day_suffix = get_day_suffix(day_num)
-                            appointment_datetime_str = f"Date: {day_name} {month_name} {day_num}{day_suffix}, {year}<br/><br/>Time: TBD"
-                            arrival_time_str = "Time TBD"
+                            appointment_datetime_str = f"{day_name} {month_name} {day_num}{day_suffix}, {year}<br/><br/>N/A"
+                            arrival_time_str = "N/A"
                         else:
                             # This has both date and time - format as requested
                             day_name = parsed_dt.strftime('%A')
@@ -497,7 +497,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                             day_suffix = get_day_suffix(day_num)
                             time_str = parsed_dt.strftime('%I:%M %p').lstrip('0')  # Remove leading zero from hour
 
-                            appointment_datetime_str = f"Date: {day_name} {month_name} {day_num}{day_suffix}, {year}<br/><br/>Time: {time_str}"
+                            appointment_datetime_str = f"{day_name} {month_name} {day_num}{day_suffix}, {year}<br/><br/>{time_str}"
 
                             pre_arrival_min = study.get("pre_arrival_minutes", 30)
                             arrival_dt = parsed_dt - timedelta(minutes=pre_arrival_min)
@@ -514,7 +514,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
             # Check if location info is unavailable or invalid
             if (not facility_name or facility_name in ['N/A', 'Not Available', 'Not Available in Database'] or
                 not facility_address or facility_address in ['N/A', 'Not Available', 'Not Available in Database']):
-                location_display = "Not Available"
+                location_display = "N/A"
             else:
                 location_display = f"{facility_name} - {facility_address}"
 
@@ -553,7 +553,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
             return {"status": "not_found", "message": f"Patient ID {patient_id} found, studies retrieved, but failed to transform any for display.", "patient_id": patient_id}
 
         # Log summary of study_date_time processing
-        studies_with_date_time = sum(1 for study in transformed_studies_for_template if study.get('appointment_datetime_str') not in ['Date/Time N/A', 'N/A'])
+        studies_with_date_time = sum(1 for study in transformed_studies_for_template if study.get('appointment_datetime_str') != 'N/A')
         studies_without_date_time = len(transformed_studies_for_template) - studies_with_date_time
         logger.info(f"Patient {patient_id}: {studies_with_date_time} studies have valid study_date_time, {studies_without_date_time} do not")
 
@@ -576,12 +576,12 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                 # Custom placeholders (new approach - global placeholders)
                 "custom_placeholders": db_settings.get("custom_placeholders", {}),
                 # Patient demographics for template placeholders
-                "first_name": patient_demographics.get("first_name", "Not Available"),
-                "last_name": patient_demographics.get("last_name", "Not Available"),
-                "dob": patient_demographics.get("dob", "Not Available"),
-                "address": patient_demographics.get("address", "Not Available"),
-                "home_phone": patient_demographics.get("home_phone", "Not Available"),
-                "cell_phone": patient_demographics.get("cell_phone", "Not Available")
+                "first_name": patient_demographics.get("first_name", "N/A"),
+                "last_name": patient_demographics.get("last_name", "N/A"),
+                "dob": patient_demographics.get("dob", "N/A"),
+                "address": patient_demographics.get("address", "N/A"),
+                "home_phone": patient_demographics.get("home_phone", "N/A"),
+                "cell_phone": patient_demographics.get("cell_phone", "N/A")
             }
         }
 
