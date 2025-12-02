@@ -120,6 +120,14 @@ async def is_new_unresolved_topic_present(
         "text": new_message_text
     }
 
+    logger.info(f"🤖 AI TOPIC ANALYSIS: Preparing prompt with {len(prompt_history)} conversation history message(s)")
+    for i, msg in enumerate(prompt_history, 1):
+        preview = msg['text'][:100] + "..." if len(msg['text']) > 100 else msg['text']
+        logger.info(f"🤖 AI TOPIC ANALYSIS: History {i}/{len(prompt_history)} - {msg['sender']}: {preview}")
+
+    new_msg_preview = new_message_text[:100] + "..." if len(new_message_text) > 100 else new_message_text
+    logger.info(f"🤖 AI TOPIC ANALYSIS: New message - {new_message_sender_role}: {new_msg_preview}")
+
     prompt = _construct_topic_shift_prompt(prompt_history, prompt_new_message)
 
     try:
@@ -131,8 +139,8 @@ async def is_new_unresolved_topic_present(
         # it's likely we want this to be async too.
         # Let's make this function async and adapt the call if _call_openai_api is sync.
 
-        logger.info(f"Sending prompt to OpenAI for topic shift analysis. History messages: {len(prompt_history)}")
-        # _call_openai_api in response_generator is synchronous. 
+        logger.info(f"🤖 AI TOPIC ANALYSIS: Sending prompt to OpenAI (model: {settings.OPENAI_MODEL_VERSION or 'default'})...")
+        # _call_openai_api in response_generator is synchronous.
         # To call it from an async function, we need to run it in an executor.
         # However, for simplicity and to align with other OpenAI calls which are async,
         # let's define a local async way to call OpenAI, or assume an async version of _call_openai_api exists/is preferred.
@@ -140,24 +148,26 @@ async def is_new_unresolved_topic_present(
         # Re-evaluating: `_call_openai_api` from `response_generator` is synchronous.
         # The `tag_email` task where this will be called is synchronous.
         # So, this function can remain synchronous.
-        
+
         # Let's revert to synchronous for this function, as the caller (`tag_email`) is synchronous.
         # The original _call_openai_api is synchronous.
-        
+
         ai_response_text = _call_openai_api(prompt) # This is a synchronous call
 
-        logger.info(f"OpenAI response for topic shift analysis: '{ai_response_text}'")
+        logger.info(f"🤖 AI TOPIC ANALYSIS: Received OpenAI response: '{ai_response_text.strip()}'")
 
         if "SPLIT" in ai_response_text.upper():
+            logger.info(f"🤖 AI TOPIC ANALYSIS: OpenAI decision = SPLIT (new unresolved topic detected)")
             return True
         elif "CONTINUE" in ai_response_text.upper():
+            logger.info(f"🤖 AI TOPIC ANALYSIS: OpenAI decision = CONTINUE (same topic or minor follow-up)")
             return False
         else:
-            logger.warning(f"OpenAI returned an unexpected response for topic shift: '{ai_response_text}'. Assuming CONTINUE.")
+            logger.warning(f"⚠️ AI TOPIC ANALYSIS: OpenAI returned unexpected response: '{ai_response_text}'. Defaulting to CONTINUE.")
             return False
 
     except Exception as e:
-        logger.error(f"Error during OpenAI topic shift analysis: {e}", exc_info=True)
+        logger.error(f"❌ AI TOPIC ANALYSIS: Error during OpenAI topic shift analysis: {e}", exc_info=True)
         return False
 
 # Add TOPIC_SPLIT_MESSAGE_HISTORY_COUNT to settings, e.g., 3 or 5

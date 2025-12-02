@@ -1539,24 +1539,27 @@ def create_new_conversation_for_split(
          payload["metadata"] = {"is_inbound": True, "thread_ref": f"split-thread-{os.urandom(16).hex()}"}
 
 
-    logger.info(f"Attempting to create new conversation (split) via POST to: {webhook_url}")
-    logger.debug(f"Payload for new conversation: {json.dumps(payload, indent=2)}")
+    logger.info(f"📤 FRONT API CALL: Sending POST request to create new conversation")
+    logger.info(f"📤 FRONT API CALL: URL: {webhook_url}")
+    logger.info(f"📤 FRONT API CALL: Subject: '{subject}', Sender: {sender_handle}, To: {to_handle}")
+    logger.debug(f"📤 FRONT API CALL: Full payload: {json.dumps(payload, indent=2)}")
 
     try:
         with httpx.Client(verify=False) as client: # Assuming verify=False based on other calls
             response = client.post(webhook_url, headers=headers, json=payload, timeout=30.0)
-        
-        logger.info(f"Front API response status for new conversation creation: {response.status_code}")
+
+        logger.info(f"📥 FRONT API RESPONSE: Status code: {response.status_code}")
 
         if 200 <= response.status_code < 300: # Typically 202 Accepted for incoming messages
             response_data = response.json()
-            logger.info("Successfully created new conversation (split) in Front.")
-            logger.debug(f"Front API response: {response_data}")
+            logger.info(f"✅ FRONT API SUCCESS: New conversation created successfully")
+            logger.info(f"✅ FRONT API SUCCESS: Conversation reference: {response_data.get('conversation_reference', 'N/A')}")
+            logger.debug(f"📥 FRONT API RESPONSE: Full response: {response_data}")
             # The response should contain "conversation_reference" or similar
             return response_data
         else:
             logger.error(
-                f"Failed to create new conversation (split) in Front. Status: {response.status_code}, "
+                f"❌ FRONT API ERROR: Failed to create new conversation. Status: {response.status_code}, "
                 f"Response: {response.text}"
             )
             # You might want to raise an exception here or handle it more gracefully depending on requirements
@@ -1567,20 +1570,20 @@ def create_new_conversation_for_split(
         # Handle 403 Forbidden specifically for non-custom channels
         if e.response.status_code == 403 and "Incoming message are supported for custom channel only" in e.response.text:
             logger.warning(
-                f"Cannot split conversation to channel {channel_id} - channel does not support incoming messages. "
+                f"⚠️ FRONT API WARNING: Cannot split conversation to channel {channel_id} - channel does not support incoming messages. "
                 f"Conversation splitting requires a custom channel. Continuing with original conversation."
             )
             return None  # Graceful fallback - don't raise exception
-        
+
         logger.error(
-            f"HTTPStatusError creating new conversation (split): {e.response.status_code} - {e.response.text}"
+            f"❌ FRONT API ERROR: HTTPStatusError creating new conversation (split): {e.response.status_code} - {e.response.text}"
         )
         raise # Re-raise for other HTTP errors
     except httpx.RequestError as e:
-        logger.error(f"RequestError creating new conversation (split): {e}")
+        logger.error(f"❌ FRONT API ERROR: RequestError creating new conversation (split): {e}")
         raise
     except Exception as e:
-        logger.error(f"Unexpected error creating new conversation (split): {e}", exc_info=True)
+        logger.error(f"❌ FRONT API ERROR: Unexpected error creating new conversation (split): {e}", exc_info=True)
         raise
 
 # Make sure to add a new setting FRONT_APP_WEBHOOK_BASE_URL_FOR_SPLIT to your app.core.config.py

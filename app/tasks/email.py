@@ -317,16 +317,20 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
         )
 
         # --- TOPIC SPLIT DETECTION --- (Copied and adapted from tag_email)
+        logger.info(f"🔀 TOPIC SPLIT CHECK: Starting split analysis for email {email_id} in conversation {front_conversation_id}")
         is_potential_split = False
         try:
+            logger.info(f"🔀 TOPIC SPLIT CHECK: Retrieving conversation history for {front_conversation_id}")
             conversation_data_for_split = get_conversation_text(front_conversation_id)
             structured_messages_for_analysis = conversation_data_for_split.get('_structured_messages', [])
 
             if not structured_messages_for_analysis:
-                logger.warning(f"Could not retrieve structured message history for {front_conversation_id} to attempt topic split. Proceeding without split check.")
+                logger.warning(f"🔀 TOPIC SPLIT CHECK: Could not retrieve structured message history for {front_conversation_id}. Skipping split check.")
             elif len(structured_messages_for_analysis) <= 1:
-                pass  # No split check needed
+                logger.info(f"🔀 TOPIC SPLIT CHECK: Conversation {front_conversation_id} has only {len(structured_messages_for_analysis)} message(s). No split analysis needed for first message.")
             else:
+                logger.info(f"🔀 TOPIC SPLIT CHECK: Found {len(structured_messages_for_analysis)} messages in conversation history. Analyzing last {min(settings.TOPIC_SPLIT_MESSAGE_HISTORY_COUNT, len(structured_messages_for_analysis)-1)} messages for topic shift.")
+
                 history_for_prompt = structured_messages_for_analysis[:-1]
                 transformed_history_for_analysis = []
                 for msg in history_for_prompt:
@@ -334,10 +338,13 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
                         "sender_type": msg.get("author_role", "user"),
                         "body": msg.get("body", "")
                     })
-                
+
                 new_message_text_for_analysis = email_obj.content_text
                 new_message_sender_role_for_analysis = "User"
-                
+
+                logger.info(f"🔀 TOPIC SPLIT CHECK: Prepared {len(transformed_history_for_analysis)} history messages for AI analysis")
+                logger.info(f"🔀 TOPIC SPLIT CHECK: New message preview: {new_message_text_for_analysis[:150]}..." if len(new_message_text_for_analysis) > 150 else f"🔀 TOPIC SPLIT CHECK: New message: {new_message_text_for_analysis}")
+
                 split_decision = False
                 async def _run_topic_analysis_async():
                     nonlocal split_decision
@@ -346,23 +353,25 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
                         new_message_text=new_message_text_for_analysis,
                         new_message_sender_role=new_message_sender_role_for_analysis
                     )
+
+                logger.info(f"🔀 TOPIC SPLIT CHECK: Calling OpenAI to analyze topic shift...")
                 asyncio.run(_run_topic_analysis_async())
-                
+
                 if split_decision:
                     is_potential_split = True
-                    logger.info(f"AI detected new unresolved topic for email {email_id} in conversation {front_conversation_id}.")
+                    logger.info(f"✅ TOPIC SPLIT DECISION: AI detected NEW UNRESOLVED TOPIC for email {email_id} in conversation {front_conversation_id}. Will attempt to split conversation.")
                 else:
-                    logger.info(f"AI analysis: No new unresolved topic for email {email_id}. Proceeding normally.")
+                    logger.info(f"➡️ TOPIC SPLIT DECISION: AI determined message continues SAME TOPIC for email {email_id}. No split needed - proceeding normally.")
 
         except Exception as e_topic_detect:
-            logger.error(f"Error during topic split detection for {front_conversation_id}: {e_topic_detect}", exc_info=True)
+            logger.error(f"❌ TOPIC SPLIT ERROR: Error during topic split detection for {front_conversation_id}: {e_topic_detect}", exc_info=True)
             is_potential_split = False
 
         if is_potential_split:
             try:
-                logger.info(f"Attempting to split message from email {email_id} (conversation {front_conversation_id}).")
+                logger.info(f"🔀 SPLIT EXECUTION: Initiating conversation split for email {email_id} from conversation {front_conversation_id}")
                 if not settings.FRONT_CHANNEL_PRIMARY_EMAIL:
-                    logger.error("FRONT_CHANNEL_PRIMARY_EMAIL setting is not configured. Cannot determine 'to_handle' for split.")
+                    logger.error("❌ SPLIT EXECUTION: FRONT_CHANNEL_PRIMARY_EMAIL setting is not configured. Cannot determine 'to_handle' for split.")
                     raise ValueError("FRONT_CHANNEL_PRIMARY_EMAIL not configured.")
 
                 new_conv_subject = f"Split: {email_obj.subject.replace('[SPLIT]', '').strip() if email_obj.subject else 'Split Conversation'}"
@@ -377,6 +386,9 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
                     "source_email_db_id": str(email_obj.id)
                 }
 
+                logger.info(f"🔀 SPLIT EXECUTION: Creating new conversation with subject: '{new_conv_subject}'")
+                logger.info(f"🔀 SPLIT EXECUTION: Sender: {new_conv_sender_handle}, To: {settings.FRONT_CHANNEL_PRIMARY_EMAIL}, Channel: {target_channel_id_for_new_conv}")
+
                 split_response = create_new_conversation_for_split(
                     channel_id=target_channel_id_for_new_conv,
                     sender_handle=new_conv_sender_handle,
@@ -390,25 +402,26 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
 
                 if split_response and split_response.get("conversation_reference"):
                     new_front_conv_ref = split_response.get("conversation_reference")
-                    logger.info(f"Successfully created new Front conversation ({new_front_conv_ref}) for split message from email {email_id}.")
+                    logger.info(f"✅ SPLIT SUCCESS: Created new Front conversation {new_front_conv_ref} for split message from email {email_id}")
                     try:
+                        logger.info(f"🔀 SPLIT EXECUTION: Tagging original conversation {front_conversation_id} with 'System: Split - New Topic'")
                         add_conversation_tags(front_conversation_id, ["System: Split - New Topic"])
-                        logger.info(f"Tagged original conversation {front_conversation_id} for split.")
+                        logger.info(f"✅ SPLIT SUCCESS: Tagged original conversation {front_conversation_id}")
                     except Exception as tag_err:
-                        logger.error(f"Failed to tag original conversation {front_conversation_id} after split: {tag_err}")
-                    
+                        logger.error(f"❌ SPLIT ERROR: Failed to tag original conversation {front_conversation_id} after split: {tag_err}")
+
                     email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="split_off", is_processed=True))
-                    logger.info(f"Marked email {email_id} as 'split_off' and processed.")
+                    logger.info(f"✅ SPLIT SUCCESS: Marked email {email_id} as 'split_off' and processed. Split operation complete!")
                     return {"status": "success_split", "original_email_id": email_id, "new_conversation_reference": new_front_conv_ref}
                 else:
                     if split_response is None:
-                        logger.info(f"Conversation splitting not supported for this channel - continuing with original conversation (email {email_id})")
+                        logger.warning(f"⚠️ SPLIT WARNING: Conversation splitting not supported for this channel - continuing with original conversation (email {email_id})")
                     else:
-                        logger.error(f"Failed to create new conversation for split (email {email_id}). API response: {split_response}")
+                        logger.error(f"❌ SPLIT ERROR: Failed to create new conversation for split (email {email_id}). API response: {split_response}")
                     # Fall through to regular processing if split failed critically (handled by not returning)
 
             except Exception as e_split:
-                logger.error(f"Error during split attempt for email {email_id}: {e_split}", exc_info=True)
+                logger.error(f"❌ SPLIT ERROR: Exception during split attempt for email {email_id}: {e_split}", exc_info=True)
                 # Fall through to process the email in the original conversation if split fails
         
         # --- END TOPIC SPLIT DETECTION ---
