@@ -124,6 +124,17 @@ class Settings(BaseSettings):
     
     # Conflict Detection Settings
     CONFLICT_DETECTION_ENABLED: bool = True  # Enable/disable conflict detection before classification
+    
+    # SMTP / Replay Settings
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: Optional[int] = None
+    SMTP_USE_TLS: bool = True
+    SMTP_USE_SSL: bool = False
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SENDER_EMAIL: Optional[str] = None
+    SENDER_PASSWORD: Optional[str] = None
+    DEFAULT_RECIPIENT_EMAIL: Optional[str] = None
 
     # Inbox Routing Settings
     INBOX_ROUTING_ENABLED: bool = False  # Enable/disable automatic conversation routing to different inboxes
