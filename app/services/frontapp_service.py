@@ -1150,19 +1150,21 @@ def send_conversation_reply_with_attachment(conversation_id: str, text: str, att
         if not conversation_data:
             logger.error(f"Could not fetch conversation {conversation_id} to determine recipients")
             return False
-        
+
         recipient_handle = conversation_data.get("recipient", {}).get("handle")
         if not recipient_handle:
             logger.error(f"No recipient handle found in conversation {conversation_id}")
             return False
-            
+
         recipients = [recipient_handle]
-        
+
     except Exception as e:
         logger.error(f"Error getting conversation details for {conversation_id}: {e}")
         return False
 
-    html_body = text
+    # Append invisible marker to detect our autorespond emails
+    invisible_marker = settings.AUTORESPOND_INVISIBLE_MARKER
+    html_body = f"{text}{invisible_marker}"
     
     # Prepare multipart form data
     files = {
@@ -1238,22 +1240,24 @@ def send_conversation_reply(conversation_id: str, text: str) -> bool:
         if not conversation_data:
             logger.error(f"Could not fetch conversation {conversation_id} to determine recipients")
             return False
-        
+
         # Extract recipient from conversation recipient field
         recipient_handle = conversation_data.get("recipient", {}).get("handle")
         if not recipient_handle:
             logger.error(f"No recipient handle found in conversation {conversation_id}")
             return False
-            
+
         # Front API expects just strings in the 'to' array, not objects
         recipients = [recipient_handle]  # Just the email string, not {"handle": email}
         # logger.info(f"🔧 DEBUG: Using recipient for reply: {recipient_handle}")
-        
+
     except Exception as e:
         logger.error(f"Error getting conversation details for {conversation_id}: {e}")
         return False
 
-    html_body = text
+    # Append invisible marker to detect our autorespond emails
+    invisible_marker = settings.AUTORESPOND_INVISIBLE_MARKER
+    html_body = f"{text}{invisible_marker}"
     
     headers = {
         "Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}",

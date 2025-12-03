@@ -204,18 +204,21 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         # Check if this is an autoresponse email and skip processing
         def is_autoresponse_email(content_text: str, content_body: str) -> bool:
             """Detect if this is an autoresponse email that should be skipped."""
-            # Check if content contains our autoresponse signature from settings
-            autoresponse_signature = settings.AUTORESPONSE_SIGNATURE
-            if not autoresponse_signature:
-                return False
-
-            # Check in both text and body content
             content_to_check = f"{content_text} {content_body}"
-            
-            is_autoresponse = autoresponse_signature in content_to_check
-            logger.info(f"🔍 Autoresponse signature check: found={is_autoresponse}")
-            
-            return is_autoresponse
+
+            # Primary detection: Check for invisible marker (zero-width Unicode characters)
+            invisible_marker = settings.AUTORESPOND_INVISIBLE_MARKER
+            if invisible_marker and invisible_marker in content_to_check:
+                logger.info(f"🔍 Invisible marker detected - this is our autorespond email")
+                return True
+
+            # Fallback detection: Check for text signature (if configured)
+            autoresponse_signature = settings.AUTORESPONSE_SIGNATURE
+            if autoresponse_signature and autoresponse_signature in content_to_check:
+                logger.info(f"🔍 Text signature detected - this is an autorespond email")
+                return True
+
+            return False
         
         # Extract recipients
         recipients = []
@@ -250,7 +253,7 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         else:
             final_content_html = content_body
         
-        # Check for autoresponse
+        # Check for autoresponse - RE-ENABLED with invisible marker detection
         with tracer.trace_step(
             step_name=TraceSteps.AUTORESPONSE_CHECK,
             step_type=StepTypes.BUSINESS_LOGIC,

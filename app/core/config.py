@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     CONTACT_NUMBER: str = "(555) 123-4567"  # Default contact number for auto-responses
     BOT_EMAIL_SIGNATURE: Optional[str] = None # Signature to identify bot emails
 
+    # Invisible marker to detect our own autorespond emails
+    # Uses zero-width Unicode characters: Zero Width Space + Zero Width Non-Joiner + Zero Width Joiner
+    AUTORESPOND_INVISIBLE_MARKER: str = "\u200B\u200C\u200D\u200B"  # Invisible but detectable signature
+
     # Logging
     LOG_LEVEL: str = "INFO"
 
