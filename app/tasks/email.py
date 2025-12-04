@@ -928,28 +928,46 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                 
                 # --- INBOX ROUTING LOGIC ---
                 if settings.INBOX_ROUTING_ENABLED:
-                    from app.services.frontapp_service import move_conversation_to_inbox
-                    
-                    tag_to_inbox_mapping = settings.TAG_TO_INBOX_MAPPING
-                    target_inbox_id = None
-                    matched_tag = None
-                    
-                    # Find the first tag that matches our mapping (priority order matters)
-                    for tag in new_tags:
-                        if tag in tag_to_inbox_mapping:
-                            target_inbox_id = tag_to_inbox_mapping[tag]
-                            matched_tag = tag
-                            break
-                    
-                    if target_inbox_id:
-                        logger.info(f"📬 INBOX ROUTING: Moving conversation {front_conversation_id} to inbox {target_inbox_id} based on tag '{matched_tag}'")
-                        move_success = move_conversation_to_inbox(front_conversation_id, target_inbox_id)
-                        if move_success:
-                            logger.info(f"✅ Successfully moved conversation {front_conversation_id} to inbox {target_inbox_id}")
+                    from app.services.frontapp_service import move_conversation_to_inbox, get_conversation
+
+                    # Check if this conversation should be excluded from routing (test inbox)
+                    TEST_CHANNEL_ID = "cha_fr79u"  # test123abc@mediflow360.com
+                    should_skip_routing = False
+
+                    try:
+                        conversation_data = get_conversation(front_conversation_id)
+                        if conversation_data:
+                            # Check if conversation came through test channel
+                            last_message = conversation_data.get("last_message", {})
+                            message_channel_id = last_message.get("channel", {}).get("id") if isinstance(last_message.get("channel"), dict) else None
+
+                            if message_channel_id == TEST_CHANNEL_ID:
+                                should_skip_routing = True
+                                logger.info(f"🧪 INBOX ROUTING: Skipping routing for test channel {TEST_CHANNEL_ID} (conversation {front_conversation_id})")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Could not check conversation channel for routing exclusion: {e}")
+
+                    if not should_skip_routing:
+                        tag_to_inbox_mapping = settings.TAG_TO_INBOX_MAPPING
+                        target_inbox_id = None
+                        matched_tag = None
+
+                        # Find the first tag that matches our mapping (priority order matters)
+                        for tag in new_tags:
+                            if tag in tag_to_inbox_mapping:
+                                target_inbox_id = tag_to_inbox_mapping[tag]
+                                matched_tag = tag
+                                break
+
+                        if target_inbox_id:
+                            logger.info(f"📬 INBOX ROUTING: Moving conversation {front_conversation_id} to inbox {target_inbox_id} based on tag '{matched_tag}'")
+                            move_success = move_conversation_to_inbox(front_conversation_id, target_inbox_id)
+                            if move_success:
+                                logger.info(f"✅ Successfully moved conversation {front_conversation_id} to inbox {target_inbox_id}")
+                            else:
+                                logger.warning(f"❌ Failed to move conversation {front_conversation_id} to inbox {target_inbox_id}")
                         else:
-                            logger.warning(f"❌ Failed to move conversation {front_conversation_id} to inbox {target_inbox_id}")
-                    else:
-                        logger.debug(f"📬 INBOX ROUTING: No inbox mapping found for tags {new_tags}")
+                            logger.debug(f"📬 INBOX ROUTING: No inbox mapping found for tags {new_tags}")
                 else:
                     logger.debug(f"📬 INBOX ROUTING: Disabled (INBOX_ROUTING_ENABLED=False)")
                 # --- END INBOX ROUTING LOGIC ---
@@ -980,28 +998,46 @@ def perform_tagging_task(self, email_id: str) -> Dict:
         # --- INBOX ROUTING (for failed main tagging case) ---
         # Attempt inbox routing even if main tag application failed, based on determined tags
         if not applied_tags_to_front and settings.INBOX_ROUTING_ENABLED and new_tags:
-            from app.services.frontapp_service import move_conversation_to_inbox
-            
-            tag_to_inbox_mapping = settings.TAG_TO_INBOX_MAPPING
-            target_inbox_id = None
-            matched_tag = None
-            
-            # Find the first tag that matches our mapping
-            for tag in new_tags:
-                if tag in tag_to_inbox_mapping:
-                    target_inbox_id = tag_to_inbox_mapping[tag]
-                    matched_tag = tag
-                    break
-            
-            if target_inbox_id:
-                logger.info(f"📬 INBOX ROUTING (after tag failure): Moving conversation {front_conversation_id} to inbox {target_inbox_id} based on determined tag '{matched_tag}'")
-                move_success = move_conversation_to_inbox(front_conversation_id, target_inbox_id)
-                if move_success:
-                    logger.info(f"✅ Successfully moved conversation {front_conversation_id} to inbox {target_inbox_id} (despite tag application failure)")
+            from app.services.frontapp_service import move_conversation_to_inbox, get_conversation
+
+            # Check if this conversation should be excluded from routing (test inbox)
+            TEST_CHANNEL_ID = "cha_fr79u"  # test123abc@mediflow360.com
+            should_skip_routing = False
+
+            try:
+                conversation_data = get_conversation(front_conversation_id)
+                if conversation_data:
+                    # Check if conversation came through test channel
+                    last_message = conversation_data.get("last_message", {})
+                    message_channel_id = last_message.get("channel", {}).get("id") if isinstance(last_message.get("channel"), dict) else None
+
+                    if message_channel_id == TEST_CHANNEL_ID:
+                        should_skip_routing = True
+                        logger.info(f"🧪 INBOX ROUTING (after tag failure): Skipping routing for test channel {TEST_CHANNEL_ID} (conversation {front_conversation_id})")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not check conversation channel for routing exclusion: {e}")
+
+            if not should_skip_routing:
+                tag_to_inbox_mapping = settings.TAG_TO_INBOX_MAPPING
+                target_inbox_id = None
+                matched_tag = None
+
+                # Find the first tag that matches our mapping
+                for tag in new_tags:
+                    if tag in tag_to_inbox_mapping:
+                        target_inbox_id = tag_to_inbox_mapping[tag]
+                        matched_tag = tag
+                        break
+
+                if target_inbox_id:
+                    logger.info(f"📬 INBOX ROUTING (after tag failure): Moving conversation {front_conversation_id} to inbox {target_inbox_id} based on determined tag '{matched_tag}'")
+                    move_success = move_conversation_to_inbox(front_conversation_id, target_inbox_id)
+                    if move_success:
+                        logger.info(f"✅ Successfully moved conversation {front_conversation_id} to inbox {target_inbox_id} (despite tag application failure)")
+                    else:
+                        logger.warning(f"❌ Failed to move conversation {front_conversation_id} to inbox {target_inbox_id} (tag application also failed)")
                 else:
-                    logger.warning(f"❌ Failed to move conversation {front_conversation_id} to inbox {target_inbox_id} (tag application also failed)")
-            else:
-                logger.debug(f"📬 INBOX ROUTING (after tag failure): No inbox mapping found for determined tags {new_tags}")
+                    logger.debug(f"📬 INBOX ROUTING (after tag failure): No inbox mapping found for determined tags {new_tags}")
         # --- END INBOX ROUTING (for failed main tagging case) ---
         
         # Regardless of tagging outcome (unless critical error above), proceed to auto-response.
