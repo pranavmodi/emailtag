@@ -156,44 +156,19 @@ def _determine_lien_type(applied_tags: List[str]) -> str:
 
 async def _upload_lien_to_patient_file(patient_id: str, lien_type: str, attachment_data: Dict[str, Any]) -> bool:
     """
-    Upload lien document to patient file.
-    
-    Note: Currently this is a placeholder since there's no MCP tool for file upload.
-    In a real implementation, this would use an MCP tool to upload the document.
-    
+    Upload lien document to patient file via RadFlow API (using shared service).
+
     Args:
         patient_id: Patient ID to upload document for
         lien_type: Type of lien being uploaded
-        attachment_data: Attachment data to upload
-        
+        attachment_data: Attachment data with URL to download
+
     Returns:
         True if upload successful, False otherwise
     """
-    try:
-        # TODO: Implement actual file upload when MCP tool becomes available
-        # For now, we'll simulate successful upload and log the action
-        
-        filename = attachment_data.get('filename', 'unknown_lien_document')
-        logger.info(f"Simulating upload of {lien_type} ({filename}) to patient {patient_id} file")
-        
-        # In a real implementation, this would be something like:
-        # result = await call_mcp_tool(
-        #     tool_name="upload_patient_document",
-        #     arguments={
-        #         "patient_id": patient_id,
-        #         "document_type": lien_type,
-        #         "file_data": attachment_data.get('content'),
-        #         "filename": filename
-        #     }
-        # )
-        # return result.get("success", False)
-        
-        # For now, return True to simulate successful upload
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error uploading lien to patient file: {e}", exc_info=True)
-        return False
+    from app.services.lien_upload_service import upload_lien_to_radflow
+
+    return await upload_lien_to_radflow(patient_id, lien_type, attachment_data)
 
 # --- END: Helper Functions ---
 

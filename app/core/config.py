@@ -145,6 +145,10 @@ class Settings(BaseSettings):
     INBOX_ROUTING_ENABLED: bool = False  # Enable/disable automatic conversation routing to different inboxes
     TAG_TO_INBOX_MAPPING: Json[Dict[str, str]]  # Maps tags to inbox IDs for conversation routing
 
+    # RadFlow Document Upload API
+    RADFLOW_UPLOAD_ENDPOINT: str  # RadFlow API endpoint for uploading patient documents
+    RADFLOW_LIEN_DOCTYPE_ID: int = 1  # Document type ID for lien documents
+
     @field_validator("ASYNC_DATABASE_URL", mode="before")
     def assemble_async_db_connection(cls, v: Optional[str], info) -> Any:
         """Assemble async database connection string if not provided."""
