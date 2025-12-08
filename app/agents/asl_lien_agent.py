@@ -86,6 +86,42 @@ www.PreciseMRI.com
 
 # --- BEGIN: Helper Functions ---
 
+async def _fetch_lien_templates_from_db(tag_name: str = "ASL Lien") -> Dict[str, str]:
+    """
+    Fetch lien templates from database tag_settings.
+
+    Args:
+        tag_name: Tag name to fetch settings for ("ASL Lien" or "PSL Lien")
+
+    Returns:
+        Dictionary with template keys mapped to template content
+    """
+    try:
+        from app.crud.tag_settings import tag_settings_crud
+        from app.db.session import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            tag_settings = await tag_settings_crud.get_by_tag_name(db, tag_name)
+
+            if tag_settings and tag_settings.settings:
+                settings = tag_settings.settings
+                return {
+                    "success": settings.get("lien_success_template", TEMPLATE_LIEN_PROCESSED_SUCCESS),
+                    "unreadable": settings.get("lien_unreadable_template", TEMPLATE_LIEN_UNREADABLE),
+                    "patient_not_found": settings.get("lien_patient_not_found_template", TEMPLATE_PATIENT_NOT_FOUND),
+                    "modified": settings.get("lien_modified_template", TEMPLATE_LIEN_MODIFIED_REVIEW)
+                }
+    except Exception as e:
+        logger.warning(f"Failed to fetch lien templates from database: {e}. Using hardcoded templates.")
+
+    # Fallback to hardcoded templates
+    return {
+        "success": TEMPLATE_LIEN_PROCESSED_SUCCESS,
+        "unreadable": TEMPLATE_LIEN_UNREADABLE,
+        "patient_not_found": TEMPLATE_PATIENT_NOT_FOUND,
+        "modified": TEMPLATE_LIEN_MODIFIED_REVIEW
+    }
+
 def _check_lien_readability(document_analysis_results: List[Dict[str, Any]]) -> bool:
     """
     Check if lien documents are readable based on OCR confidence and analysis results.
@@ -208,9 +244,12 @@ async def handle_asl_lien_request(
     """
     logger.info(f"Initiating ASL Lien agent for conv ID: {front_conversation_id}, tags: {applied_tags}")
 
+    # Fetch lien templates from database
+    templates = await _fetch_lien_templates_from_db("ASL Lien")
+
     # Determine lien type from tags
     lien_type = _determine_lien_type(applied_tags)
-    
+
     # Check for lien modifications
     has_modifications = _check_lien_modifications(email_obj) or _has_lien_modified_tag(applied_tags)
     
@@ -227,7 +266,7 @@ async def handle_asl_lien_request(
             
             await send_reply_to_front_direct(
                 conversation_id=front_conversation_id,
-                reply_text=TEMPLATE_LIEN_MODIFIED_REVIEW.format(lien_type=lien_type)
+                reply_text=templates["modified"].format(lien_type=lien_type)
             )
             
             return {
@@ -249,7 +288,7 @@ async def handle_asl_lien_request(
         try:
             await send_reply_to_front_direct(
                 conversation_id=front_conversation_id,
-                reply_text=TEMPLATE_LIEN_UNREADABLE.format(lien_type=lien_type)
+                reply_text=templates["unreadable"].format(lien_type=lien_type)
             )
             
             return {
@@ -272,10 +311,10 @@ async def handle_asl_lien_request(
         
         try:
             frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
-            
+
             await send_reply_to_front_direct(
                 conversation_id=front_conversation_id,
-                reply_text=TEMPLATE_PATIENT_NOT_FOUND.format(lien_type=lien_type)
+                reply_text=templates["patient_not_found"].format(lien_type=lien_type)
             )
             
             return {
@@ -345,7 +384,7 @@ async def handle_asl_lien_request(
                             doi = raw_doi  # Use as-is if parsing fails
         
         # Generate success response
-        reply_body = TEMPLATE_LIEN_PROCESSED_SUCCESS.format(
+        reply_body = templates["success"].format(
             lien_type=lien_type,
             patient_id=patient_id,
             patient_name=patient_name,
