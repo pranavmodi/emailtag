@@ -182,6 +182,9 @@ export default function TemplateConfigPage() {
             </div>
           ) : (
             <>
+              {/* Placeholder Reference */}
+              <PlaceholderReference tagSettings={tagSettings} />
+
               {/* Lien Templates Editor - Show for ASL/PSL Lien tags */}
               {(selectedTag === "ASL Lien" || selectedTag === "PSL Lien") && (
                 <LienTemplatesEditor
@@ -201,9 +204,6 @@ export default function TemplateConfigPage() {
                   onReset={handleResetTagSettings}
                 />
               )}
-
-              {/* Placeholder Reference */}
-              <PlaceholderReference tagSettings={tagSettings} />
 
               {/* Template Preview - Only show for Apt status req */}
               {selectedTag === "Apt status req" && (
