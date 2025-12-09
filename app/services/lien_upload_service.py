@@ -13,6 +13,41 @@ from app.core.config import settings
 logger = get_task_logger(__name__)
 
 
+def _get_doc_type_id(lien_type: str) -> int:
+    """
+    Get the correct DocTypeId based on lien type.
+
+    Args:
+        lien_type: Type of lien (e.g., "Patient Signed Radiology Lien", "Attorney Signed Technologist Lien")
+
+    Returns:
+        DocTypeId for RadFlow API
+
+    DocTypeId Mapping:
+        56: RAD Patient Signed Lien (PSL Rad)
+        57: RAD Attorney Signed Lien (ASL Rad)
+        58: TECH Patient Signed Lien (PSL Tech)
+        59: TECH Attorney Signed Lien (ASL Tech)
+    """
+    # PSL (Patient Signed Lien) IDs
+    if "Patient Signed" in lien_type:
+        if "Radiology" in lien_type:
+            return 56  # RAD Patient Signed Lien
+        elif "Technologist" in lien_type:
+            return 58  # TECH Patient Signed Lien
+
+    # ASL (Attorney Signed Lien) IDs
+    if "Attorney Signed" in lien_type:
+        if "Radiology" in lien_type:
+            return 57  # RAD Attorney Signed Lien
+        elif "Technologist" in lien_type:
+            return 59  # TECH Attorney Signed Lien
+
+    # Fallback
+    logger.error(f"Unknown lien type: {lien_type}. Using default DocTypeId.")
+    return settings.RADFLOW_LIEN_DOCTYPE_ID
+
+
 async def upload_lien_to_radflow(
     patient_id: str,
     lien_type: str,
@@ -23,7 +58,7 @@ async def upload_lien_to_radflow(
 
     Args:
         patient_id: Patient ID to upload document for (e.g., "PRE100453")
-        lien_type: Type of lien being uploaded (e.g., "Attorney Signed Radiology Lien")
+        lien_type: Type of lien being uploaded (e.g., "Patient Signed Radiology Lien")
         attachment_data: Attachment data dict with 'url' and 'filename' keys
 
     Returns:
@@ -33,8 +68,8 @@ async def upload_lien_to_radflow(
     Request Body:
         {
             "patientId": "PRE100453",
-            "DocTypeName": "Attorney Signed Radiology Lien",
-            "DocTypeId": 1,
+            "DocTypeName": "RAD Patient Signed Lien",
+            "DocTypeId": 56,
             "base64String": "<base64 encoded file>"
         }
 
@@ -45,6 +80,12 @@ async def upload_lien_to_radflow(
             "responseStatus": "Success",
             "exception": null
         }
+
+    DocTypeId Mapping:
+        56: RAD Patient Signed Lien (PSL Rad)
+        57: RAD Attorney Signed Lien (ASL Rad)
+        58: TECH Patient Signed Lien (PSL Tech)
+        59: TECH Attorney Signed Lien (ASL Tech)
     """
     try:
         filename = attachment_data.get('filename', 'unknown_lien_document')
@@ -72,12 +113,15 @@ async def upload_lien_to_radflow(
             logger.debug(f"Converted {len(file_content)} bytes to base64 ({len(base64_string)} chars)")
 
             # Step 3: Prepare upload request
+            doc_type_id = _get_doc_type_id(lien_type)
             upload_payload = {
                 "patientId": patient_id,
                 "DocTypeName": lien_type,
-                "DocTypeId": settings.RADFLOW_LIEN_DOCTYPE_ID,
+                "DocTypeId": doc_type_id,
                 "base64String": base64_string
             }
+
+            logger.info(f"Uploading lien: DocTypeName='{lien_type}', DocTypeId={doc_type_id}, Patient={patient_id}")
 
             # Step 4: Upload to RadFlow
             upload_response = await client.post(
