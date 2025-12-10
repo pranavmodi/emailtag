@@ -202,6 +202,30 @@ class AllTagsStatisticsResponse(BaseModel):
         from_attributes = True
 
 
+class ArchivedConversation(BaseModel):
+    """Schema for a single archived conversation."""
+
+    conversation_id: str
+    subject: Optional[str]
+    sender: str
+    created_at: str  # ISO format timestamp
+    archived_at: str  # ISO format timestamp (from updated_at)
+    tags_applied: List[str]
+
+
+class ArchivedConversationsResponse(BaseModel):
+    """Schema for archived conversations query response."""
+
+    date: str
+    hour: Optional[int]
+    total_archived: int
+    conversations: List[ArchivedConversation]
+
+    class Config:
+        """Pydantic config."""
+        from_attributes = True
+
+
 class FrontAppWebhook(BaseModel):
     """Schema for FrontApp webhook payload."""
     

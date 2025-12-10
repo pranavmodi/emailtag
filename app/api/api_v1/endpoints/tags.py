@@ -14,7 +14,8 @@ from app.db.session import get_db
 from app.schemas.email import (
     Tag, TagCreate, TagUpdate, ConversationsByTagResponse,
     TagStatisticsResponse, ConversationTagStatus,
-    AllTagsStatisticsResponse, TagStatisticsSummary
+    AllTagsStatisticsResponse, TagStatisticsSummary,
+    ArchivedConversationsResponse, ArchivedConversation
 )
 from app.services.frontapp import create_tag as create_frontapp_tag
 from app.services.frontapp_service import get_conversation_tags_async
@@ -408,6 +409,77 @@ async def get_all_tags_statistics(
         total_conversations=len(all_unique_conv_ids),
         total_tags=len(tags_dict),
         tag_statistics=tag_statistics
+    )
+
+
+@router.get("/archived-conversations", response_model=ArchivedConversationsResponse)
+async def get_archived_conversations(
+    target_date: date = Query(..., description="Date to query archived conversations (format: YYYY-MM-DD)"),
+    hour: int = Query(None, ge=0, le=23, description="Optional hour (0-23) to filter by"),
+    db: AsyncSession = Depends(get_db),
+) -> ArchivedConversationsResponse:
+    """
+    Get all conversations that were archived on a specific date, optionally filtered by hour.
+
+    This endpoint:
+    1. Finds all emails with status='archived_in_orchestration' on the given date/hour
+    2. Returns details including conversation ID, subject, sender, timestamps, and applied tags
+
+    Args:
+        target_date: Date to query (e.g., 2025-12-09)
+        hour: Optional hour (0-23) to filter by. If not provided, returns entire day.
+        db: Database session
+
+    Returns:
+        ArchivedConversationsResponse: List of archived conversations with details
+
+    Example:
+        GET /api/v1/tags/archived-conversations?target_date=2025-12-09&hour=14
+    """
+    if hour is not None:
+        logger.info(f"Fetching archived conversations for date {target_date} hour {hour}")
+    else:
+        logger.info(f"Fetching archived conversations for date {target_date}")
+
+    # Import email crud
+    from app.crud import email as email_crud
+
+    # Get archived emails from database
+    archived_emails = await email_crud.get_archived_by_date(
+        db, target_date=target_date, hour=hour
+    )
+
+    if not archived_emails:
+        logger.info(f"No archived conversations found for {target_date}")
+        return ArchivedConversationsResponse(
+            date=target_date.isoformat(),
+            hour=hour,
+            total_archived=0,
+            conversations=[]
+        )
+
+    # Build response
+    conversations = []
+    for email in archived_emails:
+        # Get tags applied to this conversation
+        tag_names = [tag.name for tag in email.tags] if email.tags else []
+
+        conversations.append(ArchivedConversation(
+            conversation_id=email.front_conversation_id,
+            subject=email.subject,
+            sender=email.sender,
+            created_at=email.created_at.isoformat() if email.created_at else "",
+            archived_at=email.updated_at.isoformat() if email.updated_at else "",
+            tags_applied=tag_names
+        ))
+
+    logger.info(f"Found {len(conversations)} archived conversations for {target_date}")
+
+    return ArchivedConversationsResponse(
+        date=target_date.isoformat(),
+        hour=hour,
+        total_archived=len(conversations),
+        conversations=conversations
     )
 
 

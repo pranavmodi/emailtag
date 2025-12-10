@@ -18,6 +18,7 @@ import {
 import { ApiError, SettingsApi, TagsApi } from "@/lib/api";
 import type {
   AllTagsStatisticsResponse,
+  ArchivedConversationsResponse,
   EvalClassificationEntry,
   EvalClassificationResponse,
   TagStatisticsResponse,
@@ -134,7 +135,7 @@ const percent = (value?: number) => `${value?.toFixed(1) ?? "0.0"}%`;
 
 export default function TagStatisticsPage() {
   const [user, setUser] = useState<string>("Admin");
-  const [mode, setMode] = useState<"statistics" | "eval">("statistics");
+  const [mode, setMode] = useState<"statistics" | "eval" | "archive">("statistics");
   const [analysisType, setAnalysisType] = useState<"single" | "all">("single");
   const [tagName, setTagName] = useState("");
   const [date, setDate] = useState(defaultDate());
@@ -156,6 +157,12 @@ export default function TagStatisticsPage() {
   const [evalResult, setEvalResult] = useState<EvalClassificationResponse | null>(null);
   const [evalError, setEvalError] = useState<string | null>(null);
   const [evalLoading, setEvalLoading] = useState(false);
+
+  const [archiveDate, setArchiveDate] = useState(defaultDate());
+  const [archiveHour, setArchiveHour] = useState<string>("");
+  const [archiveResult, setArchiveResult] = useState<ArchivedConversationsResponse | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archiveLoading, setArchiveLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -322,6 +329,36 @@ export default function TagStatisticsPage() {
     }
   };
 
+  const runArchiveQuery = async () => {
+    if (!archiveDate) {
+      setArchiveError("Select a date to query.");
+      return;
+    }
+
+    if (archiveHour !== "") {
+      const parsed = Number(archiveHour);
+      if (Number.isNaN(parsed) || parsed < 0 || parsed > 23) {
+        setArchiveError("Hour must be between 0 and 23.");
+        return;
+      }
+    }
+
+    setArchiveLoading(true);
+    setArchiveError(null);
+    try {
+      const parsedHour = archiveHour !== "" ? Number(archiveHour) : undefined;
+      const response = await TagsApi.getArchivedConversations(archiveDate, parsedHour);
+      setArchiveResult(response);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to fetch archived conversations.";
+      setArchiveError(message);
+      setArchiveResult(null);
+    } finally {
+      setArchiveLoading(false);
+    }
+  };
+
   const summaryCards = useMemo(() => {
     if (singleResult) {
       return [
@@ -485,6 +522,7 @@ export default function TagStatisticsPage() {
               {[
                 { key: "statistics", label: "📊 Retention" },
                 { key: "eval", label: "🧪 Eval Mode" },
+                { key: "archive", label: "📁 Archive View" },
               ].map((item) => (
                 <button
                   key={item.key}
@@ -745,6 +783,76 @@ export default function TagStatisticsPage() {
           </Card>
 
           {evalResult && <EvalResults result={evalResult} />}
+        </motion.section>
+      )}
+
+      {mode === "archive" && (
+        <motion.section
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...easing, delay: 0.05 }}
+          className="space-y-6"
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3 text-2xl">
+                <Activity className="h-6 w-6 text-brand.indigo" /> Archived Conversations
+              </CardTitle>
+              <CardDescription>
+                View all conversations that were automatically archived on a specific date.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="space-y-2 text-sm font-medium text-slate-700">
+                  Target Date
+                  <input
+                    type="date"
+                    value={archiveDate}
+                    onChange={(event) => setArchiveDate(event.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white/80 p-3 text-base shadow-inner focus:border-brand.indigo focus:outline-none"
+                  />
+                </label>
+
+                <label className="space-y-2 text-sm font-medium text-slate-700">
+                  Hour (optional)
+                  <input
+                    type="number"
+                    min="0"
+                    max="23"
+                    placeholder="0-23"
+                    value={archiveHour}
+                    onChange={(event) => setArchiveHour(event.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white/80 p-3 text-base shadow-inner focus:border-brand.indigo focus:outline-none"
+                  />
+                </label>
+              </div>
+
+              <Button
+                onClick={runArchiveQuery}
+                disabled={archiveLoading}
+                className="w-full justify-center bg-slate-900 text-white"
+              >
+                {archiveLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading archives
+                  </>
+                ) : (
+                  <>
+                    <Search className="h-4 w-4" /> View Archived Conversations
+                  </>
+                )}
+              </Button>
+
+              {archiveError && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                  {archiveError}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {archiveResult && <ArchivedConversationsTable result={archiveResult} />}
         </motion.section>
       )}
     </div>
@@ -1156,5 +1264,85 @@ function TagList({ tags, placeholder }: { tags: string[]; placeholder?: string }
         </span>
       ))}
     </div>
+  );
+}
+
+function ArchivedConversationsTable({ result }: { result: ArchivedConversationsResponse }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-2xl">
+          Archived on {result.date}
+          {result.hour !== null && ` (Hour ${result.hour})`}
+        </CardTitle>
+        <CardDescription>
+          {result.total_archived} conversation{result.total_archived !== 1 ? "s" : ""} automatically archived.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {result.conversations.length === 0 && (
+          <p className="text-sm text-slate-500">No archived conversations found for this date.</p>
+        )}
+
+        {result.conversations.length > 0 && (
+          <div className="overflow-x-auto rounded-2xl border border-slate-200">
+            <table className="min-w-full divide-y divide-slate-200 text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3 text-left">Conversation ID</th>
+                  <th className="px-4 py-3 text-left">Subject</th>
+                  <th className="px-4 py-3 text-left">Sender</th>
+                  <th className="px-4 py-3 text-left">Created</th>
+                  <th className="px-4 py-3 text-left">Archived</th>
+                  <th className="px-4 py-3 text-left">Tags</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
+                {result.conversations.map((conv) => (
+                  <tr key={conv.conversation_id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 font-mono text-xs">
+                      <a
+                        href={`https://app.frontapp.com/open/${conv.conversation_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 hover:text-indigo-800 hover:underline"
+                      >
+                        {conv.conversation_id}
+                      </a>
+                    </td>
+                    <td className="px-4 py-3 max-w-xs truncate">
+                      {conv.subject || <span className="text-slate-400">No subject</span>}
+                    </td>
+                    <td className="px-4 py-3 text-xs">{conv.sender}</td>
+                    <td className="px-4 py-3 text-xs">
+                      {new Date(conv.created_at).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      {new Date(conv.archived_at).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      {conv.tags_applied.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {conv.tags_applied.map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700 border border-emerald-200"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400">No tags</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
