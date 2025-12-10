@@ -73,8 +73,7 @@ export type TemplateKey = keyof typeof TEMPLATE_DEFINITIONS;
 
 export const TAG_OPTIONS = [
   { value: "Apt status req", label: "Apt Status Req" },
-  { value: "ASL Lien", label: "ASL Lien (Attorney Signed)" },
-  { value: "PSL Lien", label: "PSL Lien (Patient Signed)" }
+  { value: "Lien Templates", label: "Lien Templates" }
 ];
 
 // Dummy data for preview
@@ -153,7 +152,25 @@ Thank you,
 Precise Imaging Billing Dept.
 www.PreciseMRI.com`,
 
-  lien_unreadable_template: `Thank you for submitting the {lien_type}.
+  lien_patient_not_found_template: `Thank you for submitting the {lien_type}.
+
+We're having trouble locating the patient record for this lien. A member of our billing team will personally review your submission and get back to you shortly.
+
+Thank you,
+Precise Imaging Billing Dept.
+www.PreciseMRI.com`,
+
+  lien_reject_no_changes_template: `Thank you for submitting the {lien_type}.
+
+We've received your lien document, however it appears to contain modifications or alterations (such as cross-outs, black-outs, or added text).
+
+Please resubmit a clean, unmodified lien document so we can properly process it.
+
+Thank you,
+Precise Imaging Billing Dept.
+www.PreciseMRI.com`,
+
+  lien_reject_not_readable_template: `Thank you for submitting the {lien_type}.
 
 We received your lien document, however the document appears to be unreadable due to poor image quality, blurriness, or scanning issues.
 
@@ -163,17 +180,11 @@ Thank you,
 Precise Imaging Billing Dept.
 www.PreciseMRI.com`,
 
-  lien_patient_not_found_template: `Thank you for submitting the {lien_type}.
+  lien_reject_sig_not_valid_template: `Thank you for submitting the {lien_type}.
 
-We're having trouble locating the patient record for this lien. A member of our billing team will personally review your submission and get back to you shortly.
+We've received your lien document, however there appears to be an issue with the signature placement. The signature may be in the wrong box or outside the designated signature area.
 
-Thank you,
-Precise Imaging Billing Dept.
-www.PreciseMRI.com`,
-
-  lien_modified_template: `Thank you for submitting the {lien_type}.
-
-We've received your lien document, however it appears to contain modifications or alterations. A member of our billing team will review this submission and get back to you shortly.
+Please resubmit the lien with the signature properly placed in the correct box.
 
 Thank you,
 Precise Imaging Billing Dept.
@@ -187,9 +198,10 @@ export const DEFAULT_TAG_SETTINGS = {
   unified_template: DEFAULT_UNIFIED_TEMPLATE,
   // Lien templates (for ASL/PSL lien agents)
   lien_success_template: DEFAULT_LIEN_TEMPLATES.lien_success_template,
-  lien_unreadable_template: DEFAULT_LIEN_TEMPLATES.lien_unreadable_template,
   lien_patient_not_found_template: DEFAULT_LIEN_TEMPLATES.lien_patient_not_found_template,
-  lien_modified_template: DEFAULT_LIEN_TEMPLATES.lien_modified_template,
+  lien_reject_no_changes_template: DEFAULT_LIEN_TEMPLATES.lien_reject_no_changes_template,
+  lien_reject_not_readable_template: DEFAULT_LIEN_TEMPLATES.lien_reject_not_readable_template,
+  lien_reject_sig_not_valid_template: DEFAULT_LIEN_TEMPLATES.lien_reject_sig_not_valid_template,
   // Legacy fields (for backward compatibility)
   scheduling_phone_number: "",
   portal_link_bills: "",

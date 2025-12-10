@@ -185,8 +185,8 @@ export default function TemplateConfigPage() {
               {/* Placeholder Reference */}
               <PlaceholderReference tagSettings={tagSettings} />
 
-              {/* Lien Templates Editor - Show for ASL/PSL Lien tags */}
-              {(selectedTag === "ASL Lien" || selectedTag === "PSL Lien") && (
+              {/* Lien Templates Editor - Show for Lien Templates tag */}
+              {selectedTag === "Lien Templates" && (
                 <LienTemplatesEditor
                   tagSettings={tagSettings}
                   onFieldChange={handleFieldChange}

@@ -47,9 +47,10 @@ export function useTagSettings(selectedTag: string, currentUser: string) {
         unified_template: response.settings.unified_template ?? "",
         // Lien templates (for ASL/PSL lien agents)
         lien_success_template: response.settings.lien_success_template ?? DEFAULT_LIEN_TEMPLATES.lien_success_template,
-        lien_unreadable_template: response.settings.lien_unreadable_template ?? DEFAULT_LIEN_TEMPLATES.lien_unreadable_template,
         lien_patient_not_found_template: response.settings.lien_patient_not_found_template ?? DEFAULT_LIEN_TEMPLATES.lien_patient_not_found_template,
-        lien_modified_template: response.settings.lien_modified_template ?? DEFAULT_LIEN_TEMPLATES.lien_modified_template,
+        lien_reject_no_changes_template: response.settings.lien_reject_no_changes_template ?? DEFAULT_LIEN_TEMPLATES.lien_reject_no_changes_template,
+        lien_reject_not_readable_template: response.settings.lien_reject_not_readable_template ?? DEFAULT_LIEN_TEMPLATES.lien_reject_not_readable_template,
+        lien_reject_sig_not_valid_template: response.settings.lien_reject_sig_not_valid_template ?? DEFAULT_LIEN_TEMPLATES.lien_reject_sig_not_valid_template,
         // Legacy fields (for backward compatibility)
         scheduling_phone_number: response.settings.scheduling_phone_number ?? "",
         portal_link_bills: response.settings.portal_link_bills ?? "",
