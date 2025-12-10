@@ -154,6 +154,26 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             else:
                 structured_history_messages = all_messages
 
+        # --- Internal Domain Check ---
+        # Check if the sender is from an internal domain - skip ALL autoresponds if so
+        sender_email = email_obj.sender
+        internal_domains = ["@precisemri.com", "@radflow360.com", "@mediflow360.com"]
+        is_internal_sender = any(domain in sender_email.lower() for domain in internal_domains) if sender_email else False
+
+        if is_internal_sender:
+            logger.info(f"🚫 AUTORESPOND BLOCKED: Email {email_id} sender '{sender_email}' is from internal domain. Skipping all autoresponds.")
+            final_status = "processed_internal_sender_no_autorespond"
+            email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_status, is_processed=True))
+            return {
+                "status": "completed_autorespond_phase",
+                "email_id": email_id,
+                "final_db_status": final_status,
+                "auto_response_sent": False,
+                "auto_response_details": {"reason": f"Internal sender detected: {sender_email}"},
+                "agent_handled_response": False
+            }
+        # --- End Internal Domain Check ---
+
         auto_response_processed_flag = False
         auto_response_details = None
         agent_handled_response = False

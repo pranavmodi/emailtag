@@ -243,7 +243,7 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
             logger.warning(f"No sender identifier found for conversation ID '{str(conversation_id)}'. Skipping auto-response.")
             return {"status": "no_auto_response_needed", "details": "No sender identifier found"}
 
-        # Enhanced bot detection: check identifier, name, and signature
+        # Enhanced bot detection: check identifier, name, signature, and internal domains
         is_bot_in_identifier = "bot" in last_sender_identifier.lower()
         is_bot_in_name = "bot" in sender_name.lower()
         # Check for BOT_EMAIL_SIGNATURE, ensuring it's not None before calling .lower()
@@ -251,12 +251,16 @@ async def process_autorespond(db: AsyncSession, conversation_id: str, conversati
         if settings.BOT_EMAIL_SIGNATURE: # Ensure it exists and is not None/empty
             is_bot_signature_match = settings.BOT_EMAIL_SIGNATURE.lower() in last_sender_identifier.lower()
 
-        if is_bot_in_identifier or is_bot_in_name or is_bot_signature_match:
-            logger.info(f"Skipping auto-response for conversation {conversation_id} due to bot detection. "
-                        f"Identifier: '{last_sender_identifier}' (match: {is_bot_in_identifier}), "
-                        f"Name: '{sender_name}' (match: {is_bot_in_name}), "
+        # Check for internal domain emails (staff members)
+        internal_domains = ["@precisemri.com", "@radflow360.com", "@mediflow360.com"]
+        is_internal_email = any(domain in last_sender_identifier.lower() for domain in internal_domains)
+
+        if is_bot_in_identifier or is_bot_in_name or is_bot_signature_match or is_internal_email:
+            logger.info(f"Skipping auto-response for conversation {conversation_id} due to bot/internal detection. "
+                        f"Identifier: '{last_sender_identifier}' (bot match: {is_bot_in_identifier}, internal: {is_internal_email}), "
+                        f"Name: '{sender_name}' (bot match: {is_bot_in_name}), "
                         f"Signature match: {is_bot_signature_match}")
-            return {"status": "no_auto_response_needed", "details": "Bot detected"}
+            return {"status": "no_auto_response_needed", "details": "Bot or internal email detected"}
             
     except Exception as e:
         logger.error(f"Error during initial data retrieval or bot check for {conversation_id}: {e}", exc_info=True)
