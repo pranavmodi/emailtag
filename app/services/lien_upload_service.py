@@ -156,3 +156,94 @@ async def upload_lien_to_radflow(
     except Exception as e:
         logger.error(f"Unexpected error uploading lien to patient file: {e}", exc_info=True)
         return False
+
+
+async def upload_lien_pdf_bytes_to_radflow(
+    patient_id: str,
+    lien_type: str,
+    pdf_bytes: bytes,
+    filename: str = "lien_document.pdf",
+    signature_type: str = "ASL"
+) -> bool:
+    """
+    Upload lien document PDF bytes directly to patient file via RadFlow API.
+
+    This function is used for split PDF documents that are already in bytes format.
+
+    Args:
+        patient_id: Patient ID to upload document for (e.g., "PRE100453")
+        lien_type: Type of lien being uploaded (e.g., "RAD", "TECH")
+        pdf_bytes: Raw PDF file content as bytes
+        filename: Filename for logging purposes
+        signature_type: Signature type - "ASL" (Attorney) or "PSL" (Patient). Defaults to "ASL"
+
+    Returns:
+        True if upload successful, False otherwise
+    """
+    try:
+        # Determine full lien type name based on short code and signature type
+        if lien_type.upper() in ["RAD", "RADIOLOGY"]:
+            if signature_type.upper() == "PSL":
+                full_lien_type = "Patient Signed Radiology Lien"
+            else:  # ASL or default
+                full_lien_type = "Attorney Signed Radiology Lien"
+        elif lien_type.upper() in ["TECH", "TC", "TECHNOLOGIST"]:
+            if signature_type.upper() == "PSL":
+                full_lien_type = "Patient Signed Technologist Lien"
+            else:  # ASL or default
+                full_lien_type = "Attorney Signed Technologist Lien"
+        else:
+            logger.error(f"Unknown lien type: {lien_type}")
+            return False
+
+        logger.info(f"📤 Uploading {full_lien_type} ({filename}) to patient {patient_id} via RadFlow API")
+
+        # Convert PDF bytes to base64
+        base64_string = base64.b64encode(pdf_bytes).decode('utf-8')
+        logger.debug(f"Converted {len(pdf_bytes)} bytes to base64 ({len(base64_string)} chars)")
+
+        # Prepare upload request
+        doc_type_id = _get_doc_type_id(full_lien_type)
+        upload_payload = {
+            "patientId": patient_id,
+            "DocTypeName": full_lien_type,
+            "DocTypeId": doc_type_id,
+            "base64String": base64_string
+        }
+
+        logger.info(f"Uploading lien: DocTypeName='{full_lien_type}', DocTypeId={doc_type_id}, Patient={patient_id}")
+
+        # Upload to RadFlow
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            upload_response = await client.post(
+                settings.RADFLOW_UPLOAD_ENDPOINT,
+                json=upload_payload,
+                timeout=60.0
+            )
+
+            if upload_response.status_code != 200:
+                logger.error(f"RadFlow upload failed with status {upload_response.status_code}: {upload_response.text}")
+                return False
+
+            # Parse and validate response
+            result_data = upload_response.json()
+            upload_success = result_data.get("result", False)
+            response_status = result_data.get("responseStatus", "Unknown")
+            exception = result_data.get("exception")
+
+            if upload_success and response_status == "Success":
+                logger.info(f"✅ Successfully uploaded {full_lien_type} for patient {patient_id} to RadFlow")
+                return True
+            else:
+                logger.error(f"❌ RadFlow upload failed: status={response_status}, exception={exception}")
+                return False
+
+    except httpx.TimeoutException:
+        logger.error(f"⏱️ Timeout uploading lien to patient {patient_id}")
+        return False
+    except httpx.HTTPError as e:
+        logger.error(f"HTTP error uploading lien: {e}", exc_info=True)
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error uploading lien PDF bytes to patient file: {e}", exc_info=True)
+        return False

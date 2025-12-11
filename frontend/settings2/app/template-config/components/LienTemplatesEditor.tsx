@@ -3,7 +3,7 @@
  */
 
 import { useState } from "react";
-import { DEFAULT_TAG_SETTINGS } from "../constants/template-config.constants";
+import { DEFAULT_TAG_SETTINGS, DUMMY_LIEN_STATUS_TABLE } from "../constants/template-config.constants";
 
 interface LienTemplatesEditorProps {
   tagSettings: typeof DEFAULT_TAG_SETTINGS;
@@ -63,6 +63,7 @@ export function LienTemplatesEditor({ tagSettings, onFieldChange, onSave, onRese
       "{patient_name}": "John Doe",
       "{dob}": "01/15/1985",
       "{doi}": "03/22/2024",
+      "{lien_status_table}": DUMMY_LIEN_STATUS_TABLE,
     };
 
     Object.entries(dummyData).forEach(([placeholder, value]) => {
@@ -83,7 +84,8 @@ export function LienTemplatesEditor({ tagSettings, onFieldChange, onSave, onRese
           </span>
         </h3>
         <p className="mb-4 text-xs text-slate-600">
-          Configure autoresponse templates for different lien processing scenarios. Available placeholders: {"{lien_type}"}, {"{patient_id}"}, {"{patient_name}"}, {"{dob}"}, {"{doi}"}
+          Configure autoresponse templates for different lien processing scenarios.<br/>
+          <strong>Available placeholders:</strong> {"{lien_type}"}, {"{patient_id}"}, {"{patient_name}"}, {"{dob}"}, {"{doi}"}, <strong className="text-purple-700">{"{lien_status_table}"}</strong> (shows Technical & Professional lien signature status)
         </p>
 
         {/* Scenario Selector Dropdown */}
@@ -140,9 +142,14 @@ export function LienTemplatesEditor({ tagSettings, onFieldChange, onSave, onRese
 
           {showPreview && (
             <div className="mt-3 rounded-lg border-2 border-indigo-200 bg-white p-4">
-              <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
-                {generatePreview() || <span className="text-slate-400 italic">No template content to preview</span>}
-              </div>
+              {generatePreview() ? (
+                <div
+                  className="text-sm leading-relaxed text-slate-700"
+                  dangerouslySetInnerHTML={{ __html: generatePreview() }}
+                />
+              ) : (
+                <span className="text-slate-400 italic">No template content to preview</span>
+              )}
             </div>
           )}
         </div>

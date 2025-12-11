@@ -76,7 +76,7 @@ export const TAG_OPTIONS = [
   { value: "Lien Templates", label: "Lien Templates" }
 ];
 
-// Dummy data for preview
+// Dummy data for preview - Appointment table
 export const DUMMY_TABLE_DATA = `<tr>
 <td style="border: 1px solid black; padding: 8px;">PRE1234567</td>
 <td style="border: 1px solid black; padding: 8px;">MRI Brain W/O Contrast</td>
@@ -97,6 +97,29 @@ export const DUMMY_TABLE_DATA = `<tr>
 <td style="border: 1px solid black; padding: 8px;">Yes</td>
 <td style="border: 1px solid black; padding: 8px;">Yes</td>
 </tr>`;
+
+// Dummy data for lien status table preview
+export const DUMMY_LIEN_STATUS_TABLE = `<table border="1" style="border-collapse: collapse; width: 100%; margin-top: 10px;">
+<thead>
+<tr>
+<th style="border: 1px solid black; padding: 8px; text-align: left; background-color: #f0f0f0;">Lien Type</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left; background-color: #f0f0f0;">Patient Signature</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left; background-color: #f0f0f0;">Attorney Signature</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="border: 1px solid black; padding: 8px;">Technical Lien (Imaging)</td>
+<td style="border: 1px solid black; padding: 8px;">Signed 11/19/2025</td>
+<td style="border: 1px solid black; padding: 8px;">Not Signed.<br/>Please eSign here</td>
+</tr>
+<tr>
+<td style="border: 1px solid black; padding: 8px;">Professional Lien (Report)</td>
+<td style="border: 1px solid black; padding: 8px;">Signed 11/19/2025</td>
+<td style="border: 1px solid black; padding: 8px;">Not Signed.<br/>Please eSign here</td>
+</tr>
+</tbody>
+</table>`;
 
 export const DEFAULT_UNIFIED_TEMPLATE = `Dear {first_name} {last_name},<br/>
 In regards to patient ID (MRN): {patient_id_confirmed}<br/><br/>
@@ -147,6 +170,8 @@ DOB: {dob}
 DOI: {doi}
 
 Your lien has been successfully uploaded to the patient file and is now on record.
+
+{lien_status_table}
 
 Thank you,
 Precise Imaging Billing Dept.

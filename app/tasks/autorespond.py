@@ -22,8 +22,8 @@ from app.agents.release_records_autorespond import handle_release_of_records_req
 from app.agents.bill_balance_request_agent import handle_bill_balance_request
 from app.agents.case_updates_agent import handle_case_update_request
 from app.agents.missing_lien_request_agent import handle_missing_lien_request
-from app.agents.psl_lien_agent import handle_psl_lien_request
-from app.agents.asl_lien_agent import handle_asl_lien_request
+# Unified lien agent (replaces separate ASL/PSL agents, but keeps backward compatibility wrappers)
+from app.agents.lien_agent import handle_asl_lien_request, handle_psl_lien_request
 from app.agents.agent_helpers import extract_patient_id_from_email_logic
 
 logger = get_task_logger(__name__)

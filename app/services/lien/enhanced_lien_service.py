@@ -11,6 +11,7 @@ from typing import Dict, Any, List
 from .barcode_detector import BarcodeDetector
 from .signature_detector import SignatureDetector
 from .document_converter import DocumentConverter
+from .pdf_splitter import PDFSplitter
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class EnhancedLienService:
         self.barcode_detector = BarcodeDetector()
         self.signature_detector = SignatureDetector()
         self.document_converter = DocumentConverter()
+        self.pdf_splitter = PDFSplitter()
     
     async def process_lien_document(self, file_content: bytes, filename: str) -> Dict[str, Any]:
         """
@@ -261,6 +263,173 @@ class EnhancedLienService:
             logger.error(f"Error consolidating page results: {e}")
             return self._error_response(f"Consolidation error: {str(e)}")
     
+    def _generate_page_groupings(self, page_results: List[Dict]) -> List[Dict[str, Any]]:
+        """
+        Generate page groupings based on unique patient ID + lien type combinations.
+
+        Args:
+            page_results: List of results from each page
+
+        Returns:
+            List of page groupings with structure:
+                [
+                    {
+                        "pages": [0, 1],  # Zero-indexed page numbers
+                        "patient_id": "PRE123456",
+                        "lien_type": "RAD",
+                        "signature_type": "ASL"
+                    },
+                    ...
+                ]
+        """
+        logger.info("📄 GROUPING: Generating page groupings for PDF splitting...")
+
+        # Build a mapping of (patient_id, lien_type) -> list of page indices
+        groupings_map = {}
+
+        for page_idx, page in enumerate(page_results):
+            if not page.get("success"):
+                logger.warning(f"📄 GROUPING: Page {page_idx} failed processing, skipping")
+                continue
+
+            # Extract barcode data
+            barcode_detection = page.get("barcode_detection", {})
+            if not barcode_detection.get("barcode_found"):
+                logger.warning(f"📄 GROUPING: Page {page_idx} has no barcode, skipping")
+                continue
+
+            # Get patient IDs and lien types from this page
+            combined_data = barcode_detection.get("combined_data", {})
+            patient_ids = combined_data.get("PatientIDs", [])
+            lien_types = combined_data.get("LienTypes", [])
+
+            # Fallback to legacy format
+            if not patient_ids and combined_data.get("PatientID"):
+                patient_ids = [combined_data["PatientID"]]
+            if not lien_types and combined_data.get("LienType"):
+                lien_types = [combined_data["LienType"]]
+
+            # Get signature type from this page
+            signature_detection = page.get("signature_detection", {})
+            signature_data = signature_detection.get("signature_data", {})
+            signature_type = signature_data.get("lien_signature_type", "UNKNOWN")
+
+            # For each patient ID + lien type combination, add this page to the group
+            for patient_id in patient_ids:
+                for lien_type in lien_types:
+                    # Create grouping key
+                    group_key = (patient_id, lien_type.upper())
+
+                    if group_key not in groupings_map:
+                        groupings_map[group_key] = {
+                            "pages": [],
+                            "patient_id": patient_id,
+                            "lien_type": lien_type.upper(),
+                            "signature_type": signature_type
+                        }
+
+                    # Add this page to the group
+                    groupings_map[group_key]["pages"].append(page_idx)
+                    logger.info(f"📄 GROUPING: Page {page_idx} → Patient {patient_id}, Lien {lien_type.upper()}")
+
+        # Convert map to list
+        page_groupings = list(groupings_map.values())
+
+        logger.info(f"📄 GROUPING: Generated {len(page_groupings)} unique page groups")
+        for i, group in enumerate(page_groupings):
+            logger.info(
+                f"📄 GROUP {i+1}: Patient={group['patient_id']}, "
+                f"LienType={group['lien_type']}, "
+                f"Pages={group['pages']}, "
+                f"Signature={group['signature_type']}"
+            )
+
+        return page_groupings
+
+    async def process_lien_document_with_splits(self, file_content: bytes, filename: str) -> Dict[str, Any]:
+        """
+        Process a lien document and split it into separate PDFs per patient ID + lien type.
+
+        Args:
+            file_content: Raw PDF file content as bytes
+            filename: Original filename
+
+        Returns:
+            Dictionary containing split documents:
+                {
+                    "filename": "original.pdf",
+                    "processing_type": "enhanced_lien_processing_split",
+                    "split_documents": [
+                        {
+                            "pdf_bytes": b"...",
+                            "patient_id": "PRE123456",
+                            "lien_type": "RAD",
+                            "signature_type": "ASL",
+                            "page_count": 2,
+                            "original_pages": [0, 1]
+                        },
+                        ...
+                    ],
+                    "total_splits": 2,
+                    "processing_status": "completed"
+                }
+        """
+        try:
+            logger.info(f"📄 ENHANCED LIEN SPLIT: Starting split processing for {filename}")
+
+            # Convert PDF to images for analysis
+            images = self.document_converter.convert_to_images(file_content, filename)
+            if not images:
+                return self._error_response("Failed to convert document to images")
+
+            logger.info(f"📄 ENHANCED LIEN SPLIT: Converted PDF to {len(images)} pages")
+
+            # Process each page for barcode and signature detection
+            page_results = []
+            for i, image_data in enumerate(images):
+                logger.info(f"📄 PAGE {i+1}/{len(images)}: Processing...")
+                page_result = await self._process_single_page(image_data, f"{filename}_page_{i+1}")
+                page_results.append(page_result)
+
+            # Generate page groupings based on patient ID + lien type
+            page_groupings = self._generate_page_groupings(page_results)
+
+            if not page_groupings:
+                logger.warning(f"📄 ENHANCED LIEN SPLIT: No valid page groupings found for {filename}")
+                return {
+                    "filename": filename,
+                    "processing_type": "enhanced_lien_processing_split",
+                    "split_documents": [],
+                    "total_splits": 0,
+                    "processing_status": "no_valid_groupings",
+                    "error": "No valid barcode data found to create splits"
+                }
+
+            # Split the PDF using the page groupings
+            split_documents = self.pdf_splitter.split_pdf_by_groups(file_content, page_groupings)
+
+            logger.info(f"✅ ENHANCED LIEN SPLIT: Created {len(split_documents)} split documents from {filename}")
+
+            return {
+                "filename": filename,
+                "processing_type": "enhanced_lien_processing_split",
+                "split_documents": split_documents,
+                "total_splits": len(split_documents),
+                "processing_status": "completed",
+                "pages_processed": len(page_results)
+            }
+
+        except Exception as e:
+            logger.error(f"Error in enhanced lien split processing for {filename}: {e}", exc_info=True)
+            return {
+                "filename": filename,
+                "processing_type": "enhanced_lien_processing_split",
+                "split_documents": [],
+                "total_splits": 0,
+                "processing_status": "failed",
+                "error": str(e)
+            }
+
     def _error_response(self, error_message: str) -> Dict[str, Any]:
         """Generate standardized error response."""
         return {

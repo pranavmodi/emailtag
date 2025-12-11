@@ -536,62 +536,98 @@ ANALYSIS REQUIREMENTS:
     
     async def _apply_enhanced_lien_processing(self, file_content: bytes, filename: str, basic_result: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Apply enhanced lien processing including barcode reading and signature detection.
-        
+        Apply enhanced lien processing including barcode reading, signature detection, and PDF splitting.
+
         Args:
             file_content: Document content as bytes
             filename: Original filename
             basic_result: Basic document processing result
-            
+
         Returns:
-            Enhanced result with lien-specific data
+            Enhanced result with lien-specific data and split documents
         """
         try:
             # Import here to avoid circular imports
-            from app.services.enhanced_lien_processing_service import process_lien_document_enhanced
-            
-            # Perform enhanced lien analysis
-            enhanced_analysis = await process_lien_document_enhanced(file_content, filename)
+            from app.services.lien import EnhancedLienService
+
+            # Initialize enhanced lien service
+            lien_service = EnhancedLienService()
+
+            # Perform enhanced lien analysis WITH SPLITTING
+            # This will return split documents instead of consolidated result
+            enhanced_analysis = await lien_service.process_lien_document_with_splits(file_content, filename)
             
             # Merge enhanced results with basic results
             enhanced_result = basic_result.copy()
-            
+
+            # Extract split documents and metadata
+            split_documents = enhanced_analysis.get("split_documents", [])
+            total_splits = enhanced_analysis.get("total_splits", 0)
+
+            logger.info(f"📄 ENHANCED LIEN: Created {total_splits} split documents from {filename}")
+
+            # Collect all patient IDs and lien types from splits for backward compatibility
+            all_patient_ids = set()
+            all_lien_types = set()
+            all_signature_types = set()
+
+            for split_doc in split_documents:
+                patient_id = split_doc.get("patient_id", "")
+                if patient_id and patient_id.startswith("PRE"):
+                    all_patient_ids.add(patient_id)
+
+                lien_type = split_doc.get("lien_type", "")
+                if lien_type:
+                    all_lien_types.add(lien_type)
+
+                signature_type = split_doc.get("signature_type", "")
+                if signature_type:
+                    all_signature_types.add(signature_type)
+
             # Update document analysis with enhanced lien data
             if enhanced_result.get("document_analysis", {}).get("success"):
                 enhanced_result["document_analysis"]["data"].update({
                     "enhanced_lien_analysis": {
-                        "PatientID": enhanced_analysis.get("PatientID", ""),
-                        "PatientIDs": enhanced_analysis.get("PatientIDs", []),  # New field with all patient IDs
-                        "LienType": enhanced_analysis.get("LienType", ""),  # Legacy field for backward compatibility
-                        "LienTypes": enhanced_analysis.get("LienTypes", []),  # New field with all lien types
-                        "ReferrerID": enhanced_analysis.get("ReferrerID", ""),
-                        "LienSignatureType": enhanced_analysis.get("LienSignatureType", "UNKNOWN"),
-                        "barcode_found": enhanced_analysis.get("barcode_found", False),
-                        "signature_analysis": enhanced_analysis.get("signature_analysis", "")
+                        "PatientID": list(all_patient_ids)[0] if all_patient_ids else "",  # First patient ID for backward compatibility
+                        "PatientIDs": list(all_patient_ids),  # All unique patient IDs found
+                        "LienType": list(all_lien_types)[0] if all_lien_types else "",  # First lien type for backward compatibility
+                        "LienTypes": list(all_lien_types),  # All unique lien types found
+                        "LienSignatureType": list(all_signature_types)[0] if all_signature_types else "UNKNOWN",
+                        "barcode_found": total_splits > 0,
+                        "total_splits": total_splits,
+                        "split_documents_metadata": [
+                            {
+                                "patient_id": doc.get("patient_id"),
+                                "lien_type": doc.get("lien_type"),
+                                "signature_type": doc.get("signature_type"),
+                                "page_count": doc.get("page_count"),
+                                "original_pages": doc.get("original_pages")
+                            }
+                            for doc in split_documents
+                        ]
                     }
                 })
-                
+
                 # Override patient ID if barcode provides more accurate data
-                barcode_patient_id = enhanced_analysis.get("PatientID", "")
-                if barcode_patient_id and barcode_patient_id.startswith("PRE"):
+                if all_patient_ids:
+                    barcode_patient_id = list(all_patient_ids)[0]
                     enhanced_result["document_analysis"]["data"]["patient_id"] = barcode_patient_id
                     logger.info(f"🔍 ENHANCED LIEN: Using barcode patient ID: {barcode_patient_id}")
-                
+
                 # Update lien type from barcode if available
-                barcode_lien_type = enhanced_analysis.get("LienType", "")
-                if barcode_lien_type:
-                    # Store the barcode lien type for downstream processing
+                if all_lien_types:
+                    barcode_lien_type = list(all_lien_types)[0]
                     enhanced_result["document_analysis"]["data"]["lien_type"] = barcode_lien_type
                     logger.info(f"🔍 ENHANCED LIEN: Using barcode lien type: {barcode_lien_type}")
-            
-            # Add enhanced processing metadata
+
+            # Add enhanced processing metadata (includes split documents with pdf_bytes)
             enhanced_result["enhanced_lien_processing"] = enhanced_analysis
             enhanced_result["provider_info"] = {
                 "analysis_provider": "openai_structured_outputs",
-                "enhanced_lien_provider": "barcode_signature_analysis"
+                "enhanced_lien_provider": "barcode_signature_analysis_with_splitting"
             }
-            
-            logger.info(f"✅ ENHANCED LIEN PROCESSING: Successfully enhanced {filename}")
+
+            logger.info(f"✅ ENHANCED LIEN PROCESSING: Successfully enhanced {filename} with {total_splits} splits")
             return enhanced_result
             
         except Exception as e:
