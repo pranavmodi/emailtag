@@ -83,52 +83,9 @@ export function LienTemplatesEditor({ tagSettings, onFieldChange, onSave, onRese
             5 Scenarios
           </span>
         </h3>
-        <p className="mb-3 text-xs text-slate-600">
+        <p className="mb-6 text-xs text-slate-600">
           Configure autoresponse templates for different lien processing scenarios.
         </p>
-
-        {/* Available Placeholders Table */}
-        <div className="mb-4 overflow-hidden rounded-lg border border-purple-200 bg-white">
-          <div className="bg-purple-50 px-3 py-2">
-            <h4 className="text-xs font-semibold text-purple-900">📋 Available Placeholders</h4>
-          </div>
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-purple-100 bg-purple-25">
-                <th className="px-3 py-2 text-left font-semibold text-slate-700">Placeholder</th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700">Description</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-slate-100 hover:bg-slate-50">
-                <td className="px-3 py-2 font-mono text-purple-700">{"{lien_type}"}</td>
-                <td className="px-3 py-2 text-slate-600">Full lien type name (e.g., "Attorney Signed Lien")</td>
-              </tr>
-              <tr className="border-b border-slate-100 hover:bg-slate-50">
-                <td className="px-3 py-2 font-mono text-purple-700">{"{patient_id}"}</td>
-                <td className="px-3 py-2 text-slate-600">Patient ID (MRN)</td>
-              </tr>
-              <tr className="border-b border-slate-100 hover:bg-slate-50">
-                <td className="px-3 py-2 font-mono text-purple-700">{"{patient_name}"}</td>
-                <td className="px-3 py-2 text-slate-600">Patient's full name (First Last)</td>
-              </tr>
-              <tr className="border-b border-slate-100 hover:bg-slate-50">
-                <td className="px-3 py-2 font-mono text-purple-700">{"{dob}"}</td>
-                <td className="px-3 py-2 text-slate-600">Patient's date of birth (MM/DD/YYYY)</td>
-              </tr>
-              <tr className="border-b border-slate-100 hover:bg-slate-50">
-                <td className="px-3 py-2 font-mono text-purple-700">{"{doi}"}</td>
-                <td className="px-3 py-2 text-slate-600">Date of injury (MM/DD/YYYY)</td>
-              </tr>
-              <tr className="hover:bg-slate-50">
-                <td className="px-3 py-2 font-mono text-purple-700 font-bold">{"{lien_status_table}"}</td>
-                <td className="px-3 py-2 text-slate-600">
-                  <span className="font-semibold text-purple-900">HTML table</span> showing Technical & Professional lien signature status with patient and attorney signature dates
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
 
         {/* Scenario Selector Dropdown */}
         <div className="mb-6">

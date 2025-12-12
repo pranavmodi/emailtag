@@ -20,7 +20,7 @@ import { StatusBanner } from "./components/StatusBanner";
 import { PlaceholderManager } from "./components/PlaceholderManager";
 import { LienTemplatesEditor } from "./components/LienTemplatesEditor";
 import { UnifiedTemplateEditor } from "./components/UnifiedTemplateEditor";
-import { PlaceholderReference } from "./components/PlaceholderReference";
+import PlaceholderSection from "./components/PlaceholderSection";
 import { TemplatePreview } from "./components/TemplatePreview";
 import { useTagSettings } from "./hooks/useTagSettings";
 
@@ -182,8 +182,8 @@ export default function TemplateConfigPage() {
             </div>
           ) : (
             <>
-              {/* Placeholder Reference */}
-              <PlaceholderReference tagSettings={tagSettings} />
+              {/* Placeholder Section - Dynamic based on selected tag */}
+              <PlaceholderSection selectedTag={selectedTag} />
 
               {/* Lien Templates Editor - Show for Lien Templates tag */}
               {selectedTag === "Lien Templates" && (
