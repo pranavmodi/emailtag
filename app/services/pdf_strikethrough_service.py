@@ -460,23 +460,23 @@ class RoboflowProvider(StrikethroughProvider):
 
 
 class OpenAIProvider(StrikethroughProvider):
-    """OpenAI GPT-4o Vision provider for strikethrough detection."""
-    
+    """OpenAI GPT-5.2 Vision provider for strikethrough detection."""
+
     def __init__(self, model: Optional[str] = None, max_tokens: Optional[int] = None):
         super().__init__()
-        # Prefer DOCUMENT_ANALYSIS_MODEL, fallback to env, then OPENAI_VISION_MODEL, then gpt-4o
+        # Prefer DOCUMENT_ANALYSIS_MODEL, fallback to env, then OPENAI_VISION_MODEL, then gpt-5.2
         self.model = (
             model
             or getattr(settings, 'DOCUMENT_ANALYSIS_MODEL', None)
             or os.getenv('DOCUMENT_ANALYSIS_MODEL')
-            or getattr(settings, 'OPENAI_VISION_MODEL', 'gpt-4o')
+            or getattr(settings, 'OPENAI_VISION_MODEL', 'gpt-5.2')
         )
         self.max_tokens = max_tokens or getattr(settings, 'OPENAI_MAX_TOKENS', 1000)
         self.api_key = getattr(settings, 'OPENAI_API_KEY', None)
-        
+
         if not self.api_key:
             logger.error("OPENAI_API_KEY not found in settings. OpenAI provider will not work.")
-        
+
         logger.info(f"Initialized OpenAI provider with model: {self.model}")
     
     def _convert_pdf_to_images(self, pdf_path: str) -> List[str]:
@@ -516,7 +516,7 @@ class OpenAIProvider(StrikethroughProvider):
             return None
     
     def _prepare_vision_prompt(self) -> str:
-        """Prepare the prompt for GPT-4o vision to detect strikethrough text."""
+        """Prepare the prompt for GPT-5.2 vision to detect strikethrough text."""
         return """CRITICAL: Analyze this image and detect ONLY text that has been physically crossed out or struck through with visible lines.
 
 STRICT REQUIREMENTS:
@@ -719,8 +719,8 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
             return []
     
     async def detect_strikethrough_in_pdf(self, pdf_path: str) -> Dict[str, Any]:
-        """Detect strikethrough text in a PDF file using OpenAI GPT-4o Vision."""
-        logger.info(f"Starting OpenAI GPT-4o strikethrough detection for PDF: {pdf_path}")
+        """Detect strikethrough text in a PDF file using OpenAI GPT-5.2 Vision."""
+        logger.info(f"Starting OpenAI GPT-5.2 strikethrough detection for PDF: {pdf_path}")
         
         # Convert PDF to images
         image_paths = self._convert_pdf_to_images(pdf_path)
@@ -754,7 +754,7 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
                 "total_pages": len(image_paths)
             }
             
-            logger.info(f"OpenAI GPT-4o processing complete. Found {len(all_strikethrough_instances)} strikethrough instances.")
+            logger.info(f"OpenAI GPT-5.2 processing complete. Found {len(all_strikethrough_instances)} strikethrough instances.")
             
             return {
                 "success": True,
@@ -764,16 +764,16 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
             }
             
         except Exception as e:
-            logger.error(f"Error during OpenAI GPT-4o processing: {e}", exc_info=True)
+            logger.error(f"Error during OpenAI GPT-5.2 processing: {e}", exc_info=True)
             return {
                 "success": False,
                 "error": f"Processing error: {str(e)}",
                 "strikethrough_text": [],
                 "provider": "openai"
             }
-    
+
     async def detect_strikethrough_from_bytes(self, pdf_bytes: bytes) -> Dict[str, Any]:
-        """Detect strikethrough text from PDF bytes using OpenAI GPT-4o Vision."""
+        """Detect strikethrough text from PDF bytes using OpenAI GPT-5.2 Vision."""
         import tempfile
         
         # Save bytes to temporary file
@@ -850,13 +850,13 @@ class PDFStrikethroughDetectionService:
         elif self.provider_name == 'openai':
             return {
                 "provider": "openai",
-                "name": "OpenAI GPT-4o Vision",
+                "name": "OpenAI GPT-5.2 Vision",
                 "status": "Ready to use with multimodal vision capabilities",
                 "requires_setup": "OpenAI API key only",
                 "api_key_type": "OpenAI API Key",
-                "model": getattr(settings, 'OPENAI_VISION_MODEL', 'gpt-4o'),
-                "capabilities": "Multimodal vision analysis, natural language understanding",
-                "advantages": "High accuracy, detailed text extraction, flexible detection"
+                "model": getattr(settings, 'OPENAI_VISION_MODEL', 'gpt-5.2'),
+                "capabilities": "Advanced multimodal vision analysis, natural language understanding, 400K context window",
+                "advantages": "Highest accuracy with GPT-5.2, detailed text extraction, flexible detection"
             }
         else:
             return {
@@ -947,12 +947,12 @@ def get_provider_status() -> Dict[str, Any]:
             "performance": "mAP: 93.2%, Precision: 93.8%, Recall: 87.5%"
         },
         "openai": {
-            "name": "OpenAI GPT-4o Vision",
+            "name": "OpenAI GPT-5.2 Vision",
             "supported": True,
-            "reason": "Uses multimodal vision capabilities for accurate strikethrough detection",
+            "reason": "Uses advanced multimodal vision capabilities for accurate strikethrough detection",
             "setup_required": "OpenAI API key only",
-            "model": getattr(settings, 'OPENAI_VISION_MODEL', 'gpt-4o'),
-            "capabilities": "Advanced text recognition, visual analysis, natural language understanding"
+            "model": getattr(settings, 'OPENAI_VISION_MODEL', 'gpt-5.2'),
+            "capabilities": "Advanced text recognition, visual analysis, natural language understanding, 400K context window"
         },
         "current_provider": getattr(settings, 'STRIKETHROUGH_PROVIDER', 'google')
     }
