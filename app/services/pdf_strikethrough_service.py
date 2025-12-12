@@ -599,8 +599,8 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
                                 "location": {"type": "string"},
                                 "visual_description": {"type": "string"}
                             },
-                            "required": ["struck_through_text", "confidence"],
-                            "additionalProperties": True
+                            "required": ["struck_through_text", "confidence", "location", "visual_description"],
+                            "additionalProperties": False
                         }
                     },
                     "analysis": {"type": "string"}

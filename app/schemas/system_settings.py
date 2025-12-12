@@ -52,8 +52,7 @@ class AllAutorespondSettingsResponse(BaseModel):
     bill_balance_request: AutorespondSettingDetail
     case_updates: AutorespondSettingDetail
     missing_lien_request: AutorespondSettingDetail
-    psl_lien: AutorespondSettingDetail
-    asl_lien: AutorespondSettingDetail
+    liens: AutorespondSettingDetail
 
 
 class AutorespondToggleRequest(BaseModel):

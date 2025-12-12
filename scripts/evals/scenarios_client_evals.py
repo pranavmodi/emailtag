@@ -739,5 +739,45 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["Reports Request"]
+    },
+    "30": {
+        "description": "Cherie Roedel - ASL Lien - Attorney signed RAD lien document for processing",
+        "subject": "Cherie Roedel - Signed Document",
+        "body_html": (
+            "<p>Hello Precise Imaging,</p>"
+            "<p>Please find attached the signed document for our client Cherie Roedel.</p>"
+            "<p>This has been signed and is ready for processing.</p>"
+            "<p>Please confirm receipt and let us know once this has been uploaded to the patient file.</p>"
+            "<p>Thank you,</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "20250703 - RAD Signed Lien - Precise Imaging - Cherie Roedel.pdf",
+                "filepath": "data/documents/20250703 - RAD Signed Lien - Precise Imaging - Cherie Roedel.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL > Rad Lien"]
+    },
+    "31": {
+        "description": "Cherie Roedel - ASL Lien - Attorney signed TECH lien document for processing",
+        "subject": "Cherie Roedel - Signed Document",
+        "body_html": (
+            "<p>Hello Precise Imaging,</p>"
+            "<p>Please find attached the signed document for our client Cherie Roedel.</p>"
+            "<p>This has been signed and is ready for processing.</p>"
+            "<p>Please confirm receipt and let us know once this has been uploaded to the patient file.</p>"
+            "<p>Thank you,</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "20250703 - TECH Signed Lien - Precise Imaging - Cherie Roedel.pdf",
+                "filepath": "data/documents/20250703 - TECH Signed Lien - Precise Imaging - Cherie Roedel.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL > Tech Lien"]
     }
 }

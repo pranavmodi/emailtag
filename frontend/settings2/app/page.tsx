@@ -72,14 +72,8 @@ const AUTORESPOND_LAYOUT: Array<{
     icon: FileWarning,
   },
   {
-    key: "psl_lien",
-    settingKey: "autorespond_psl_lien",
-    accent: "from-cyan-500 to-emerald-500",
-    icon: MailSearch,
-  },
-  {
-    key: "asl_lien",
-    settingKey: "autorespond_asl_lien",
+    key: "liens",
+    settingKey: "autorespond_liens",
     accent: "from-blue-500 to-indigo-600",
     icon: ShieldCheck,
   },

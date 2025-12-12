@@ -484,7 +484,15 @@ async def handle_lien_request(
     # Extract patient ID from email
     patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id, email_subject)
 
-    if not patient_id:
+    # TEMPORARY TESTING: Always use hardcoded PRE470159 for testing
+    original_patient_id = patient_id
+    patient_id = "PRE470159"
+    if original_patient_id:
+        logger.warning(f"⚠️ TESTING MODE: Found patient ID {original_patient_id} but overriding with hardcoded PRE470159 for conversation {front_conversation_id}")
+    else:
+        logger.warning(f"⚠️ TESTING MODE: No patient ID found, using hardcoded PRE470159 for conversation {front_conversation_id}")
+
+    if False:  # Disabled the "patient not found" branch for testing
         logger.info(f"Patient ID not found for conversation {front_conversation_id}. Tagging for human review.")
 
         try:

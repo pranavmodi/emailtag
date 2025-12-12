@@ -83,8 +83,24 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
         service = DocumentProcessingService()
         processing_result = asyncio.run(service.process_document(attachment_content, filename))
 
+        # Log document processing result WITHOUT binary pdf_bytes to avoid massive logs
+        result_summary = {k: v for k, v in processing_result.items() if k != 'enhanced_lien_processing'}
+
+        # If enhanced lien processing exists, add a summary without pdf_bytes
+        if 'enhanced_lien_processing' in processing_result:
+            enhanced_data = processing_result['enhanced_lien_processing']
+            enhanced_summary = {k: v for k, v in enhanced_data.items() if k != 'split_documents'}
+            if 'split_documents' in enhanced_data:
+                split_docs_summary = []
+                for doc in enhanced_data['split_documents']:
+                    split_docs_summary.append({
+                        k: v for k, v in doc.items() if k != 'pdf_bytes'
+                    })
+                enhanced_summary['split_documents'] = split_docs_summary
+            result_summary['enhanced_lien_processing'] = enhanced_summary
+
         logger.info(f"📄 DOCUMENT PROCESSING RESULT for email {email_id}:")
-        logger.info(f"📄 Full result: {processing_result}")
+        logger.info(f"📄 Result summary: {result_summary}")
         
         if not processing_result.get("processing_status") == "completed":
             logger.warning(f"Document processing incomplete for email {email_id}. Status: {processing_result.get('processing_status')}")

@@ -159,15 +159,19 @@ async def get_autorespond_settings(
                 "label": "Missing Lien Request",
                 "description": "Automatic responses to missing lien request emails"
             },
-            "psl_lien": {
-                "label": "PSL Lien",
-                "description": "Automatic responses to Patient Signed Lien (PSL) emails"
-            },
-            "asl_lien": {
-                "label": "ASL Lien",
-                "description": "Automatic responses to Attorney Signed Lien (ASL) emails"
+            "liens": {
+                "label": "Liens (ASL & PSL)",
+                "description": "Automatic responses to all lien submissions (Attorney Signed Liens and Patient Signed Liens)"
             }
         }
+
+        # Consolidated liens setting - use autorespond_liens, fallback to both PSL and ASL for backwards compatibility
+        liens_enabled = settings.get("autorespond_liens")
+        if liens_enabled is None:
+            # If liens setting doesn't exist, check if both PSL and ASL are enabled
+            psl_enabled = settings.get("autorespond_psl_lien", True)
+            asl_enabled = settings.get("autorespond_asl_lien", True)
+            liens_enabled = psl_enabled and asl_enabled
 
         response = AllAutorespondSettingsResponse(
             global_autorespond_enabled=global_enabled,
@@ -201,15 +205,10 @@ async def get_autorespond_settings(
                 label=autorespond_info["missing_lien_request"]["label"],
                 description=autorespond_info["missing_lien_request"]["description"]
             ),
-            psl_lien=AutorespondSettingDetail(
-                enabled=settings.get("autorespond_psl_lien", True),
-                label=autorespond_info["psl_lien"]["label"],
-                description=autorespond_info["psl_lien"]["description"]
-            ),
-            asl_lien=AutorespondSettingDetail(
-                enabled=settings.get("autorespond_asl_lien", True),
-                label=autorespond_info["asl_lien"]["label"],
-                description=autorespond_info["asl_lien"]["description"]
+            liens=AutorespondSettingDetail(
+                enabled=liens_enabled,
+                label=autorespond_info["liens"]["label"],
+                description=autorespond_info["liens"]["description"]
             )
         )
 
@@ -245,8 +244,7 @@ async def toggle_autorespond_setting(
             "autorespond_bill_balance_request",
             "autorespond_case_updates",
             "autorespond_missing_lien_request",
-            "autorespond_psl_lien",
-            "autorespond_asl_lien"
+            "autorespond_liens"
         ]
 
         if request.autorespond_type not in valid_types:
@@ -255,13 +253,37 @@ async def toggle_autorespond_setting(
                 detail=f"Invalid autorespond type. Must be one of: {', '.join(valid_types)}"
             )
 
-        # Update the setting
-        setting = await system_settings_crud.toggle_autorespond(
-            db,
-            autorespond_type=request.autorespond_type,
-            enable=request.setting_value,
-            updated_by=request.updated_by
-        )
+        # Special handling for consolidated liens toggle - update both PSL and ASL
+        if request.autorespond_type == "autorespond_liens":
+            # Update the consolidated liens setting
+            setting = await system_settings_crud.toggle_autorespond(
+                db,
+                autorespond_type="autorespond_liens",
+                enable=request.setting_value,
+                updated_by=request.updated_by
+            )
+
+            # Also update both PSL and ASL for backwards compatibility
+            await system_settings_crud.toggle_autorespond(
+                db,
+                autorespond_type="autorespond_psl_lien",
+                enable=request.setting_value,
+                updated_by=request.updated_by
+            )
+            await system_settings_crud.toggle_autorespond(
+                db,
+                autorespond_type="autorespond_asl_lien",
+                enable=request.setting_value,
+                updated_by=request.updated_by
+            )
+        else:
+            # Update the setting
+            setting = await system_settings_crud.toggle_autorespond(
+                db,
+                autorespond_type=request.autorespond_type,
+                enable=request.setting_value,
+                updated_by=request.updated_by
+            )
 
         # Log the change prominently
         action = "ENABLED" if request.setting_value else "DISABLED"
