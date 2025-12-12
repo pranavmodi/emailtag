@@ -2,13 +2,14 @@
 Shared service for uploading lien documents to RadFlow.
 
 This service is used by both ASL and PSL lien agents to upload
-accepted lien documents to the patient file via RadFlow API.
+accepted lien documents to the patient file via RadFlow API via MCP server.
 """
 import base64
 import httpx
 from typing import Dict, Any
 from celery.utils.log import get_task_logger
 from app.core.config import settings
+from app.mcp import call_mcp_tool
 
 logger = get_task_logger(__name__)
 
@@ -95,11 +96,10 @@ async def upload_lien_to_radflow(
             logger.error(f"No attachment URL found for lien upload to patient {patient_id}")
             return False
 
-        logger.info(f"📤 Uploading {lien_type} ({filename}) to patient {patient_id} via RadFlow API")
+        logger.info(f"📤 Uploading {lien_type} ({filename}) to patient {patient_id} via MCP server")
 
-        # Download the attachment from Front and upload to RadFlow
+        # Step 1: Download file from Front API
         async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
-            # Step 1: Download file from Front API
             headers = {"Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}"}
             download_response = await client.get(attachment_url, headers=headers)
 
@@ -110,50 +110,33 @@ async def upload_lien_to_radflow(
             # Step 2: Convert to base64
             file_content = download_response.content
             base64_string = base64.b64encode(file_content).decode('utf-8')
-            logger.debug(f"Converted {len(file_content)} bytes to base64 ({len(base64_string)} chars)")
+            logger.info(f"📦 Converted {len(file_content)} bytes to base64 ({len(base64_string)} chars)")
 
-            # Step 3: Prepare upload request
-            doc_type_id = _get_doc_type_id(lien_type)
-            upload_payload = {
-                "patientId": patient_id,
-                "DocTypeName": lien_type,
-                "DocTypeId": doc_type_id,
-                "base64String": base64_string
+        # Step 3: Upload via MCP server
+        doc_type_id = _get_doc_type_id(lien_type)
+        logger.info(f"📤 Uploading via MCP: DocTypeName='{lien_type}', DocTypeId={doc_type_id}, Patient={patient_id}")
+
+        upload_result = await call_mcp_tool(
+            tool_name="upload_patient_document",
+            arguments={
+                "patient_id": patient_id,
+                "doc_type_name": lien_type,
+                "doc_type_id": doc_type_id,
+                "base64_string": base64_string
             }
+        )
 
-            logger.info(f"Uploading lien: DocTypeName='{lien_type}', DocTypeId={doc_type_id}, Patient={patient_id}")
-            logger.info(f"📡 RadFlow API Endpoint: {settings.RADFLOW_UPLOAD_ENDPOINT}")
-            logger.info(f"📦 Payload size: {len(base64_string)} chars base64, {len(file_content)} bytes original")
-            logger.debug(f"📋 Full payload (without base64): patientId={patient_id}, DocTypeName={lien_type}, DocTypeId={doc_type_id}")
-
-            # Step 4: Upload to RadFlow
-            upload_response = await client.post(
-                settings.RADFLOW_UPLOAD_ENDPOINT,
-                json=upload_payload,
-                timeout=60.0  # Longer timeout for upload
-            )
-
-            logger.info(f"📡 RadFlow Response Status: {upload_response.status_code}")
-            logger.info(f"📡 RadFlow Response Headers: {dict(upload_response.headers)}")
-
-            if upload_response.status_code != 200:
-                logger.error(f"❌ RadFlow upload failed with status {upload_response.status_code}")
-                logger.error(f"📄 Response body: {upload_response.text[:1000]}")  # First 1000 chars
-                logger.error(f"🔑 Was authentication included? Check if RADFLOW_API_KEY is set in settings")
-                return False
-
-            # Step 5: Parse and validate response
-            result_data = upload_response.json()
-            upload_success = result_data.get("result", False)
-            response_status = result_data.get("responseStatus", "Unknown")
-            exception = result_data.get("exception")
-
-            if upload_success and response_status == "Success":
-                logger.info(f"✅ Successfully uploaded {lien_type} for patient {patient_id} to RadFlow")
+        if upload_result and isinstance(upload_result, dict):
+            if upload_result.get("success"):
+                logger.info(f"✅ Successfully uploaded {lien_type} for patient {patient_id} via MCP")
                 return True
             else:
-                logger.error(f"❌ RadFlow upload failed: status={response_status}, exception={exception}")
+                error = upload_result.get("error", "Unknown error")
+                logger.error(f"❌ MCP upload failed: {error}")
                 return False
+        else:
+            logger.error(f"❌ MCP upload returned unexpected result: {upload_result}")
+            return False
 
     except httpx.TimeoutException:
         logger.error(f"⏱️ Timeout uploading lien to patient {patient_id}")
@@ -212,39 +195,28 @@ async def upload_lien_pdf_bytes_to_radflow(
 
         # Prepare upload request
         doc_type_id = _get_doc_type_id(full_lien_type)
-        upload_payload = {
-            "patientId": patient_id,
-            "DocTypeName": full_lien_type,
-            "DocTypeId": doc_type_id,
-            "base64String": base64_string
-        }
+        logger.info(f"Uploading lien via MCP: DocTypeName='{full_lien_type}', DocTypeId={doc_type_id}, Patient={patient_id}")
 
-        logger.info(f"Uploading lien: DocTypeName='{full_lien_type}', DocTypeId={doc_type_id}, Patient={patient_id}")
+        upload_result = await call_mcp_tool(
+            tool_name="upload_patient_document",
+            arguments={
+                "patient_id": patient_id,
+                "doc_type_name": full_lien_type,
+                "doc_type_id": doc_type_id,
+                "base64_string": base64_string
+            }
+        )
 
-        # Upload to RadFlow
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            upload_response = await client.post(
-                settings.RADFLOW_UPLOAD_ENDPOINT,
-                json=upload_payload,
-                timeout=60.0
-            )
-
-            if upload_response.status_code != 200:
-                logger.error(f"RadFlow upload failed with status {upload_response.status_code}: {upload_response.text}")
-                return False
-
-            # Parse and validate response
-            result_data = upload_response.json()
-            upload_success = result_data.get("result", False)
-            response_status = result_data.get("responseStatus", "Unknown")
-            exception = result_data.get("exception")
-
-            if upload_success and response_status == "Success":
-                logger.info(f"✅ Successfully uploaded {full_lien_type} for patient {patient_id} to RadFlow")
+        if upload_result and isinstance(upload_result, dict):
+            if upload_result.get("success"):
+                logger.info(f"✅ Successfully uploaded {full_lien_type} for patient {patient_id} via MCP")
                 return True
             else:
-                logger.error(f"❌ RadFlow upload failed: status={response_status}, exception={exception}")
+                logger.error(f"❌ MCP upload failed: {upload_result.get('error', 'Unknown error')}")
                 return False
+        else:
+            logger.error(f"❌ MCP upload returned unexpected result: {upload_result}")
+            return False
 
     except httpx.TimeoutException:
         logger.error(f"⏱️ Timeout uploading lien to patient {patient_id}")
