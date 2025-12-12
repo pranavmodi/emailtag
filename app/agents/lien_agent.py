@@ -481,16 +481,20 @@ async def handle_lien_request(
             logger.error(f"Failed to request clearer document: {e}")
             return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to request clearer document: {e}"}}
 
-    # Extract patient ID from email
-    patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id, email_subject)
+    # Extract patient ID - First check if it was already extracted from document barcode
+    patient_id = None
 
-    # TEMPORARY TESTING: Always use hardcoded PRE470159 for testing
-    original_patient_id = patient_id
-    patient_id = "PRE470159"
-    if original_patient_id:
-        logger.warning(f"⚠️ TESTING MODE: Found patient ID {original_patient_id} but overriding with hardcoded PRE470159 for conversation {front_conversation_id}")
+    if email_obj.extracted_patient_ids and len(email_obj.extracted_patient_ids) > 0:
+        patient_id = email_obj.extracted_patient_ids[0]
+        logger.info(f"🔍 LIEN AGENT: Using patient ID from document barcode: {patient_id}")
     else:
-        logger.warning(f"⚠️ TESTING MODE: No patient ID found, using hardcoded PRE470159 for conversation {front_conversation_id}")
+        logger.info(f"🔍 LIEN AGENT: No barcode patient ID found, attempting to extract from email text")
+        patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id, email_subject)
+
+    if patient_id:
+        logger.info(f"🔍 LIEN AGENT: Patient ID found: {patient_id}")
+    else:
+        logger.warning(f"🔍 LIEN AGENT: No patient ID found for conversation {front_conversation_id}")
 
     if False:  # Disabled the "patient not found" branch for testing
         logger.info(f"Patient ID not found for conversation {front_conversation_id}. Tagging for human review.")
@@ -599,9 +603,34 @@ async def handle_lien_request(
                 "success": upload_success
             })
 
+        # If upload failed, tag for human review and notify
         if not upload_success:
-            logger.warning(f"File upload failed for patient {patient_id}, but continuing with response")
+            logger.warning(f"File upload failed for patient {patient_id}. Tagging for human review.")
 
+            try:
+                frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
+                await send_reply_to_front_direct(
+                    conversation_id=front_conversation_id,
+                    reply_text=f"We encountered an error uploading your {lien_type} to the patient file. A team member will review your submission and complete the upload manually. Thank you for your patience."
+                )
+
+                return {
+                    "agent_handled": True,
+                    "processed_flag": True,
+                    "details": {
+                        "action": "tagged_for_human_review_upload_failed",
+                        "patient_id": patient_id,
+                        "lien_type": lien_type,
+                        "signature_type": signature_type,
+                        "upload_success": False,
+                        "reason": "RadFlow upload failed"
+                    }
+                }
+            except Exception as tag_error:
+                logger.error(f"Failed to add human review tag after upload failure: {tag_error}")
+                return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Upload failed and couldn't tag for review: {tag_error}"}}
+
+        # Upload succeeded - proceed with success response
         # Process patient information for response
         patient_name = "Unknown"
         dob = "Unknown"

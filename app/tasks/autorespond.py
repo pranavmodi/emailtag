@@ -186,6 +186,9 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             logger.warning("determined_tags not passed to autorespond task. Reading from DB, which may be stale.")
             applied_tag_names = [tag.name for tag in email_obj.tags if hasattr(tag, 'name')]
 
+        # DEBUG: Log applied tags
+        logger.info(f"🏷️ AUTORESPOND DEBUG: Email {email_id} has tags: {applied_tag_names}")
+
         # Extract document processing results for downstream agent use
         document_results = email_obj.ocr_results if hasattr(email_obj, 'ocr_results') and email_obj.ocr_results else None
 
@@ -437,166 +440,159 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                     auto_response_details = {"reason": "Missing Lien Request agent call failed or returned None."}
 
         # --- BEGIN: Case Updates Agent Branch ---
-        elif not agent_handled_response:
-            # Check for any Case Update tags (excluding those that require human review)
-            matching_case_tags = [tag for tag in applied_tag_names if tag in CASE_UPDATE_TAGS]
+        # Check for any Case Update tags (excluding those that require human review)
+        matching_case_tags = [tag for tag in applied_tag_names if tag in CASE_UPDATE_TAGS]
 
-            if matching_case_tags:
-                # Check if case_updates autorespond is enabled
-                if not asyncio.run(_check_autorespond_enabled("autorespond_case_updates")):
-                    logger.info(f"📴 Case Updates autorespond DISABLED - Skipping agent for email {email_id}")
-                    auto_response_details = {"reason": "Case Updates autorespond is disabled"}
-                else:
-                    agent_name_for_status = "case_updates"
-                    logger.info(
-                        f"Email {email_id} tagged with Case Update tag(s) {matching_case_tags}. Attempting Case Updates agent."
+        if not agent_handled_response and matching_case_tags:
+            # Check if case_updates autorespond is enabled
+            if not asyncio.run(_check_autorespond_enabled("autorespond_case_updates")):
+                logger.info(f"📴 Case Updates autorespond DISABLED - Skipping agent for email {email_id}")
+                auto_response_details = {"reason": "Case Updates autorespond is disabled"}
+            else:
+                agent_name_for_status = "case_updates"
+                logger.info(
+                    f"Email {email_id} tagged with Case Update tag(s) {matching_case_tags}. Attempting Case Updates agent."
+                )
+
+                agent_result_dict = None
+
+                async def _run_case_updates_agent():
+                    nonlocal agent_result_dict
+                    agent_result_dict = await handle_case_update_request(
+                        front_conversation_id=front_conversation_id,
+                        current_email_content=current_email_content,
+                        email_subject=email_obj.subject,
+                        applied_case_tags=matching_case_tags,
+                        structured_history_messages=structured_history_messages,
+                        settings_obj=settings,
                     )
 
-                    agent_result_dict = None
+                try:
+                    asyncio.run(_run_case_updates_agent())
+                except Exception as e:
+                    logger.error(
+                        f"Error running Case Updates agent for {email_id}: {e}",
+                        exc_info=True,
+                    )
+                    agent_result_dict = {
+                        "agent_handled": False,
+                        "processed_flag": False,
+                        "details": {"reason": f"Agent execution error: {e}"},
+                    }
 
-                    async def _run_case_updates_agent():
-                        nonlocal agent_result_dict
-                        agent_result_dict = await handle_case_update_request(
-                            front_conversation_id=front_conversation_id,
-                            current_email_content=current_email_content,
-                            email_subject=email_obj.subject,
-                            applied_case_tags=matching_case_tags,
-                            structured_history_messages=structured_history_messages,
-                            settings_obj=settings,
+                if agent_result_dict:
+                    agent_handled_response = agent_result_dict.get("agent_handled", False)
+                    auto_response_processed_flag = agent_result_dict.get("processed_flag", False)
+                    auto_response_details = agent_result_dict.get(
+                        "details", {"reason": "Unknown Case Updates agent outcome"}
+                    )
+                    if agent_handled_response:
+                        logger.info(
+                            f"Case Updates agent handled response for {front_conversation_id}."
                         )
-
-                    try:
-                        asyncio.run(_run_case_updates_agent())
-                    except Exception as e:
-                        logger.error(
-                            f"Error running Case Updates agent for {email_id}: {e}",
-                            exc_info=True,
-                        )
-                        agent_result_dict = {
-                            "agent_handled": False,
-                            "processed_flag": False,
-                            "details": {"reason": f"Agent execution error: {e}"},
-                        }
-
-                    if agent_result_dict:
-                        agent_handled_response = agent_result_dict.get("agent_handled", False)
-                        auto_response_processed_flag = agent_result_dict.get("processed_flag", False)
-                        auto_response_details = agent_result_dict.get(
-                            "details", {"reason": "Unknown Case Updates agent outcome"}
-                        )
-                        if agent_handled_response:
-                            logger.info(
-                                f"Case Updates agent handled response for {front_conversation_id}."
-                            )
-                        else:
-                            logger.warning(
-                                f"Case Updates agent did NOT handle response for {front_conversation_id}."
-                            )
                     else:
-                        logger.error(
-                            f"Case Updates agent call failed to return a result for {front_conversation_id}."
+                        logger.warning(
+                            f"Case Updates agent did NOT handle response for {front_conversation_id}."
                         )
-                        auto_response_details = {
-                            "reason": "Case Updates agent call failed or returned None."
-                        }
+                else:
+                    logger.error(
+                        f"Case Updates agent call failed to return a result for {front_conversation_id}."
+                    )
+                    auto_response_details = {
+                        "reason": "Case Updates agent call failed or returned None."
+                    }
         # --- END: Case Updates Agent Branch ---
-        
+
         # --- BEGIN: PSL Lien Agent Branch ---
-        elif not agent_handled_response:
-            # Check for PSL Lien tags (both PSL and either Rad Lien or Tech Lien required)
-            has_psl = PSL_TAG_NAME in applied_tag_names
+        elif not agent_handled_response and PSL_TAG_NAME in applied_tag_names and (RAD_LIEN_TAG_NAME in applied_tag_names or TECH_LIEN_TAG_NAME in applied_tag_names):
             has_rad_lien = RAD_LIEN_TAG_NAME in applied_tag_names
             has_tech_lien = TECH_LIEN_TAG_NAME in applied_tag_names
+            logger.info(f"🔍 PSL LIEN CHECK: Matched PSL lien conditions")
+            # Check if liens autorespond is enabled (consolidated setting)
+            if not asyncio.run(_check_autorespond_enabled("autorespond_liens")):
+                logger.info(f"📴 Liens autorespond DISABLED - Skipping PSL agent for email {email_id}")
+                auto_response_details = {"reason": "Liens autorespond is disabled"}
+            else:
+                agent_name_for_status = "psl_lien"
+                lien_type = "PSL > Rad Lien" if has_rad_lien else "PSL > Tech Lien"
+                logger.info(f"Email {email_id} tagged with {lien_type}. Attempting PSL Lien agent.")
 
-            if has_psl and (has_rad_lien or has_tech_lien):
-                # Check if psl_lien autorespond is enabled
-                if not asyncio.run(_check_autorespond_enabled("autorespond_psl_lien")):
-                    logger.info(f"📴 PSL Lien autorespond DISABLED - Skipping agent for email {email_id}")
-                    auto_response_details = {"reason": "PSL Lien autorespond is disabled"}
-                else:
-                    agent_name_for_status = "psl_lien"
-                    lien_type = "PSL > Rad Lien" if has_rad_lien else "PSL > Tech Lien"
-                    logger.info(f"Email {email_id} tagged with {lien_type}. Attempting PSL Lien agent.")
+                agent_result_dict = None
+                async def _run_psl_lien_agent():
+                    nonlocal agent_result_dict
+                    agent_result_dict = await handle_psl_lien_request(
+                        front_conversation_id=front_conversation_id,
+                        current_email_content=current_email_content,
+                        applied_tags=applied_tag_names,
+                        email_obj=email_obj,
+                        document_analysis_results=document_results,
+                        settings_obj=settings,
+                        email_subject=email_obj.subject
+                    )
 
-                    agent_result_dict = None
-                    async def _run_psl_lien_agent():
-                        nonlocal agent_result_dict
-                        agent_result_dict = await handle_psl_lien_request(
-                            front_conversation_id=front_conversation_id,
-                            current_email_content=current_email_content,
-                            applied_tags=applied_tag_names,
-                            email_obj=email_obj,
-                            document_analysis_results=document_results,
-                            settings_obj=settings,
-                            email_subject=email_obj.subject
-                        )
+                try:
+                    asyncio.run(_run_psl_lien_agent())
+                except Exception as e:
+                    logger.error(f"Error running PSL Lien agent for {email_id}: {e}", exc_info=True)
+                    agent_result_dict = {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Agent execution error: {e}"}}
 
-                    try:
-                        asyncio.run(_run_psl_lien_agent())
-                    except Exception as e:
-                        logger.error(f"Error running PSL Lien agent for {email_id}: {e}", exc_info=True)
-                        agent_result_dict = {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Agent execution error: {e}"}}
-
-                    if agent_result_dict:
-                        agent_handled_response = agent_result_dict.get("agent_handled", False)
-                        auto_response_processed_flag = agent_result_dict.get("processed_flag", False)
-                        auto_response_details = agent_result_dict.get("details", {"reason": "Unknown PSL Lien agent processing outcome"})
-                        if agent_handled_response:
-                            logger.info(f"PSL Lien agent handled response for {front_conversation_id}.")
-                        else:
-                            logger.warning(f"PSL Lien agent did NOT handle response for {front_conversation_id}.")
+                if agent_result_dict:
+                    agent_handled_response = agent_result_dict.get("agent_handled", False)
+                    auto_response_processed_flag = agent_result_dict.get("processed_flag", False)
+                    auto_response_details = agent_result_dict.get("details", {"reason": "Unknown PSL Lien agent processing outcome"})
+                    if agent_handled_response:
+                        logger.info(f"PSL Lien agent handled response for {front_conversation_id}.")
                     else:
-                        logger.error(f"PSL Lien agent call failed to return a result for {front_conversation_id}.")
-                        auto_response_details = {"reason": "PSL Lien agent call failed or returned None."}
+                        logger.warning(f"PSL Lien agent did NOT handle response for {front_conversation_id}.")
+                else:
+                    logger.error(f"PSL Lien agent call failed to return a result for {front_conversation_id}.")
+                    auto_response_details = {"reason": "PSL Lien agent call failed or returned None."}
         # --- END: PSL Lien Agent Branch ---
 
         # --- BEGIN: ASL Lien Agent Branch ---
-        elif not agent_handled_response:
-            # Check for ASL Lien tags (both ASL and either Rad Lien or Tech Lien required)
-            has_asl = ASL_TAG_NAME in applied_tag_names
+        elif not agent_handled_response and ASL_TAG_NAME in applied_tag_names and (RAD_LIEN_TAG_NAME in applied_tag_names or TECH_LIEN_TAG_NAME in applied_tag_names):
             has_rad_lien = RAD_LIEN_TAG_NAME in applied_tag_names
             has_tech_lien = TECH_LIEN_TAG_NAME in applied_tag_names
+            logger.info(f"🔍 ASL LIEN CHECK: Matched ASL lien conditions")
+            # Check if liens autorespond is enabled (consolidated setting)
+            if not asyncio.run(_check_autorespond_enabled("autorespond_liens")):
+                logger.info(f"📴 Liens autorespond DISABLED - Skipping ASL agent for email {email_id}")
+                auto_response_details = {"reason": "Liens autorespond is disabled"}
+            else:
+                agent_name_for_status = "asl_lien"
+                lien_type = "ASL > Rad Lien" if has_rad_lien else "ASL > Tech Lien"
+                logger.info(f"Email {email_id} tagged with {lien_type}. Attempting ASL Lien agent.")
 
-            if has_asl and (has_rad_lien or has_tech_lien):
-                # Check if asl_lien autorespond is enabled
-                if not asyncio.run(_check_autorespond_enabled("autorespond_asl_lien")):
-                    logger.info(f"📴 ASL Lien autorespond DISABLED - Skipping agent for email {email_id}")
-                    auto_response_details = {"reason": "ASL Lien autorespond is disabled"}
-                else:
-                    agent_name_for_status = "asl_lien"
-                    lien_type = "ASL > Rad Lien" if has_rad_lien else "ASL > Tech Lien"
-                    logger.info(f"Email {email_id} tagged with {lien_type}. Attempting ASL Lien agent.")
+                agent_result_dict = None
+                async def _run_asl_lien_agent():
+                    nonlocal agent_result_dict
+                    agent_result_dict = await handle_asl_lien_request(
+                        front_conversation_id=front_conversation_id,
+                        current_email_content=current_email_content,
+                        applied_tags=applied_tag_names,
+                        email_obj=email_obj,
+                        document_analysis_results=document_results,
+                        settings_obj=settings,
+                        email_subject=email_obj.subject
+                    )
 
-                    agent_result_dict = None
-                    async def _run_asl_lien_agent():
-                        nonlocal agent_result_dict
-                        agent_result_dict = await handle_asl_lien_request(
-                            front_conversation_id=front_conversation_id,
-                            current_email_content=current_email_content,
-                            applied_tags=applied_tag_names,
-                            email_obj=email_obj,
-                            document_analysis_results=document_results,
-                            settings_obj=settings,
-                            email_subject=email_obj.subject
-                        )
+                try:
+                    asyncio.run(_run_asl_lien_agent())
+                except Exception as e:
+                    logger.error(f"Error running ASL Lien agent for {email_id}: {e}", exc_info=True)
+                    agent_result_dict = {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Agent execution error: {e}"}}
 
-                    try:
-                        asyncio.run(_run_asl_lien_agent())
-                    except Exception as e:
-                        logger.error(f"Error running ASL Lien agent for {email_id}: {e}", exc_info=True)
-                        agent_result_dict = {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Agent execution error: {e}"}}
-
-                    if agent_result_dict:
-                        agent_handled_response = agent_result_dict.get("agent_handled", False)
-                        auto_response_processed_flag = agent_result_dict.get("processed_flag", False)
-                        auto_response_details = agent_result_dict.get("details", {"reason": "Unknown ASL Lien agent processing outcome"})
-                        if agent_handled_response:
-                            logger.info(f"ASL Lien agent handled response for {front_conversation_id}.")
-                        else:
-                            logger.warning(f"ASL Lien agent did NOT handle response for {front_conversation_id}.")
+                if agent_result_dict:
+                    agent_handled_response = agent_result_dict.get("agent_handled", False)
+                    auto_response_processed_flag = agent_result_dict.get("processed_flag", False)
+                    auto_response_details = agent_result_dict.get("details", {"reason": "Unknown ASL Lien agent processing outcome"})
+                    if agent_handled_response:
+                        logger.info(f"ASL Lien agent handled response for {front_conversation_id}.")
                     else:
-                        logger.error(f"ASL Lien agent call failed to return a result for {front_conversation_id}.")
-                        auto_response_details = {"reason": "ASL Lien agent call failed or returned None."}
+                        logger.warning(f"ASL Lien agent did NOT handle response for {front_conversation_id}.")
+                else:
+                    logger.error(f"ASL Lien agent call failed to return a result for {front_conversation_id}.")
+                    auto_response_details = {"reason": "ASL Lien agent call failed or returned None."}
         # --- END: ASL Lien Agent Branch ---
 
         current_status_from_tagging = email_obj.status

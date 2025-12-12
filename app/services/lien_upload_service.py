@@ -98,7 +98,7 @@ async def upload_lien_to_radflow(
         logger.info(f"📤 Uploading {lien_type} ({filename}) to patient {patient_id} via RadFlow API")
 
         # Download the attachment from Front and upload to RadFlow
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
             # Step 1: Download file from Front API
             headers = {"Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}"}
             download_response = await client.get(attachment_url, headers=headers)
@@ -122,6 +122,9 @@ async def upload_lien_to_radflow(
             }
 
             logger.info(f"Uploading lien: DocTypeName='{lien_type}', DocTypeId={doc_type_id}, Patient={patient_id}")
+            logger.info(f"📡 RadFlow API Endpoint: {settings.RADFLOW_UPLOAD_ENDPOINT}")
+            logger.info(f"📦 Payload size: {len(base64_string)} chars base64, {len(file_content)} bytes original")
+            logger.debug(f"📋 Full payload (without base64): patientId={patient_id}, DocTypeName={lien_type}, DocTypeId={doc_type_id}")
 
             # Step 4: Upload to RadFlow
             upload_response = await client.post(
@@ -130,8 +133,13 @@ async def upload_lien_to_radflow(
                 timeout=60.0  # Longer timeout for upload
             )
 
+            logger.info(f"📡 RadFlow Response Status: {upload_response.status_code}")
+            logger.info(f"📡 RadFlow Response Headers: {dict(upload_response.headers)}")
+
             if upload_response.status_code != 200:
-                logger.error(f"RadFlow upload failed with status {upload_response.status_code}: {upload_response.text}")
+                logger.error(f"❌ RadFlow upload failed with status {upload_response.status_code}")
+                logger.error(f"📄 Response body: {upload_response.text[:1000]}")  # First 1000 chars
+                logger.error(f"🔑 Was authentication included? Check if RADFLOW_API_KEY is set in settings")
                 return False
 
             # Step 5: Parse and validate response
