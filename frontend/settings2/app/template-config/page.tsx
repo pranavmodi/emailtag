@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BadgeCheck } from "lucide-react";
 
-import { ApiError, SettingsApi } from "@/lib/api";
+import { ApiError, SettingsApi, TemplatesApi } from "@/lib/api";
 import {
   Card,
   CardContent,
@@ -14,7 +14,11 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-import { MENU_ITEMS, TAG_OPTIONS } from "./constants/template-config.constants";
+import {
+  DEFAULT_CUSTOM_PLACEHOLDERS,
+  MENU_ITEMS,
+  TAG_OPTIONS,
+} from "./constants/template-config.constants";
 import { getTagLabel } from "./utils/template-helpers";
 import { StatusBanner } from "./components/StatusBanner";
 import { PlaceholderManager } from "./components/PlaceholderManager";
@@ -22,13 +26,16 @@ import { LienTemplatesEditor } from "./components/LienTemplatesEditor";
 import { UnifiedTemplateEditor } from "./components/UnifiedTemplateEditor";
 import PlaceholderSection from "./components/PlaceholderSection";
 import { TemplatePreview } from "./components/TemplatePreview";
-import { useTagSettings } from "./hooks/useTagSettings";
+import { useTagSettings, normalizeCustomPlaceholdersFromSettings } from "./hooks/useTagSettings";
 
 export default function TemplateConfigPage() {
   const [currentUser, setCurrentUser] = useState("Admin");
   const [selectedTag, setSelectedTag] = useState(TAG_OPTIONS[0].value);
   const [showPreview, setShowPreview] = useState(true);
   const [showPersonalInjuryInPreview, setShowPersonalInjuryInPreview] = useState(true);
+  const [baseCustomPlaceholders, setBaseCustomPlaceholders] = useState<Record<string, string>>({
+    ...DEFAULT_CUSTOM_PLACEHOLDERS,
+  });
 
   const {
     tagSettings,
@@ -68,6 +75,40 @@ export default function TemplateConfigPage() {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadWorkspacePlaceholders = async () => {
+      try {
+        const response = await TemplatesApi.getAllTagSettings();
+        if (!mounted) return;
+        const merged: Record<string, string> = {};
+        response.items.forEach((item) => {
+          const placeholders = normalizeCustomPlaceholdersFromSettings(item.settings);
+          Object.entries(placeholders).forEach(([key, value]) => {
+            merged[key] = value;
+          });
+        });
+        setBaseCustomPlaceholders(
+          Object.keys(merged).length > 0 ? merged : { ...DEFAULT_CUSTOM_PLACEHOLDERS }
+        );
+      } catch (error) {
+        console.error("Failed to load workspace custom placeholders", error);
+      }
+    };
+    void loadWorkspacePlaceholders();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const mergedCustomPlaceholders = useMemo(() => {
+    const merged = { ...baseCustomPlaceholders };
+    Object.entries(tagSettings.custom_placeholders || {}).forEach(([key, value]) => {
+      merged[key] = value as string;
+    });
+    return merged;
+  }, [baseCustomPlaceholders, tagSettings.custom_placeholders]);
 
   const logout = async () => {
     try {
@@ -183,7 +224,10 @@ export default function TemplateConfigPage() {
           ) : (
             <>
               {/* Placeholder Section - Dynamic based on selected tag */}
-              <PlaceholderSection selectedTag={selectedTag} />
+              <PlaceholderSection
+                selectedTag={selectedTag}
+                customPlaceholders={mergedCustomPlaceholders}
+              />
 
               {/* Lien Templates Editor - Show for Lien Templates tag */}
               {selectedTag === "Lien Templates" && (

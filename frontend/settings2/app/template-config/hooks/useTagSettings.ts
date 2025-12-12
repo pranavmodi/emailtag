@@ -13,6 +13,23 @@ import {
 } from "../constants/template-config.constants";
 import { getTagLabel } from "../utils/template-helpers";
 
+export function normalizeCustomPlaceholdersFromSettings(
+  settings: Record<string, any> = {}
+): Record<string, string> {
+  const customPlaceholders = {
+    ...((settings.custom_placeholders as Record<string, string>) || {}),
+  };
+
+  if (settings.scheduling_phone) customPlaceholders.scheduling_phone = settings.scheduling_phone;
+  if (settings.no_show_policy) customPlaceholders.no_show_policy = settings.no_show_policy;
+  if (settings.bills_link) customPlaceholders.bills_link = settings.bills_link;
+  if (settings.reports_link) customPlaceholders.reports_link = settings.reports_link;
+
+  return Object.keys(customPlaceholders).length > 0
+    ? customPlaceholders
+    : { ...DEFAULT_CUSTOM_PLACEHOLDERS };
+}
+
 export function useTagSettings(selectedTag: string, currentUser: string) {
   const [tagSettings, setTagSettings] = useState(DEFAULT_TAG_SETTINGS);
   const [tagOriginal, setTagOriginal] = useState(DEFAULT_TAG_SETTINGS);
@@ -25,20 +42,7 @@ export function useTagSettings(selectedTag: string, currentUser: string) {
     setTagStatus(null);
     try {
       const response = await TemplatesApi.getTagSettings(tagName);
-
-      // Merge custom placeholders with any legacy separate fields for backward compatibility
-      const customPlaceholders = (response.settings.custom_placeholders as unknown as Record<string, string>) || {};
-
-      // If old separate fields exist, merge them into custom_placeholders
-      if (response.settings.scheduling_phone) customPlaceholders.scheduling_phone = response.settings.scheduling_phone;
-      if (response.settings.no_show_policy) customPlaceholders.no_show_policy = response.settings.no_show_policy;
-      if (response.settings.bills_link) customPlaceholders.bills_link = response.settings.bills_link;
-      if (response.settings.reports_link) customPlaceholders.reports_link = response.settings.reports_link;
-
-      // If custom_placeholders is empty, use defaults
-      const finalCustomPlaceholders = Object.keys(customPlaceholders).length > 0
-        ? customPlaceholders
-        : DEFAULT_CUSTOM_PLACEHOLDERS;
+      const finalCustomPlaceholders = normalizeCustomPlaceholdersFromSettings(response.settings);
 
       const nextSettings = {
         // Custom placeholders (global, available across all autoresponds)
