@@ -172,8 +172,7 @@ class CRUDSystemSettings:
             "autorespond_bill_balance_request",
             "autorespond_case_updates",
             "autorespond_missing_lien_request",
-            "autorespond_psl_lien",
-            "autorespond_asl_lien"
+            "autorespond_liens"  # Consolidated liens setting (replaces PSL/ASL)
         ]
 
         settings = {}
