@@ -73,7 +73,8 @@ export type TemplateKey = keyof typeof TEMPLATE_DEFINITIONS;
 
 export const TAG_OPTIONS = [
   { value: "Apt status req", label: "Apt Status Req" },
-  { value: "Lien Templates", label: "Lien Templates" }
+  { value: "Lien Templates", label: "Lien Templates" },
+  { value: "Bill or Balance Request", label: "Bill or Balance Request" }
 ];
 
 // Dummy data for preview - Appointment table
@@ -213,26 +214,74 @@ Please resubmit the lien with the signature properly placed in the correct box.
 
 Thank you,
 Precise Imaging Billing Dept.
+www.PreciseMRI.com`,
+
+  // Bill Balance templates
+  bill_balance_found_template: `Dear {patient_name},
+
+Thank you for your inquiry regarding your account balance.
+
+Patient ID: {patient_id}
+Account Number: {account_number}
+Current Balance: {current_balance}
+Invoice Number: {invoice_number}
+
+You can view detailed billing information and make payments through our patient portal:
+<a href="{portal_link}">Access Patient Portal</a>
+
+Available Payment Methods:
+{payment_methods}
+
+For billing questions, please contact our billing department at {billing_phone}.
+
+Thank you,
+Precise Imaging Billing Department
+www.PreciseMRI.com`,
+
+  bill_balance_not_found_template: `Thank you for your billing inquiry.
+
+We're unable to locate a unique patient record. This could be because:
+- The patient ID was not found in our system
+- Multiple patient records were found matching the provided information
+
+A member of our billing team will personally review your request and respond to you shortly. If you have any additional information such as:
+- Full patient name and date of birth
+- Invoice numbers or account numbers
+- Service dates
+
+Please reply with those details to help us locate the correct account.
+
+For immediate assistance, please contact our billing department at {billing_phone}.
+
+Thank you,
+Precise Imaging Billing Department
 www.PreciseMRI.com`
 };
 
+/**
+ * Standard Tag Settings Structure
+ *
+ * Individual tags store ONLY templates (unified or scenario-specific)
+ * Custom placeholders are stored separately in WORKSPACE tag
+ *
+ * NO LEGACY FIELDS - All settings use this standardized approach
+ */
 export const DEFAULT_TAG_SETTINGS = {
-  // Custom placeholders (global, available across all autoresponds)
-  custom_placeholders: DEFAULT_CUSTOM_PLACEHOLDERS,
-  // Unified template (for Apt status req)
+  // Unified template (for single-template tags like Apt status req)
   unified_template: DEFAULT_UNIFIED_TEMPLATE,
-  // Lien templates (for ASL/PSL lien agents)
+
+  // Lien templates (multi-scenario tag)
   lien_success_template: DEFAULT_LIEN_TEMPLATES.lien_success_template,
   lien_patient_not_found_template: DEFAULT_LIEN_TEMPLATES.lien_patient_not_found_template,
   lien_reject_no_changes_template: DEFAULT_LIEN_TEMPLATES.lien_reject_no_changes_template,
   lien_reject_not_readable_template: DEFAULT_LIEN_TEMPLATES.lien_reject_not_readable_template,
   lien_reject_sig_not_valid_template: DEFAULT_LIEN_TEMPLATES.lien_reject_sig_not_valid_template,
-  // Legacy fields (for backward compatibility)
-  scheduling_phone_number: "",
-  portal_link_bills: "",
-  portal_link_reports: "",
-  intro_text: "",
-  table_intro_text: "",
-  personal_injury_text: "",
-  footer_text: "",
+
+  // Bill Balance templates (multi-scenario tag)
+  bill_balance_found_template: "",
+  bill_balance_not_found_template: "",
+
+  // Note: custom_placeholders are now stored in WORKSPACE tag, not per-tag
+  // This field is added dynamically in the UI for PlaceholderManager
+  custom_placeholders: DEFAULT_CUSTOM_PLACEHOLDERS,
 };

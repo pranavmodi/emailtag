@@ -60,21 +60,7 @@ DEFAULT_PORTAL_LINKS = {
     "reports_images": "https://example.com/portal/reports"
 }
 
-# Legacy individual template parts (kept for backward compatibility during migration)
-DEFAULT_INTRO_TEXT = """Patient ID: {patient_id_confirmed}<br/><br/>
-<b>Our direct scheduling phone # is {scheduling_phone} and we can assist with directions, rescheduling, canceling, or any other scheduling-related questions.</b><br/>
-{no_show_policy}<br/><br/>"""
-DEFAULT_TABLE_INTRO_TEXT = "Here is a summary of the patient's exams we currently have entered into our system:"
-DEFAULT_PERSONAL_INJURY_TEXT = """<b>Important Information regarding personal injury cases</b><br/>
-A report containing the findings of the exam will also be sent to the attorney.<br/>
-A bill will be sent to the attorney once both the patient and the attorney sign all pending liens.<br/>
-Please make sure to submit a negotiation offer before sending the payment.<br/><br/>"""
-DEFAULT_FOOTER_TEXT = """<br/>
-{personal_injury_info}
-Access bills, appointment times, and e-sign liens (Click request login if you don't have an account): <a href="{bills_link}">Click Here</a><br/>
-Access reports & images (Request login here for reports): <a href="{reports_link}">Click Here</a><br/>"""
-
-# New unified template (combines all parts above with {appointment_table} placeholder)
+# Unified template (standard approach - replaces all legacy template parts)
 DEFAULT_UNIFIED_TEMPLATE = """Dear {first_name} {last_name},<br/>
 In regards to patient ID (MRN): {patient_id_confirmed}<br/><br/>
 
@@ -112,59 +98,62 @@ async def get_tag_settings_from_db(tag_name: str = "Apt status req") -> dict:
     """
     Fetch tag settings from database.
 
+    STANDARD APPROACH:
+    - Load custom_placeholders from WORKSPACE tag (global placeholders)
+    - Load unified_template from tag-specific settings
+
     Returns a dict with settings, falling back to defaults if not found.
     """
     try:
         async with AsyncSessionLocal() as db:
+            # Load workspace custom placeholders (global)
+            workspace_dict = await tag_settings_crud.get_settings_dict(db, "WORKSPACE")
+            custom_placeholders = {}
+            if workspace_dict and "custom_placeholders" in workspace_dict:
+                custom_placeholders = workspace_dict["custom_placeholders"]
+                logger.info(f"✅ Loaded {len(custom_placeholders)} custom placeholders from WORKSPACE")
+            else:
+                logger.warning(f"⚠️ No WORKSPACE custom placeholders found, using defaults")
+
+            # Load tag-specific settings (unified_template only)
             settings_dict = await tag_settings_crud.get_settings_dict(db, tag_name)
 
             if settings_dict:
                 logger.info(f"✅ Loaded settings for '{tag_name}' from database")
 
-                # Get custom placeholders (new approach)
-                custom_placeholders = settings_dict.get("custom_placeholders", {})
-
-                # Get values from custom_placeholders first, then fall back to legacy fields, then defaults
                 return {
-                    "scheduling_phone": custom_placeholders.get("scheduling_phone") or settings_dict.get("scheduling_phone_number", DEFAULT_SCHEDULING_PHONE),
-                    "no_show_policy": custom_placeholders.get("no_show_policy") or settings_dict.get("no_show_policy", DEFAULT_NO_SHOW_POLICY),
-                    "portal_links": {
-                        "bills_appointments_liens": custom_placeholders.get("bills_link") or settings_dict.get("portal_link_bills", DEFAULT_PORTAL_LINKS["bills_appointments_liens"]),
-                        "reports_images": custom_placeholders.get("reports_link") or settings_dict.get("portal_link_reports", DEFAULT_PORTAL_LINKS["reports_images"])
-                    },
-                    # Unified template (new approach) - use this if available
+                    # Custom placeholders (workspace-wide, loaded from WORKSPACE tag)
+                    "custom_placeholders": custom_placeholders,
+                    # Unified template (tag-specific)
                     "unified_template": settings_dict.get("unified_template", DEFAULT_UNIFIED_TEMPLATE),
-                    # Legacy individual fields (kept for backward compatibility)
-                    "intro_text": settings_dict.get("intro_text", DEFAULT_INTRO_TEXT),
-                    "table_intro_text": settings_dict.get("table_intro_text", DEFAULT_TABLE_INTRO_TEXT),
-                    "personal_injury_text": settings_dict.get("personal_injury_text", DEFAULT_PERSONAL_INJURY_TEXT),
-                    "footer_text": settings_dict.get("footer_text", DEFAULT_FOOTER_TEXT),
-                    # Store custom placeholders for template rendering
-                    "custom_placeholders": custom_placeholders
+                    # Extract specific values for backward compatibility in code
+                    "scheduling_phone": custom_placeholders.get("scheduling_phone", DEFAULT_SCHEDULING_PHONE),
+                    "no_show_policy": custom_placeholders.get("no_show_policy", DEFAULT_NO_SHOW_POLICY),
+                    "portal_links": {
+                        "bills_appointments_liens": custom_placeholders.get("bills_link", DEFAULT_PORTAL_LINKS["bills_appointments_liens"]),
+                        "reports_images": custom_placeholders.get("reports_link", DEFAULT_PORTAL_LINKS["reports_images"])
+                    }
                 }
             else:
                 logger.warning(f"⚠️ No settings found for '{tag_name}' in database, using defaults")
                 return {
-                    "scheduling_phone": DEFAULT_SCHEDULING_PHONE,
-                    "no_show_policy": DEFAULT_NO_SHOW_POLICY,
-                    "portal_links": DEFAULT_PORTAL_LINKS,
+                    "custom_placeholders": custom_placeholders,  # Use workspace placeholders even if tag not found
                     "unified_template": DEFAULT_UNIFIED_TEMPLATE,
-                    "intro_text": DEFAULT_INTRO_TEXT,
-                    "table_intro_text": DEFAULT_TABLE_INTRO_TEXT,
-                    "personal_injury_text": DEFAULT_PERSONAL_INJURY_TEXT,
-                    "footer_text": DEFAULT_FOOTER_TEXT
+                    "scheduling_phone": custom_placeholders.get("scheduling_phone", DEFAULT_SCHEDULING_PHONE),
+                    "no_show_policy": custom_placeholders.get("no_show_policy", DEFAULT_NO_SHOW_POLICY),
+                    "portal_links": {
+                        "bills_appointments_liens": custom_placeholders.get("bills_link", DEFAULT_PORTAL_LINKS["bills_appointments_liens"]),
+                        "reports_images": custom_placeholders.get("reports_link", DEFAULT_PORTAL_LINKS["reports_images"])
+                    }
                 }
     except Exception as e:
         logger.error(f"❌ Error fetching tag settings from database: {e}, using defaults")
         return {
+            "custom_placeholders": {},
+            "unified_template": DEFAULT_UNIFIED_TEMPLATE,
             "scheduling_phone": DEFAULT_SCHEDULING_PHONE,
             "no_show_policy": DEFAULT_NO_SHOW_POLICY,
-            "portal_links": DEFAULT_PORTAL_LINKS,
-            "unified_template": DEFAULT_UNIFIED_TEMPLATE,
-            "intro_text": DEFAULT_INTRO_TEXT,
-            "table_intro_text": DEFAULT_TABLE_INTRO_TEXT,
-            "personal_injury_text": DEFAULT_PERSONAL_INJURY_TEXT,
-            "footer_text": DEFAULT_FOOTER_TEXT
+            "portal_links": DEFAULT_PORTAL_LINKS
         }
 # --- END: Database Settings Helper ---
 
@@ -251,14 +240,12 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
         # Generate appointment table HTML using dedicated function
         table_html = _generate_appointment_table_html(studies)
 
-        # Get template configuration (unified or legacy)
-        unified_template = data.get("unified_template")
-
-        # Get legacy template parts for backward compatibility
-        intro_text = data.get("intro_text", DEFAULT_INTRO_TEXT)
-        table_intro_text = data.get("table_intro_text", DEFAULT_TABLE_INTRO_TEXT)
-        personal_injury_template = data.get("personal_injury_text", DEFAULT_PERSONAL_INJURY_TEXT)
-        footer_text = data.get("footer_text", DEFAULT_FOOTER_TEXT)
+        # Get template configuration (standard: unified template only)
+        unified_template = data.get("unified_template", DEFAULT_UNIFIED_TEMPLATE)
+        personal_injury_template = data.get("custom_placeholders", {}).get(
+            "personal_injury_info",
+            "Important Information regarding personal injury cases<br/>A report containing the findings of the exam will also be sent to the attorney.<br/>A bill will be sent to the attorney once both the patient and the attorney sign all pending liens.<br/>Please make sure to submit a negotiation offer before sending the payment.<br/><br/>"
+        )
 
         # Prepare personal injury info (conditionally included)
         personal_injury_info_text = ""
@@ -296,41 +283,11 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
         logger.info(f"   System: Scheduling Phone={placeholder_values['scheduling_phone']}")
         logger.info(f"   Links: Bills={placeholder_values['bills_link']}, Reports={placeholder_values['reports_link']}")
         logger.info(f"   Personal Injury Case: {placeholder_values['is_personal_injury_case']}")
-        logger.info(f"   Using {'UNIFIED' if unified_template else 'LEGACY'} template format")
+        logger.info(f"   Using UNIFIED template format (standard approach)")
 
-        # Choose between unified template or legacy assembly
-        if unified_template:
-            # NEW APPROACH: Use unified template with all placeholders
-            logger.info("Using unified template format")
-            formatted_template = unified_template.format(**placeholder_values)
-        else:
-            # LEGACY APPROACH: Assemble from separate parts (backward compatibility)
-            logger.info("Using legacy template format (separate parts)")
-            formatted_intro = intro_text.format(
-                patient_id_confirmed=placeholder_values["patient_id_confirmed"],
-                scheduling_phone=placeholder_values["scheduling_phone"],
-                no_show_policy=placeholder_values["no_show_policy"],
-                first_name=placeholder_values["first_name"],
-                last_name=placeholder_values["last_name"],
-                dob=placeholder_values["dob"],
-                address=placeholder_values["address"],
-                home_phone=placeholder_values["home_phone"],
-                cell_phone=placeholder_values["cell_phone"]
-            )
-
-            formatted_footer = footer_text.format(
-                personal_injury_info=placeholder_values["personal_injury_info"],
-                bills_link=placeholder_values["bills_link"],
-                reports_link=placeholder_values["reports_link"],
-                first_name=placeholder_values["first_name"],
-                last_name=placeholder_values["last_name"],
-                dob=placeholder_values["dob"],
-                address=placeholder_values["address"],
-                home_phone=placeholder_values["home_phone"],
-                cell_phone=placeholder_values["cell_phone"]
-            )
-
-            formatted_template = formatted_intro + table_intro_text + table_html + formatted_footer
+        # STANDARD APPROACH: Use unified template with all placeholders (custom + type-specific)
+        logger.info("Formatting unified template with placeholders")
+        formatted_template = unified_template.format(**placeholder_values)
 
         # logger.info(f"DEBUG: Generated HTML response: {formatted_template}")
         return formatted_template
@@ -566,14 +523,9 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                 "scheduling_phone": scheduling_phone,
                 "no_show_policy": no_show_policy,
                 "links": portal_links,
-                # Unified template (new approach)
+                # Unified template (standard approach)
                 "unified_template": db_settings.get("unified_template", DEFAULT_UNIFIED_TEMPLATE),
-                # Legacy template parts (for backward compatibility)
-                "intro_text": db_settings.get("intro_text", DEFAULT_INTRO_TEXT),
-                "table_intro_text": db_settings.get("table_intro_text", DEFAULT_TABLE_INTRO_TEXT),
-                "personal_injury_text": db_settings.get("personal_injury_text", DEFAULT_PERSONAL_INJURY_TEXT),
-                "footer_text": db_settings.get("footer_text", DEFAULT_FOOTER_TEXT),
-                # Custom placeholders (new approach - global placeholders)
+                # Custom placeholders (workspace-wide)
                 "custom_placeholders": db_settings.get("custom_placeholders", {}),
                 # Patient demographics for template placeholders
                 "first_name": patient_demographics.get("first_name", "N/A"),

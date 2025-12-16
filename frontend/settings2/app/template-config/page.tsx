@@ -23,6 +23,7 @@ import { getTagLabel } from "./utils/template-helpers";
 import { StatusBanner } from "./components/StatusBanner";
 import { PlaceholderManager } from "./components/PlaceholderManager";
 import { LienTemplatesEditor } from "./components/LienTemplatesEditor";
+import { BillBalanceTemplatesEditor } from "./components/BillBalanceTemplatesEditor";
 import { UnifiedTemplateEditor } from "./components/UnifiedTemplateEditor";
 import PlaceholderSection from "./components/PlaceholderSection";
 import { TemplatePreview } from "./components/TemplatePreview";
@@ -36,6 +37,7 @@ export default function TemplateConfigPage() {
   const [baseCustomPlaceholders, setBaseCustomPlaceholders] = useState<Record<string, string>>({
     ...DEFAULT_CUSTOM_PLACEHOLDERS,
   });
+  const [workspaceStatus, setWorkspaceStatus] = useState<{type: "success" | "error" | "info", message: string} | null>(null);
 
   const {
     tagSettings,
@@ -80,20 +82,17 @@ export default function TemplateConfigPage() {
     let mounted = true;
     const loadWorkspacePlaceholders = async () => {
       try {
-        const response = await TemplatesApi.getAllTagSettings();
+        // Load from WORKSPACE tag entry (workspace-wide custom placeholders)
+        const workspaceSettings = await TemplatesApi.getTagSettings("WORKSPACE");
         if (!mounted) return;
-        const merged: Record<string, string> = {};
-        response.items.forEach((item) => {
-          const placeholders = normalizeCustomPlaceholdersFromSettings(item.settings);
-          Object.entries(placeholders).forEach(([key, value]) => {
-            merged[key] = value;
-          });
-        });
+        const placeholders = workspaceSettings.settings.custom_placeholders || {};
         setBaseCustomPlaceholders(
-          Object.keys(merged).length > 0 ? merged : { ...DEFAULT_CUSTOM_PLACEHOLDERS }
+          Object.keys(placeholders).length > 0 ? placeholders : { ...DEFAULT_CUSTOM_PLACEHOLDERS }
         );
       } catch (error) {
-        console.error("Failed to load workspace custom placeholders", error);
+        // If WORKSPACE doesn't exist, use defaults
+        console.warn("Failed to load workspace custom placeholders, using defaults", error);
+        setBaseCustomPlaceholders({ ...DEFAULT_CUSTOM_PLACEHOLDERS });
       }
     };
     void loadWorkspacePlaceholders();
@@ -102,13 +101,9 @@ export default function TemplateConfigPage() {
     };
   }, []);
 
-  const mergedCustomPlaceholders = useMemo(() => {
-    const merged = { ...baseCustomPlaceholders };
-    Object.entries(tagSettings.custom_placeholders || {}).forEach(([key, value]) => {
-      merged[key] = value as string;
-    });
-    return merged;
-  }, [baseCustomPlaceholders, tagSettings.custom_placeholders]);
+  // Custom placeholders are workspace-wide (loaded from WORKSPACE tag)
+  // Individual tags no longer have their own custom_placeholders
+  const mergedCustomPlaceholders = baseCustomPlaceholders;
 
   const logout = async () => {
     try {
@@ -121,6 +116,30 @@ export default function TemplateConfigPage() {
   };
 
   const selectedTagLabel = getTagLabel(selectedTag);
+
+  // Workspace custom placeholders save handler
+  const handleSaveWorkspacePlaceholders = async () => {
+    try {
+      const payload = {
+        settings: { custom_placeholders: baseCustomPlaceholders },
+        updated_by: currentUser,
+      };
+      await TemplatesApi.updateTagSettings("WORKSPACE", payload);
+      setWorkspaceStatus({
+        type: "success",
+        message: "Workspace custom placeholders saved successfully.",
+      });
+    } catch (error) {
+      setWorkspaceStatus({
+        type: "error",
+        message: error instanceof Error ? error.message : "Failed to save workspace placeholders.",
+      });
+    }
+  };
+
+  const handleWorkspacePlaceholderChange = (placeholders: Record<string, string>) => {
+    setBaseCustomPlaceholders(placeholders);
+  };
 
   return (
     <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-10">
@@ -189,12 +208,19 @@ export default function TemplateConfigPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-8">
-          {/* Placeholder Manager */}
+          {/* Placeholder Manager - Works with WORKSPACE custom placeholders */}
           <PlaceholderManager
-            tagSettings={tagSettings}
-            onFieldChange={handleFieldChange}
-            onSave={handleSaveTagSettings}
-            onReset={handleResetTagSettings}
+            tagSettings={{ ...tagSettings, custom_placeholders: baseCustomPlaceholders }}
+            onFieldChange={(key, value) => {
+              if (key === "custom_placeholders") {
+                handleWorkspacePlaceholderChange(value as Record<string, string>);
+              }
+            }}
+            onSave={handleSaveWorkspacePlaceholders}
+            onReset={() => {
+              // Reload workspace placeholders
+              window.location.reload();
+            }}
           />
 
           {/* Tag Selector */}
@@ -233,6 +259,18 @@ export default function TemplateConfigPage() {
               {selectedTag === "Lien Templates" && (
                 <LienTemplatesEditor
                   tagSettings={tagSettings}
+                  customPlaceholders={mergedCustomPlaceholders}
+                  onFieldChange={handleFieldChange}
+                  onSave={handleSaveTagSettings}
+                  onReset={handleResetTagSettings}
+                />
+              )}
+
+              {/* Bill Balance Templates Editor - Show for Bill or Balance Request tag */}
+              {selectedTag === "Bill or Balance Request" && (
+                <BillBalanceTemplatesEditor
+                  tagSettings={tagSettings}
+                  customPlaceholders={mergedCustomPlaceholders}
                   onFieldChange={handleFieldChange}
                   onSave={handleSaveTagSettings}
                   onReset={handleResetTagSettings}
@@ -252,7 +290,7 @@ export default function TemplateConfigPage() {
               {/* Template Preview - Only show for Apt status req */}
               {selectedTag === "Apt status req" && (
                 <TemplatePreview
-                  tagSettings={tagSettings}
+                  tagSettings={{...tagSettings, custom_placeholders: mergedCustomPlaceholders}}
                   showPreview={showPreview}
                   setShowPreview={setShowPreview}
                   showPersonalInjuryInPreview={showPersonalInjuryInPreview}

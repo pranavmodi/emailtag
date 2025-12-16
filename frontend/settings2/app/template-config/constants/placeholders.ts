@@ -140,6 +140,26 @@ export const TEMPLATE_PLACEHOLDERS: PlaceholderSet = {
         key: "{payment_methods}",
         description: "Available payment methods",
         example: "Credit Card, Check, Online Portal"
+      },
+      {
+        key: "{account_number}",
+        description: "Patient account number",
+        example: "ACC-987654"
+      },
+      {
+        key: "{due_date}",
+        description: "Payment due date",
+        example: "12/31/2024"
+      },
+      {
+        key: "{billing_phone}",
+        description: "Billing department phone number",
+        example: "800-558-2223"
+      },
+      {
+        key: "{portal_link}",
+        description: "Patient portal URL for billing",
+        example: "https://app.radflow360.com/patient-portal"
       }
     ],
 

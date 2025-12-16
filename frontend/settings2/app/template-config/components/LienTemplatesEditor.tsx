@@ -7,6 +7,7 @@ import { DEFAULT_TAG_SETTINGS, DUMMY_LIEN_STATUS_TABLE } from "../constants/temp
 
 interface LienTemplatesEditorProps {
   tagSettings: typeof DEFAULT_TAG_SETTINGS;
+  customPlaceholders: Record<string, string>;
   onFieldChange: (key: keyof typeof DEFAULT_TAG_SETTINGS, value: string) => void;
   onSave: () => void;
   onReset: () => void;
@@ -22,7 +23,7 @@ const SCENARIO_OPTIONS: Array<{ value: LienScenario; label: string; description:
   { value: "reject_sig_not_valid", label: "Reply & Reject - Sig Not Valid", description: "Wrong box or outside designated area", emoji: "🖊️", color: "pink" },
 ];
 
-export function LienTemplatesEditor({ tagSettings, onFieldChange, onSave, onReset }: LienTemplatesEditorProps) {
+export function LienTemplatesEditor({ tagSettings, customPlaceholders, onFieldChange, onSave, onReset }: LienTemplatesEditorProps) {
   const [selectedScenario, setSelectedScenario] = useState<LienScenario>("success");
   const [showPreview, setShowPreview] = useState(true);
 
@@ -57,6 +58,8 @@ export function LienTemplatesEditor({ tagSettings, onFieldChange, onSave, onRese
   // Generate preview with dummy data
   const generatePreview = () => {
     let preview = templateValue;
+
+    // Type-specific dummy data
     const dummyData: Record<string, string> = {
       "{lien_type}": "Attorney Signed Lien (ASL)",
       "{patient_id}": "PRE1234567",
@@ -66,7 +69,14 @@ export function LienTemplatesEditor({ tagSettings, onFieldChange, onSave, onRese
       "{lien_status_table}": DUMMY_LIEN_STATUS_TABLE,
     };
 
-    Object.entries(dummyData).forEach(([placeholder, value]) => {
+    // Merge with custom placeholders (workspace-wide)
+    const allPlaceholders = { ...dummyData };
+    Object.entries(customPlaceholders).forEach(([key, value]) => {
+      allPlaceholders[`{${key}}`] = value;
+    });
+
+    // Replace all placeholders
+    Object.entries(allPlaceholders).forEach(([placeholder, value]) => {
       preview = preview.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
     });
 
