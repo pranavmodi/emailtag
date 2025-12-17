@@ -231,17 +231,19 @@ async def _generate_lien_status_table(patient_id: str, upload_results: List[Dict
         rows = []
         lien_types_to_show = set()
 
-        # Collect lien types from upload results
-        for result in upload_results:
-            lien_type_code = result.get("lien_type", "").upper()
-            if lien_type_code in ["TECH", "TC", "TECHNOLOGIST"]:
-                lien_types_to_show.add("TECH")
-            elif lien_type_code in ["RAD", "RADIOLOGY"]:
-                lien_types_to_show.add("RAD")
-
-        # If no upload results, check if we have lien signatures from API
-        if not lien_types_to_show and lien_signatures:
+        # PRIORITY 1: Use lien signatures from API (most accurate source)
+        if lien_signatures:
             lien_types_to_show = set(lien_signatures.keys())
+            logger.info(f"📊 Using lien types from RadFlow API: {lien_types_to_show}")
+        else:
+            # FALLBACK: Collect lien types from upload results
+            for result in upload_results:
+                lien_type_code = result.get("lien_type", "").upper()
+                if lien_type_code in ["TECH", "TC", "TECHNOLOGIST"]:
+                    lien_types_to_show.add("TECH")
+                elif lien_type_code in ["RAD", "RADIOLOGY"]:
+                    lien_types_to_show.add("RAD")
+            logger.info(f"📊 Using lien types from upload results: {lien_types_to_show}")
 
         # Generate rows for each lien type
         for lien_type_code in sorted(lien_types_to_show):
@@ -519,33 +521,41 @@ async def handle_lien_request(
             arguments={"patient_id": patient_id}
         )
 
-        # Check if we have split documents from enhanced lien processing
-        split_documents = []
+        # Collect all split documents from ALL document analysis results
+        # This handles both:
+        # 1. Single PDF with multiple liens (splits within one attachment)
+        # 2. Multiple separate PDFs (each with potential splits)
+        all_split_documents = []
+        processed_doc_indices = set()
+
         if document_analysis_results:
-            for doc_result in document_analysis_results:
+            for doc_idx, doc_result in enumerate(document_analysis_results):
                 enhanced_lien_data = doc_result.get("enhanced_lien_processing", {})
                 if enhanced_lien_data.get("processing_type") == "enhanced_lien_processing_split":
                     split_documents = enhanced_lien_data.get("split_documents", [])
-                    break
+                    if split_documents:
+                        all_split_documents.extend(split_documents)
+                        processed_doc_indices.add(doc_idx)
+                        logger.info(f"📄 {signature_type} AGENT: Found {len(split_documents)} splits from document {doc_idx + 1}")
 
-        # Process split documents if available, otherwise fall back to original attachment
+        # Process all split documents (from all attachments)
         upload_results = []
 
-        if split_documents:
-            logger.info(f"📄 {signature_type} AGENT: Found {len(split_documents)} split documents to process")
+        if all_split_documents:
+            logger.info(f"📄 {signature_type} AGENT: Processing {len(all_split_documents)} total split documents across all attachments")
 
             # Import upload service for split documents
             from app.services.lien_upload_service import upload_lien_pdf_bytes_to_radflow
 
             # Process each split document
-            for i, split_doc in enumerate(split_documents):
+            for i, split_doc in enumerate(all_split_documents):
                 split_patient_id = split_doc.get("patient_id", "")
                 split_lien_type = split_doc.get("lien_type", "")
                 split_pdf_bytes = split_doc.get("pdf_bytes", b"")
                 page_count = split_doc.get("page_count", 0)
 
                 logger.info(
-                    f"📄 {signature_type} AGENT: Processing split {i+1}/{len(split_documents)}: "
+                    f"📄 {signature_type} AGENT: Processing split {i+1}/{len(all_split_documents)}: "
                     f"Patient={split_patient_id}, LienType={split_lien_type}, Pages={page_count}"
                 )
 
@@ -573,24 +583,57 @@ async def handle_lien_request(
             upload_success = all_uploads_success
 
         else:
-            # Fallback: No split documents, use original attachment upload logic
-            logger.info(f"📄 {signature_type} AGENT: No split documents found, using original attachment")
+            # Fallback: No split documents, upload original attachments directly
+            # This handles cases where documents don't need splitting (e.g., single-page liens)
+            logger.info(f"📄 {signature_type} AGENT: No split documents found, uploading original attachments")
 
-            # Extract first attachment for upload
-            attachment_data = {}
+            # Get all attachments from email
+            attachments = []
             if email_obj.raw_data and isinstance(email_obj.raw_data, dict):
                 target_data = email_obj.raw_data.get('target', {}).get('data', {})
                 attachments = target_data.get('attachments', [])
-                if attachments:
-                    attachment_data = attachments[0]  # Use first attachment
 
-            upload_success = await _upload_lien_to_patient_file(patient_id, lien_type, attachment_data)
+            if not attachments:
+                logger.error(f"📄 {signature_type} AGENT: No attachments found in email")
+                upload_success = False
+            else:
+                # Upload ALL attachments (not just the first one)
+                logger.info(f"📄 {signature_type} AGENT: Uploading {len(attachments)} attachment(s)")
 
-            upload_results.append({
-                "patient_id": patient_id,
-                "lien_type": lien_type,
-                "success": upload_success
-            })
+                for att_idx, attachment_data in enumerate(attachments):
+                    # Determine lien type from document analysis if available
+                    att_lien_type = lien_type  # Default to the primary lien type
+                    if document_analysis_results and att_idx < len(document_analysis_results):
+                        doc_analysis = document_analysis_results[att_idx].get("document_analysis", {}).get("data", {})
+                        enhanced_lien = doc_analysis.get("enhanced_lien_analysis", {})
+                        detected_lien_type = enhanced_lien.get("LienType", "")
+
+                        # Normalize lien type codes to standard format
+                        if detected_lien_type:
+                            detected_upper = detected_lien_type.upper()
+                            if detected_upper in ["TC", "TECH", "TECHNOLOGIST"]:
+                                att_lien_type = "TECH"
+                            elif detected_upper in ["RAD", "RADIOLOGY", "RADIOLOGIST"]:
+                                att_lien_type = "RAD"
+                            else:
+                                att_lien_type = detected_lien_type  # Use as-is if unknown
+
+                            logger.info(f"📄 {signature_type} AGENT: Attachment {att_idx + 1} detected as {detected_lien_type} -> normalized to {att_lien_type} lien")
+
+                    attachment_upload_success = await _upload_lien_to_patient_file(patient_id, att_lien_type, attachment_data)
+
+                    upload_results.append({
+                        "patient_id": patient_id,
+                        "lien_type": att_lien_type,
+                        "success": attachment_upload_success
+                    })
+
+                    if not attachment_upload_success:
+                        logger.warning(f"📄 {signature_type} AGENT: Upload failed for attachment {att_idx + 1}")
+
+                # Check if all uploads succeeded
+                all_uploads_success = all(result["success"] for result in upload_results)
+                upload_success = all_uploads_success
 
         # If upload failed, tag for human review and notify
         if not upload_success:
@@ -695,7 +738,7 @@ async def handle_lien_request(
                 "lien_type": lien_type,
                 "signature_type": signature_type,
                 "upload_success": upload_success,
-                "total_splits": len(split_documents) if split_documents else 0,
+                "total_splits": len(all_split_documents) if all_split_documents else 0,
                 "upload_results": upload_results
             }
         }
