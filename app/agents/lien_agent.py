@@ -9,7 +9,7 @@ patient file or requests human review.
 import asyncio
 import os
 import json
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 from pathlib import Path
 from datetime import datetime
 
@@ -112,6 +112,72 @@ def _check_lien_readability(document_analysis_results: List[Dict[str, Any]]) -> 
             return False
 
     return True
+
+def _check_signature_placement(document_analysis_results: List[Dict[str, Any]]) -> bool:
+    """
+    Check if signatures are placed inside designated signature boxes.
+
+    Args:
+        document_analysis_results: List of document analysis results containing signature data
+
+    Returns:
+        True if all signatures are properly placed, False if any are outside boxes
+    """
+    if not document_analysis_results:
+        # No documents to check - consider valid
+        return True
+
+    for doc_result in document_analysis_results:
+        # Get enhanced lien processing data which contains signature placement info
+        enhanced_lien_data = doc_result.get("enhanced_lien_processing", {})
+
+        # Check if we have signature placement data from each split document
+        split_documents = enhanced_lien_data.get("split_documents", [])
+
+        for split_doc in split_documents:
+            # Check signature placement validity for this document/page
+            signature_data = split_doc.get("signature_data", {})
+
+            if signature_data:
+                placement_valid = signature_data.get("placement_valid", True)
+                placement_issues = signature_data.get("placement_issues", [])
+
+                if not placement_valid or placement_issues:
+                    logger.warning(f"⚠️ SIGNATURE PLACEMENT: Invalid placement detected - {placement_issues}")
+                    return False
+
+    # All signatures are properly placed
+    return True
+
+def _check_document_quality(email_obj: Any) -> Tuple[bool, str]:
+    """
+    Check document quality from lien modification detection results.
+
+    Args:
+        email_obj: Email database object with lien modification detection results
+
+    Returns:
+        Tuple of (is_readable: bool, quality: str)
+        - is_readable: True if quality is GOOD, False if BLURRY or UNREADABLE
+        - quality: "GOOD", "BLURRY", or "UNREADABLE"
+    """
+    if not hasattr(email_obj, 'lien_modification_results') or not email_obj.lien_modification_results:
+        # No modification detection results - assume readable
+        logger.info("📄 QUALITY: No modification detection results, assuming GOOD quality")
+        return (True, "GOOD")
+
+    # lien_modification_results is a list of detection results per attachment
+    for result in email_obj.lien_modification_results:
+        # Extract quality from the result
+        document_quality = result.get("document_quality", "GOOD")
+
+        if document_quality in ["BLURRY", "UNREADABLE"]:
+            logger.warning(f"📄 QUALITY: Poor document quality detected - {document_quality}")
+            return (False, document_quality)
+
+    # All attachments have good quality
+    logger.info("📄 QUALITY: All documents assessed as GOOD quality")
+    return (True, "GOOD")
 
 def _check_lien_modifications(email_obj: Any) -> bool:
     """
@@ -440,6 +506,69 @@ async def handle_lien_request(
         except Exception as e:
             logger.error(f"Failed to handle modified lien: {e}")
             return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to handle modified lien: {e}"}}
+
+    # Check signature placement validity
+    signature_placement_valid = _check_signature_placement(document_analysis_results)
+    if not signature_placement_valid:
+        logger.info(f"Signature placement invalid for conversation {front_conversation_id}. Requesting properly signed lien.")
+
+        try:
+            # Add human review tag
+            frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
+
+            # Send reply if template is configured
+            if templates.get("invalid_signature"):
+                await send_reply_to_front_direct(
+                    conversation_id=front_conversation_id,
+                    reply_text=templates["invalid_signature"].format(lien_type=lien_type)
+                )
+            else:
+                logger.warning(f"Invalid signature template not configured for tag '{tag_name}'. No autoresponse sent.")
+
+            return {
+                "agent_handled": True,
+                "processed_flag": True,
+                "details": {
+                    "action": "tagged_for_human_review_signature_placement",
+                    "lien_type": lien_type,
+                    "signature_type": signature_type
+                }
+            }
+        except Exception as e:
+            logger.error(f"Failed to handle invalid signature placement: {e}")
+            return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to handle invalid signature placement: {e}"}}
+
+    # Check document quality (BLURRY/UNREADABLE check)
+    is_readable, quality_status = _check_document_quality(email_obj)
+    if not is_readable:
+        logger.info(f"Document quality poor ({quality_status}) for conversation {front_conversation_id}. Requesting clearer scan.")
+
+        try:
+            # Add human review tag
+            frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
+
+            # Send unreadable template
+            if templates.get("unreadable"):
+                await send_reply_to_front_direct(
+                    conversation_id=front_conversation_id,
+                    reply_text=templates["unreadable"].format(lien_type=lien_type)
+                )
+            else:
+                logger.warning(f"Unreadable template not configured for tag '{tag_name}'. No autoresponse sent.")
+
+            return {
+                "agent_handled": True,
+                "processed_flag": True,
+                "details": {
+                    "action": "tagged_for_human_review_poor_quality",
+                    "lien_type": lien_type,
+                    "signature_type": signature_type,
+                    "quality": quality_status
+                }
+            }
+        except Exception as e:
+            logger.error(f"Failed to handle poor document quality: {e}")
+            return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to handle poor document quality: {e}"}}
 
     # Check lien readability
     if document_analysis_results and not _check_lien_readability(document_analysis_results):

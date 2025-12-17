@@ -325,7 +325,8 @@ class EnhancedLienService:
                             "pages": [],
                             "patient_id": patient_id,
                             "lien_type": lien_type.upper(),
-                            "signature_type": signature_type
+                            "signature_type": signature_type,
+                            "signature_data": signature_data  # Include full signature data with placement info
                         }
 
                     # Add this page to the group

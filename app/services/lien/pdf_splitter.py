@@ -69,6 +69,7 @@ class PDFSplitter:
                     patient_id = group.get("patient_id", "")
                     lien_type = group.get("lien_type", "")
                     signature_type = group.get("signature_type", "")
+                    signature_data = group.get("signature_data", {})
 
                     if not pages_to_extract:
                         logger.warning(f"📄 PDF SPLIT: Group {group_idx} has no pages, skipping")
@@ -105,6 +106,7 @@ class PDFSplitter:
                         "patient_id": patient_id,
                         "lien_type": lien_type,
                         "signature_type": signature_type,
+                        "signature_data": signature_data,  # Include signature placement data
                         "page_count": len(valid_pages),
                         "original_pages": valid_pages
                     })

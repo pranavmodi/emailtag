@@ -516,8 +516,12 @@ class OpenAIProvider(StrikethroughProvider):
             return None
     
     def _prepare_vision_prompt(self) -> str:
-        """Prepare the prompt for GPT-5.2 vision to detect strikethrough text."""
-        return """CRITICAL: Analyze this image and detect ONLY text that has been physically crossed out or struck through with visible lines.
+        """Prepare the prompt for GPT-5.2 vision to detect strikethrough text and document quality."""
+        return """CRITICAL: Analyze this lien document image for TWO things:
+1. Detect ONLY text that has been physically crossed out or struck through with visible lines
+2. Assess the overall text clarity and readability of the document
+
+PART 1: STRIKETHROUGH DETECTION
 
 STRICT REQUIREMENTS:
 - You must provide the EXACT struck-through text that you can read
@@ -539,6 +543,18 @@ VISUAL CHECK:
 - If the line goes UNDER the text → UNDERLINE (do NOT report it)
 - If unsure, do NOT report it
 
+PART 2: DOCUMENT QUALITY ASSESSMENT
+
+Assess the text clarity and readability of the lien document:
+- GOOD: Text is sharp, clear, and easily readable. All words and numbers can be read without difficulty.
+- BLURRY: Text shows signs of blurriness, pixelation, or poor focus. Some words may be difficult to read but most content is still discernible.
+- UNREADABLE: Text is severely degraded, distorted, or illegible. Significant portions of text cannot be read reliably.
+
+Quality assessment criteria:
+- Check the sharpness and focus of text throughout the document
+- Evaluate if patient information, dates, and legal text are clearly legible
+- Consider if someone could confidently extract accurate information from this document
+
 Please provide a JSON response with the following structure:
 {
     "strikethrough_detected": boolean,
@@ -550,7 +566,9 @@ Please provide a JSON response with the following structure:
             "visual_description": "description of the strikethrough marking (e.g., 'horizontal black line through text')"
         }
     ],
-    "analysis": "detailed explanation of what you see - be specific about strikethrough marks"
+    "document_quality": "GOOD" | "BLURRY" | "UNREADABLE",
+    "quality_explanation": "brief explanation of why you assigned this quality rating",
+    "analysis": "detailed explanation of what you see - be specific about strikethrough marks and document clarity"
 }
 
 ONLY include text in strikethrough_instances if:
@@ -584,7 +602,7 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
                 "Authorization": f"Bearer {self.api_key}"
             }
             
-            # Structured output schema for strikethrough detection
+            # Structured output schema for strikethrough detection and document quality
             schema: Dict[str, Any] = {
                 "type": "object",
                 "properties": {
@@ -603,9 +621,11 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
                             "additionalProperties": False
                         }
                     },
+                    "document_quality": {"type": "string", "enum": ["GOOD", "BLURRY", "UNREADABLE"]},
+                    "quality_explanation": {"type": "string"},
                     "analysis": {"type": "string"}
                 },
-                "required": ["strikethrough_detected", "strikethrough_instances", "analysis"],
+                "required": ["strikethrough_detected", "strikethrough_instances", "document_quality", "quality_explanation", "analysis"],
                 "additionalProperties": False
             }
 
@@ -683,6 +703,12 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
                         logger.warning(f"Failed to parse JSON from Responses output, content: {text_content[:200]}...")
                         return []
                 
+                # Extract document quality assessment
+                document_quality = parsed_result.get("document_quality", "GOOD")
+                quality_explanation = parsed_result.get("quality_explanation", "")
+
+                logger.info(f"📄 QUALITY: Document assessed as '{document_quality}' - {quality_explanation}")
+
                 # Convert to our standard format with STRICT requirements
                 strikethrough_instances = []
                 if parsed_result.get("strikethrough_detected", False):
@@ -690,10 +716,10 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
                         # STRICT REQUIREMENTS: Must have actual struck-through text
                         struck_text = instance.get("struck_through_text", "").strip()
                         confidence = instance.get("confidence", 0.0)
-                        
+
                         # Count words in struck-through text
                         word_count = len(struck_text.split()) if struck_text else 0
-                        
+
                         # Only include if we have substantial text (4+ words) and high enough confidence
                         if struck_text and word_count >= 4 and confidence >= 0.8:
                             strikethrough_instances.append({
@@ -704,19 +730,31 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
                                 "visual_description": instance.get("visual_description", ""),
                                 "type": "strikethrough",
                                 "provider_data": {
-                                    "analysis": parsed_result.get("analysis", "")
+                                    "analysis": parsed_result.get("analysis", ""),
+                                    "document_quality": document_quality,
+                                    "quality_explanation": quality_explanation
                                 }
                             })
                             logger.info(f"STRICT DETECTION: Found substantial struck-through text: '{struck_text}' ({word_count} words, confidence: {confidence})")
                         else:
                             reason = "no text" if not struck_text else f"too short ({word_count} words < 4)" if word_count < 4 else f"low confidence ({confidence} < 0.8)"
                             logger.info(f"STRICT FILTER: Rejected strikethrough - {reason}: '{struck_text}'")
-                
-                return strikethrough_instances
-                
+
+                # Store quality info for this page even if no strikethroughs detected
+                # This allows us to aggregate quality across all pages
+                return {
+                    "strikethrough_instances": strikethrough_instances,
+                    "document_quality": document_quality,
+                    "quality_explanation": quality_explanation
+                }
+
         except Exception as e:
             logger.error(f"Error detecting strikethrough in image {image_path}: {e}")
-            return []
+            return {
+                "strikethrough_instances": [],
+                "document_quality": "GOOD",  # Default to GOOD on error
+                "quality_explanation": f"Error during quality assessment: {str(e)}"
+            }
     
     async def detect_strikethrough_in_pdf(self, pdf_path: str) -> Dict[str, Any]:
         """Detect strikethrough text in a PDF file using OpenAI GPT-5.2 Vision."""
@@ -734,33 +772,59 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
         
         try:
             all_strikethrough_instances = []
-            
+            quality_assessments = []  # Track quality for each page
+
             # Process each page image
             for i, image_path in enumerate(image_paths, 1):
-                page_instances = await self._detect_strikethrough_in_image(image_path, i)
+                page_result = await self._detect_strikethrough_in_image(image_path, i)
+
+                # Extract strikethrough instances and quality data
+                page_instances = page_result.get("strikethrough_instances", [])
+                document_quality = page_result.get("document_quality", "GOOD")
+                quality_explanation = page_result.get("quality_explanation", "")
+
                 all_strikethrough_instances.extend(page_instances)
-                
+                quality_assessments.append({
+                    "page": i,
+                    "quality": document_quality,
+                    "explanation": quality_explanation
+                })
+
                 # Clean up temporary image file
                 try:
                     os.unlink(image_path)
                 except:
                     pass
-            
+
+            # Aggregate quality: if ANY page is UNREADABLE → overall UNREADABLE
+            # else if ANY page is BLURRY → overall BLURRY
+            # else → overall GOOD
+            overall_quality = "GOOD"
+            if any(q["quality"] == "UNREADABLE" for q in quality_assessments):
+                overall_quality = "UNREADABLE"
+            elif any(q["quality"] == "BLURRY" for q in quality_assessments):
+                overall_quality = "BLURRY"
+
+            logger.info(f"📄 OVERALL QUALITY: {overall_quality} (based on {len(quality_assessments)} pages)")
+
             # Calculate summary
             pages_with_strikethrough = len(set(instance["page_number"] for instance in all_strikethrough_instances))
             summary = {
                 "total_strikethrough_instances": len(all_strikethrough_instances),
                 "pages_with_strikethrough": pages_with_strikethrough,
-                "total_pages": len(image_paths)
+                "total_pages": len(image_paths),
+                "overall_quality": overall_quality,
+                "quality_by_page": quality_assessments
             }
-            
+
             logger.info(f"OpenAI GPT-5.2 processing complete. Found {len(all_strikethrough_instances)} strikethrough instances.")
-            
+
             return {
                 "success": True,
                 "strikethrough_text": all_strikethrough_instances,
                 "provider": "openai",
-                "summary": summary
+                "summary": summary,
+                "document_quality": overall_quality  # Top-level quality for easy access
             }
             
         except Exception as e:

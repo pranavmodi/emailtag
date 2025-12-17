@@ -856,5 +856,26 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
+    },
+    "36": {
+        "description": "Case 258521 - Attorney signed lien packet with single consolidated PDF attachment",
+        "subject": "Signed Lien Packet - Case 258521",
+        "body_html": (
+            "<p>Hi Precise Imaging Billing,</p>"
+            "<p>Please see the attached signed lien packet for case 258521.</p>"
+            "<p>Kindly confirm receipt and update the patient account accordingly.</p>"
+            "<p>Thank you for your help!</p>"
+            "<p>Best regards,<br>"
+            "Accounting Support</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "AR-Precise Imaging-258521-Signed.pdf",
+                "filepath": "data/documents/AR-Precise Imaging-258521-Signed.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Rad Lien"]
     }
 }

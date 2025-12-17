@@ -170,23 +170,27 @@ class SignatureDetector:
 
             system_instructions = (
                 "You are an expert at analyzing lien documents. "
-                "Two images are provided: (A) full page, (B) bottom-region crop focusing where signatures usually appear. "
-                "Focus ONLY on designated signature boxes/lines. "
+                "Multiple images are provided: (A) full page, (B) bottom-region crop, (C) CLAHE enhanced, (D) thresholded. "
+                "Focus on designated signature boxes/lines. "
                 "Count only handwritten signatures (pen/ink strokes). Ignore printed/typed names, stamps, initials, checkmarks, or blanks. "
+                "IMPORTANT: Also check if signatures are INSIDE or OUTSIDE their designated signature boxes. "
+                "A signature is considered 'outside' if it appears significantly above, below, or beside the signature box borders. "
                 "If unsure, answer false. Always return strict JSON with the required boolean fields."
             )
 
             # Step 1: Attorney-only detection
             user_attorney = (
-                "Task: Detect ONLY the presence of an ATTORNEY signature.\n"
-                "Use both images: (A) full page and (B) bottom-region crop.\n"
+                "Task: Detect ONLY the presence of an ATTORNEY signature and its placement.\n"
+                "Use all images: (A) full page, (B) bottom-region crop, (C) CLAHE, (D) thresholded.\n"
                 "Attorney signature areas may be labeled 'Attorney' / 'Attorney Signature'.\n"
-                "Consider true only if there are clear handwritten strokes in the attorney signature box/line.\n"
-                "Return ONLY strict JSON: {\"attorney_signature_present\": true|false, \"analysis\": \"<brief reason>\"}."
+                "Consider true only if there are clear handwritten strokes in or near the attorney signature box/line.\n"
+                "Also check: Is the signature INSIDE the designated signature box? Or is it clearly outside (above, below, or beside the box)?\n"
+                "Return ONLY strict JSON: {\"attorney_signature_present\": true|false, \"attorney_signature_inside_box\": true|false, \"analysis\": \"<brief reason including placement>\"}."
             )
             attorney_text = _call_o3_and_get_text(system_instructions, user_attorney)
 
             attorney_present = False
+            attorney_inside_box = True  # Default to True (assume valid unless proven otherwise)
             attorney_analysis = ""
             if isinstance(attorney_text, str) and attorney_text.strip():
                 try:
@@ -200,6 +204,7 @@ class SignatureDetector:
                             data = json.loads(attorney_text[s:e+1])
                     if isinstance(data, dict):
                         attorney_present = bool(data.get("attorney_signature_present", False))
+                        attorney_inside_box = bool(data.get("attorney_signature_inside_box", True))
                         attorney_analysis = str(data.get("analysis", "")).strip()
                 except Exception:
                     pass
@@ -223,26 +228,35 @@ class SignatureDetector:
                             attorney_analysis = "Attorney signature likely present (heuristic)."
 
             if attorney_present:
-                logger.info("✍️ SIGNATURE: Attorney found → ASL")
+                if attorney_inside_box:
+                    logger.info("✍️ SIGNATURE: Attorney found (inside box) → ASL")
+                else:
+                    logger.info("✍️ SIGNATURE: Attorney found (OUTSIDE box) → ASL with placement issue")
                 signature_data = {
                     "patient_signature_present": False,
                     "attorney_signature_present": True,
+                    "attorney_signature_inside_box": attorney_inside_box,
+                    "patient_signature_inside_box": True,  # N/A for ASL
                     "signature_analysis": attorney_analysis or "Attorney signature detected.",
-                    "lien_signature_type": "ASL"
+                    "lien_signature_type": "ASL",
+                    "placement_valid": attorney_inside_box,
+                    "placement_issues": [] if attorney_inside_box else ["attorney_signature_outside_box"]
                 }
                 return {"success": True, "signature_data": signature_data}
 
             # Step 2: Patient-only detection (since attorney not found)
             user_patient = (
-                "Task: Detect ONLY the presence of a PATIENT signature.\n"
-                "Use both images: (A) full page and (B) bottom-region crop.\n"
+                "Task: Detect ONLY the presence of a PATIENT signature and its placement.\n"
+                "Use all images: (A) full page, (B) bottom-region crop, (C) CLAHE, (D) thresholded.\n"
                 "Patient signature areas may be labeled 'Patient', 'Patient Signature', 'Signature of Patient'.\n"
-                "Consider true only if there are clear handwritten strokes in the patient signature box/line.\n"
-                "Return ONLY strict JSON: {\"patient_signature_present\": true|false, \"analysis\": \"<brief reason>\"}."
+                "Consider true only if there are clear handwritten strokes in or near the patient signature box/line.\n"
+                "Also check: Is the signature INSIDE the designated signature box? Or is it clearly outside (above, below, or beside the box)?\n"
+                "Return ONLY strict JSON: {\"patient_signature_present\": true|false, \"patient_signature_inside_box\": true|false, \"analysis\": \"<brief reason including placement>\"}."
             )
             patient_text = _call_o3_and_get_text(system_instructions, user_patient)
 
             patient_present = False
+            patient_inside_box = True  # Default to True (assume valid unless proven otherwise)
             patient_analysis = ""
             if isinstance(patient_text, str) and patient_text.strip():
                 try:
@@ -256,6 +270,7 @@ class SignatureDetector:
                             pdata = json.loads(patient_text[s:e+1])
                     if isinstance(pdata, dict):
                         patient_present = bool(pdata.get("patient_signature_present", False))
+                        patient_inside_box = bool(pdata.get("patient_signature_inside_box", True))
                         patient_analysis = str(pdata.get("analysis", "")).strip()
                 except Exception:
                     pass
@@ -279,20 +294,28 @@ class SignatureDetector:
                             patient_analysis = "Patient signature likely present (heuristic)."
 
             if patient_present:
-                logger.info("✍️ SIGNATURE: Patient found → PSL")
+                if patient_inside_box:
+                    logger.info("✍️ SIGNATURE: Patient found (inside box) → PSL")
+                else:
+                    logger.info("✍️ SIGNATURE: Patient found (OUTSIDE box) → PSL with placement issue")
                 signature_data = {
                     "patient_signature_present": True,
                     "attorney_signature_present": False,
+                    "patient_signature_inside_box": patient_inside_box,
+                    "attorney_signature_inside_box": True,  # N/A for PSL
                     "signature_analysis": patient_analysis or "Patient signature detected.",
-                    "lien_signature_type": "PSL"
+                    "lien_signature_type": "PSL",
+                    "placement_valid": patient_inside_box,
+                    "placement_issues": [] if patient_inside_box else ["patient_signature_outside_box"]
                 }
                 return {"success": True, "signature_data": signature_data}
 
             # Step 3 (fallback): Combined detection to cross-check if both are present
             combined_user = (
-                "Task: Detect BOTH attorney and patient signatures.\n"
+                "Task: Detect BOTH attorney and patient signatures and their placement.\n"
                 "Use images: (A) full page, (B) bottom crop, (C) CLAHE, (D) thresholded.\n"
-                "Return ONLY strict JSON: {\"attorney_signature_present\": true|false, \"patient_signature_present\": true|false, \"analysis\": \"<brief>\"}."
+                "Check if each signature is INSIDE or OUTSIDE its designated signature box.\n"
+                "Return ONLY strict JSON: {\"attorney_signature_present\": true|false, \"attorney_signature_inside_box\": true|false, \"patient_signature_present\": true|false, \"patient_signature_inside_box\": true|false, \"analysis\": \"<brief>\"}."
             )
             combined_text = _call_o3_and_get_text(system_instructions, combined_user)
             if isinstance(combined_text, str) and combined_text.strip():
@@ -308,15 +331,32 @@ class SignatureDetector:
                     if isinstance(cdata, dict):
                         att = bool(cdata.get("attorney_signature_present", False))
                         pat = bool(cdata.get("patient_signature_present", False))
+                        att_inside = bool(cdata.get("attorney_signature_inside_box", True))
+                        pat_inside = bool(cdata.get("patient_signature_inside_box", True))
                         analysis = str(cdata.get("analysis", "")).strip()
                         if att or pat:
                             lien_type = "ASL" if att else "PSL" if pat else "UNKNOWN"
-                            logger.info(f"✍️ SIGNATURE: Combined analysis → {lien_type}")
+                            placement_valid = (att_inside if att else True) and (pat_inside if pat else True)
+                            placement_issues = []
+                            if att and not att_inside:
+                                placement_issues.append("attorney_signature_outside_box")
+                            if pat and not pat_inside:
+                                placement_issues.append("patient_signature_outside_box")
+
+                            if placement_valid:
+                                logger.info(f"✍️ SIGNATURE: Combined analysis → {lien_type} (all signatures inside boxes)")
+                            else:
+                                logger.info(f"✍️ SIGNATURE: Combined analysis → {lien_type} (placement issues: {placement_issues})")
+
                             signature_data = {
                                 "patient_signature_present": pat,
                                 "attorney_signature_present": att,
+                                "patient_signature_inside_box": pat_inside,
+                                "attorney_signature_inside_box": att_inside,
                                 "signature_analysis": analysis or "Combined detection result.",
-                                "lien_signature_type": lien_type
+                                "lien_signature_type": lien_type,
+                                "placement_valid": placement_valid,
+                                "placement_issues": placement_issues
                             }
                             return {"success": True, "signature_data": signature_data}
                 except Exception:
@@ -327,8 +367,12 @@ class SignatureDetector:
             signature_data = {
                 "patient_signature_present": False,
                 "attorney_signature_present": False,
+                "patient_signature_inside_box": True,  # N/A when no signature
+                "attorney_signature_inside_box": True,  # N/A when no signature
                 "signature_analysis": "No signatures detected in designated boxes.",
-                "lien_signature_type": "UNKNOWN"
+                "lien_signature_type": "UNKNOWN",
+                "placement_valid": True,  # No placement issue if no signatures found
+                "placement_issues": []
             }
             return {"success": True, "signature_data": signature_data}
 
