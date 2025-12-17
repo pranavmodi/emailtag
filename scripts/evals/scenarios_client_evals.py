@@ -804,5 +804,18 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
+    },
+    "33": {
+        "description": "Kathleen Neeck - RAD Signed Lien - Single RAD lien attachment for processing",
+        "subject": "Kathleen Neeck - Signed RAD Lien Document",
+        "body_html": "<p>Please find attached the signed RAD lien for Kathleen Neeck.</p>",
+        "attachments": [
+            {
+                "filename": "20250703 - RAD signed Lien - Precise Imaging - Kathleen Neeck.pdf",
+                "filepath": "data/documents/20250703 - RAD signed Lien - Precise Imaging - Kathleen Neeck.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Rad Lien"]
     }
 }

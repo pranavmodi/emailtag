@@ -602,7 +602,7 @@ async def handle_lien_request(
 
                 for att_idx, attachment_data in enumerate(attachments):
                     # Determine lien type from document analysis if available
-                    att_lien_type = lien_type  # Default to the primary lien type
+                    att_lien_type_short = "TECH"  # Default short code
                     if document_analysis_results and att_idx < len(document_analysis_results):
                         doc_analysis = document_analysis_results[att_idx].get("document_analysis", {}).get("data", {})
                         enhanced_lien = doc_analysis.get("enhanced_lien_analysis", {})
@@ -612,19 +612,34 @@ async def handle_lien_request(
                         if detected_lien_type:
                             detected_upper = detected_lien_type.upper()
                             if detected_upper in ["TC", "TECH", "TECHNOLOGIST"]:
-                                att_lien_type = "TECH"
+                                att_lien_type_short = "TECH"
                             elif detected_upper in ["RAD", "RADIOLOGY", "RADIOLOGIST"]:
-                                att_lien_type = "RAD"
+                                att_lien_type_short = "RAD"
                             else:
-                                att_lien_type = detected_lien_type  # Use as-is if unknown
+                                att_lien_type_short = "TECH"  # Default fallback
 
-                            logger.info(f"📄 {signature_type} AGENT: Attachment {att_idx + 1} detected as {detected_lien_type} -> normalized to {att_lien_type} lien")
+                            logger.info(f"📄 {signature_type} AGENT: Attachment {att_idx + 1} detected as {detected_lien_type} -> normalized to {att_lien_type_short} lien")
 
-                    attachment_upload_success = await _upload_lien_to_patient_file(patient_id, att_lien_type, attachment_data)
+                    # Convert short code to full lien type name for upload function
+                    # The _upload_lien_to_patient_file function expects full names like "Attorney Signed Technologist Lien"
+                    if att_lien_type_short == "TECH":
+                        if signature_type == "PSL":
+                            att_lien_type_full = "Patient Signed Technologist Lien"
+                        else:  # ASL
+                            att_lien_type_full = "Attorney Signed Technologist Lien"
+                    elif att_lien_type_short == "RAD":
+                        if signature_type == "PSL":
+                            att_lien_type_full = "Patient Signed Radiology Lien"
+                        else:  # ASL
+                            att_lien_type_full = "Attorney Signed Radiology Lien"
+                    else:
+                        att_lien_type_full = lien_type  # Fallback to original
+
+                    attachment_upload_success = await _upload_lien_to_patient_file(patient_id, att_lien_type_full, attachment_data)
 
                     upload_results.append({
                         "patient_id": patient_id,
-                        "lien_type": att_lien_type,
+                        "lien_type": att_lien_type_short,  # Store short code for table generation
                         "success": attachment_upload_success
                     })
 
