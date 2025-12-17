@@ -779,5 +779,30 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["ASL > Tech Lien"]
+    },
+    "32": {
+        "description": "Cherie Roedel - ASL Lien - Both RAD and TECH liens attached in same email for processing",
+        "subject": "Cherie Roedel - Signed Lien Documents",
+        "body_html": (
+            "<p>Hello Precise Imaging,</p>"
+            "<p>Please find attached the signed lien documents for our client Cherie Roedel.</p>"
+            "<p>Both the Radiology and Technologist liens have been signed and are ready for processing.</p>"
+            "<p>Please confirm receipt and let us know once these have been uploaded to the patient file.</p>"
+            "<p>Thank you,</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "20250703 - RAD Signed Lien - Precise Imaging - Cherie Roedel.pdf",
+                "filepath": "data/documents/20250703 - RAD Signed Lien - Precise Imaging - Cherie Roedel.pdf",
+                "content_type": "application/pdf"
+            },
+            {
+                "filename": "20250703 - TECH Signed Lien - Precise Imaging - Cherie Roedel.pdf",
+                "filepath": "data/documents/20250703 - TECH Signed Lien - Precise Imaging - Cherie Roedel.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
     }
 }

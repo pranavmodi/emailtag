@@ -626,14 +626,26 @@ async def handle_lien_request(
         doi = "Unknown"
 
         if patient_info_response and isinstance(patient_info_response, dict):
-            if patient_info_response.get("success") and patient_info_response.get("data"):
-                data = patient_info_response["data"]
-                if "patients" in data and data["patients"]:
-                    patient = data["patients"][0]
-                    patient_name = f"{patient.get('first_name', '')} {patient.get('last_name', '')}".strip()
+            data_section = patient_info_response.get('data', {})
+            if data_section and isinstance(data_section, dict):
+                patients_list = data_section.get('patients', [])
+                if patients_list and len(patients_list) > 0:
+                    patient = patients_list[0]
 
-                    # Format DOB
-                    raw_dob = patient.get('date_of_birth')
+                    # Extract and format patient name
+                    first_name = patient.get('first_name', '').strip()
+                    last_name = patient.get('last_name', '').strip()
+                    if first_name and last_name:
+                        patient_name = f"{first_name} {last_name}"
+                    elif first_name:
+                        patient_name = first_name
+                    elif last_name:
+                        patient_name = last_name
+                    else:
+                        patient_name = "Unknown"
+
+                    # Format DOB (field is 'birth_date' not 'date_of_birth')
+                    raw_dob = patient.get('birth_date')
                     if raw_dob:
                         try:
                             date_obj = datetime.strptime(raw_dob, '%Y-%m-%d')
@@ -641,14 +653,18 @@ async def handle_lien_request(
                         except:
                             dob = raw_dob  # Use as-is if parsing fails
 
-                    # Format DOI
-                    raw_doi = patient.get('date_of_injury') or patient.get('date_of_loss')
+                    # Format DOI (field is 'doi' not 'date_of_injury')
+                    raw_doi = patient.get('doi')
                     if raw_doi:
                         try:
                             date_obj = datetime.strptime(raw_doi, '%Y-%m-%d')
                             doi = date_obj.strftime('%m/%d/%Y')
                         except:
                             doi = raw_doi  # Use as-is if parsing fails
+                else:
+                    logger.warning(f"No patients found in patient info response for {patient_id}")
+            else:
+                logger.warning(f"Invalid data structure in patient info response for {patient_id}")
 
         # Generate lien status table
         lien_status_table = await _generate_lien_status_table(patient_id, upload_results, signature_type)
