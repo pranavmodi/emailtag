@@ -187,14 +187,10 @@ async def _generate_lien_status_table(patient_id: str, upload_results: List[Dict
     try:
         logger.info(f"📊 Generating lien status table for patient {patient_id} (signature_type: {signature_type})")
 
-        # TEMPORARY: Use hardcoded patient ID for lien status fetch testing
-        temp_patient_id = "PRE470159"
-        logger.warning(f"⚠️ TEMPORARY: Using hardcoded patient ID {temp_patient_id} for lien status fetch (actual patient: {patient_id})")
-
         # Fetch actual lien status from RadFlow API via MCP tool
         lien_status_response = await call_mcp_tool(
             tool_name="get_patient_lien_bill_balance",
-            arguments={"patient_id": temp_patient_id}
+            arguments={"patient_id": patient_id}
         )
 
         # Parse lien status from MCP response
