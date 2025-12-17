@@ -817,5 +817,44 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["ASL", "Rad Lien"]
+    },
+    "34": {
+        "description": "Inder Singh - ASL Combined Lien - Both TECH and RAD liens in single 2-page document (should be split)",
+        "subject": "Inder Singh - Signed Lien Documents",
+        "body_html": "<p>Please find attached the signed lien documents for Inder Singh.</p>",
+        "attachments": [
+            {
+                "filename": "ESIGN_PRE1089351_ASL.pdf",
+                "filepath": "data/documents/ESIGN_PRE1089351_ASL.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
+    },
+    "35": {
+        "description": "December 9 PI Client - Dual lien packet with separate radiologist and technologist files for processing",
+        "subject": "Signed PI Lien Packet - Radiologist & Tech (Dec 9)",
+        "body_html": (
+            "<p>Hello Precise Imaging Team,</p>"
+            "<p>Attached are the finalized Precise Imaging lien packets for our PI client that were executed on December 9.</p>"
+            "<p>Both the Radiologist and Technologist lien forms are included so your team can upload them to the patient account and confirm receipt.</p>"
+            "<p>Please let us know once everything is filed with the chart.</p>"
+            "<p>Thank you,<br>"
+            "Lien Processing Desk</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "2025-12-09-Lien-PI Radiologist-Precise Imaging.pdf",
+                "filepath": "data/documents/2025-12-09-Lien-PI Radiologist-Precise Imaging.pdf",
+                "content_type": "application/pdf"
+            },
+            {
+                "filename": "2025-12-09-Lien-PI Tech-Precise Imaging.pdf",
+                "filepath": "data/documents/2025-12-09-Lien-PI Tech-Precise Imaging.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
     }
 }
