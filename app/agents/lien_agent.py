@@ -30,60 +30,8 @@ RAD_LIEN_TAG = "Rad Lien"
 TECH_LIEN_TAG = "Tech Lien"
 # --- END: Tag Constants ---
 
-# --- BEGIN: Response Templates ---
-
-# Template for successful lien processing (not modified, patient found)
-TEMPLATE_LIEN_PROCESSED_SUCCESS = """
-Thank you for submitting the {lien_type}.
-
-Patient ID: {patient_id}
-Patient: {patient_name}
-DOB: {dob}
-DOI: {doi}
-
-Your lien has been successfully uploaded to the patient file and is now on record.
-
-Thank you,
-Precise Imaging Billing Dept.
-www.PreciseMRI.com
-"""
-
-# Template for unreadable/blurry lien document
-TEMPLATE_LIEN_UNREADABLE = """
-Thank you for submitting the {lien_type}.
-
-We received your lien document, however the document appears to be unreadable due to poor image quality, blurriness, or scanning issues.
-
-Please resend a clearer version of the lien document so we can properly process it.
-
-Thank you,
-Precise Imaging Billing Dept.
-www.PreciseMRI.com
-"""
-
-# Template for human review (patient not found)
-TEMPLATE_PATIENT_NOT_FOUND = """
-Thank you for submitting the {lien_type}.
-
-We're having trouble locating the patient record for this lien. A member of our billing team will personally review your submission and get back to you shortly.
-
-Thank you,
-Precise Imaging Billing Dept.
-www.PreciseMRI.com
-"""
-
-# Template for modified lien (will be tagged for human review)
-TEMPLATE_LIEN_MODIFIED_REVIEW = """
-Thank you for submitting the {lien_type}.
-
-We've received your lien document, however it appears to contain modifications or alterations. A member of our billing team will review this submission and get back to you shortly.
-
-Thank you,
-Precise Imaging Billing Dept.
-www.PreciseMRI.com
-"""
-
-# --- END: Response Templates ---
+# --- NOTE: All lien response templates are now managed via /settings/template-config ---
+# Templates are fetched from database via _fetch_lien_templates_from_db()
 
 # --- BEGIN: Helper Functions ---
 
@@ -106,21 +54,25 @@ async def _fetch_lien_templates_from_db(tag_name: str) -> Dict[str, str]:
 
             if tag_settings and tag_settings.settings:
                 settings = tag_settings.settings
+                # Use exact key names from frontend template-config
                 return {
-                    "success": settings.get("lien_success_template", TEMPLATE_LIEN_PROCESSED_SUCCESS),
-                    "unreadable": settings.get("lien_unreadable_template", TEMPLATE_LIEN_UNREADABLE),
-                    "patient_not_found": settings.get("lien_patient_not_found_template", TEMPLATE_PATIENT_NOT_FOUND),
-                    "modified": settings.get("lien_modified_template", TEMPLATE_LIEN_MODIFIED_REVIEW)
+                    "success": settings.get("lien_success_template", ""),
+                    "unreadable": settings.get("lien_reject_not_readable_template", ""),
+                    "patient_not_found": settings.get("lien_patient_not_found_template", ""),
+                    "modified": settings.get("lien_reject_no_changes_template", ""),
+                    "invalid_signature": settings.get("lien_reject_sig_not_valid_template", "")
                 }
     except Exception as e:
-        logger.warning(f"Failed to fetch lien templates from database: {e}. Using hardcoded templates.")
+        logger.error(f"Failed to fetch lien templates from database: {e}")
 
-    # Fallback to hardcoded templates
+    # Return empty templates if database fetch fails - this should not happen in production
+    logger.error(f"Could not load lien templates for tag '{tag_name}' - templates will be empty!")
     return {
-        "success": TEMPLATE_LIEN_PROCESSED_SUCCESS,
-        "unreadable": TEMPLATE_LIEN_UNREADABLE,
-        "patient_not_found": TEMPLATE_PATIENT_NOT_FOUND,
-        "modified": TEMPLATE_LIEN_MODIFIED_REVIEW
+        "success": "",
+        "unreadable": "",
+        "patient_not_found": "",
+        "modified": "",
+        "invalid_signature": ""
     }
 
 def _check_lien_readability(document_analysis_results: List[Dict[str, Any]]) -> bool:
@@ -250,19 +202,20 @@ async def _generate_lien_status_table(patient_id: str, upload_results: List[Dict
 
         if lien_status_response and lien_status_response.get("success"):
             data = lien_status_response.get("data", {})
-            liens = data.get("liens", [])
+            result = data.get("result", {})
+            lien_status_list = result.get("lienStatusList", [])
 
-            for lien in liens:
-                lien_type = lien.get("lien_type", "").upper()
-                patient_signed = lien.get("patient_signed", False)
-                attorney_signed = lien.get("attorney_signed", False)
-                patient_signed_date = lien.get("patient_signed_date", "")
-                attorney_signed_date = lien.get("attorney_signed_date", "")
+            for lien in lien_status_list:
+                lien_type = lien.get("lienType", "").upper()
+                patient_signed = lien.get("hasPatientSigned", False)
+                attorney_signed = lien.get("hasAttorneySigned", False)
+                patient_signed_date = lien.get("patientSignedLienDate", "")
+                attorney_signed_date = lien.get("attorneySignedDate", "")
 
                 # Map lien type to our standard names
                 if "TECH" in lien_type or "IMAGING" in lien_type:
                     standard_type = "TECH"
-                elif "RAD" in lien_type or "PROFESSIONAL" in lien_type or "REPORT" in lien_type:
+                elif "RAD" in lien_type or "PROFESSIONAL" in lien_type or "MEDICAL" in lien_type or "RADIOLOGIST" in lien_type:
                     standard_type = "RAD"
                 else:
                     continue
@@ -312,11 +265,19 @@ async def _generate_lien_status_table(patient_id: str, upload_results: List[Dict
                 if sig_info["patient_signed"]:
                     patient_date = sig_info["patient_date"]
                     if patient_date:
+                        # Try multiple date formats (MCP returns "MM/DD/YYYY HH:MM:SS" format)
                         try:
-                            date_obj = datetime.strptime(patient_date, '%Y-%m-%d')
+                            # Try "MM/DD/YYYY HH:MM:SS" format first
+                            date_obj = datetime.strptime(patient_date.split()[0], '%m/%d/%Y')
                             formatted_date = date_obj.strftime('%m/%d/%Y')
                         except:
-                            formatted_date = patient_date
+                            try:
+                                # Try "YYYY-MM-DD" format
+                                date_obj = datetime.strptime(patient_date, '%Y-%m-%d')
+                                formatted_date = date_obj.strftime('%m/%d/%Y')
+                            except:
+                                # Use as-is if both fail
+                                formatted_date = patient_date
                         patient_sig_status = f"Signed {formatted_date}"
                     else:
                         patient_sig_status = "Signed"
@@ -327,11 +288,19 @@ async def _generate_lien_status_table(patient_id: str, upload_results: List[Dict
                 if sig_info["attorney_signed"]:
                     attorney_date = sig_info["attorney_date"]
                     if attorney_date:
+                        # Try multiple date formats (MCP returns "MM/DD/YYYY HH:MM:SS" format)
                         try:
-                            date_obj = datetime.strptime(attorney_date, '%Y-%m-%d')
+                            # Try "MM/DD/YYYY HH:MM:SS" format first
+                            date_obj = datetime.strptime(attorney_date.split()[0], '%m/%d/%Y')
                             formatted_date = date_obj.strftime('%m/%d/%Y')
                         except:
-                            formatted_date = attorney_date
+                            try:
+                                # Try "YYYY-MM-DD" format
+                                date_obj = datetime.strptime(attorney_date, '%Y-%m-%d')
+                                formatted_date = date_obj.strftime('%m/%d/%Y')
+                            except:
+                                # Use as-is if both fail
+                                formatted_date = attorney_date
                         attorney_sig_status = f"Signed {formatted_date}"
                     else:
                         attorney_sig_status = "Signed"
@@ -421,11 +390,19 @@ async def handle_lien_request(
     """
     logger.info(f"Initiating {signature_type} Lien agent for conv ID: {front_conversation_id}, tags: {applied_tags}")
 
-    # Determine tag name based on signature type
-    tag_name = f"{signature_type} Lien"
-
-    # Fetch lien templates from database
+    # Fetch lien templates from database using unified "Lien Templates" tag
+    # (All lien templates are stored under this single tag in the database)
+    tag_name = "Lien Templates"
     templates = await _fetch_lien_templates_from_db(tag_name)
+
+    # Validate that templates were loaded
+    if not templates.get("success"):
+        logger.error(f"CRITICAL: Lien success template not configured for tag '{tag_name}'. Please configure templates in /settings/template-config")
+        return {
+            "agent_handled": False,
+            "processed_flag": False,
+            "details": {"error": "Templates not configured"}
+        }
 
     # Determine lien type from tags
     lien_type = _determine_lien_type(applied_tags, signature_type)
@@ -444,10 +421,14 @@ async def handle_lien_request(
 
             frontapp_service.add_conversation_tags(front_conversation_id, tags_to_add)
 
-            await send_reply_to_front_direct(
-                conversation_id=front_conversation_id,
-                reply_text=templates["modified"].format(lien_type=lien_type)
-            )
+            # Send reply if template is configured
+            if templates.get("modified"):
+                await send_reply_to_front_direct(
+                    conversation_id=front_conversation_id,
+                    reply_text=templates["modified"].format(lien_type=lien_type)
+                )
+            else:
+                logger.warning(f"Modified lien template not configured for tag '{tag_name}'. No autoresponse sent.")
 
             return {
                 "agent_handled": True,
@@ -467,10 +448,14 @@ async def handle_lien_request(
         logger.info(f"Lien document unreadable for conversation {front_conversation_id}. Requesting clearer version.")
 
         try:
-            await send_reply_to_front_direct(
-                conversation_id=front_conversation_id,
-                reply_text=templates["unreadable"].format(lien_type=lien_type)
-            )
+            # Send reply if template is configured
+            if templates.get("unreadable"):
+                await send_reply_to_front_direct(
+                    conversation_id=front_conversation_id,
+                    reply_text=templates["unreadable"].format(lien_type=lien_type)
+                )
+            else:
+                logger.warning(f"Unreadable lien template not configured for tag '{tag_name}'. No autoresponse sent.")
 
             return {
                 "agent_handled": True,
@@ -506,10 +491,14 @@ async def handle_lien_request(
         try:
             frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
 
-            await send_reply_to_front_direct(
-                conversation_id=front_conversation_id,
-                reply_text=templates["patient_not_found"].format(lien_type=lien_type)
-            )
+            # Send reply if template is configured
+            if templates.get("patient_not_found"):
+                await send_reply_to_front_direct(
+                    conversation_id=front_conversation_id,
+                    reply_text=templates["patient_not_found"].format(lien_type=lien_type)
+                )
+            else:
+                logger.warning(f"Patient not found template not configured for tag '{tag_name}'. No autoresponse sent.")
 
             return {
                 "agent_handled": True,
@@ -668,17 +657,15 @@ async def handle_lien_request(
         # Generate lien status table
         lien_status_table = await _generate_lien_status_table(patient_id, upload_results, signature_type)
 
-        # Generate success response
+        # Generate success response with all placeholders
         reply_body = templates["success"].format(
             lien_type=lien_type,
             patient_id=patient_id,
             patient_name=patient_name,
             dob=dob,
-            doi=doi
+            doi=doi,
+            lien_status_table=lien_status_table
         )
-
-        # Replace {lien_status_table} placeholder with actual table
-        reply_body = reply_body.replace("{lien_status_table}", lien_status_table)
 
         # Send the response
         await send_reply_to_front_direct(

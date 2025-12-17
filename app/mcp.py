@@ -38,7 +38,9 @@ class MCPClient:
         headers = {
             "Accept": "application/json, text/event-stream"
         }
-        self.client = httpx.AsyncClient(follow_redirects=True, headers=headers)
+        # Use 30 second timeout for MCP operations (some tools like get_patient_lien_bill_balance can be slow)
+        timeout = httpx.Timeout(30.0, connect=10.0)
+        self.client = httpx.AsyncClient(follow_redirects=True, headers=headers, timeout=timeout)
         self._connected = False
     
     async def connect(self) -> bool:
