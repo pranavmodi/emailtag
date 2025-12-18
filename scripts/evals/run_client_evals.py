@@ -83,6 +83,33 @@ def _find_existing_scenario_by_conversation(conversation_id: str, existing: Dict
     return None
 
 
+def _parse_scenario_selection(choice_str: str) -> List[str]:
+    """
+    Parse a selection string like "1,3,5-7" into a list of scenario keys.
+    """
+    selected: List[str] = []
+    parts = [p.strip() for p in choice_str.split(",") if p.strip()]
+    for part in parts:
+        if "-" in part:
+            try:
+                start_str, end_str = part.split("-", 1)
+                start = int(start_str)
+                end = int(end_str)
+                if start <= end:
+                    for i in range(start, end + 1):
+                        key = str(i)
+                        if key not in selected:
+                            selected.append(key)
+            except ValueError:
+                # If parsing fails, treat as literal key
+                if part not in selected:
+                    selected.append(part)
+        else:
+            if part not in selected:
+                selected.append(part)
+    return selected
+
+
 def _download_attachments_for_conversation(conversation_id: str, messages: List[Dict[str, Any]], verbose: bool = False) -> List[Dict[str, str]]:
     """
     Download attachments referenced in the conversation messages to data/documents folder
@@ -652,7 +679,12 @@ async def main():
     
     # Parse command line arguments (simple parsing to avoid adding dependencies)
     verbose = "--verbose" in sys.argv or "-v" in sys.argv
-    send_only = "--send-only" in sys.argv
+    # Default mode: send-only (no validation) unless explicitly validating
+    send_only = "--validate" not in sys.argv
+    if "--send-only" in sys.argv:
+        send_only = True
+    if "--validate" in sys.argv:
+        send_only = False
     force_import = "--force" in sys.argv
     from_conv: Optional[str] = None
     for i, arg in enumerate(sys.argv):
@@ -706,21 +738,21 @@ async def main():
                 print("Failed to import conversation; no scenario added.")
             # Exit after import per requirement (no scenario execution prompt)
             return
-
+    
     # Display scenarios (now including any imported one)
     display_client_scenarios(verbose)
     
     # Get user choice
     print(f"\nTotal client scenarios available: {len(CLIENT_EVAL_SCENARIOS)}")
-    choice = input("Enter scenario number(s) to test (comma-separated) or 'all': ").strip()
+    choice = input("Enter scenario number(s) to test (comma-separated or ranges like 30-35) or 'all': ").strip()
     
     scenarios_to_run = {}
     
     if choice.lower() == 'all':
         scenarios_to_run = CLIENT_EVAL_SCENARIOS
     else:
-        # Parse comma-separated scenario numbers
-        scenario_keys = [key.strip() for key in choice.split(',')]
+        # Parse comma-separated scenario numbers and ranges
+        scenario_keys = _parse_scenario_selection(choice)
         for key in scenario_keys:
             if key in CLIENT_EVAL_SCENARIOS:
                 scenarios_to_run[key] = CLIENT_EVAL_SCENARIOS[key]
@@ -735,6 +767,7 @@ async def main():
     
     # Run scenarios
     results = []
+    send_delay_seconds = 3
     
     for key, scenario in scenarios_to_run.items():
         result = run_single_scenario(key, scenario, verbose)
@@ -746,6 +779,9 @@ async def main():
             })
         
         results.append(result)
+        # Brief delay between sends to avoid bursts
+        print(f"Waiting {send_delay_seconds} seconds before next send...")
+        time.sleep(send_delay_seconds)
     
     # Validate tags if Front API is configured and not in send-only mode
     if can_check_tags and not send_only:
