@@ -118,13 +118,20 @@ export default function TemplateConfigPage() {
   const selectedTagLabel = getTagLabel(selectedTag);
 
   // Workspace custom placeholders save handler
-  const handleSaveWorkspacePlaceholders = async () => {
+  const handleSaveWorkspacePlaceholders = async (placeholders?: Record<string, string>) => {
     try {
+      // Use provided placeholders or fall back to current state
+      const placeholdersToSave = placeholders !== undefined ? placeholders : baseCustomPlaceholders;
+
       const payload = {
-        settings: { custom_placeholders: baseCustomPlaceholders },
+        settings: { custom_placeholders: placeholdersToSave },
         updated_by: currentUser,
       };
       await TemplatesApi.updateTagSettings("WORKSPACE", payload);
+
+      // Update local state with saved placeholders
+      setBaseCustomPlaceholders(placeholdersToSave);
+
       setWorkspaceStatus({
         type: "success",
         message: "Workspace custom placeholders saved successfully.",

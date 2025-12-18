@@ -8,7 +8,7 @@ import { DEFAULT_TAG_SETTINGS } from "../constants/template-config.constants";
 interface PlaceholderManagerProps {
   tagSettings: typeof DEFAULT_TAG_SETTINGS;
   onFieldChange: (key: keyof typeof DEFAULT_TAG_SETTINGS, value: string | Record<string, string>) => void;
-  onSave: () => void;
+  onSave: (placeholders?: Record<string, string>) => void;
   onReset: () => void;
 }
 
@@ -40,12 +40,22 @@ export function PlaceholderManager({ tagSettings, onFieldChange, onSave, onReset
     }
   };
 
-  const handleDeletePlaceholder = () => {
+  const handleDeletePlaceholder = async () => {
+    if (!confirm(`Delete placeholder {${selectedPlaceholder}}? This action cannot be undone.`)) {
+      return;
+    }
+
+    // Delete from local state
     const customPlaceholders = { ...tagSettings.custom_placeholders };
     delete customPlaceholders[selectedPlaceholder];
+
+    // Update local state
     onFieldChange("custom_placeholders", customPlaceholders);
     const remaining = Object.keys(customPlaceholders);
     setSelectedPlaceholder(remaining.length > 0 ? remaining[0] : "");
+
+    // Immediately save to database with the updated placeholders
+    await onSave(customPlaceholders);
   };
 
   const handleUpdatePlaceholder = (value: string) => {
@@ -171,6 +181,18 @@ export function PlaceholderManager({ tagSettings, onFieldChange, onSave, onReset
             Add New Placeholder
           </button>
 
+          {/* Save Reminder */}
+          <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3">
+            <div className="flex items-start gap-2">
+              <svg className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-xs text-blue-800">
+                <strong className="font-semibold">Note:</strong> Deletions are applied immediately. Changes to placeholder values (adding or editing) require clicking <strong>&quot;Save Placeholders&quot;</strong> below.
+              </p>
+            </div>
+          </div>
+
           {/* Save Buttons */}
           <div className="mt-6 flex justify-end gap-3 border-t-2 border-amber-200 pt-4">
             <button
@@ -183,7 +205,7 @@ export function PlaceholderManager({ tagSettings, onFieldChange, onSave, onReset
               Reset
             </button>
             <button
-              onClick={onSave}
+              onClick={() => onSave(tagSettings.custom_placeholders)}
               className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:from-amber-700 hover:to-orange-700 hover:shadow-lg active:scale-95"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

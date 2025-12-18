@@ -172,8 +172,8 @@ const PlaceholderSection: React.FC<PlaceholderSectionProps> = ({
           turn green to confirm the copy.
         </p>
         <p className="text-xs text-indigo-700">
-          <strong>Note:</strong> Placeholders that don't resolve (e.g., if DOB isn't on file) are automatically replaced
-          with "Not Available."
+          <strong>Note:</strong> Placeholders that do not resolve (e.g., if DOB is not on file) are automatically replaced
+          with Not Available.
         </p>
       </div>
     </div>
