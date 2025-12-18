@@ -112,12 +112,12 @@ export const DUMMY_LIEN_STATUS_TABLE = `<table border="1" style="border-collapse
 <tr>
 <td style="border: 1px solid black; padding: 8px;">Technical Lien (Imaging)</td>
 <td style="border: 1px solid black; padding: 8px;">Signed 11/19/2025</td>
-<td style="border: 1px solid black; padding: 8px;">Not Signed.<br/>Please eSign here</td>
+<td style="border: 1px solid black; padding: 8px;">Not Signed.<br/><a href="https://example.com/esign-attorney-tech" target="_blank" style="color: #2563eb; text-decoration: underline;">Please eSign here</a></td>
 </tr>
 <tr>
 <td style="border: 1px solid black; padding: 8px;">Professional Lien (Report)</td>
-<td style="border: 1px solid black; padding: 8px;">Signed 11/19/2025</td>
-<td style="border: 1px solid black; padding: 8px;">Not Signed.<br/>Please eSign here</td>
+<td style="border: 1px solid black; padding: 8px;">Not Signed.<br/><a href="https://example.com/esign-patient-rad" target="_blank" style="color: #2563eb; text-decoration: underline;">Please eSign here</a></td>
+<td style="border: 1px solid black; padding: 8px;">Not Signed.<br/><a href="https://example.com/esign-attorney-rad" target="_blank" style="color: #2563eb; text-decoration: underline;">Please eSign here</a></td>
 </tr>
 </tbody>
 </table>`;
