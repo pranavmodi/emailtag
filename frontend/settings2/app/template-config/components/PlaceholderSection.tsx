@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Placeholder, getPlaceholdersForType, TAG_TO_AUTORESPOND_TYPE } from "../constants/placeholders";
 
 interface PlaceholderSectionProps {
@@ -14,6 +14,7 @@ const PlaceholderSection: React.FC<PlaceholderSectionProps> = ({
   customPlaceholders,
   onPlaceholderClick,
 }) => {
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const autorespondType = TAG_TO_AUTORESPOND_TYPE[selectedTag] || selectedTag;
   const { common, specific } = getPlaceholdersForType(autorespondType);
   const customPlaceholderEntries = Object.entries(customPlaceholders || {}).map(([key, description]) => ({
@@ -21,27 +22,82 @@ const PlaceholderSection: React.FC<PlaceholderSectionProps> = ({
     description: description || "Custom placeholder defined in workspace settings",
   }));
 
-  const handlePlaceholderClick = (placeholderKey: string) => {
+  const handlePlaceholderClick = async (placeholderKey: string) => {
+    // Copy to clipboard
+    try {
+      await navigator.clipboard.writeText(placeholderKey);
+      setCopiedKey(placeholderKey);
+
+      // Reset copied state after 2 seconds
+      setTimeout(() => {
+        setCopiedKey(null);
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to copy placeholder:", err);
+    }
+
+    // Call original callback if provided
     if (onPlaceholderClick) {
       onPlaceholderClick(placeholderKey);
     }
   };
 
-  const PlaceholderCard: React.FC<{ placeholder: Placeholder }> = ({ placeholder }) => (
-    <button
-      type="button"
-      onClick={() => handlePlaceholderClick(placeholder.key)}
-      className="w-full rounded-2xl border border-slate-200 bg-white/80 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-lg"
-    >
-      <code className="rounded-lg bg-indigo-50 px-2 py-1 font-mono text-sm text-indigo-600">{placeholder.key}</code>
-      <p className="mt-2 text-sm text-slate-700">{placeholder.description}</p>
-      {placeholder.example && (
-        <p className="mt-1 text-xs text-slate-500">
-          <span className="font-semibold">Example:</span> {placeholder.example}
-        </p>
-      )}
-    </button>
-  );
+  const PlaceholderCard: React.FC<{ placeholder: Placeholder }> = ({ placeholder }) => {
+    const isCopied = copiedKey === placeholder.key;
+
+    return (
+      <button
+        type="button"
+        onClick={() => handlePlaceholderClick(placeholder.key)}
+        className={`group relative w-full rounded-2xl border p-4 text-left shadow-sm transition-all duration-200 ${
+          isCopied
+            ? "border-green-400 bg-green-50 shadow-md"
+            : "border-slate-200 bg-white/80 hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-lg"
+        }`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <code
+            className={`rounded-lg px-2 py-1 font-mono text-sm transition-colors ${
+              isCopied ? "bg-green-100 text-green-700" : "bg-indigo-50 text-indigo-600"
+            }`}
+          >
+            {placeholder.key}
+          </code>
+
+          {/* Copy icon with visual feedback */}
+          <div className="flex items-center gap-1">
+            {isCopied ? (
+              <span className="flex items-center gap-1 text-xs font-medium text-green-600">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Copied!
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-xs font-medium text-slate-400 opacity-0 transition-opacity group-hover:opacity-100">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                  />
+                </svg>
+                Click to copy
+              </span>
+            )}
+          </div>
+        </div>
+
+        <p className="mt-2 text-sm text-slate-700">{placeholder.description}</p>
+        {placeholder.example && (
+          <p className="mt-1 text-xs text-slate-500">
+            <span className="font-semibold">Example:</span> {placeholder.example}
+          </p>
+        )}
+      </button>
+    );
+  };
 
   const PlaceholderGroup: React.FC<{
     icon: string;
@@ -110,10 +166,14 @@ const PlaceholderSection: React.FC<PlaceholderSectionProps> = ({
         </div>
       )}
 
-      <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-900">
+      <div className="space-y-2 rounded-2xl border border-indigo-200 bg-indigo-50/80 p-4 text-sm text-indigo-900">
         <p>
-          <strong>Tip:</strong> Placeholders that don’t resolve (for example, if DOB isn’t on file) are automatically
-          replaced with “Not Available.” Use them freely without worrying about broken emails.
+          <strong>💡 Quick Copy:</strong> Click any placeholder card to instantly copy it to your clipboard. The card will
+          turn green to confirm the copy.
+        </p>
+        <p className="text-xs text-indigo-700">
+          <strong>Note:</strong> Placeholders that don't resolve (e.g., if DOB isn't on file) are automatically replaced
+          with "Not Available."
         </p>
       </div>
     </div>
