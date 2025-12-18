@@ -9,6 +9,7 @@ patient file or requests human review.
 import asyncio
 import os
 import json
+import httpx
 from typing import Optional, Dict, Any, List, Tuple
 from pathlib import Path
 from datetime import datetime
@@ -34,6 +35,33 @@ TECH_LIEN_TAG = "Tech Lien"
 # Templates are fetched from database via _fetch_lien_templates_from_db()
 
 # --- BEGIN: Helper Functions ---
+
+async def _fetch_custom_placeholders_from_db() -> Dict[str, str]:
+    """
+    Fetch workspace custom placeholders from database tag_settings.
+
+    Returns:
+        Dictionary of custom placeholder key-value pairs
+    """
+    try:
+        from app.crud.tag_settings import tag_settings_crud
+        from app.db.session import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            # Load workspace custom placeholders (global)
+            workspace_settings = await tag_settings_crud.get_settings_dict(db, "WORKSPACE")
+
+            if workspace_settings and "custom_placeholders" in workspace_settings:
+                custom_placeholders = workspace_settings["custom_placeholders"]
+                logger.info(f"✅ Loaded {len(custom_placeholders)} custom placeholders from WORKSPACE")
+                return custom_placeholders
+            else:
+                logger.warning(f"⚠️ No WORKSPACE custom placeholders found")
+                return {}
+
+    except Exception as e:
+        logger.error(f"❌ Error fetching custom placeholders: {e}")
+        return {}
 
 async def _fetch_lien_templates_from_db(tag_name: str) -> Dict[str, str]:
     """
@@ -201,6 +229,57 @@ def _check_duplicate_barcodes(document_analysis_results: List[Dict[str, Any]]) -
             return True
 
     return False
+
+async def _regenerate_split_documents(
+    attachment_url: str,
+    split_metadata: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """
+    Download attachment and regenerate split PDFs from saved metadata.
+
+    Args:
+        attachment_url: Front API URL to download the attachment
+        split_metadata: List of split document metadata (without pdf_bytes)
+
+    Returns:
+        List of split documents with pdf_bytes populated
+    """
+    try:
+        logger.info(f"🔄 Downloading attachment to regenerate {len(split_metadata)} splits: {attachment_url}")
+
+        # Download original attachment
+        headers = {"Authorization": f"Bearer {app_settings_instance.FRONT_AUTH_TOKEN}"}
+        async with httpx.AsyncClient(follow_redirects=True, verify=False) as client:
+            response = await client.get(attachment_url, headers=headers, timeout=120.0)
+            response.raise_for_status()
+            original_pdf_bytes = response.content
+
+        logger.info(f"✅ Downloaded {len(original_pdf_bytes)} bytes from {attachment_url}")
+
+        # Import PDF splitter
+        from app.services.lien.pdf_splitter import PDFSplitter
+
+        # Convert metadata to page groupings format
+        page_groupings = []
+        for split_meta in split_metadata:
+            page_groupings.append({
+                "pages": split_meta.get("original_pages", []),
+                "patient_id": split_meta.get("patient_id", ""),
+                "lien_type": split_meta.get("lien_type", ""),
+                "signature_type": split_meta.get("signature_type", ""),
+                "signature_data": split_meta.get("signature_data", {})
+            })
+
+        # Re-split the PDF
+        splitter = PDFSplitter()
+        split_documents = splitter.split_pdf_by_groups(original_pdf_bytes, page_groupings)
+
+        logger.info(f"✅ Re-generated {len(split_documents)} split documents with pdf_bytes")
+        return split_documents
+
+    except Exception as e:
+        logger.error(f"Failed to regenerate split documents from {attachment_url}: {e}", exc_info=True)
+        return []
 
 async def _check_duplicate_lien_type(patient_id: str, lien_type: str, signature_type: str) -> Tuple[bool, str]:
     """
@@ -548,6 +627,9 @@ async def handle_lien_request(
     tag_name = "Lien Templates"
     templates = await _fetch_lien_templates_from_db(tag_name)
 
+    # Fetch workspace custom placeholders (global placeholders available to all templates)
+    custom_placeholders = await _fetch_custom_placeholders_from_db()
+
     # Validate that templates were loaded
     if not templates.get("success"):
         logger.error(f"CRITICAL: Lien success template not configured for tag '{tag_name}'. Please configure templates in /settings/template-config")
@@ -793,22 +875,37 @@ async def handle_lien_request(
             arguments={"patient_id": patient_id}
         )
 
-        # Collect all split documents from ALL document analysis results
+        # Collect split metadata from ALL document analysis results
         # This handles both:
         # 1. Single PDF with multiple liens (splits within one attachment)
         # 2. Multiple separate PDFs (each with potential splits)
-        all_split_documents = []
+        splits_by_url = {}  # Map attachment_url -> list of split metadata
         processed_doc_indices = set()
 
         if document_analysis_results:
             for doc_idx, doc_result in enumerate(document_analysis_results):
                 enhanced_lien_data = doc_result.get("enhanced_lien_processing", {})
                 if enhanced_lien_data.get("processing_type") == "enhanced_lien_processing_split":
-                    split_documents = enhanced_lien_data.get("split_documents", [])
-                    if split_documents:
-                        all_split_documents.extend(split_documents)
-                        processed_doc_indices.add(doc_idx)
-                        logger.info(f"📄 {signature_type} AGENT: Found {len(split_documents)} splits from document {doc_idx + 1}")
+                    split_metadata = enhanced_lien_data.get("split_documents", [])
+                    if split_metadata:
+                        attachment_url = doc_result.get("attachment_url", "")
+                        if attachment_url:
+                            if attachment_url not in splits_by_url:
+                                splits_by_url[attachment_url] = []
+                            splits_by_url[attachment_url].extend(split_metadata)
+                            processed_doc_indices.add(doc_idx)
+                            logger.info(f"📄 {signature_type} AGENT: Found {len(split_metadata)} split metadata from document {doc_idx + 1}")
+
+        # Regenerate split documents with pdf_bytes by downloading attachments
+        all_split_documents = []
+        if splits_by_url:
+            logger.info(f"📄 {signature_type} AGENT: Regenerating splits from {len(splits_by_url)} attachment(s)")
+
+            for attachment_url, split_meta_list in splits_by_url.items():
+                regenerated_splits = await _regenerate_split_documents(attachment_url, split_meta_list)
+                all_split_documents.extend(regenerated_splits)
+
+            logger.info(f"📄 {signature_type} AGENT: Successfully regenerated {len(all_split_documents)} split documents with pdf_bytes")
 
         # Process all split documents (from all attachments)
         upload_results = []
@@ -999,15 +1096,23 @@ async def handle_lien_request(
         # Generate lien status table
         lien_status_table = await _generate_lien_status_table(patient_id, upload_results, signature_type)
 
+        # Prepare all placeholders for template formatting
+        placeholder_values = {
+            "lien_type": lien_type,
+            "patient_id": patient_id,
+            "patient_name": patient_name,
+            "dob": dob,
+            "doi": doi,
+            "lien_status_table": lien_status_table
+        }
+
+        # Merge in custom placeholders from workspace settings
+        if custom_placeholders:
+            placeholder_values.update(custom_placeholders)
+            logger.info(f"📝 Merged {len(custom_placeholders)} custom placeholders into template")
+
         # Generate success response with all placeholders
-        reply_body = templates["success"].format(
-            lien_type=lien_type,
-            patient_id=patient_id,
-            patient_name=patient_name,
-            dob=dob,
-            doi=doi,
-            lien_status_table=lien_status_table
-        )
+        reply_body = templates["success"].format(**placeholder_values)
 
         # Send the response
         await send_reply_to_front_direct(
