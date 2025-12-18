@@ -179,6 +179,95 @@ def _check_document_quality(email_obj: Any) -> Tuple[bool, str]:
     logger.info("📄 QUALITY: All documents assessed as GOOD quality")
     return (True, "GOOD")
 
+def _check_duplicate_barcodes(document_analysis_results: List[Dict[str, Any]]) -> bool:
+    """
+    Check if duplicate barcodes were detected across multiple pages.
+
+    Args:
+        document_analysis_results: List of document analysis results
+
+    Returns:
+        True if duplicate barcodes detected, False otherwise
+    """
+    if not document_analysis_results:
+        return False
+
+    for doc_result in document_analysis_results:
+        enhanced_lien_data = doc_result.get("enhanced_lien_processing", {})
+        has_duplicate_barcodes = enhanced_lien_data.get("has_duplicate_barcodes", False)
+
+        if has_duplicate_barcodes:
+            logger.warning("⚠️ DUPLICATE BARCODES: Same barcode found on multiple pages")
+            return True
+
+    return False
+
+async def _check_duplicate_lien_type(patient_id: str, lien_type: str, signature_type: str) -> Tuple[bool, str]:
+    """
+    Check if patient already has the exact same lien type in RadFlow.
+
+    Args:
+        patient_id: Patient ID (e.g., "PRE123456")
+        lien_type: Lien type being uploaded ("TECH" or "RAD")
+        signature_type: Signature type being uploaded ("ASL" or "PSL")
+
+    Returns:
+        Tuple of (has_duplicate: bool, reason: str)
+    """
+    try:
+        logger.info(f"🔍 DUPLICATE CHECK: Checking for existing {lien_type} {signature_type} lien for patient {patient_id}")
+
+        # Fetch existing liens from RadFlow
+        lien_status_response = await call_mcp_tool(
+            tool_name="get_patient_lien_bill_balance",
+            arguments={"patient_id": patient_id}
+        )
+
+        if not lien_status_response or not lien_status_response.get("success"):
+            logger.warning("⚠️ DUPLICATE CHECK: Could not fetch lien status, allowing upload")
+            return (False, "Could not fetch lien status")
+
+        # Parse existing liens
+        data = lien_status_response.get("data", {})
+        result = data.get("result", {})
+        lien_status_list = result.get("lienStatusList", [])
+
+        for lien in lien_status_list:
+            existing_lien_type = lien.get("lienType", "").upper()
+            patient_signed = lien.get("hasPatientSigned", False)
+            attorney_signed = lien.get("hasAttorneySigned", False)
+
+            # Map to standard lien type
+            standard_lien_type = None
+            if "TECH" in existing_lien_type or "IMAGING" in existing_lien_type:
+                standard_lien_type = "TECH"
+            elif "RAD" in existing_lien_type or "PROFESSIONAL" in existing_lien_type or "MEDICAL" in existing_lien_type or "RADIOLOGIST" in existing_lien_type:
+                standard_lien_type = "RAD"
+
+            if not standard_lien_type:
+                continue
+
+            # Determine existing signature type
+            existing_signature_type = None
+            if attorney_signed:
+                existing_signature_type = "ASL"
+            elif patient_signed:
+                existing_signature_type = "PSL"
+
+            # Check for exact match (same lien type AND same signature type)
+            if standard_lien_type == lien_type and existing_signature_type == signature_type:
+                reason = f"Patient already has {lien_type} {signature_type} lien in RadFlow"
+                logger.warning(f"⚠️ DUPLICATE LIEN: {reason}")
+                return (True, reason)
+
+        logger.info(f"✅ DUPLICATE CHECK: No exact duplicate found, allowing upload")
+        return (False, "No duplicate found")
+
+    except Exception as e:
+        logger.error(f"Error checking for duplicate lien type: {e}", exc_info=True)
+        # On error, allow upload (don't block on technical failure)
+        return (False, f"Error during duplicate check: {e}")
+
 def _check_lien_modifications(email_obj: Any) -> bool:
     """
     Check if lien has modifications based on email processing results.
@@ -570,6 +659,32 @@ async def handle_lien_request(
             logger.error(f"Failed to handle poor document quality: {e}")
             return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to handle poor document quality: {e}"}}
 
+    # Check for duplicate barcodes
+    has_duplicate_barcodes = _check_duplicate_barcodes(document_analysis_results)
+    if has_duplicate_barcodes:
+        logger.info(f"Duplicate barcodes detected for conversation {front_conversation_id}. Tagging for human review.")
+
+        try:
+            # Add human review tag
+            frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
+
+            # Add comment to Front conversation
+            comment_text = "Barcodes are the same on multiple pages. Please review and handle accordingly."
+            frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
+
+            return {
+                "agent_handled": True,
+                "processed_flag": True,
+                "details": {
+                    "action": "tagged_for_human_review_duplicate_barcodes",
+                    "lien_type": lien_type,
+                    "signature_type": signature_type
+                }
+            }
+        except Exception as e:
+            logger.error(f"Failed to handle duplicate barcodes: {e}")
+            return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to handle duplicate barcodes: {e}"}}
+
     # Check lien readability
     if document_analysis_results and not _check_lien_readability(document_analysis_results):
         logger.info(f"Lien document unreadable for conversation {front_conversation_id}. Requesting clearer version.")
@@ -642,6 +757,34 @@ async def handle_lien_request(
 
     # Patient found - proceed with lien processing
     logger.info(f"Patient ID {patient_id} found. Processing {lien_type} for conversation {front_conversation_id}.")
+
+    # Check for duplicate lien type (exact match of lien type AND signature type)
+    if patient_id:
+        has_duplicate_lien, duplicate_reason = await _check_duplicate_lien_type(patient_id, lien_type, signature_type)
+        if has_duplicate_lien:
+            logger.info(f"Duplicate lien type detected for conversation {front_conversation_id}. {duplicate_reason}. Tagging for human review.")
+
+            try:
+                # Add human review tag
+                frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
+
+                # Add comment to Front conversation
+                comment_text = f"{duplicate_reason}. Please review and handle accordingly."
+                frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
+
+                return {
+                    "agent_handled": True,
+                    "processed_flag": True,
+                    "details": {
+                        "action": "tagged_for_human_review_duplicate_lien_type",
+                        "lien_type": lien_type,
+                        "signature_type": signature_type,
+                        "reason": duplicate_reason
+                    }
+                }
+            except Exception as e:
+                logger.error(f"Failed to handle duplicate lien type: {e}")
+                return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to handle duplicate lien type: {e}"}}
 
     try:
         # Get patient information (needed for response template)

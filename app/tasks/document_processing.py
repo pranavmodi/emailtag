@@ -248,7 +248,7 @@ def _parse_document_processing_result(processing_result: Dict, attachment_url: s
             doc_type = analysis_data.get("document_type")
             description = analysis_data.get("description", "")
         
-        return {
+        result_dict = {
             "attachment_url": attachment_url,
             "patient_id": patient_id,
             "document_type": doc_type,
@@ -256,6 +256,24 @@ def _parse_document_processing_result(processing_result: Dict, attachment_url: s
             "document_analysis": document_analysis,
             "processing_status": processing_result.get("processing_status")
         }
+
+        # Include enhanced lien processing data if available (excluding pdf_bytes for JSON serialization)
+        if "enhanced_lien_processing" in processing_result:
+            enhanced_data = processing_result["enhanced_lien_processing"]
+            # Create a copy without pdf_bytes in split_documents
+            enhanced_clean = {k: v for k, v in enhanced_data.items() if k != 'split_documents'}
+
+            # Add split_documents without pdf_bytes
+            if 'split_documents' in enhanced_data:
+                split_docs_clean = []
+                for doc in enhanced_data['split_documents']:
+                    doc_clean = {k: v for k, v in doc.items() if k != 'pdf_bytes'}
+                    split_docs_clean.append(doc_clean)
+                enhanced_clean['split_documents'] = split_docs_clean
+
+            result_dict["enhanced_lien_processing"] = enhanced_clean
+
+        return result_dict
 
     except Exception as parse_error:
         logger.error(f"Error parsing document processing result for email {email_id}: {parse_error}. Result: {processing_result}")

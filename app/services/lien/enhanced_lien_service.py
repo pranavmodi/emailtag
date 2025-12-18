@@ -284,6 +284,9 @@ class EnhancedLienService:
         """
         logger.info("📄 GROUPING: Generating page groupings for PDF splitting...")
 
+        # Track barcodes per page for duplicate detection
+        page_barcodes = {}  # {page_idx: barcode_string}
+
         # Build a mapping of (patient_id, lien_type) -> list of page indices
         groupings_map = {}
 
@@ -313,6 +316,12 @@ class EnhancedLienService:
             signature_detection = page.get("signature_detection", {})
             signature_data = signature_detection.get("signature_data", {})
             signature_type = signature_data.get("lien_signature_type", "UNKNOWN")
+
+            # Track barcode for duplicate detection
+            # Construct barcode string from patient ID and lien type
+            if patient_ids and lien_types:
+                barcode_string = f"{patient_ids[0]}^{lien_types[0]}"
+                page_barcodes[page_idx] = barcode_string
 
             # For each patient ID + lien type combination, add this page to the group
             for patient_id in patient_ids:
@@ -345,7 +354,28 @@ class EnhancedLienService:
                 f"Signature={group['signature_type']}"
             )
 
-        return page_groupings
+        # Check for duplicate barcodes across pages
+        barcode_to_pages = {}
+        for page_idx, barcode in page_barcodes.items():
+            if barcode not in barcode_to_pages:
+                barcode_to_pages[barcode] = []
+            barcode_to_pages[barcode].append(page_idx)
+
+        # Detect duplicates (same barcode on multiple pages)
+        duplicate_barcodes = {
+            barcode: pages
+            for barcode, pages in barcode_to_pages.items()
+            if len(pages) > 1
+        }
+
+        has_duplicate_barcodes = False
+        if duplicate_barcodes:
+            has_duplicate_barcodes = True
+            logger.warning(f"⚠️ DUPLICATE BARCODES DETECTED: Same barcode found on multiple pages")
+            for barcode, pages in duplicate_barcodes.items():
+                logger.warning(f"   Barcode '{barcode}' appears on pages: {pages}")
+
+        return page_groupings, has_duplicate_barcodes
 
     async def process_lien_document_with_splits(self, file_content: bytes, filename: str) -> Dict[str, Any]:
         """
@@ -393,7 +423,7 @@ class EnhancedLienService:
                 page_results.append(page_result)
 
             # Generate page groupings based on patient ID + lien type
-            page_groupings = self._generate_page_groupings(page_results)
+            page_groupings, has_duplicate_barcodes = self._generate_page_groupings(page_results)
 
             if not page_groupings:
                 logger.warning(f"📄 ENHANCED LIEN SPLIT: No valid page groupings found for {filename}")
@@ -403,6 +433,7 @@ class EnhancedLienService:
                     "split_documents": [],
                     "total_splits": 0,
                     "processing_status": "no_valid_groupings",
+                    "has_duplicate_barcodes": has_duplicate_barcodes,
                     "error": "No valid barcode data found to create splits"
                 }
 
@@ -417,7 +448,8 @@ class EnhancedLienService:
                 "split_documents": split_documents,
                 "total_splits": len(split_documents),
                 "processing_status": "completed",
-                "pages_processed": len(page_results)
+                "pages_processed": len(page_results),
+                "has_duplicate_barcodes": has_duplicate_barcodes
             }
 
         except Exception as e:
