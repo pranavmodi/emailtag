@@ -40,8 +40,28 @@ export function PlaceholderManager({ tagSettings, onFieldChange, onSave, onReset
     }
   };
 
+  const findPlaceholderUsage = (name: string): string[] => {
+    const token = `{${name}}`;
+    return Object.entries(tagSettings)
+      .filter(
+        ([key, value]) =>
+          key !== "custom_placeholders" && typeof value === "string" && value.includes(token)
+      )
+      .map(([key]) => key);
+  };
+
   const handleDeletePlaceholder = async () => {
-    if (!confirm(`Delete placeholder {${selectedPlaceholder}}? This action cannot be undone.`)) {
+    const usage = findPlaceholderUsage(selectedPlaceholder);
+    const usageNote =
+      usage.length > 0
+        ? `It is currently used in: ${usage.join(", ")}.`
+        : "It is not used in any templates.";
+
+    if (
+      !confirm(
+        `Delete placeholder {${selectedPlaceholder}}?\n${usageNote}\nThis action cannot be undone.`
+      )
+    ) {
       return;
     }
 
