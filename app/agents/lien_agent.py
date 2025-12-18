@@ -433,6 +433,8 @@ async def _generate_lien_status_table(patient_id: str, upload_results: List[Dict
         if lien_status_response and lien_status_response.get("success"):
             data = lien_status_response.get("data", {})
             result = data.get("result", {})
+            patient_esign_link = result.get("patientEsignLink")
+            attorney_esign_link = result.get("attorneyEsignLink")
             lien_status_list = result.get("lienStatusList", [])
 
             for lien in lien_status_list:
@@ -514,7 +516,10 @@ async def _generate_lien_status_table(patient_id: str, upload_results: List[Dict
                     else:
                         patient_sig_status = "Signed"
                 else:
-                    patient_sig_status = "Not Signed"
+                    if patient_esign_link:
+                        patient_sig_status = f'Not Signed.<br/><a href="{patient_esign_link}" target="_blank">Please eSign here</a>'
+                    else:
+                        patient_sig_status = "Not Signed"
 
                 # Format attorney signature status
                 if sig_info["attorney_signed"]:
@@ -537,7 +542,10 @@ async def _generate_lien_status_table(patient_id: str, upload_results: List[Dict
                     else:
                         attorney_sig_status = "Signed"
                 else:
-                    attorney_sig_status = "Not Signed.<br/>Please eSign here"
+                    if attorney_esign_link:
+                        attorney_sig_status = f'Not Signed.<br/><a href="{attorney_esign_link}" target="_blank">Please eSign here</a>'
+                    else:
+                        attorney_sig_status = "Not Signed"
             else:
                 # Fallback: use upload success as indicator
                 upload_result = next((r for r in upload_results if r.get("lien_type", "").upper() in [lien_type_code, f"{lien_type_code}OLOGIST"]), None)

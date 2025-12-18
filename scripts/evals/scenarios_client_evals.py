@@ -877,5 +877,77 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["ASL", "Rad Lien"]
+    },
+    "37": {
+        "description": "PRE1092256 - ASL Radiology lien test from lientest folder",
+        "subject": "Signed Radiology Lien - PRE1092256",
+        "body_html": (
+            "<p>Hello,</p>"
+            "<p>Please find the attorney signed radiology lien for patient PRE1092256 attached.</p>"
+            "<p>Kindly upload and confirm receipt.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "PRE1092256_RAD_ASL.pdf",
+                "filepath": "data/documents/lientest/PRE1092256_RAD_ASL.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Rad Lien"]
+    },
+    "38": {
+        "description": "PRE1092256 - ASL Technologist lien test from lientest folder",
+        "subject": "Signed Tech Lien - PRE1092256",
+        "body_html": (
+            "<p>Hello,</p>"
+            "<p>Attached is the attorney signed technologist lien for patient PRE1092256.</p>"
+            "<p>Please upload to the patient file and confirm.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "PRE1092256_TC_ASL.pdf",
+                "filepath": "data/documents/lientest/PRE1092256_TC_ASL.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Tech Lien"]
+    },
+    "39": {
+        "description": "PRE1159780 - PSL Radiology lien test from lientest folder",
+        "subject": "Patient Signed Radiology Lien - PRE1159780",
+        "body_html": (
+            "<p>Hi team,</p>"
+            "<p>Patient PRE1159780 has signed the radiology lien attached.</p>"
+            "<p>Kindly process and confirm upload.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "PRE1159780_RAD_PSL.pdf",
+                "filepath": "data/documents/lientest/PRE1159780_RAD_PSL.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["PSL", "Rad Lien"]
+    },
+    "40": {
+        "description": "PRE1159780 - PSL Technologist lien test from lientest folder",
+        "subject": "Patient Signed Tech Lien - PRE1159780",
+        "body_html": (
+            "<p>Hi team,</p>"
+            "<p>Attached is the patient signed technologist lien for PRE1159780.</p>"
+            "<p>Please upload and confirm receipt.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "PRE1159780_TC_PSL.pdf",
+                "filepath": "data/documents/lientest/PRE1159780_TC_PSL.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["PSL", "Tech Lien"]
     }
 }
