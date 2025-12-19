@@ -774,14 +774,29 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
             all_strikethrough_instances = []
             quality_assessments = []  # Track quality for each page
 
-            # Process each page image
+            # Process each page image with simple retries
             for i, image_path in enumerate(image_paths, 1):
-                page_result = await self._detect_strikethrough_in_image(image_path, i)
+                page_result = None
+                for attempt in range(1, 4):
+                    try:
+                        page_result = await self._detect_strikethrough_in_image(image_path, i)
+                        break
+                    except Exception as e:
+                        logger.error(f"Strikethrough detection error on page {i} (attempt {attempt}/3): {e}")
+                        if attempt < 3:
+                            await asyncio.sleep(1 * attempt)
+                if page_result is None:
+                    page_result = {}
 
                 # Extract strikethrough instances and quality data
-                page_instances = page_result.get("strikethrough_instances", [])
-                document_quality = page_result.get("document_quality", "GOOD")
-                quality_explanation = page_result.get("quality_explanation", "")
+                if isinstance(page_result, dict):
+                    page_instances = page_result.get("strikethrough_instances", [])
+                    document_quality = page_result.get("document_quality", "GOOD")
+                    quality_explanation = page_result.get("quality_explanation", "")
+                else:
+                    page_instances = []
+                    document_quality = "GOOD"
+                    quality_explanation = "Unexpected page_result type"
 
                 all_strikethrough_instances.extend(page_instances)
                 quality_assessments.append({
