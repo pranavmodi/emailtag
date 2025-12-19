@@ -1134,6 +1134,50 @@ def _plain_text_to_html(plain_text: str) -> str:
             html_paragraphs.append(f"<p>{html_lines}</p>")
     return "".join(html_paragraphs)
 
+
+def _build_reply_all_recipients(conversation_id: str) -> List[str]:
+    """
+    Build a reply-all recipient list (from/to/cc of latest message), excluding our alias.
+    Falls back to the conversation recipient if nothing else is available.
+    """
+    recipients: set[str] = set()
+    alias_handle: Optional[str] = None
+
+    try:
+        conversation_data = get_conversation(conversation_id)
+        alias_handle = conversation_data.get("recipient", {}).get("handle")
+    except Exception as e:
+        logger.warning(f"Could not fetch conversation {conversation_id} for recipient resolution: {e}")
+
+    try:
+        url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}",
+            "Accept": "application/json",
+        }
+        with httpx.Client(verify=False) as client:
+            resp = client.get(url, headers=headers)
+            resp.raise_for_status()
+            msgs = resp.json().get("_results", [])
+            if msgs:
+                latest = msgs[0]  # Front returns most recent first
+                for rcpt in latest.get("recipients", []) or []:
+                    handle = rcpt.get("handle")
+                    if handle:
+                        recipients.add(handle)
+    except Exception as e:
+        logger.warning(f"Could not build reply-all recipients for {conversation_id}: {e}")
+
+    # Remove our alias from the outbound list
+    if alias_handle and alias_handle in recipients:
+        recipients.discard(alias_handle)
+
+    # Fallback to alias if nothing else found (maintain previous behavior)
+    if not recipients and alias_handle:
+        recipients.add(alias_handle)
+
+    return list(recipients)
+
 def send_conversation_reply_with_attachment(conversation_id: str, text: str, attachment_path: str) -> bool:
     """Send a reply to a conversation in Front with an attachment."""
     if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL or not settings.FRONT_CHANNEL_ID or not settings.FRONT_BOT_TEAMMATE_ID:
@@ -1146,17 +1190,10 @@ def send_conversation_reply_with_attachment(conversation_id: str, text: str, att
 
     # Get conversation details to extract recipients
     try:
-        conversation_data = get_conversation(conversation_id)
-        if not conversation_data:
-            logger.error(f"Could not fetch conversation {conversation_id} to determine recipients")
+        recipients = _build_reply_all_recipients(conversation_id)
+        if not recipients:
+            logger.error(f"No recipients resolved for conversation {conversation_id}")
             return False
-
-        recipient_handle = conversation_data.get("recipient", {}).get("handle")
-        if not recipient_handle:
-            logger.error(f"No recipient handle found in conversation {conversation_id}")
-            return False
-
-        recipients = [recipient_handle]
 
     except Exception as e:
         logger.error(f"Error getting conversation details for {conversation_id}: {e}")
@@ -1236,20 +1273,10 @@ def send_conversation_reply(conversation_id: str, text: str) -> bool:
 
     # Get conversation details to extract recipients
     try:
-        conversation_data = get_conversation(conversation_id)
-        if not conversation_data:
-            logger.error(f"Could not fetch conversation {conversation_id} to determine recipients")
+        recipients = _build_reply_all_recipients(conversation_id)
+        if not recipients:
+            logger.error(f"No recipients resolved for conversation {conversation_id}")
             return False
-
-        # Extract recipient from conversation recipient field
-        recipient_handle = conversation_data.get("recipient", {}).get("handle")
-        if not recipient_handle:
-            logger.error(f"No recipient handle found in conversation {conversation_id}")
-            return False
-
-        # Front API expects just strings in the 'to' array, not objects
-        recipients = [recipient_handle]  # Just the email string, not {"handle": email}
-        # logger.info(f"🔧 DEBUG: Using recipient for reply: {recipient_handle}")
 
     except Exception as e:
         logger.error(f"Error getting conversation details for {conversation_id}: {e}")

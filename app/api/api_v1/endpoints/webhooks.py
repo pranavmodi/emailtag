@@ -194,7 +194,14 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
         # Extract message data and attachments from target.data
         message = webhook_data.target.get("data", {})
         attachments = message.get("attachments", [])
-        sender = webhook_data.conversation.get("recipient", {}).get("handle", "unknown@example.com")
+
+        # Use the actual message author email/handle as sender for autorespond detection
+        author = message.get("author") or {}
+        sender = (
+            author.get("email")
+            or author.get("handle")
+            or webhook_data.conversation.get("recipient", {}).get("handle", "unknown@example.com")
+        )
         
         # Extract subject
         message_subject = message.get("subject")
@@ -206,19 +213,11 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
             """Detect if this is an autoresponse email that should be skipped."""
             content_to_check = f"{content_text} {content_body}"
 
-            # Primary detection: Check for invisible marker + sender domain
-            # Only skip if BOTH marker is present AND sender is from @precisemri.com
+            # Primary detection: Check for invisible marker and skip regardless of sender
             invisible_marker = settings.AUTORESPOND_INVISIBLE_MARKER
             if invisible_marker and invisible_marker in content_to_check:
-                # Check if sender is from precisemri.com domain
-                is_internal_sender = "@precisemri.com" in sender_email.lower()
-
-                if is_internal_sender:
-                    logger.info(f"🔍 Invisible marker detected AND sender is @precisemri.com - this is our autorespond")
-                    return True
-                else:
-                    logger.warning(f"⚠️ Invisible marker detected but sender is NOT @precisemri.com ({sender_email}) - processing anyway")
-                    return False
+                logger.info(f"🔍 Invisible marker detected in content for sender {sender_email} - treating as autorespond")
+                return True
 
             # Fallback detection: Check for text signature (if configured)
             autoresponse_signature = settings.AUTORESPONSE_SIGNATURE
@@ -228,15 +227,16 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
 
             return False
         
-        # Extract recipients
+        # Extract recipients (to/cc) for recordkeeping
         recipients = []
         for recipient in message.get("recipients", []):
             # handle might be ID or email, prefer email if exists
             handle = recipient.get("handle", "")
-            if "@" in handle: 
+            email = recipient.get("email", "")
+            if email:
+                recipients.append(email)
+            elif "@" in handle:
                 recipients.append(handle)
-            elif recipient.get("email"): # Check if email field exists
-                recipients.append(recipient["email"])
         
         # Extract content from the correct FrontApp fields
         # Different message types may have content in different fields
