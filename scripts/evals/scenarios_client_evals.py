@@ -949,5 +949,23 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["PSL", "Tech Lien"]
+    },
+    "41": {
+        "description": "Strikethrough lien document - should flag lien modifications",
+        "subject": "Lien Submission with Edits",
+        "body_html": (
+            "<p>Hello,</p>"
+            "<p>Please find the attached lien document for processing.</p>"
+            "<p>Thank you.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "1d6e60248fa5a9eeeb2aa2e438738dbd2a7ea84e.pdf",
+                "filepath": "data/documents/strikethrough/1d6e60248fa5a9eeeb2aa2e438738dbd2a7ea84e.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Lien Modified"]
     }
 }
