@@ -464,13 +464,8 @@ class OpenAIProvider(StrikethroughProvider):
 
     def __init__(self, model: Optional[str] = None, max_tokens: Optional[int] = None):
         super().__init__()
-        # Prefer DOCUMENT_ANALYSIS_MODEL, fallback to env, then OPENAI_VISION_MODEL, then gpt-5.2
-        self.model = (
-            model
-            or getattr(settings, 'DOCUMENT_ANALYSIS_MODEL', None)
-            or os.getenv('DOCUMENT_ANALYSIS_MODEL')
-            or getattr(settings, 'OPENAI_VISION_MODEL', 'gpt-5.2')
-        )
+        # Lock to gpt-5.2 for responses-based vision detection (avoid o3/other models)
+        self.model = 'gpt-5.2'
         self.max_tokens = max_tokens or getattr(settings, 'OPENAI_MAX_TOKENS', 1000)
         self.api_key = getattr(settings, 'OPENAI_API_KEY', None)
 
@@ -689,20 +684,14 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
 
                 import json
                 if not text_content:
-                    # Last resort: accept dict under parsed/result
-                    parsed = result_data.get("parsed") or result_data.get("result")
-                    if isinstance(parsed, dict):
-                        parsed_result = parsed
-                    else:
-                        logger.warning("Responses API: No text content found for strikethrough detection output")
-                        return []
-                else:
-                    try:
-                        parsed_result = json.loads(text_content)
-                    except json.JSONDecodeError:
-                        logger.warning(f"Failed to parse JSON from Responses output, content: {text_content[:200]}...")
-                        return []
-                
+                    logger.warning("Responses API: No text content found for strikethrough detection output")
+                    raise ValueError("Empty response text from OpenAI Responses API")
+                try:
+                    parsed_result = json.loads(text_content)
+                except json.JSONDecodeError:
+                    logger.warning(f"Failed to parse JSON from Responses output, content: {text_content[:200]}...")
+                    raise
+
                 # Extract document quality assessment
                 document_quality = parsed_result.get("document_quality", "GOOD")
                 quality_explanation = parsed_result.get("quality_explanation", "")
@@ -773,6 +762,7 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
         try:
             all_strikethrough_instances = []
             quality_assessments = []  # Track quality for each page
+            had_error = False
 
             # Process each page image with simple retries
             for i, image_path in enumerate(image_paths, 1):
@@ -787,16 +777,21 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
                             await asyncio.sleep(1 * attempt)
                 if page_result is None:
                     page_result = {}
+                    had_error = True
 
                 # Extract strikethrough instances and quality data
                 if isinstance(page_result, dict):
                     page_instances = page_result.get("strikethrough_instances", [])
                     document_quality = page_result.get("document_quality", "GOOD")
                     quality_explanation = page_result.get("quality_explanation", "")
+                    if "Error during quality assessment" in quality_explanation or not page_instances:
+                        # Flag any page-level issues for overall status
+                        had_error = had_error or ("Error during quality assessment" in quality_explanation)
                 else:
                     page_instances = []
                     document_quality = "GOOD"
                     quality_explanation = "Unexpected page_result type"
+                    had_error = True
 
                 all_strikethrough_instances.extend(page_instances)
                 quality_assessments.append({
@@ -835,7 +830,7 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
             logger.info(f"OpenAI GPT-5.2 processing complete. Found {len(all_strikethrough_instances)} strikethrough instances.")
 
             return {
-                "success": True,
+                "success": not had_error,
                 "strikethrough_text": all_strikethrough_instances,
                 "provider": "openai",
                 "summary": summary,
