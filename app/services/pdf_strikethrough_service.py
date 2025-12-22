@@ -92,78 +92,52 @@ class OpenAIProvider(StrikethroughProvider):
     
     def _prepare_vision_prompt(self) -> str:
         """Prepare the prompt for GPT-5.2 vision to detect strikethrough text and document quality."""
-        return """CRITICAL: Analyze this lien document image for TWO things:
-1. Detect ONLY text that has been physically crossed out or struck through with visible lines
+        return """Analyze this lien document for TWO things:
+1. Detect text that has been crossed out or struck through with visible lines
 2. Assess the overall text clarity and readability of the document
 
 PART 1: STRIKETHROUGH DETECTION
 
-STRICT REQUIREMENTS:
-- You must provide the EXACT struck-through text that you can read
-- Only mark strikethrough_detected: true if you can see actual visible lines crossing through text
-- IMPORTANT: Only report strikethrough text that represents COMPLETE SENTENCES or SUBSTANTIAL PHRASES (at least 4+ words)
-- DO NOT report single words or short fragments as strikethrough - only meaningful complete text
+What to look for:
+- Lines going THROUGH/ACROSS text (not under it - that's underline)
+- Thick black marks, pen marks, or lines crossing out text
+- Single lines or multiple lines crossing through words
+- Can be thin lines or thick heavy marks
 
-CRITICAL DISTINCTION - STRIKETHROUGH vs UNDERLINE:
-- STRIKETHROUGH: Lines go THROUGH/ACROSS the middle of text horizontally (like this: s̶t̶r̶i̶k̶e̶t̶h̶r̶o̶u̶g̶h̶)
-- UNDERLINE: Lines go UNDER/BELOW the text (like this: underlined)
-- ONLY report STRIKETHROUGH text - text with lines going through it
-- DO NOT report underlined text, highlighted text, or any other formatting
-- DO NOT mark as strikethrough if text is just highlighted, circled, boxed, or otherwise marked without lines through it
-- DO NOT mark as strikethrough based on assumptions or context - only visible strikethrough marks
+Report strikethrough if you see:
+- Any visible lines or marks crossing through text horizontally
+- Even if you can't read all the exact text underneath
+- Even if it's just parts of sentences or fragments
+- Heavy black markings that clearly obscure/cross out text
 
-VISUAL CHECK:
-- Ask yourself: "Does this line go THROUGH the text or UNDER the text?"
-- If the line goes THROUGH the middle of letters → STRIKETHROUGH (report it)
-- If the line goes UNDER the text → UNDERLINE (do NOT report it)
-- If unsure, do NOT report it
+DO NOT report:
+- Underlined text (lines under, not through)
+- Highlighted or circled text
+- Checkboxes or form marks
 
 PART 2: DOCUMENT QUALITY ASSESSMENT
 
-Assess the text clarity and readability of the lien document:
-- GOOD: Text is sharp, clear, and easily readable. All words and numbers can be read without difficulty.
-- BLURRY: Text shows signs of blurriness, pixelation, or poor focus. Some words may be difficult to read but most content is still discernible.
-- UNREADABLE: Text is severely degraded, distorted, or illegible. Significant portions of text cannot be read reliably.
+- GOOD: Text is sharp, clear, easily readable
+- BLURRY: Shows blur, pixelation, or compression artifacts but mostly readable
+- UNREADABLE: Severely degraded, illegible, cannot read reliably
 
-Quality assessment criteria:
-- Check the sharpness and focus of text throughout the document
-- Evaluate if patient information, dates, and legal text are clearly legible
-- Consider if someone could confidently extract accurate information from this document
-
-Please provide a JSON response with the following structure:
+Response format:
 {
     "strikethrough_detected": boolean,
     "strikethrough_instances": [
         {
-            "struck_through_text": "the exact text that is crossed out (must be readable)",
-            "confidence": confidence_score_0_to_1,
-            "location": "description of where it appears on the page",
-            "visual_description": "description of the strikethrough marking (e.g., 'horizontal black line through text')"
+            "struck_through_text": "text you can read (or 'text obscured by heavy marking' if unreadable)",
+            "confidence": 0.0 to 1.0,
+            "location": "where on page (e.g., 'middle section', 'paragraph 3')",
+            "visual_description": "what the marking looks like (e.g., 'thick black horizontal line', 'heavy black marker')"
         }
     ],
     "document_quality": "GOOD" | "BLURRY" | "UNREADABLE",
-    "quality_explanation": "brief explanation of why you assigned this quality rating",
-    "analysis": "detailed explanation of what you see - be specific about strikethrough marks and document clarity"
+    "quality_explanation": "brief explanation of quality rating",
+    "analysis": "what you see regarding strikethrough marks and document clarity"
 }
 
-ONLY include text in strikethrough_instances if:
-1. You can clearly see lines crossing through the text
-2. You can read the actual text that is struck through
-3. The confidence is at least 0.8
-4. The struck-through text is a COMPLETE SENTENCE or SUBSTANTIAL PHRASE (minimum 4 words)
-
-Examples of what TO report:
-- "This patient will receive radiology services"
-- "Payment terms are thirty days from service"
-- "The lien covers all medical expenses"
-
-Examples of what NOT to report:
-- "updates" (single word)
-- "or not" (fragment)
-- "yes" (single word)
-- "payment due" (too short)
-
-If you cannot see clear strikethrough lines, cannot read substantial struck-through text, or only see single words crossed out, return strikethrough_detected: false."""
+Report strikethrough_detected: true if you see ANY lines crossing through text, regardless of whether you can read the text underneath."""
     
     async def _detect_strikethrough_in_image(self, image_path: str, page_number: int) -> List[Dict[str, Any]]:
         """Detect strikethrough in a single image using OpenAI Responses API."""
@@ -278,19 +252,15 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
 
                 logger.info(f"📄 QUALITY: Document assessed as '{document_quality}' - {quality_explanation}")
 
-                # Convert to our standard format with STRICT requirements
+                # Convert to our standard format with simplified requirements
                 strikethrough_instances = []
                 if parsed_result.get("strikethrough_detected", False):
                     for instance in parsed_result.get("strikethrough_instances", []):
-                        # STRICT REQUIREMENTS: Must have actual struck-through text
                         struck_text = instance.get("struck_through_text", "").strip()
                         confidence = instance.get("confidence", 0.0)
 
-                        # Count words in struck-through text
-                        word_count = len(struck_text.split()) if struck_text else 0
-
-                        # Only include if we have substantial text (4+ words) and high enough confidence
-                        if struck_text and word_count >= 4 and confidence >= 0.8:
+                        # Only require that we have some text/description and reasonable confidence
+                        if struck_text and confidence >= 0.5:
                             strikethrough_instances.append({
                                 "text": struck_text,
                                 "page_number": page_number,
@@ -304,10 +274,10 @@ If you cannot see clear strikethrough lines, cannot read substantial struck-thro
                                     "quality_explanation": quality_explanation
                                 }
                             })
-                            logger.info(f"STRICT DETECTION: Found substantial struck-through text: '{struck_text}' ({word_count} words, confidence: {confidence})")
+                            logger.info(f"✓ Detected strikethrough: '{struck_text[:50]}...' (confidence: {confidence:.2f})")
                         else:
-                            reason = "no text" if not struck_text else f"too short ({word_count} words < 4)" if word_count < 4 else f"low confidence ({confidence} < 0.8)"
-                            logger.info(f"STRICT FILTER: Rejected strikethrough - {reason}: '{struck_text}'")
+                            reason = "no text" if not struck_text else f"low confidence ({confidence:.2f} < 0.5)"
+                            logger.info(f"✗ Rejected strikethrough - {reason}: '{struck_text[:50] if struck_text else 'N/A'}'")
 
                 # Store quality info for this page even if no strikethroughs detected
                 # This allows us to aggregate quality across all pages
