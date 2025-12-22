@@ -12,6 +12,7 @@ from .barcode_detector import BarcodeDetector
 from .signature_detector import SignatureDetector
 from .document_converter import DocumentConverter
 from .pdf_splitter import PDFSplitter
+from .cover_letter_detector import CoverLetterDetector
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class EnhancedLienService:
         self.signature_detector = SignatureDetector()
         self.document_converter = DocumentConverter()
         self.pdf_splitter = PDFSplitter()
+        self.cover_letter_detector = CoverLetterDetector()
     
     async def process_lien_document(self, file_content: bytes, filename: str) -> Dict[str, Any]:
         """
@@ -70,21 +72,30 @@ class EnhancedLienService:
             return self._error_response(f"Processing error: {str(e)}")
     
     async def _process_single_page(self, image_data: bytes, page_name: str) -> Dict[str, Any]:
-        """Process a single page/image for barcode and signature detection."""
+        """Process a single page/image for barcode, signature, and cover letter detection."""
         try:
             # Step 1: Barcode Detection
             barcode_result = self.barcode_detector.detect_and_parse_barcodes(image_data, page_name)
-            
+            has_barcode = barcode_result.get("barcode_found", False)
+
             # Step 2: Signature Detection via OpenAI Vision
             signature_result = self.signature_detector.detect_signatures(image_data, page_name)
-            
+
+            # Step 3: Cover Letter and Conditional Language Detection
+            cover_letter_result = await self.cover_letter_detector.analyze_page_content(
+                image_data,
+                page_name,
+                has_barcode=has_barcode
+            )
+
             return {
                 "page_name": page_name,
                 "barcode_detection": barcode_result,
                 "signature_detection": signature_result,
+                "cover_letter_analysis": cover_letter_result,
                 "success": True
             }
-            
+
         except Exception as e:
             logger.error(f"Error processing page {page_name}: {e}")
             return {
@@ -239,7 +250,31 @@ class EnhancedLienService:
                         raw_barcode_value = first_barcode.get("raw_value", "Not found")
                         logger.info(f"📄 FINAL: Raw barcode value: {raw_barcode_value}")
                         break
-            
+
+            # Check for cover letters with conditional language across all pages
+            has_cover_letter_with_conditions = False
+            all_conditional_phrases = []
+            cover_letter_pages = []
+
+            for page_idx, page in enumerate(page_results):
+                if page.get("success"):
+                    cover_analysis = page.get("cover_letter_analysis", {})
+
+                    # Check if this page has conditional language
+                    if cover_analysis.get("has_conditional_language", False):
+                        has_cover_letter_with_conditions = True
+                        phrases = cover_analysis.get("conditional_phrases_found", [])
+                        all_conditional_phrases.extend(phrases)
+                        cover_letter_pages.append(page_idx + 1)
+
+                        logger.warning(f"⚠️ CONDITIONAL LANGUAGE: Page {page_idx + 1} has conditional language")
+                        logger.warning(f"   Phrases: {phrases}")
+
+            if has_cover_letter_with_conditions:
+                logger.warning(f"⚠️ DOCUMENT REJECTION: Cover letter with conditional language detected")
+                logger.warning(f"   Pages with conditions: {cover_letter_pages}")
+                logger.warning(f"   All conditional phrases: {all_conditional_phrases}")
+
             result = {
                 "filename": filename,
                 "processing_type": "enhanced_lien_processing",
@@ -254,6 +289,9 @@ class EnhancedLienService:
                 "signature_analysis": signature_data.get("signature_analysis", "") if signature_data else "",
                 "processing_status": "completed",
                 "pages_processed": len(page_results),
+                "has_cover_letter_with_conditions": has_cover_letter_with_conditions,
+                "conditional_phrases_found": all_conditional_phrases,
+                "cover_letter_pages": cover_letter_pages,
                 "raw_page_results": page_results  # Include for debugging
             }
             
@@ -437,6 +475,30 @@ class EnhancedLienService:
                     "error": "No valid barcode data found to create splits"
                 }
 
+            # Check for cover letters with conditional language across all pages
+            has_cover_letter_with_conditions = False
+            all_conditional_phrases = []
+            cover_letter_pages = []
+
+            for page_idx, page in enumerate(page_results):
+                if page.get("success"):
+                    cover_analysis = page.get("cover_letter_analysis", {})
+
+                    # Check if this page has conditional language
+                    if cover_analysis.get("has_conditional_language", False):
+                        has_cover_letter_with_conditions = True
+                        phrases = cover_analysis.get("conditional_phrases_found", [])
+                        all_conditional_phrases.extend(phrases)
+                        cover_letter_pages.append(page_idx + 1)
+
+                        logger.warning(f"⚠️ CONDITIONAL LANGUAGE: Page {page_idx + 1} has conditional language")
+                        logger.warning(f"   Phrases: {phrases}")
+
+            if has_cover_letter_with_conditions:
+                logger.warning(f"⚠️ DOCUMENT REJECTION: Cover letter with conditional language detected in split processing")
+                logger.warning(f"   Pages with conditions: {cover_letter_pages}")
+                logger.warning(f"   All conditional phrases: {all_conditional_phrases}")
+
             # Split the PDF using the page groupings
             split_documents = self.pdf_splitter.split_pdf_by_groups(file_content, page_groupings)
 
@@ -449,7 +511,10 @@ class EnhancedLienService:
                 "total_splits": len(split_documents),
                 "processing_status": "completed",
                 "pages_processed": len(page_results),
-                "has_duplicate_barcodes": has_duplicate_barcodes
+                "has_duplicate_barcodes": has_duplicate_barcodes,
+                "has_cover_letter_with_conditions": has_cover_letter_with_conditions,
+                "conditional_phrases_found": all_conditional_phrases,
+                "cover_letter_pages": cover_letter_pages
             }
 
         except Exception as e:

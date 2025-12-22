@@ -630,6 +630,11 @@ async def handle_lien_request(
     """
     logger.info(f"Initiating {signature_type} Lien agent for conv ID: {front_conversation_id}, tags: {applied_tags}")
 
+    # Step 1: Analyze email content for conditional language
+    from app.services.lien.cover_letter_detector import CoverLetterDetector
+    cover_letter_detector = CoverLetterDetector()
+    email_analysis = await cover_letter_detector.analyze_email_content(current_email_content)
+
     # Fetch lien templates from database using unified "Lien Templates" tag
     # (All lien templates are stored under this single tag in the database)
     tag_name = "Lien Templates"
@@ -650,7 +655,83 @@ async def handle_lien_request(
     # Determine lien type from tags
     lien_type = _determine_lien_type(applied_tags, signature_type)
 
-    # Check for lien modifications
+    # Step 2: Check email content for conditional language
+    if email_analysis.get("has_conditional_language", False):
+        logger.warning(f"⚠️ EMAIL CONDITIONAL LANGUAGE: Detected in email content for conversation {front_conversation_id}")
+        conditional_phrases = email_analysis.get("conditional_phrases_found", [])
+        logger.warning(f"   Conditional phrases: {conditional_phrases}")
+
+        try:
+            # Add human review tag and lien modified tag
+            frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED, TAG_LIEN_MODIFIED])
+
+            # Send reply if template is configured
+            if templates.get("modified"):
+                await send_reply_to_front_direct(
+                    conversation_id=front_conversation_id,
+                    reply_text=templates["modified"].format(lien_type=lien_type)
+                )
+            else:
+                logger.warning(f"Modified lien template not configured for tag '{tag_name}'. No autoresponse sent.")
+
+            return {
+                "agent_handled": True,
+                "processed_flag": True,
+                "details": {
+                    "action": "tagged_for_human_review_email_conditional_language",
+                    "lien_type": lien_type,
+                    "signature_type": signature_type,
+                    "conditional_phrases": conditional_phrases
+                }
+            }
+        except Exception as e:
+            logger.error(f"Failed to handle email conditional language: {e}")
+            return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to handle email conditional language: {e}"}}
+
+    # Step 3: Check document attachments for cover letters with conditional language
+    has_cover_letter_with_conditions = False
+    cover_letter_phrases = []
+
+    if document_analysis_results:
+        for doc_result in document_analysis_results:
+            # Check both enhanced_lien_processing and enhanced_lien_processing_split
+            enhanced_data = doc_result.get("enhanced_lien_processing_split", doc_result.get("enhanced_lien_processing", {}))
+            if enhanced_data.get("has_cover_letter_with_conditions", False):
+                has_cover_letter_with_conditions = True
+                cover_letter_phrases.extend(enhanced_data.get("conditional_phrases_found", []))
+
+    if has_cover_letter_with_conditions:
+        logger.warning(f"⚠️ COVER LETTER CONDITIONAL LANGUAGE: Detected in attachments for conversation {front_conversation_id}")
+        logger.warning(f"   Conditional phrases: {cover_letter_phrases}")
+
+        try:
+            # Add human review tag and lien modified tag
+            frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED, TAG_LIEN_MODIFIED])
+
+            # Send reply if template is configured
+            if templates.get("modified"):
+                await send_reply_to_front_direct(
+                    conversation_id=front_conversation_id,
+                    reply_text=templates["modified"].format(lien_type=lien_type)
+                )
+            else:
+                logger.warning(f"Modified lien template not configured for tag '{tag_name}'. No autoresponse sent.")
+
+            return {
+                "agent_handled": True,
+                "processed_flag": True,
+                "details": {
+                    "action": "tagged_for_human_review_cover_letter_conditions",
+                    "lien_type": lien_type,
+                    "signature_type": signature_type,
+                    "conditional_phrases": cover_letter_phrases
+                }
+            }
+        except Exception as e:
+            logger.error(f"Failed to handle cover letter conditional language: {e}")
+            return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to handle cover letter conditional language: {e}"}}
+
+    # Check for lien modifications (strikethrough)
     has_modifications = _check_lien_modifications(email_obj) or _has_lien_modified_tag(applied_tags)
 
     if has_modifications:

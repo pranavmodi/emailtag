@@ -967,5 +967,182 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["Lien Modified"]
+    },
+    "42": {
+        "description": "Victoria Concepcion Orozco - Fraudulent Lien (LB 254676) - Should detect conditional language and modifications",
+        "subject": "Signed Lien - Victoria Concepcion Orozco Case 254676",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>Please find attached the signed lien for our client Victoria Concepcion Orozco.</p>"
+            "<p>Case Number: 254676 (LB)</p>"
+            "<p>Please process and upload to the patient file.</p>"
+            "<p>Thank you,</p>"
+            "<p>Law Office</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "(LB) 254676 - Victoria Concepcion Orozco -SIGNED LIEN.pdf",
+                "filepath": "data/documents/fraudulentliens/(LB) 254676 - Victoria Concepcion Orozco -SIGNED LIEN.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Lien Modified", "AI: Human review required"]
+    },
+    "43": {
+        "description": "Dhunna - Fraudulent Notice of Lien - Should detect non-standard lien format with cover letter conditions",
+        "subject": "Notice of Lien - Dhunna from Precise Imaging",
+        "body_html": (
+            "<p>Hello Billing Team,</p>"
+            "<p>Attached is the Notice of Lien document for our client.</p>"
+            "<p>Please review and process accordingly.</p>"
+            "<p>Best regards,</p>"
+            "<p>Legal Department</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "10.01.25 Dhunna fr Precise Imaging re Notice of Lien.pdf",
+                "filepath": "data/documents/fraudulentliens/10.01.25 Dhunna fr Precise Imaging re Notice of Lien.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Lien Modified", "AI: Human review required"]
+    },
+    "44": {
+        "description": "Fraudulent Lien Document (2d5f56bb) - Should detect modifications and conditional language",
+        "subject": "Lien Document Submission",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>Attached is the completed lien documentation for our client.</p>"
+            "<p>Please upload to patient records.</p>"
+            "<p>Thank you,</p>"
+            "<p>Attorney Services</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "2d5f56bbbb6051603dc2133c3d0769eb99f40d99.pdf",
+                "filepath": "data/documents/fraudulentliens/2d5f56bbbb6051603dc2133c3d0769eb99f40d99.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Lien Modified", "AI: Human review required"]
+    },
+    "45": {
+        "description": "LT Atkinson - Fraudulent Lien (6.9.2008) - Old fraudulent lien document should be flagged",
+        "subject": "LT Atkinson Lien Documentation",
+        "body_html": (
+            "<p>Please find the attached lien document for LT Atkinson.</p>"
+            "<p>This document has been signed and is ready for processing.</p>"
+            "<p>Best regards,</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "6.9.2008 LT Atkinson.pdf",
+                "filepath": "data/documents/fraudulentliens/6.9.2008 LT Atkinson.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Lien Modified", "AI: Human review required"]
+    },
+    "46": {
+        "description": "Fraudulent Lien Document (6622f1e6) - Should detect non-standard lien format",
+        "subject": "Lien Agreement Submission",
+        "body_html": (
+            "<p>Dear Billing Department,</p>"
+            "<p>Please process the attached lien agreement.</p>"
+            "<p>Thank you for your assistance.</p>"
+            "<p>Legal Processing Team</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "6622f1e6eae239d18d64afb8941b19bae6d7242e.pdf",
+                "filepath": "data/documents/fraudulentliens/6622f1e6eae239d18d64afb8941b19bae6d7242e.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Lien Modified", "AI: Human review required"]
+    },
+    "47": {
+        "description": "Case 253099 - Fraudulent Tech Lien - Should detect modifications in tech lien document",
+        "subject": "Signed Tech Lien - Case 253099",
+        "body_html": (
+            "<p>Hello Precise Imaging,</p>"
+            "<p>Attached is the signed technologist lien for case 253099.</p>"
+            "<p>Please upload to the patient account and confirm receipt.</p>"
+            "<p>Thank you,</p>"
+            "<p>Accounts Receivable</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "AR-Precise Imaging- Tech Lien-253099-SIGNED.pdf",
+                "filepath": "data/documents/fraudulentliens/AR-Precise Imaging- Tech Lien-253099-SIGNED.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Lien Modified", "AI: Human review required"]
+    },
+    "48": {
+        "description": "Palomo - Fraudulent Lien Document - Should detect modifications and flag for review",
+        "subject": "Palomo Lien Submission",
+        "body_html": (
+            "<p>Dear Precise Imaging Team,</p>"
+            "<p>Please find attached the lien document for our client Palomo.</p>"
+            "<p>Kindly process and confirm upload.</p>"
+            "<p>Regards,</p>"
+            "<p>Legal Services</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "palomo.pdf",
+                "filepath": "data/documents/fraudulentliens/palomo.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Lien Modified", "AI: Human review required"]
+    },
+    "49": {
+        "description": "Email with conditional language - Should be rejected before document analysis",
+        "subject": "Lien Submission with Special Terms",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>We are submitting the attached lien for our client. However, please note that this lien is subject to final approval by our managing attorney and we will only proceed if you agree to modify the payment terms to net 60 days instead of the standard terms.</p>"
+            "<p>We also require that you provide weekly status updates on the settlement process.</p>"
+            "<p>Thank you for your cooperation.</p>"
+            "<p>Best regards,<br>"
+            "<p>Law Firm XYZ</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "standard_lien.pdf",
+                "filepath": "data/documents/lientest/PRE1092256_RAD_ASL.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Lien Modified", "AI: Human review required"]
+    },
+    "50": {
+        "description": "Cover letter with conditional terms - Should detect cover letter with modification language",
+        "subject": "Lien Documents with Cover Letter",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>Please find attached our client's lien documentation with cover letter.</p>"
+            "<p>Thank you.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "lien_with_cover.pdf",
+                "filepath": "data/documents/fraudulentliens/10.01.25 Dhunna fr Precise Imaging re Notice of Lien.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Lien Modified", "AI: Human review required"]
     }
 }
