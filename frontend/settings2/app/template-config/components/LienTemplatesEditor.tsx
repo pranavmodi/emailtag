@@ -3,7 +3,8 @@
  */
 
 import { useState } from "react";
-import { DEFAULT_TAG_SETTINGS, DUMMY_LIEN_STATUS_TABLE } from "../constants/template-config.constants";
+import { DEFAULT_TAG_SETTINGS } from "../constants/template-config.constants";
+import { getDummyPlaceholders } from "../utils/template-helpers";
 
 interface LienTemplatesEditorProps {
   tagSettings: typeof DEFAULT_TAG_SETTINGS;
@@ -59,18 +60,11 @@ export function LienTemplatesEditor({ tagSettings, customPlaceholders, onFieldCh
   const generatePreview = () => {
     let preview = templateValue;
 
-    // Type-specific dummy data
-    const dummyData: Record<string, string> = {
-      "{lien_type}": "Attorney Signed Lien (ASL)",
-      "{patient_id}": "PRE1234567",
-      "{patient_name}": "John Doe",
-      "{dob}": "01/15/1985",
-      "{doi}": "03/22/2024",
-      "{lien_status_table}": DUMMY_LIEN_STATUS_TABLE,
-    };
+    // Get shared dummy placeholders
+    const dummyPlaceholders = getDummyPlaceholders();
 
     // Merge with custom placeholders (workspace-wide)
-    const allPlaceholders = { ...dummyData };
+    const allPlaceholders = { ...dummyPlaceholders };
     Object.entries(customPlaceholders).forEach(([key, value]) => {
       allPlaceholders[`{${key}}`] = value;
     });

@@ -52,6 +52,11 @@ export const TEMPLATE_PLACEHOLDERS: PlaceholderSet = {
       key: "{doi}",
       description: "Date of injury (MM/DD/YYYY)",
       example: "03/20/2024"
+    },
+    {
+      key: "{call_log_table}",
+      description: "HTML table of patient call history (Date/Time, Phone #, Inbound/Outbound, Disposition)",
+      example: "<table>...</table>"
     }
   ],
 

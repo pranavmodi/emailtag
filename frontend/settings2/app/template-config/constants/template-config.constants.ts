@@ -122,6 +122,38 @@ export const DUMMY_LIEN_STATUS_TABLE = `<table border="1" style="border-collapse
 </tbody>
 </table>`;
 
+// Dummy data for call log table preview
+export const DUMMY_CALL_LOG_TABLE = `<table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 14px; margin-top: 10px;">
+<thead>
+<tr style="background-color: #f2f2f2;">
+<th style="text-align: left; padding: 10px; border: 1px solid #ddd;">Date/Time</th>
+<th style="text-align: left; padding: 10px; border: 1px solid #ddd;">Phone #</th>
+<th style="text-align: center; padding: 10px; border: 1px solid #ddd;">Direction</th>
+<th style="text-align: left; padding: 10px; border: 1px solid #ddd;">Disposition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="padding: 8px; border: 1px solid #ddd;">12/22/2025 02:30 PM</td>
+<td style="padding: 8px; border: 1px solid #ddd;">(555) 123-4567</td>
+<td style="padding: 8px; border: 1px solid #ddd; text-align: center; color: #4CAF50; font-weight: bold;">⬅️ Inbound</td>
+<td style="padding: 8px; border: 1px solid #ddd;">Appointment Confirmed</td>
+</tr>
+<tr>
+<td style="padding: 8px; border: 1px solid #ddd;">12/20/2025 10:15 AM</td>
+<td style="padding: 8px; border: 1px solid #ddd;">(555) 123-4567</td>
+<td style="padding: 8px; border: 1px solid #ddd; text-align: center; color: #2196F3; font-weight: bold;">➡️ Outbound</td>
+<td style="padding: 8px; border: 1px solid #ddd;">Left Voicemail</td>
+</tr>
+<tr>
+<td style="padding: 8px; border: 1px solid #ddd;">12/18/2025 03:45 PM</td>
+<td style="padding: 8px; border: 1px solid #ddd;">(555) 987-6543</td>
+<td style="padding: 8px; border: 1px solid #ddd; text-align: center; color: #4CAF50; font-weight: bold;">⬅️ Inbound</td>
+<td style="padding: 8px; border: 1px solid #ddd;">Scheduling Question</td>
+</tr>
+</tbody>
+</table>`;
+
 export const DEFAULT_UNIFIED_TEMPLATE = `Dear {first_name} {last_name},<br/>
 In regards to patient ID (MRN): {patient_id_confirmed}<br/><br/>
 

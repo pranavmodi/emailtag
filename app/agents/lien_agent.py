@@ -1185,6 +1185,10 @@ async def handle_lien_request(
         # Generate lien status table
         lien_status_table = await _generate_lien_status_table(patient_id, upload_results, signature_type)
 
+        # Generate call log table
+        from app.helpers.call_log_table import generate_call_log_table
+        call_log_table = await generate_call_log_table(patient_id)
+
         # Prepare all placeholders for template formatting
         placeholder_values = {
             "lien_type": lien_type,
@@ -1192,7 +1196,8 @@ async def handle_lien_request(
             "patient_name": patient_name,
             "dob": dob,
             "doi": doi,
-            "lien_status_table": lien_status_table
+            "lien_status_table": lien_status_table,
+            "call_log_table": call_log_table
         }
 
         # Merge in custom placeholders from workspace settings

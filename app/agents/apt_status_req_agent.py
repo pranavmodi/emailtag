@@ -252,9 +252,16 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
         if data.get("is_personal_injury_case"):
             personal_injury_info_text = personal_injury_template
 
+        # Generate call log table
+        from app.helpers.call_log_table import generate_call_log_table
+        patient_id = data.get("patient_id_confirmed", "N/A")
+        call_log_table = ""
+        if patient_id != "N/A":
+            call_log_table = await generate_call_log_table(patient_id)
+
         # Prepare all placeholder variables for logging and formatting
         placeholder_values = {
-            "patient_id_confirmed": data.get("patient_id_confirmed", "N/A"),
+            "patient_id_confirmed": patient_id,
             "scheduling_phone": data.get("scheduling_phone", DEFAULT_SCHEDULING_PHONE),
             "no_show_policy": data.get("no_show_policy", DEFAULT_NO_SHOW_POLICY),
             "first_name": data.get("first_name", "N/A"),
@@ -267,7 +274,8 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
             "bills_link": data.get("links", {}).get("bills_appointments_liens", "#"),
             "reports_link": data.get("links", {}).get("reports_images", "#"),
             "appointment_table": table_html,  # NEW: Add table to placeholders
-            "is_personal_injury_case": data.get("is_personal_injury_case", False)
+            "is_personal_injury_case": data.get("is_personal_injury_case", False),
+            "call_log_table": call_log_table
         }
 
         # Add all custom placeholders to placeholder_values
