@@ -43,24 +43,14 @@ async def generate_call_log_table(patient_id: str, phone_number: str = None) -> 
             logger.warning(f"📞 No valid call log response for patient {patient_id}")
             return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No recent call history available for this patient.</em></p>'
 
-        # Extract call log data
-        call_log_data = call_log_response.get("content", [])
-
-        if isinstance(call_log_data, list) and len(call_log_data) > 0:
-            # Parse the first content item which should contain the call log
-            if isinstance(call_log_data[0], dict) and "text" in call_log_data[0]:
-                import json
-                try:
-                    call_log_json = json.loads(call_log_data[0]["text"])
-                    calls = call_log_json.get("calls", [])
-                except json.JSONDecodeError:
-                    logger.error(f"📞 Failed to parse call log JSON for patient {patient_id}")
-                    return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No recent call history available for this patient.</em></p>'
-            else:
-                calls = call_log_data
-        else:
-            logger.info(f"📞 No call history found for patient {patient_id}")
+        # Extract call log data from MCP response
+        # MCP response structure: {"success": true, "data": {"result": [...]}}
+        if not call_log_response.get("success"):
+            logger.warning(f"📞 Call log request unsuccessful for patient {patient_id}")
             return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No recent call history available for this patient.</em></p>'
+
+        data = call_log_response.get("data", {})
+        calls = data.get("result", [])
 
         if not calls or len(calls) == 0:
             logger.info(f"📞 No calls in call log for patient {patient_id}")
@@ -114,19 +104,32 @@ def _format_calls_as_html_table(calls: List[Dict[str, Any]]) -> str:
     # Add rows for each call
     for call in calls:
         # Parse and format date/time
-        date_time_str = call.get("date_time", call.get("datetime", "N/A"))
-        try:
-            # Try to parse and format the datetime
-            if date_time_str != "N/A":
-                dt = datetime.fromisoformat(date_time_str.replace("Z", "+00:00"))
-                formatted_datetime = dt.strftime("%m/%d/%Y %I:%M %p")
-            else:
-                formatted_datetime = date_time_str
-        except (ValueError, AttributeError):
-            formatted_datetime = date_time_str
+        # MCP response has separate 'callDate' and 'time' fields
+        call_date = call.get("callDate", "")
+        call_time = call.get("time", "")
 
-        phone_number = call.get("phone_number", call.get("phone", "N/A"))
-        direction = call.get("direction", "N/A")
+        if call_date and call_time:
+            # Combine date and time from MCP response
+            formatted_datetime = f"{call_date} {call_time}"
+        else:
+            # Fallback to legacy format
+            date_time_str = call.get("date_time", call.get("datetime", "N/A"))
+            try:
+                # Try to parse and format the datetime
+                if date_time_str != "N/A":
+                    dt = datetime.fromisoformat(date_time_str.replace("Z", "+00:00"))
+                    formatted_datetime = dt.strftime("%m/%d/%Y %I:%M %p")
+                else:
+                    formatted_datetime = date_time_str
+            except (ValueError, AttributeError):
+                formatted_datetime = date_time_str
+
+        # MCP response uses 'phoneNumber' instead of 'phone_number'
+        phone_number = call.get("phoneNumber", call.get("phone_number", call.get("phone", "N/A")))
+
+        # MCP response uses 'phoneDirection' instead of 'direction'
+        direction = call.get("phoneDirection", call.get("direction", "N/A"))
+
         disposition = call.get("disposition", call.get("status", "N/A"))
 
         # Determine direction display and icon
