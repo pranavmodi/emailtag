@@ -60,37 +60,41 @@ DEFAULT_PORTAL_LINKS = {
     "reports_images": "https://example.com/portal/reports"
 }
 
-# Unified template (standard approach - replaces all legacy template parts)
-DEFAULT_UNIFIED_TEMPLATE = """Dear {first_name} {last_name},<br/>
-In regards to patient ID (MRN): {patient_id_confirmed}<br/><br/>
-
-<b>How to Schedule:</b><br/><br/>
-
-<ul>
-  <li>Schedule online 24/7 via the <a href="https://app.radflow360.com/patient-portal" target="_blank">patient portal</a></li>
-  <li>Call <b>800-558-2223</b></li>
-</ul><br/>
-
-<b>Rescheduling / No Show Policy:</b><br/>
-**If the patient cannot make the appointment please contact us within 48 hours of the appointment to reschedule or cancel to avoid any no-show fees. Two no-shows will require a $50 no-show payment before being scheduled for a 3rd time.**<br/><br/>
-
-Here is a summary of the patient's exams we currently have entered into our system:<br/>
-{appointment_table}<br/>
-
-{personal_injury_info}
-
-<b>What You Can Access in the RadFlow 360 Portal</b><br/><br/>
-
-<ul>
-  <li>View all patient exams and status</li>
-  <li>Reports & Documents</li>
-  <li>View Images, Download, and Burn to CD</li>
-  <li>Provide Case Updates</li>
-  <li>Submit & Approve Bill Offers</li>
-  <li>Pay online via credit card and ACH</li>
-</ul><br/>
-
-<a href="https://app.radflow360.com/patient-portal" target="_blank"><b>Login or Create Your Free Account Today</b></a>"""
+# # Unified template (standard approach - replaces all legacy template parts)
+# # COMMENTED OUT: If DB settings are missing, we should log an error instead of using a default
+# DEFAULT_UNIFIED_TEMPLATE = """Dear {first_name} {last_name},<br/>
+# In regards to patient ID (MRN): {patient_id_confirmed}<br/><br/>
+#
+# <b>How to Schedule:</b><br/><br/>
+#
+# <ul>
+#   <li>Schedule online 24/7 via the <a href="https://app.radflow360.com/patient-portal" target="_blank">patient portal</a></li>
+#   <li>Call <b>800-558-2223</b></li>
+# </ul><br/>
+#
+# <b>Rescheduling / No Show Policy:</b><br/>
+# **If the patient cannot make the appointment please contact us within 48 hours of the appointment to reschedule or cancel to avoid any no-show fees. Two no-shows will require a $50 no-show payment before being scheduled for a 3rd time.**<br/><br/>
+#
+# Here is a summary of the patient's exams we currently have entered into our system:<br/>
+# {appointment_table}<br/>
+#
+# <p>Recent contact history:</p>
+# {call_log_table}<br/>
+#
+# {personal_injury_info}
+#
+# <b>What You Can Access in the RadFlow 360 Portal</b><br/><br/>
+#
+# <ul>
+#   <li>View all patient exams and status</li>
+#   <li>Reports & Documents</li>
+#   <li>View Images, Download, and Burn to CD</li>
+#   <li>Provide Case Updates</li>
+#   <li>Submit & Approve Bill Offers</li>
+#   <li>Pay online via credit card and ACH</li>
+# </ul><br/>
+#
+# <a href="https://app.radflow360.com/patient-portal" target="_blank"><b>Login or Create Your Free Account Today</b></a>"""
 # --- END: Placeholder Static Information ---
 
 # --- BEGIN: Database Settings Helper ---
@@ -125,7 +129,7 @@ async def get_tag_settings_from_db(tag_name: str = "Apt status req") -> dict:
                     # Custom placeholders (workspace-wide, loaded from WORKSPACE tag)
                     "custom_placeholders": custom_placeholders,
                     # Unified template (tag-specific)
-                    "unified_template": settings_dict.get("unified_template", DEFAULT_UNIFIED_TEMPLATE),
+                    "unified_template": settings_dict.get("unified_template"),
                     # Extract specific values for backward compatibility in code
                     "scheduling_phone": custom_placeholders.get("scheduling_phone", DEFAULT_SCHEDULING_PHONE),
                     "no_show_policy": custom_placeholders.get("no_show_policy", DEFAULT_NO_SHOW_POLICY),
@@ -135,10 +139,10 @@ async def get_tag_settings_from_db(tag_name: str = "Apt status req") -> dict:
                     }
                 }
             else:
-                logger.warning(f"⚠️ No settings found for '{tag_name}' in database, using defaults")
+                logger.error(f"❌ CRITICAL: No settings found for '{tag_name}' in database! Template must be configured in /settings/template-config")
                 return {
                     "custom_placeholders": custom_placeholders,  # Use workspace placeholders even if tag not found
-                    "unified_template": DEFAULT_UNIFIED_TEMPLATE,
+                    "unified_template": None,  # No default - must be configured in DB
                     "scheduling_phone": custom_placeholders.get("scheduling_phone", DEFAULT_SCHEDULING_PHONE),
                     "no_show_policy": custom_placeholders.get("no_show_policy", DEFAULT_NO_SHOW_POLICY),
                     "portal_links": {
@@ -147,10 +151,10 @@ async def get_tag_settings_from_db(tag_name: str = "Apt status req") -> dict:
                     }
                 }
     except Exception as e:
-        logger.error(f"❌ Error fetching tag settings from database: {e}, using defaults")
+        logger.error(f"❌ CRITICAL: Error fetching tag settings from database: {e}. Template must be configured in /settings/template-config", exc_info=True)
         return {
             "custom_placeholders": {},
-            "unified_template": DEFAULT_UNIFIED_TEMPLATE,
+            "unified_template": None,  # No default - must be configured in DB
             "scheduling_phone": DEFAULT_SCHEDULING_PHONE,
             "no_show_policy": DEFAULT_NO_SHOW_POLICY,
             "portal_links": DEFAULT_PORTAL_LINKS
@@ -241,7 +245,11 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
         table_html = _generate_appointment_table_html(studies)
 
         # Get template configuration (standard: unified template only)
-        unified_template = data.get("unified_template", DEFAULT_UNIFIED_TEMPLATE)
+        unified_template = data.get("unified_template")
+        if not unified_template:
+            logger.error(f"❌ CRITICAL: No unified_template configured in database for 'Apt status req'. Template must be configured in /settings/template-config")
+            raise ValueError("Missing unified_template in database settings. Please configure template in /settings/template-config")
+
         personal_injury_template = data.get("custom_placeholders", {}).get(
             "personal_injury_info",
             "Important Information regarding personal injury cases<br/>A report containing the findings of the exam will also be sent to the attorney.<br/>A bill will be sent to the attorney once both the patient and the attorney sign all pending liens.<br/>Please make sure to submit a negotiation offer before sending the payment.<br/><br/>"
@@ -540,7 +548,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                 "no_show_policy": no_show_policy,
                 "links": portal_links,
                 # Unified template (standard approach)
-                "unified_template": db_settings.get("unified_template", DEFAULT_UNIFIED_TEMPLATE),
+                "unified_template": db_settings.get("unified_template"),  # No default - must be in DB
                 # Custom placeholders (workspace-wide)
                 "custom_placeholders": db_settings.get("custom_placeholders", {}),
                 # Patient demographics for template placeholders

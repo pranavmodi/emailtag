@@ -41,7 +41,7 @@ async def generate_call_log_table(patient_id: str, phone_number: str = None) -> 
 
         if not call_log_response or not isinstance(call_log_response, dict):
             logger.warning(f"📞 No valid call log response for patient {patient_id}")
-            return ""
+            return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No recent call history available for this patient.</em></p>'
 
         # Extract call log data
         call_log_data = call_log_response.get("content", [])
@@ -55,16 +55,16 @@ async def generate_call_log_table(patient_id: str, phone_number: str = None) -> 
                     calls = call_log_json.get("calls", [])
                 except json.JSONDecodeError:
                     logger.error(f"📞 Failed to parse call log JSON for patient {patient_id}")
-                    return ""
+                    return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No recent call history available for this patient.</em></p>'
             else:
                 calls = call_log_data
         else:
             logger.info(f"📞 No call history found for patient {patient_id}")
-            return ""
+            return "<p><em>No recent call history available for this patient.</em></p>"
 
         if not calls or len(calls) == 0:
             logger.info(f"📞 No calls in call log for patient {patient_id}")
-            return ""
+            return "<p><em>No recent call history available for this patient.</em></p>"
 
         logger.info(f"📞 Found {len(calls)} call(s) for patient {patient_id}")
 
@@ -74,7 +74,7 @@ async def generate_call_log_table(patient_id: str, phone_number: str = None) -> 
             logger.info(f"📞 Filtered to {len(calls)} call(s) for phone {phone_number}")
 
         if not calls:
-            return ""
+            return "<p><em>No recent call history available for this patient.</em></p>"
 
         # Generate HTML table
         table_html = _format_calls_as_html_table(calls)
@@ -84,7 +84,7 @@ async def generate_call_log_table(patient_id: str, phone_number: str = None) -> 
 
     except Exception as e:
         logger.error(f"Error generating call log table for patient {patient_id}: {e}", exc_info=True)
-        return ""
+        return "<p><em>No recent call history available for this patient.</em></p>"
 
 
 def _format_calls_as_html_table(calls: List[Dict[str, Any]]) -> str:

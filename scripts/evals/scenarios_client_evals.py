@@ -1144,5 +1144,17 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["Lien Modified", "AI: Human review required"]
+    },
+    "51": {
+        "description": "PRE1166211 - Apt status req - Client inquiry about appointment attendance and reports/recommendations availability",
+        "subject": "Appointment Confirmation and Reports Request",
+        "body_html": (
+            "<p>Hello,</p>"
+            "<p>Could you kindly confirm whether the patient has attended the appointment? If so, are there any reports or recommendations available for this client?</p>"
+            "<p>Patient ID: PRE1166211</p>"
+            "<p>Best regards,</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Apt status req"]
     }
 }
