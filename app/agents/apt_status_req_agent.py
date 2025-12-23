@@ -260,13 +260,20 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
             call_log_table = await generate_call_log_table(patient_id)
 
         # Prepare all placeholder variables for logging and formatting
+        first_name = data.get("first_name", "N/A")
+        last_name = data.get("last_name", "N/A")
+        patient_name = f"{first_name} {last_name}"
+
         placeholder_values = {
             "patient_id_confirmed": patient_id,
+            "patient_id": patient_id,  # Add patient_id alias
+            "patient_name": patient_name,  # Add patient_name for templates
             "scheduling_phone": data.get("scheduling_phone", DEFAULT_SCHEDULING_PHONE),
             "no_show_policy": data.get("no_show_policy", DEFAULT_NO_SHOW_POLICY),
-            "first_name": data.get("first_name", "N/A"),
-            "last_name": data.get("last_name", "N/A"),
+            "first_name": first_name,
+            "last_name": last_name,
             "dob": data.get("dob", "N/A"),
+            "doi": data.get("doi", "N/A"),  # Add DOI for templates
             "address": data.get("address", "N/A"),
             "home_phone": data.get("home_phone", "N/A"),
             "cell_phone": data.get("cell_phone", "N/A"),
@@ -364,6 +371,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                 "first_name": patient_data.get("first_name", "N/A"),
                 "last_name": patient_data.get("last_name", "N/A"),
                 "dob": patient_data.get("birth_date", "N/A"),
+                "doi": patient_data.get("doi", "N/A"),  # Add DOI field
                 "address": patient_data.get("address", "N/A"),
                 "home_phone": patient_data.get("phone", "N/A"),
                 "cell_phone": patient_data.get("phone", "N/A"),  # API may not distinguish
@@ -539,6 +547,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                 "first_name": patient_demographics.get("first_name", "N/A"),
                 "last_name": patient_demographics.get("last_name", "N/A"),
                 "dob": patient_demographics.get("dob", "N/A"),
+                "doi": patient_demographics.get("doi", "N/A"),  # Add DOI for templates
                 "address": patient_demographics.get("address", "N/A"),
                 "home_phone": patient_demographics.get("home_phone", "N/A"),
                 "cell_phone": patient_demographics.get("cell_phone", "N/A")
