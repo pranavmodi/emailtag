@@ -1241,4 +1241,285 @@ async def test_openai_patient_extraction():
 # Uncomment the lines below to run the test
 # if __name__ == "__main__":
 #     import asyncio
-#     asyncio.run(test_openai_patient_extraction()) 
+#     asyncio.run(test_openai_patient_extraction())
+
+
+# --- BEGIN: Sender Verification Functions ---
+
+async def compile_study_participants(patient_id: str, studies: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Compiles all participants across all studies for a patient.
+
+    This function fetches participant information from RadFlow for each study
+    associated with a patient, creating a comprehensive list of all authorized
+    parties (attorneys, doctors, etc.) who have access to the patient's records.
+
+    Args:
+        patient_id: The patient's ID (e.g., "PRE123456")
+        studies: List of study dictionaries containing study information
+
+    Returns:
+        Dictionary containing:
+            {
+                "success": True/False,
+                "total_participants": int,
+                "participants": [
+                    {
+                        "email": str,
+                        "role": str,
+                        "type": str,
+                        "referrer_id": str,
+                        "phone": str,
+                        "accession_number": str,
+                        "study_id": str,
+                        "domain": str
+                    },
+                    ...
+                ],
+                "successful_studies": int,
+                "failed_studies": int
+            }
+    """
+    from app.mcp import default_mcp_client as mcp_client
+
+    if not mcp_client.is_connected:
+        await mcp_client.connect()
+
+    all_participants = []
+    successful_studies = 0
+    failed_studies = 0
+
+    for study in studies:
+        accession_number = study.get("accessionNumber", "") or study.get("authorization_number", "")
+        study_id = study.get("study_id") or study.get("id")
+
+        if not accession_number:
+            failed_studies += 1
+            continue
+
+        try:
+            participants_result = await mcp_client.call_tool("get_study_participants", {"accession_number": str(accession_number)})
+
+            if participants_result.get("success") and participants_result.get("data", {}).get("result"):
+                participants = participants_result["data"]["result"]
+
+                for participant in participants:
+                    participant_data = {
+                        "email": participant.get("email", "").strip().lower(),
+                        "role": participant.get("playerTypeName", "").lower(),
+                        "type": participant.get("type", "").lower(),
+                        "referrer_id": participant.get("referrerID", ""),
+                        "phone": participant.get("businessPhoneNumber", ""),
+                        "accession_number": accession_number,
+                        "study_id": study_id,
+                        "domain": participant.get("email", "").split("@")[1].lower() if "@" in participant.get("email", "") else ""
+                    }
+
+                    all_participants.append(participant_data)
+
+                successful_studies += 1
+            else:
+                failed_studies += 1
+
+        except Exception as e:
+            logger.error(f"Failed to get participants for accession {accession_number}: {e}")
+            failed_studies += 1
+            continue
+
+    return {
+        "success": True,
+        "total_participants": len(all_participants),
+        "participants": all_participants,
+        "successful_studies": successful_studies,
+        "failed_studies": failed_studies
+    }
+
+
+async def verify_sender_authorization(sender_email: str, participants: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Verifies if the sender's email is authorized to receive patient information.
+
+    This function checks if the sender is listed as a participant (attorney, doctor, etc.)
+    for the patient's case. It performs multiple verification passes:
+    1. Direct email match - exact match with participant email
+    2. Domain match - same domain as a medical professional participant
+    3. Pattern matching - domain contains keywords suggesting attorney/medical entity
+
+    Args:
+        sender_email: Email address of the sender
+        participants: List of participant dictionaries from compile_study_participants()
+
+    Returns:
+        Dictionary containing:
+            {
+                "status": "verified" | "domain_verified" | "unverified",
+                "role": str,  # e.g., "attorney_on_file", "doctor_on_file", "attorney_not_on_file", etc.
+                "player_info": dict  # Additional participant information (if verified)
+            }
+    """
+    sender_domain = sender_email.split('@')[1] if '@' in sender_email else None
+
+    # First pass: Direct email matches
+    for participant in participants:
+        participant_email = participant.get("email", "").lower()
+        participant_role = participant.get("role", "").lower()
+        participant_type = participant.get("type", "").lower()
+
+        # Direct email match
+        if sender_email.lower() == participant_email:
+            player_info = {
+                "email": participant_email,
+                "role": participant_role,
+                "type": participant_type,
+                "accession_number": participant.get("accession_number", ""),
+                "study_id": participant.get("study_id", ""),
+                "referrer_id": participant.get("referrer_id", ""),
+                "phone": participant.get("phone", "")
+            }
+
+            # Check for attorney roles
+            if "attorney" in participant_role or "law" in participant_role:
+                return {"status": "verified", "role": "attorney_on_file", "player_info": player_info}
+
+            # Check for doctor/physician roles
+            if any(keyword in participant_role for keyword in ["doctor", "physician", "radiologist"]) or \
+               any(keyword in participant_type for keyword in ["doctor", "physician"]):
+                return {"status": "verified", "role": "doctor_on_file", "player_info": player_info}
+
+    # Second pass: Domain matches for medical professionals
+    if sender_domain:
+        for participant in participants:
+            participant_domain = participant.get("domain", "").lower()
+            participant_role = participant.get("role", "").lower()
+            participant_type = participant.get("type", "").lower()
+
+            if sender_domain == participant_domain:
+                # Domain match with doctor/physician type
+                if any(keyword in participant_role for keyword in ["doctor", "physician", "radiologist"]) or \
+                   any(keyword in participant_type for keyword in ["doctor", "physician"]):
+                    player_info = {
+                        "email": participant.get("email", ""),
+                        "role": participant_role,
+                        "type": participant_type,
+                        "accession_number": participant.get("accession_number", ""),
+                        "study_id": participant.get("study_id", ""),
+                        "domain": participant_domain
+                    }
+                    return {"status": "domain_verified", "role": "doctor_domain_match", "player_info": player_info}
+
+    # Fallback to domain pattern matching
+    if sender_domain:
+        if any(keyword in sender_domain for keyword in ["law", "legal", "attorney", "lawfirm"]):
+            return {"status": "unverified", "role": "attorney_not_on_file"}
+
+        if any(keyword in sender_domain for keyword in ["med", "clinic", "hospital", "health", "medical"]):
+            return {"status": "unverified", "role": "doctor_not_on_file"}
+
+    return {"status": "unverified", "role": "unknown"}
+
+
+async def verify_sender_for_patient_access(
+    patient_id: str,
+    sender_email: str,
+    studies: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """
+    High-level function to verify if a sender is authorized to access patient information.
+
+    This is the main entry point for sender verification. It:
+    1. Fetches patient and study information (if not provided)
+    2. Compiles all participants for the patient's studies
+    3. Verifies the sender against the participants
+
+    Args:
+        patient_id: The patient's ID
+        sender_email: Email address of the sender
+        studies: Optional list of studies (will fetch if not provided)
+
+    Returns:
+        Dictionary containing:
+            {
+                "authorized": True/False,
+                "verification_status": str,  # "verified", "domain_verified", "unverified"
+                "role": str,  # e.g., "attorney_on_file", "doctor_on_file", etc.
+                "player_info": dict,  # Participant information (if verified)
+                "message": str  # Human-readable message about verification result
+            }
+    """
+    try:
+        # Fetch studies if not provided
+        if studies is None:
+            mcp_results = await get_patient_and_study_info(patient_id)
+            study_result = mcp_results.get("study_result", {})
+
+            if not study_result.get("success"):
+                return {
+                    "authorized": False,
+                    "verification_status": "error",
+                    "role": "unknown",
+                    "message": "Failed to fetch patient study information for verification"
+                }
+
+            studies = study_result.get("studies", [])
+
+        # Compile participants
+        participants_result = await compile_study_participants(patient_id, studies)
+
+        if not participants_result.get("success"):
+            logger.error(f"Failed to compile participants for patient {patient_id}")
+            return {
+                "authorized": False,
+                "verification_status": "error",
+                "role": "unknown",
+                "message": "Failed to verify sender authorization"
+            }
+
+        participants = participants_result.get("participants", [])
+
+        # Log participants on file for debugging
+        logger.info(f"📋 STUDY PARTICIPANTS ON FILE for patient {patient_id}:")
+        logger.info(f"   Total participants: {len(participants)}")
+        if participants:
+            logger.info(f"   Authorized emails:")
+            for idx, participant in enumerate(participants, 1):
+                email = participant.get("email", "N/A")
+                role = participant.get("role", "N/A")
+                participant_type = participant.get("type", "N/A")
+                logger.info(f"      {idx}. {email} - Role: {role}, Type: {participant_type}")
+        else:
+            logger.info(f"   No participants found for this patient")
+
+        # Verify sender
+        verification_result = await verify_sender_authorization(sender_email, participants)
+
+        verification_status = verification_result.get("status", "unverified")
+        role = verification_result.get("role", "unknown")
+
+        # Determine if sender is authorized
+        authorized = verification_status in ["verified", "domain_verified"]
+
+        # Create human-readable message
+        if authorized:
+            message = f"Sender verified as {role} for patient {patient_id}"
+        else:
+            message = f"Sender not authorized: {role}"
+
+        return {
+            "authorized": authorized,
+            "verification_status": verification_status,
+            "role": role,
+            "player_info": verification_result.get("player_info", {}),
+            "message": message,
+            "total_participants": participants_result.get("total_participants", 0)
+        }
+
+    except Exception as e:
+        logger.error(f"Exception in verify_sender_for_patient_access: {e}", exc_info=True)
+        return {
+            "authorized": False,
+            "verification_status": "error",
+            "role": "unknown",
+            "message": f"Error during sender verification: {str(e)}"
+        }
+
+# --- END: Sender Verification Functions --- 

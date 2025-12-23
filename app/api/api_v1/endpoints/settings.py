@@ -323,3 +323,79 @@ async def toggle_global_autorespond(
             status_code=500,
             detail=f"Failed to toggle global autorespond: {str(e)}"
         )
+
+
+# --- BEGIN: Workspace Settings Endpoints ---
+
+@router.get("/workspace-settings")
+async def get_workspace_settings(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get workspace-level settings including sender verification toggle.
+
+    Returns:
+        Dictionary with workspace settings
+    """
+    try:
+        from app.crud.tag_settings import tag_settings_crud
+
+        # Get WORKSPACE settings
+        workspace_settings = await tag_settings_crud.get_settings_dict(db, "WORKSPACE")
+
+        return {
+            "enable_sender_verification": workspace_settings.get("enable_sender_verification", True),
+            "custom_placeholders": workspace_settings.get("custom_placeholders", {})
+        }
+    except Exception as e:
+        logger.error(f"Error fetching workspace settings: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch workspace settings: {str(e)}"
+        )
+
+
+@router.post("/workspace-settings/sender-verification")
+async def update_sender_verification(
+    enabled: bool,
+    updated_by: str = "Admin",
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update sender verification enable/disable setting.
+
+    Args:
+        enabled: True to enable sender verification, False to disable
+        updated_by: Username of person making the change
+
+    Returns:
+        Updated workspace settings with success message
+    """
+    try:
+        from app.crud.tag_settings import tag_settings_crud
+
+        # Get current WORKSPACE settings
+        workspace_settings = await tag_settings_crud.get_settings_dict(db, "WORKSPACE")
+
+        # Update the sender verification flag
+        workspace_settings["enable_sender_verification"] = enabled
+
+        # Save back to database (use 'update' method, not 'update_settings')
+        await tag_settings_crud.update(db, "WORKSPACE", workspace_settings, updated_by)
+
+        logger.info(f"Sender verification {'enabled' if enabled else 'disabled'} by {updated_by}")
+
+        return {
+            "success": True,
+            "enable_sender_verification": enabled,
+            "message": f"Sender verification {'enabled' if enabled else 'disabled'} successfully",
+            "updated_by": updated_by
+        }
+    except Exception as e:
+        logger.error(f"Error updating sender verification setting: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update sender verification setting: {str(e)}"
+        )
+
+# --- END: Workspace Settings Endpoints ---

@@ -1156,5 +1156,17 @@ Test ID: {UNIQUE_TEST_ID}"""
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": ["Apt status req"]
+    },
+    "52": {
+        "description": "Multiple patients - Edy Posas-Valdes and Servando Zamora - Apt status req - Client following up on imaging status for two patients with different DOLs",
+        "subject": "Following up on imaging status for two clients",
+        "body_html": (
+            "<p>I am following up to see if our clients got imaging's done.</p>"
+            "<p>Edy Posas-Valdes DOL: 04/07/2025</p>"
+            "<p>Servando Zamora - DOL 07/27/2023</p>"
+            "<p>Please provide status update for both patients.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Apt status req"]
     }
 }

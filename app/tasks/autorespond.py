@@ -281,6 +281,7 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                         front_conversation_id=front_conversation_id,
                         current_email_content=current_email_content,
                         structured_history_messages=structured_history_messages,
+                        email_sender=email_obj.sender,  # Pass sender email for authorization verification
                         settings_obj=settings,  # Pass the main settings module
                         email_subject=email_obj.subject,  # Pass the email subject from DB
                         extracted_patient_id=extracted_patient_id  # Pass the pre-extracted patient ID

@@ -40,7 +40,10 @@ from app.agents.agent_helpers import (
     format_conversation_history_for_agent,
     get_patient_and_study_info,
     send_fallback_reply_and_tag,
-    send_reply_to_front
+    send_reply_to_front,
+    send_reply_to_front_direct,
+    send_reply_to_front_with_attachment,
+    verify_sender_for_patient_access
 )
 # --- END: Agent Helper Imports ---
 
@@ -603,6 +606,7 @@ async def handle_apt_status_request_agent_sdk(
     front_conversation_id: str,
     current_email_content: str,
     structured_history_messages: List[Dict[str, Any]],
+    email_sender: str,  # Email sender for authorization verification
     settings_obj: Any = app_settings_instance,
     email_subject: str = None,  # Add email_subject parameter
     extracted_patient_id: str = None  # Add pre-extracted patient ID parameter
@@ -628,6 +632,116 @@ async def handle_apt_status_request_agent_sdk(
             "processed_flag": True,
             "details": {"reason": "MCP server connection failed. Fallback reply sent."}
         }
+
+    # --- BEGIN: SENDER VERIFICATION ---
+    # Check if sender verification is enabled in settings
+    sender_verification_enabled = True  # Default to enabled for security
+
+    async with AsyncSessionLocal() as db:
+        workspace_settings = await tag_settings_crud.get_settings_dict(db, "WORKSPACE")
+        sender_verification_enabled = workspace_settings.get("enable_sender_verification", True)
+
+    logger.info(f"🔐 SENDER VERIFICATION: Enabled = {sender_verification_enabled}")
+
+    # Perform sender verification if we have a patient ID and verification is enabled
+    if extracted_patient_id and sender_verification_enabled:
+        logger.info(f"🔐 SENDER VERIFICATION: Checking authorization for {email_sender} to access patient {extracted_patient_id}")
+
+        # Verify sender authorization
+        verification_result = await verify_sender_for_patient_access(
+            patient_id=extracted_patient_id,
+            sender_email=email_sender
+        )
+
+        logger.info(f"🔐 VERIFICATION RESULT: {verification_result['message']}")
+        logger.info(f"   - Authorized: {verification_result['authorized']}")
+        logger.info(f"   - Role: {verification_result['role']}")
+        logger.info(f"   - Status: {verification_result['verification_status']}")
+
+        # Handle unauthorized senders
+        if not verification_result["authorized"]:
+            logger.warning(f"⚠️ UNAUTHORIZED ACCESS ATTEMPT:")
+            logger.warning(f"   - Sender: {email_sender}")
+            logger.warning(f"   - Patient: {extracted_patient_id}")
+            logger.warning(f"   - Role detected: {verification_result['role']}")
+
+            # Send HIPAA form for unauthorized access
+            TEMPLATE_HIPAA_NEEDED = """Hello,
+
+To proceed with your request for patient information, we require authorization. Please complete the attached HIPAA release form and reply to this email with the completed document.
+
+Thank you for your cooperation."""
+
+            hipaa_form_path = "/home/fret/work/emailtag/app/agents/templates/Medical-Release-Form.pdf"
+
+            result = await send_reply_to_front_with_attachment(
+                front_conversation_id,
+                TEMPLATE_HIPAA_NEEDED,
+                hipaa_form_path,
+                tags_to_add=["AI handled", TAG_AI_HUMAN_REVIEW_REQUIRED]
+            )
+
+            if result.get("status") == "success":
+                logger.info(f"✅ Sent HIPAA form to unauthorized sender and tagged for review")
+                return {
+                    "agent_handled": True,
+                    "processed_flag": True,
+                    "details": {
+                        "action": "sender_not_authorized_hipaa_sent",
+                        "sender": email_sender,
+                        "patient_id": extracted_patient_id,
+                        "role": verification_result["role"],
+                        "verification_status": verification_result["verification_status"],
+                        "reason": "Sender not authorized - HIPAA form sent"
+                    }
+                }
+            else:
+                logger.error(f"Failed to send HIPAA form with attachment: {result}")
+                # Fallback to simple unauthorized message
+                TEMPLATE_UNAUTHORIZED = """Hello,
+
+We're unable to automatically provide patient information as you are not currently listed as an authorized party for this patient's case.
+
+A team member will review your request and contact you shortly.
+
+Thank you."""
+
+                await send_reply_to_front_direct(
+                    conversation_id=front_conversation_id,
+                    reply_text=TEMPLATE_UNAUTHORIZED
+                )
+
+                frontapp_service.add_conversation_tags(
+                    front_conversation_id,
+                    [TAG_AI_HUMAN_REVIEW_REQUIRED]
+                )
+
+                return {
+                    "agent_handled": True,
+                    "processed_flag": True,
+                    "details": {
+                        "action": "sender_not_authorized_escalated",
+                        "sender": email_sender,
+                        "patient_id": extracted_patient_id,
+                        "role": verification_result["role"],
+                        "reason": "Sender not authorized - escalated to human review"
+                    }
+                }
+
+        # Sender is authorized - log and proceed
+        logger.info(f"✅ SENDER AUTHORIZED:")
+        logger.info(f"   - Sender: {email_sender}")
+        logger.info(f"   - Role: {verification_result['role']}")
+        logger.info(f"   - Patient: {extracted_patient_id}")
+        logger.info(f"   - Proceeding with appointment status request")
+
+    elif extracted_patient_id and not sender_verification_enabled:
+        logger.info(f"ℹ️ SENDER VERIFICATION DISABLED: Skipping verification for {email_sender} (testing mode)")
+
+    else:
+        logger.info(f"ℹ️ SENDER VERIFICATION SKIPPED: No patient ID available yet (will verify in follow-up)")
+
+    # --- END: SENDER VERIFICATION ---
 
     formatted_history = format_conversation_history_for_agent(structured_history_messages)
     # logger.info(f"Formatted conversation history: {formatted_history}")

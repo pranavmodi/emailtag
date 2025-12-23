@@ -127,9 +127,11 @@ export default function Settings2Page() {
   const [status, setStatus] = useState<EmailProcessingStatus | null>(null);
   const [autorespond, setAutorespond] =
     useState<AutorespondSettingsResponse | null>(null);
+  const [senderVerificationEnabled, setSenderVerificationEnabled] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [autorespondError, setAutorespondError] = useState<string | null>(null);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -145,15 +147,18 @@ export default function Settings2Page() {
         if (!mounted) return;
         setUser(auth.username ?? "Admin");
 
-        const [processingPayload, autorespondPayload] = await Promise.all([
+        const [processingPayload, autorespondPayload, workspacePayload] = await Promise.all([
           SettingsApi.getProcessingStatus(),
           SettingsApi.getAutorespondSettings(),
+          SettingsApi.getWorkspaceSettings(),
         ]);
         if (!mounted) return;
         setStatus(processingPayload);
         setAutorespond(autorespondPayload);
+        setSenderVerificationEnabled(workspacePayload.enable_sender_verification);
         setStatusError(null);
         setAutorespondError(null);
+        setWorkspaceError(null);
       } catch (error) {
         if (!mounted) return;
         if (error instanceof ApiError && error.status === 401) {
@@ -226,6 +231,27 @@ export default function Settings2Page() {
       setAutorespondError(message);
     } finally {
       setBusyFlag("global", false);
+    }
+  };
+
+  const handleSenderVerificationToggle = async (enabled: boolean) => {
+    setBusyFlag("sender_verification", true);
+    try {
+      await SettingsApi.toggleSenderVerification(enabled);
+      setSenderVerificationEnabled(enabled);
+      setWorkspaceError(null);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to update sender verification";
+      setWorkspaceError(message);
+    } finally {
+      setBusyFlag("sender_verification", false);
     }
   };
 
@@ -412,6 +438,55 @@ export default function Settings2Page() {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ ...easing, delay: 0.05 }}
+        >
+          <Card className="h-full border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3 text-2xl">
+                <ShieldCheck className="h-6 w-6 text-amber-600" /> Security Settings
+              </CardTitle>
+              <CardDescription>
+                Configure security features for PHI protection
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-slate-900">Sender Verification</p>
+                  <Badge
+                    className={
+                      senderVerificationEnabled
+                        ? "bg-green-50 text-green-700 border-green-200"
+                        : "bg-amber-50 text-amber-700 border-amber-200"
+                    }
+                  >
+                    {senderVerificationEnabled ? "Enabled (Production)" : "Disabled (Testing)"}
+                  </Badge>
+                  <p className="text-xs text-slate-500">
+                    {senderVerificationEnabled
+                      ? "Only authorized senders can receive patient information"
+                      : "⚠️ All senders can receive patient information (Testing mode)"}
+                  </p>
+                </div>
+                <ToggleRail
+                  checked={senderVerificationEnabled}
+                  disabled={busy.sender_verification}
+                  onCheckedChange={handleSenderVerificationToggle}
+                />
+              </div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
+                <strong>Production Mode (ON):</strong> Sender email is verified against study participants before sharing PHI. Unauthorized senders receive HIPAA form.
+                <br /><br />
+                <strong>Testing Mode (OFF):</strong> Sender verification is disabled. All senders can receive patient information. ⚠️ Use only for testing!
+              </div>
+              {workspaceError && <ErrorBanner message={workspaceError} />}
+            </CardContent>
+          </Card>
+        </motion.section>
+
+        <motion.section
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...easing, delay: 0.1 }}
         >
           <Card className="h-full">
             <CardHeader>

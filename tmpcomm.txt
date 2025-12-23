@@ -1,0 +1,1000 @@
+ 1006  python scripts/fetch_patient_details.py --first-name "SERVANDO" --last-name "ZAMORA" --date-of-injury "06-01-24"
+ 1007  hello
+ 1008  clear
+ 1009  python scripts/evals/run_tagging_tests.py 
+ 1010  clear
+ 1011  python scripts/evals/run_tagging_tests.py 
+ 1012  celar
+ 1013  clear
+ 1014  python scripts/evals/run_tagging_tests.py 
+ 1015  clear
+ 1016  python scripts/evals/run_client_evals.py 
+ 1017  python scripts/evals/run_tagging_tests.py 
+ 1018  clear
+ 1019  python scripts/evals/run_tagging_tests.py 
+ 1020  clear
+ 1021  python scripts/evals/run_client_evals.py 
+ 1022  clear
+ 1023  python scripts/evals/run_client_evals.py 
+ 1024  clear
+ 1025  python scripts/evals/run_client_evals.py 
+ 1026  python scripts/test_scenario3_openai.py 
+ 1027  clear
+ 1028  python scripts/evals/run_client_evals.py 
+ 1029  clear
+ 1030  python scripts/evals/run_client_evals.py 
+ 1031  clear
+ 1032  python scripts/evals/run_client_evals.py 
+ 1033  clear
+ 1034  python scripts/evals/run_client_evals.py 
+ 1035  clear
+ 1036  python scripts/evals/run_client_evals.py 
+ 1037  clear
+ 1038  python scripts/evals/run_client_evals.py 
+ 1039  clear
+ 1040  python scripts/evals/run_client_evals.py 
+ 1041  clear
+ 1042  python scripts/evals/run_client_evals.py 
+ 1043  clear
+ 1044  python scripts/evals/run_client_evals.py 
+ 1045  clear
+ 1046  python scripts/evals/run_client_evals.py 
+ 1047  clear
+ 1048  python scripts/evals/run_client_evals.py 
+ 1049  clear
+ 1050  python scripts/evals/run_client_evals.py 
+ 1051  clear
+ 1052  python scripts/evals/run_client_evals.py 
+ 1053  clear
+ 1054  python scripts/evals/run_client_evals.py 
+ 1055  clear
+ 1056  python scripts/evals/run_client_evals.py 
+ 1057  clear
+ 1058  python scripts/evals/run_client_evals.py 
+ 1059  clear
+ 1060  python scripts/evals/run_client_evals.py 
+ 1061  celar
+ 1062  clear
+ 1063  python scripts/evals/run_client_evals.py 
+ 1064  clear
+ 1065  python scripts/evals/run_client_evals.py 
+ 1066  clear
+ 1067  python scripts/evals/run_client_evals.py 
+ 1068  clear
+ 1069  python scripts/evals/run_client_evals.py 
+ 1070  clear
+ 1071  python scripts/evals/run_client_evals.py 
+ 1072  clear
+ 1073  python scripts/evals/run_tagging_tests.py 
+ 1074  clear
+ 1075  python scripts/evals/run_tagging_tests.py 
+ 1076  clear
+ 1077  python scripts/evals/run_tagging_tests.py 
+ 1078  clear
+ 1079  python scripts/evals/run_tagging_tests.py 
+ 1080  clear
+ 1081  python scripts/evals/run_client_evals.py 
+ 1082  clear
+ 1083  python scripts/evals/run_client_evals.py 
+ 1084  python scripts/test_strikethrough_detection.py --provider roboflow
+ 1085  pip install requirements.txt 
+ 1086  pip install -r requirements.txt 
+ 1087  clear
+ 1088  python scripts/test_strikethrough_detection.py --provider roboflow
+ 1089  clear
+ 1090  python scripts/test_strikethrough_detection.py --provider google
+ 1091  clear
+ 1092  python scripts/evals/run_client_evals.py 
+ 1093  clear
+ 1094  python scripts/evals/run_client_evals.py 
+ 1095  clear
+ 1096  python scripts/evals/run_client_evals.py 
+ 1097  clear
+ 1098  python scripts/evals/run_client_evals.py 
+ 1099  clear
+ 1100  python scripts/evals/run_client_evals.py 
+ 1101  clear
+ 1102  python scripts/evals/run_client_evals.py 
+ 1103  clear
+ 1104  python scripts/evals/run_client_evals.py 
+ 1105  clear
+ 1106  python scripts/evals/run_client_evals.py 
+ 1107  clear
+ 1108  python scripts/evals/run_client_evals.py 
+ 1109  clear
+ 1110  python scripts/evals/run_client_evals.py 
+ 1111  clear
+ 1112  python scripts/evals/run_client_evals.py 
+ 1113  clear
+ 1114  python scripts/evals/run_client_evals.py 
+ 1115  clear
+ 1116  python scripts/evals/run_client_evals.py 
+ 1117  clear
+ 1118  python scripts/evals/run_client_evals.py 
+ 1119  which npm
+ 1120  clear
+ 1121  npm --version
+ 1122  cat ~/.bashrc | grep nvm
+ 1123  ls ~/.bash_profile
+ 1124  echo '[ -f ~/.bashrc ] && source ~/.bashrc' >> ~/.bash_profile
+ 1125  source ~/.bash_profile
+ 1126  ls ~/.bash_profile
+ 1127  npm --version
+ 1128  npm install -g @anthropic-ai/claude-code
+ 1129  which claude
+ 1130  python scripts/evals/run_client_evals.py 
+ 1131  clear
+ 1132  python scripts/evals/run_client_evals.py 
+ 1133  clear
+ 1134  python scripts/evals/run_client_evals.py 
+ 1135  clear
+ 1136  python scripts/evals/run_client_evals.py 
+ 1137  clear
+ 1138  python scripts/evals/run_client_evals.py 
+ 1139  clear
+ 1140  python scripts/evals/run_client_evals.py 
+ 1141  clear
+ 1142  python scripts/evals/run_client_evals.py 
+ 1143  clear
+ 1144  python scripts/evals/run_client_evals.py 
+ 1145  clear
+ 1146  python scripts/evals/run_client_evals.py 
+ 1147  claer
+ 1148  clear
+ 1149  python scripts/evals/run_client_evals.py 
+ 1150  clear
+ 1151  python scripts/evals/run_client_evals.py 
+ 1152  clear
+ 1153  python scripts/evals/run_client_evals.py 
+ 1154  clear
+ 1155  python scripts/evals/run_client_evals.py 
+ 1156  clear
+ 1157  python scripts/evals/run_client_evals.py 
+ 1158  clear
+ 1159  python scripts/evals/run_client_evals.py 
+ 1160  clear
+ 1161  python scripts/evals/run_client_evals.py 
+ 1162  clear
+ 1163  python scripts/evals/run_client_evals.py 
+ 1164  clear
+ 1165  python scripts/evals/run_client_evals.py 
+ 1166  clear
+ 1167  python scripts/evals/run_client_evals.py 
+ 1168  clear
+ 1169  pwd
+ 1170  screeen -rd scripts
+ 1171  screen -rd scripts
+ 1172  python scripts/evals/run_client_evals.py 
+ 1173  clear
+ 1174  python scripts/evals/run_client_evals.py 
+ 1175  clear
+ 1176  python scripts/evals/run_client_evals.py 
+ 1177  clear
+ 1178  python scripts/evals/run_client_evals.py 
+ 1179  clear
+ 1180  python scripts/evals/run_client_evals.py 
+ 1181  clear
+ 1182  python scripts/evals/run_client_evals.py 
+ 1183  clear
+ 1184  python scripts/evals/run_client_evals.py 
+ 1185  clear
+ 1186  python scripts/evals/run_client_evals.py 
+ 1187  clear
+ 1188  python scripts/evals/run_client_evals.py 
+ 1189  clar
+ 1190  clear
+ 1191  python scripts/evals/run_client_evals.py 
+ 1192  clear
+ 1193  python scripts/evals/run_client_evals.py 
+ 1194  clear
+ 1195  python scripts/evals/run_client_evals.py 
+ 1196  clear
+ 1197  python scripts/evals/run_client_evals.py --send-only
+ 1198  clear
+ 1199  python scripts/evals/run_client_evals.py --send-only
+ 1200  clear
+ 1201  python scripts/evals/run_client_evals.py --send-only
+ 1202  clear
+ 1203  python scripts/evals/run_client_evals.py --send-only
+ 1204  clear
+ 1205  python scripts/evals/run_client_evals.py --send-only
+ 1206  clear
+ 1207  python scripts/evals/run_client_evals.py --send-only
+ 1208  clear
+ 1209  python scripts/evals/run_client_evals.py --send-only
+ 1210  clear
+ 1211  python scripts/evals/run_client_evals.py --send-only
+ 1212  curl --location 'https://staging-app.radflow360.com/chatbotapi/Patient/GetPatientStudyRelatedDetails' --header 'accept: application/json' --header 'Content-Type: application/json' --data '{
+ 1213    "patientId": "PRE248509",
+ 1214    "issuerOfPatientId": "",
+ 1215    "phone": "",
+ 1216    "firstName": "",
+ 1217    "lastName": "",
+ 1218    "birthDate": "",
+ 1219    "doi": "",
+ 1220    "accessionNumber": "",
+ 1221    "requiredField": "Study Details"
+ 1222  }'
+ 1223  clear
+ 1224  python scripts/evals/run_client_evals.py --send-only
+ 1225  clear
+ 1226  git status
+ 1227  pwd
+ 1228  git log
+ 1229  clear
+ 1230  python scripts/evals/run_client_evals.py --send-only
+ 1231  clear
+ 1232  python scripts/evals/run_client_evals.py --send-only
+ 1233  clear
+ 1234  python scripts/evals/run_client_evals.py --send-only
+ 1235  clear
+ 1236  python scripts/evals/run_client_evals.py --send-only
+ 1237  clear
+ 1238  screen -rd scripts
+ 1239  python scripts/evals/run_client_evals.py --send-only
+ 1240  clear
+ 1241  python scripts/evals/run_client_evals.py --send-only
+ 1242  clear
+ 1243  python scripts/evals/run_client_evals.py --send-only
+ 1244  clear
+ 1245  python scripts/evals/run_client_evals.py --send-only
+ 1246  clear
+ 1247  python scripts/evals/run_client_evals.py --send-only
+ 1248  clear
+ 1249  python scripts/evals/run_client_evals.py --send-only
+ 1250  clear
+ 1251  python scripts/evals/run_client_evals.py --send-only
+ 1252  clear
+ 1253  python scripts/evals/run_client_evals.py --send-only
+ 1254  clear
+ 1255  python scripts/evals/run_client_evals.py --send-only
+ 1256  clear
+ 1257  python scripts/evals/run_client_evals.py --send-only
+ 1258  clear
+ 1259  screen -rd scripts
+ 1260  python scripts/evals/run_client_evals.py --send-only
+ 1261  clear
+ 1262  pwd
+ 1263  python scripts/evals/run_client_evals.py --send-only
+ 1264  clear
+ 1265  python scripts/evals/run_client_evals.py --send-only
+ 1266  clear
+ 1267  python scripts/evals/run_client_evals.py --send-only
+ 1268  clear
+ 1269  python scripts/evals/run_client_evals.py --send-only
+ 1270  clear
+ 1271  python scripts/evals/run_client_evals.py --send-only
+ 1272  clear
+ 1273  python scripts/evals/run_client_evals.py --from-conv msg_2rol0zob
+ 1274  clear
+ 1275  python scripts/evals/run_client_evals.py --from-conv msg_2rol0zob
+ 1276  clear
+ 1277  python scripts/evals/run_client_evals.py --from-conv cnv_1gip9rmj
+ 1278  clear
+ 1279  python scripts/evals/run_client_evals.py --from-conv cnv_1gip9rmj
+ 1280  clear
+ 1281  python scripts/evals/run_client_evals.py --from-conv cnv_1gip9rmj
+ 1282  celar
+ 1283  clear
+ 1284  python scripts/evals/run_client_evals.py
+ 1285  clear
+ 1286  python scripts/evals/run_client_evals.py
+ 1287  clear
+ 1288  python scripts/evals/run_client_evals.py
+ 1289  clear
+ 1290  python --version
+ 1291  which python
+ 1292  python scripts/evals/run_client_evals.py
+ 1293  clear
+ 1294  python scripts/evals/run_client_evals.py
+ 1295  python scripts/evals/run_client_evals.py --from-conv cnv_1glofq8r
+ 1296  python scripts/evals/run_client_evals.py
+ 1297  clear
+ 1298  python scripts/evals/run_client_evals.py
+ 1299  clear
+ 1300  python scripts/evals/run_client_evals.py
+ 1301  clear
+ 1302  pwd
+ 1303  which python
+ 1304  pip install -r requirements.txt 
+ 1305  clear
+ 1306  pwd
+ 1307  sh install_enhanced_lien_deps.sh 
+ 1308  python scripts/evals/run_client_evals.py
+ 1309  clear
+ 1310  pwd
+ 1311  python scripts/evals/run_client_evals.py
+ 1312  clear
+ 1313  python scripts/evals/run_client_evals.py
+ 1314  clear
+ 1315  python scripts/evals/run_client_evals.py
+ 1316  clear
+ 1317  python scripts/evals/run_client_evals.py
+ 1318  clear
+ 1319  python scripts/evals/run_client_evals.py
+ 1320  clear
+ 1321  python scripts/evals/run_client_evals.py
+ 1322  clear
+ 1323  python scripts/evals/run_client_evals.py
+ 1324  clear
+ 1325  python scripts/evals/run_client_evals.py
+ 1326  clear
+ 1327  python scripts/evals/run_client_evals.py
+ 1328  clear
+ 1329  python scripts/evals/run_client_evals.py
+ 1330  clear
+ 1331  python scripts/evals/run_client_evals.py
+ 1332  clear
+ 1333  python scripts/evals/run_client_evals.py
+ 1334  clear
+ 1335  python scripts/evals/run_client_evals.py
+ 1336  clear
+ 1337  python scripts/evals/run_client_evals.py
+ 1338  clear
+ 1339  python scripts/evals/run_client_evals.py
+ 1340  pwd
+ 1341  ls -l scripts
+ 1342  clear
+ 1343  python scripts/process_documents_batch.py 
+ 1344  clear
+ 1345  python scripts/process_documents_batch.py 
+ 1346  clear
+ 1347  python scripts/process_documents_batch.py 
+ 1348  clear
+ 1349  python scripts/process_documents_batch.py 
+ 1350  clear
+ 1351  python scripts/process_documents_batch.py 
+ 1352  clear
+ 1353  python scripts/process_documents_batch.py 
+ 1354  clear
+ 1355  python scripts/process_documents_batch.py 
+ 1356  clear
+ 1357  python scripts/process_documents_batch.py 
+ 1358  clear
+ 1359  python scripts/process_documents_batch.py 
+ 1360  clear
+ 1361  python scripts/process_documents_batch.py 
+ 1362  clear
+ 1363  python scripts/process_documents_batch.py 
+ 1364  clear
+ 1365  python scripts/process_documents_batch.py 
+ 1366  clear
+ 1367  python scripts/process_documents_batch.py 
+ 1368  clear
+ 1369  python scripts/process_documents_batch.py 
+ 1370  clear
+ 1371  python scripts/process_documents_batch.py 
+ 1372  python scripts/evals/run_client_evals.py 
+ 1373  clear
+ 1374  python scripts/evals/run_client_evals.py 
+ 1375  clear
+ 1376  python scripts/process_documents_batch.py 
+ 1377  clear
+ 1378  python scripts/process_documents_batch.py 
+ 1379  python scripts/process_documents_batch.py clear
+ 1380  clear
+ 1381  python scripts/process_documents_batch.py
+ 1382  clear
+ 1383  python scripts/process_documents_batch.py
+ 1384  clear
+ 1385  python scripts/process_documents_batch.py
+ 1386  clear
+ 1387  pwd
+ 1388  ls -l
+ 1389  pwd
+ 1390  clear
+ 1391  python scripts/process_documents_batch.py
+ 1392  clear
+ 1393  python scripts/process_documents_batch.py
+ 1394  history 100 | grep client
+ 1395  python scripts/evals/run_client_evals.py
+ 1396  clear
+ 1397  python scripts/evals/run_client_evals.py
+ 1398  clear
+ 1399  python scripts/evals/run_client_evals.py
+ 1400  clear
+ 1401  python scripts/evals/run_client_evals.py
+ 1402  clear
+ 1403  python scripts/evals/run_client_evals.py
+ 1404  screen -rd claude
+ 1405  clear
+ 1406  pwd
+ 1407  sl -l
+ 1408  python scripts/evals/run_client_evals.py
+ 1409  clear
+ 1410  python scripts/evals/run_client_evals.py
+ 1411  clear
+ 1412  python scripts/evals/run_client_evals.py
+ 1413  clear
+ 1414  python scripts/evals/run_client_evals.py
+ 1415  clear
+ 1416  python scripts/evals/run_client_evals.py
+ 1417  clear
+ 1418  pwd
+ 1419  screen -rd scripts
+ 1420  python scripts/evals/run_client_evals.py
+ 1421  clear
+ 1422  python scripts/evals/run_client_evals.py
+ 1423  clear
+ 1424  python scripts/evals/run_client_evals.py
+ 1425  clear
+ 1426  python scripts/evals/run_client_evals.py
+ 1427  clear
+ 1428  python scripts/evals/run_client_evals.py
+ 1429  clear
+ 1430  python scripts/evals/run_client_evals.py
+ 1431  clear
+ 1432  python scripts/evals/run_client_evals.py
+ 1433  clear
+ 1434  python scripts/evals/run_client_evals.py
+ 1435  clear
+ 1436  python scripts/evals/run_client_evals.py
+ 1437  clear
+ 1438  python scripts/evals/run_client_evals.py
+ 1439  clear
+ 1440  python scripts/evals/run_client_evals.py
+ 1441  clear
+ 1442  python scripts/evals/run_client_evals.py
+ 1443  clear
+ 1444  ls -l
+ 1445  python scripts/process_documents_batch.py 
+ 1446  clear
+ 1447  python scripts/process_documents_batch.py 
+ 1448  clear
+ 1449  python scripts/process_documents_batch.py 
+ 1450  git branch
+ 1451  git push origin main
+ 1452  git push origin traces
+ 1453  git push github traces
+ 1454  clear
+ 1455  python scripts/process_documents_batch.py 
+ 1456  python scripts/process_documents_batch.py
+ 1457  clear
+ 1458  python scripts/process_documents_batch.py
+ 1459  clear
+ 1460  python scripts/process_documents_batch.py
+ 1461  clear
+ 1462  python scripts/process_documents_batch.py
+ 1463  clear
+ 1464  python scripts/process_documents_batch.py
+ 1465  clear
+ 1466  python scripts/process_documents_batch.py
+ 1467  clear
+ 1468  python scripts/process_documents_batch.py
+ 1469  clear
+ 1470  python scripts/process_documents_batch.py
+ 1471  clear
+ 1472  python scripts/process_documents_batch.py
+ 1473  clear
+ 1474  python scripts/process_documents_batch.py
+ 1475  clear
+ 1476  python scripts/process_documents_batch.py
+ 1477  lear
+ 1478  clear
+ 1479  python scripts/process_documents_batch.py
+ 1480  clear
+ 1481  python scripts/process_documents_batch.py
+ 1482  clear
+ 1483  python scripts/process_documents_batch.py
+ 1484  clear
+ 1485  python scripts/process_documents_batch.py
+ 1486  clear
+ 1487  python scripts/process_documents_batch.py
+ 1488  clear
+ 1489  python scripts/process_documents_batch.py
+ 1490  clear
+ 1491  python scripts/process_documents_batch.py
+ 1492  clear
+ 1493  python scripts/process_documents_batch.py
+ 1494  clear
+ 1495  python scripts/process_documents_batch.py
+ 1496  clear
+ 1497  python scripts/process_documents_batch.py
+ 1498  clear
+ 1499  python scripts/process_documents_batch.py
+ 1500  clear
+ 1501  python scripts/process_documents_batch.py
+ 1502  sudo yum install libdmtx-devel
+ 1503  sudo dnf install libdmtx-devel
+ 1504  sudo apt-get update
+ 1505  sudo apt-get install -y libdmtx0b libdmtx-dev
+ 1506  clear
+ 1507  python scripts/process_documents_batch.py
+ 1508  clear
+ 1509  python scripts/process_documents_batch.py
+ 1510  clear
+ 1511  python scripts/process_documents_batch.py
+ 1512  clear
+ 1513  python scripts/process_documents_batch.py
+ 1514  clear
+ 1515  python scripts/process_documents_batch.py
+ 1516  clear
+ 1517  python scripts/process_documents_batch.py
+ 1518  claer
+ 1519  clear
+ 1520  python scripts/process_documents_batch.py
+ 1521  clear
+ 1522  python scripts/process_documents_batch.py
+ 1523  clear
+ 1524  python scripts/process_documents_batch.py
+ 1525  clear
+ 1526  python scripts/process_documents_batch.py
+ 1527  clear
+ 1528  python scripts/process_documents_batch.py
+ 1529  clear
+ 1530  python scripts/process_documents_batch.py
+ 1531  clear
+ 1532  python scripts/process_documents_batch.py
+ 1533  clear
+ 1534  python scripts/process_documents_batch.py
+ 1535  clear
+ 1536  python scripts/process_documents_batch.py
+ 1537  clear
+ 1538  history 100 | grep email
+ 1539  history 100 | grep send
+ 1540  ls -l scripts/
+ 1541  ls -l scripts/evals
+ 1542  history 100 | grep client_evals
+ 1543  history 1000 | grep client_evals
+ 1544  python scripts/evals/run_client_evals.py
+ 1545  clear
+ 1546  python scripts/evals/run_client_evals.py
+ 1547  clear
+ 1548  pwd
+ 1549  cd scripts/getraces/
+ 1550  ls -l
+ 1551  rm -rf *.zip
+ 1552  ls -l
+ 1553  rm -rf front_data/
+ 1554  ls -l
+ 1555  pwd
+ 1556  cd ..
+ 1557  pwd
+ 1558  ls -l
+ 1559  cd ..
+ 1560  which python
+ 1561  python scripts/evals/run_client_evals.py 
+ 1562  clear
+ 1563  python scripts/evals/run_client_evals.py 
+ 1564  python scripts/list_front_tags.py
+ 1565  clear
+ 1566  pwd
+ 1567  python scripts/review_and_remove_cancelled_tags.py cancelled_conversations_7days.csv
+ 1568  clear
+ 1569  python scripts/review_and_remove_cancelled_tags.py cancelled_conversations_7days.csv
+ 1570  clear
+ 1571  python scripts/review_and_remove_cancelled_tags.py cancelled_conversations_7days.csv --conversation-id cnv_1fpo2kr6
+ 1572  clear
+ 1573  python scripts/review_and_remove_cancelled_tags.py cancelled_conversations_7days.csv --conversation-id cnv_1fpo2kr6
+ 1574  clear
+ 1575  python scripts/review_and_remove_cancelled_tags.py cancelled_conversations_7days.csv
+ 1576  clear
+ 1577  python scripts/reopen_conversations_from_log.py
+ 1578  y
+ 1579  clear
+ 1580  python scripts/list_front_tags.py
+ 1581  clear
+ 1582  python scripts/export_tagged_conversations.py --tag "Cancelled" --days 7 --output cancelled_7days.csv --print
+ 1583  python scripts/export_tagged_conversations.py --tag "Rescheduled" --days 7  --print
+ 1584  python scripts/export_tagged_conversations.py --tag "Order Entered" --days 7  --print
+ 1585  python scripts/export_tagged_conversations.py --tag "Order Entered" --days 7
+ 1586  clear
+ 1587  python scripts/export_tagged_conversations.py --tag "Order Entered" --days 7
+ 1588  python scripts/export_tagged_conversations.py --tag "Offer Approved" --days 7
+ 1589  python scripts/export_tagged_conversations.py --tag "Sent to Collections" --days 7
+ 1590  python scripts/export_tagged_conversations.py --tag "Sent to collections" --days 7
+ 1591  python scripts/export_tagged_conversations.py --tag "sent to collections" --days 7
+ 1592  python scripts/export_tagged_conversations.py --tag "Offer Approved" --days 7
+ 1593  clear
+ 1594  emailtag/bin/python scripts/review_and_fix_tagged_conversations.py       --tags "Order Entered,Offer Approved,Sent to Collections,Rescheduled"       --days 7
+ 1595  clear
+ 1596  emailtag/bin/python scripts/review_and_fix_tagged_conversations.py       --tags "Order Entered,Offer Approved,Sent to Collections,Rescheduled"       --days 7
+ 1597  python scripts/evals/run_client_evals.py 
+ 1598  clear
+ 1599  python scripts/evals/run_client_evals.py 
+ 1600  clear
+ 1601  python scripts/evals/run_client_evals.py 
+ 1602  clear
+ 1603  python scripts/evals/run_client_evals.py 
+ 1604  clear
+ 1605  python scripts/evals/run_client_evals.py 
+ 1606  clear
+ 1607  python scripts/evals/run_client_evals.py 
+ 1608  clear
+ 1609  python scripts/evals/run_client_evals.py 
+ 1610  clear
+ 1611  python scripts/evals/run_client_evals.py 
+ 1612  clear
+ 1613  python scripts/evals/run_client_evals.py 
+ 1614  clear
+ 1615  python scripts/evals/run_client_evals.py 
+ 1616  clear
+ 1617  python scripts/evals/run_client_evals.py 
+ 1618  clear
+ 1619  python scripts/evals/run_client_evals.py 
+ 1620  clear
+ 1621  python scripts/evals/run_client_evals.py 
+ 1622  clear
+ 1623  python scripts/evals/run_client_evals.py 
+ 1624  clear
+ 1625  python scripts/evals/run_client_evals.py 
+ 1626  clear
+ 1627  python scripts/evals/run_client_evals.py 
+ 1628  clear
+ 1629  python scripts/evals/run_client_evals.py 
+ 1630  [2025-12-17 05:47:22,282: INFO/MainProcess] Task app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e] received
+ 1631  [2025-12-17 05:47:22,285: INFO/ForkPoolWorker-8] Task app.tasks.email.perform_tagging_task[101278a4-ff08-4985-a1f4-f2385813664d] succeeded in 57.122409135103226s: {'status': 'queued_for_autorespond', 'email_id': 'f195d88f-1da3-41d0-9123-84abef1ca0f4', 'tags_applied_to_front': True, 'determined_tags': ['ASL', 'Tech Lien']}
+ 1632  [2025-12-17 05:47:22,548: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: 🏷️ AUTORESPOND DEBUG: Email f195d88f-1da3-41d0-9123-84abef1ca0f4 has tags: ['ASL', 'Tech Lien']
+ 1633  [2025-12-17 05:47:22,548: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: 🔍 ASL LIEN CHECK: Matched ASL lien conditions
+ 1634  [2025-12-17 05:47:22,550: INFO/ForkPoolWorker-7] Autorespond 'autorespond_liens' enabled status: True
+ 1635  [2025-12-17 05:47:22,550: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: Email f195d88f-1da3-41d0-9123-84abef1ca0f4 tagged with ASL > Tech Lien. Attempting ASL Lien agent.
+ 1636  [2025-12-17 05:47:22,550: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: Initiating ASL Lien agent for conv ID: cnv_1g0n8i6q, tags: ['ASL', 'Tech Lien']
+ 1637  [2025-12-17 05:47:22,553: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: 🔍 LIEN AGENT: Using patient ID from document barcode: PRE1087186
+ 1638  [2025-12-17 05:47:22,553: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: 🔍 LIEN AGENT: Patient ID found: PRE1087186
+ 1639  [2025-12-17 05:47:22,553: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: Patient ID PRE1087186 found. Processing Attorney Signed Technologist Lien for conversation cnv_1g0n8i6q.
+ 1640  [2025-12-17 05:47:22,560: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: Connected to MCP server. Available tools: ['fetch_patient_info', 'fetch_patient_by_id', 'fetch_study_details', 'fetch_patient_by_phone', 'fetch_patient_by_name_and_doi', 'fetch_patient_by_name_and_dob', 'get_case_update_details', 'get_patient_report', 'insert_case_update_log', 'get_patient_todo_status', 'get_patient_lien_bill_balance', 'get_study_participants', 'upload_patient_document']
+ 1641  [2025-12-17 05:47:22,847: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: 📄 ASL AGENT: No split documents found, uploading original attachments
+ 1642  [2025-12-17 05:47:22,847: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: 📄 ASL AGENT: Uploading 2 attachment(s)
+ 1643  [2025-12-17 05:47:22,847: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: 📄 ASL AGENT: Attachment 1 detected as TC lien
+ 1644  [2025-12-17 05:47:22,847: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: 📤 Uploading TC (20250703 - RAD Signed Lien - Precise Imaging - Cherie Roedel.pdf) to patient PRE1087186 via MCP server
+ 1645  [2025-12-17 05:47:23,323: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: 📦 Converted 3036981 bytes to base64 (4049308 chars)
+ 1646  [2025-12-17 05:47:23,324: ERROR/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: Unknown lien type: TC. Using default DocTypeId.
+ 1647  [2025-12-17 05:47:23,324: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: 📤 Uploading via MCP: DocTypeName='TC', DocTypeId=1, Patient=PRE1087186
+ 1648  [2025-12-17 05:47:23,900: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: ✅ Successfully uploaded TC for patient PRE1087186 via MCP
+ 1649  [2025-12-17 05:47:23,900: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: 📄 ASL AGENT: Attachment 2 detected as TC lien
+ 1650  [2025-12-17 05:47:23,900: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: 📤 Uploading TC (20250703 - TECH Signed Lien - Precise Imaging - Cherie Roedel.pdf) to patient PRE1087186 via MCP server
+ 1651  [2025-12-17 05:47:24,699: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: 📦 Converted 3063273 bytes to base64 (4084364 chars)
+ 1652  [2025-12-17 05:47:24,699: ERROR/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: Unknown lien type: TC. Using default DocTypeId.
+ 1653  [2025-12-17 05:47:24,699: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: 📤 Uploading via MCP: DocTypeName='TC', DocTypeId=1, Patient=PRE1087186
+ 1654  [2025-12-17 05:47:25,202: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: ✅ Successfully uploaded TC for patient PRE1087186 via MCP
+ 1655  [2025-12-17 05:47:25,203: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: 📊 Generating lien status table for patient PRE1087186 (signature_type: ASL)
+ 1656  [2025-12-17 05:47:36,841: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: 📊 Fetched lien status from RadFlow: {'TECH': {'patient_signed': True, 'attorney_signed': True, 'patient_date': '06/04/2025 08:59:39', 'attorney_date': None}, 'RAD': {'patient_signed': True, 'attorney_signed': True, 'patient_date': '06/04/2025 08:59:39', 'attorney_date': None}}
+ 1657  [2025-12-17 05:47:36,841: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: ✅ Generated lien status table with 1 row(s)
+ 1658  [2025-12-17 05:47:36,841: INFO/ForkPoolWorker-7] app.tasks.autorespond.perform_autorespond_task[a0467c30-2a3d-435d-a042-aef454c6f68e]: Helper 'send_reply_to_front_direct' called for conv_id cnv_1g0n8i6q.
+ 1659  [2025-12-17 05:47:37,025: INFO/ForkPoolWorker-7] Sending reply to conversation cnv_1g0n8i6q
+ 1660  python scripts/evals/run_client_evals.py 
+ 1661  clear
+ 1662  python scripts/evals/run_client_evals.py 
+ 1663  clear
+ 1664  python scripts/evals/run_client_evals.py 
+ 1665  clear
+ 1666  python scripts/evals/run_client_evals.py 
+ 1667  clar
+ 1668  clear
+ 1669  python scripts/evals/run_client_evals.py 
+ 1670  clear
+ 1671  python scripts/evals/run_client_evals.py 
+ 1672  clear
+ 1673  python scripts/evals/run_client_evals.py 
+ 1674  clear
+ 1675  python scripts/evals/run_client_evals.py 
+ 1676  clear
+ 1677  python scripts/evals/run_client_evals.py 
+ 1678  clear
+ 1679  python scripts/evals/run_client_evals.py 
+ 1680  clear
+ 1681  python scripts/evals/run_client_evals.py 
+ 1682  clear
+ 1683  python scripts/evals/run_client_evals.py 
+ 1684  clear
+ 1685  python scripts/evals/run_client_evals.py 
+ 1686  clear
+ 1687  python scripts/evals/run_client_evals.py 
+ 1688  python scripts/test_strikethrough_detection.py --pdf data/documents/strikethrough/1d6e60248fa5a9eeeb2aa2e438738dbd2a7ea84e.pdf
+ 1689  clear
+ 1690  python scripts/test_strikethrough_detection.py --pdf data/documents/strikethrough/1d6e60248fa5a9eeeb2aa2e438738dbd2a7ea84e.pdf
+ 1691  python scripts/evals/run_client_evals.py 
+ 1692  python scripts/test_strikethrough_detection.py --pdf data/documents/strikethrough/1d6e60248fa5a9eeeb2aa2e438738dbd2a7ea84e.pdf
+ 1693  clear
+ 1694  python scripts/test_strikethrough_detection.py --pdf data/documents/strikethrough/1d6e60248fa5a9eeeb2aa2e438738dbd2a7ea84e.pdf
+ 1695  python scripts/evals/run_client_evals.py 
+ 1696  clear
+ 1697  python scripts/evals/run_client_evals.py 
+ 1698  clear
+ 1699  python scripts/evals/run_client_evals.py 
+ 1700  clear
+ 1701  python scripts/evals/run_client_evals.py 
+ 1702  python /home/fret/work/precisemcp/test_call_log_detailed.py
+ 1703  python scripts/evals/run_client_evals.py 
+ 1704  clear
+ 1705  python scripts/evals/run_client_evals.py 
+ 1706  clear
+ 1707  python scripts/evals/run_client_evals.py 
+ 1708  clear
+ 1709  python scripts/evals/run_client_evals.py 
+ 1710  clear
+ 1711  python scripts/evals/run_client_evals.py 
+ 1712  clear
+ 1713  python scripts/evals/run_client_evals.py 
+ 1714  clear
+ 1715  python scripts/evals/run_client_evals.py 
+ 1716  clear
+ 1717  python scripts/evals/run_client_evals.py 
+ 1718  ls -l
+ 1719  uv run autointake/main.py 
+ 1720  clear
+ 1721  uv run autointake/main.py 
+ 1722  clear
+ 1723  uv run autointake/main.py 
+ 1724  ckear
+ 1725  clear
+ 1726  uv run autointake/main.py 
+ 1727  clear
+ 1728  uv run autointake/main.py 
+ 1729  clear
+ 1730  uv run autointake/main.py 
+ 1731  clear
+ 1732  uv run autointake/main.py 
+ 1733  pwd
+ 1734  cd work/emailtag/
+ 1735  claude
+ 1736  pwd
+ 1737  clear
+ 1738  cd ..
+ 1739  pwd
+ 1740  cd precisemcp/
+ 1741  claude
+ 1742  clear
+ 1743  pwd
+ 1744  cd ..
+ 1745  cd work/emailtag/
+ 1746  claude
+ 1747  clear
+ 1748  pwd
+ 1749  claude
+ 1750  clear
+ 1751  claude login
+ 1752  wpd
+ 1753  clear
+ 1754  claude
+ 1755  clear
+ 1756  claude
+ 1757  clear
+ 1758  claude login
+ 1759  claude logout
+ 1760  clear
+ 1761  which claude
+ 1762  npm uninstall -g @anthropic-ai/cli
+ 1763  which claude
+ 1764  sudo npm uninstall -g @anthropic-ai/cli
+ 1765  which claude
+ 1766  rm -f /home/fret/.nvm/versions/node/v18.20.8/bin/claude
+ 1767  which claude
+ 1768  rm -rf /home/fret/.nvm/versions/node/v18.20.8/lib/node_modules/@anthropic-ai
+ 1769  rm -rf ~/.config/anthropic
+ 1770  rm -rf ~/.cache/anthropic
+ 1771  rm -rf ~/.local/share/anthropic
+ 1772  npm install -g @anthropic-ai/cli
+ 1773  npm install -g claude
+ 1774  which claude
+ 1775  npm install -g claude
+ 1776  which claude
+ 1777  npm install -g @anthropic-ai/claude-code
+ 1778  which claude
+ 1779  claude
+ 1780  clear
+ 1781  claude --version
+ 1782  claude
+ 1783  clear
+ 1784  pwd
+ 1785  claude
+ 1786  pwd
+ 1787  cd work/newbot/
+ 1788  source newbot/bin/activate
+ 1789  pip show uvicorn
+ 1790  history 100 | grep uvicorn
+ 1791  uvicorn backend.app.main:app --host 0.0.0.0 --port 5000
+ 1792  clear
+ 1793  git branch
+ 1794  git checkout tmp-emailtag
+ 1795  uvicorn backend.app.main:app --host 0.0.0.0 --port 5000
+ 1796  clear
+ 1797  git branch
+ 1798  git checkout main
+ 1799  uvicorn backend.app.main:app --host 0.0.0.0 --port 5000
+ 1800  clear
+ 1801  pwd
+ 1802  ls -l
+ 1803  cd backend
+ 1804  which docker
+ 1805  docker build -t precisemri-chatbot -f backend/Dockerfile .
+ 1806  cd ..
+ 1807  docker build -t precisemri-chatbot -f backend/Dockerfile .
+ 1808  clear
+ 1809  docker run -d   --name precisemri-chatbot   --restart unless-stopped   -p 5000:5000   --env-file .env   precisemri-chatbot
+ 1810  docker ps
+ 1811  docker logs -f precisemri-chatbot
+ 1812  docker build -t precisemri-chatbot -f backend/Dockerfile .
+ 1813  clear
+ 1814  docker run -d   --name precisemri-chatbot   --restart unless-stopped   -p 5000:5000   --env-file .env   precisemri-chatbot
+ 1815  docker kill precisemri-chatbot
+ 1816  docker run -d   --name precisemri-chatbot   --restart unless-stopped   -p 5000:5000   --env-file .env   precisemri-chatbot
+ 1817  docker ls
+ 1818  docker ps
+ 1819  clear
+ 1820  docker stop precisemri-chatbot
+ 1821  docker rm precisemri-chatbot
+ 1822  docker run -d   --name precisemri-chatbot   --restart unless-stopped   -p 5000:5000   --env-file .env   precisemri-chatbot
+ 1823  docker logs -f precisemri-chatbot
+ 1824  clear
+ 1825  docker build -t precisemri-chatbot -f backend/Dockerfile .
+ 1826  docker stop precisemri-chatbot
+ 1827  docker rm precisemri-chatbot
+ 1828  docker run -d   --name precisemri-chatbot   --restart unless-stopped   -p 5000:5000   --env-file .env   precisemri-chatbot
+ 1829  docker logs -f precisemri-chatbot
+ 1830  docker ps
+ 1831  curl localhost:5000
+ 1832  curl localhost:5001
+ 1833  docker build -t precisemri-chatbot -f backend/Dockerfile .
+ 1834  docker stop precisemri-chatbot
+ 1835  docker rm precisemri-chatbot
+ 1836  docker run -d   --name precisemri-chatbot   --restart unless-stopped   -p 5000:5000   --env-file .env   precisemri-chatbot
+ 1837  docker logs -f precisemri-chatbot
+ 1838  docker stop precisemri-chatbot
+ 1839  docker rm precisemri-chatbot
+ 1840  docker run -d   --name precisemri-chatbot   --restart unless-stopped   --network=host   --env-file .env   precisemri-chatbot
+ 1841  docker logs -f precisemri-chatbot
+ 1842  docker run -d   --name precisemri-chatbot   --restart unless-stopped   --network=host   --env-file .env   precisemri-chatbot
+ 1843  clear
+ 1844  docker stop precisemri-chatbot
+ 1845  docker rm precisemri-chatbot
+ 1846  docker build -t precisemri-chatbot -f backend/Dockerfile .
+ 1847  docker run -d   --name precisemri-chatbot   --restart unless-stopped   --network=host   --env-file .env   precisemri-chatbot
+ 1848  docker logs -f precisemri-chatbot
+ 1849  clear
+ 1850  docker logs -f precisemri-chatbot
+ 1851  pwd
+ 1852  cd backend
+ 1853  pwd
+ 1854  ls -l
+ 1855  clear
+ 1856  pwd
+ 1857  docker ps
+ 1858  history 20 | grep docker
+ 1859  docker logs -f precisemri-chatbot
+ 1860  sudo systemctl restart postgresql
+ 1861  psql -h 10.254.99.34 -p 5432 -U precise -d emailtagdb
+ 1862  clear
+ 1863  docker ps
+ 1864  docker logs -f precisemri-chatbot
+ 1865  clear
+ 1866  docker ps
+ 1867  docker ps | grep chatbot
+ 1868  clear
+ 1869  docker stop precisemri-chatbot && docker rm
+ 1870  docker stop precisemri-chatbot
+ 1871  docker run -d   --name precisemri-chatbot   --restart unless-stopped   --network=host   --env-file .env   precisemri-chatbot
+ 1872  pwd
+ 1873  clear
+ 1874  docker build -t precisemri-chatbot -f backend/Dockerfile .
+ 1875  pwd
+ 1876  cd ..
+ 1877  docker build -t precisemri-chatbot -f backend/Dockerfile .
+ 1878  docker run -d   --name precisemri-chatbot   --restart unless-stopped   -p 5000:5000   --env-file .env   --log-opt max-size=1m   --log-opt max-file=3   precisemri-chatbot
+ 1879  docker stop precisemri-chatbot
+ 1880  docker run -d   --name precisemri-chatbot   --restart unless-stopped   -p 5000:5000   --env-file .env   --log-opt max-size=1m   --log-opt max-file=3   precisemri-chatbot
+ 1881  docker stop precisemri-chatbot && docker rm precisemri-chatbot
+ 1882  docker run -d   --name precisemri-chatbot   --restart unless-stopped   -p 5000:5000   --env-file .env   --log-opt max-size=1m   --log-opt max-file=3   precisemri-chatbot
+ 1883  clear
+ 1884  docker logs -f precisemri-chatbot
+ 1885  docker stop precisemri-chatbot && docker rm precisemri-chatbot
+ 1886  docker run -d   --name precisemri-chatbot   --restart unless-stopped   -p 5000:5000   --env-file .env   --log-opt max-size=1m   --log-opt max-file=3   precisemri-chatbot
+ 1887  docker logs -f precisemri-chatbot
+ 1888  pg_isready -h 10.254.99.34 -p 5432
+ 1889  docker logs -f precisemri-chatbot
+ 1890  pg_isready -h 10.254.99.34 -p 5432
+ 1891  docker exec -it precisemri-chatbot bash
+ 1892  clear
+ 1893  docker exec -it --user root precisemri-chatbot bash
+ 1894  history 100 | grep docker
+ 1895  history 100 | grep network=host
+ 1896  docker stop precisemri-chatbot && docker rm precisemri-chatbot
+ 1897  docker run -d --network=host   --name precisemri-chatbot   --restart unless-stopped   --env-file .env   --log-opt max-size=1m --log-opt max-file=3   precisemri-chatbot
+ 1898  docker logs -f precisemri-chatbot
+ 1899  clear
+ 1900  docker stop precisemri-chatbot && docker rm precisemri-chatbot
+ 1901  docker run -d --network=host   --name precisemri-chatbot   --restart unless-stopped   --env-file .env   --log-opt max-size=1m --log-opt max-file=3   precisemri-chatbot
+ 1902  docker logs -f precisemri-chatbot
+ 1903  clear
+ 1904  docker stop precisemri-chatbot && docker rm precisemri-chatbot
+ 1905  docker build -t precisemri-chatbot -f backend/Dockerfile .
+ 1906  docker run -d --network=host   --name precisemri-chatbot   --restart unless-stopped   --env-file .env   --log-opt max-size=1m --log-opt max-file=3   precisemri-chatbot
+ 1907  docker logs -f precisemri-chatbot
+ 1908  docker stop precisemri-chatbot && docker rm precisemri-chatbot
+ 1909  docker build -t precisemri-chatbot -f backend/Dockerfile .
+ 1910  docker run -d --network=host   --name precisemri-chatbot   --restart unless-stopped   --env-file .env   --log-opt max-size=1m --log-opt max-file=3   precisemri-chatbot
+ 1911  docker logs -f precisemri-chatbot
+ 1912  clear
+ 1913  screen -rd emailtag
+ 1914  pwd
+ 1915  docker logs -f precisemri-chatbot
+ 1916  clear
+ 1917  docker logs -f precisemri-chatbot
+ 1918  clear
+ 1919  docker build -t precisemri-chatbot -f backend/Dockerfile .
+ 1920  docker stop precisemri-chatbot && docker rm precisemri-chatbot
+ 1921  docker build -t precisemri-chatbot -f backend/Dockerfile .
+ 1922  docker run -d --network=host   --name precisemri-chatbot   --restart unless-stopped   --env-file .env   --log-opt max-size=1m --log-opt max-file=3   precisemri-chatbot
+ 1923  docker logs -f precisemri-chatbot
+ 1924  docker stop precisemri-chatbot && docker rm precisemri-chatbot
+ 1925  docker build -t precisemri-chatbot -f backend/Dockerfile .
+ 1926  docker run -d --network=host   --name precisemri-chatbot   --restart unless-stopped   --env-file .env   --log-opt max-size=1m --log-opt max-file=3   precisemri-chatbot
+ 1927  docker logs -f precisemri-chatbot
+ 1928  git status
+ 1929  git add .
+ 1930  git commit -m "update code"
+ 1931  git push origin main
+ 1932  docker stop precisemri-chatbot && docker rm precisemri-chatbot
+ 1933  docker build -t precisemri-chatbot -f backend/Dockerfile .
+ 1934  docker run -d --network=host   --name precisemri-chatbot   --restart unless-stopped   --env-file .env   --log-opt max-size=1m --log-opt max-file=3   precisemri-chatbot
+ 1935  docker logs -f precisemri-chatbot
+ 1936  npm install -g @google/gemini-cli
+ 1937  cd work/emailtag/
+ 1938  gemini
+ 1939  source ~/.bash_profile 
+ 1940  clear
+ 1941  echo $GEMINI_API_KEY 
+ 1942  gemini
+ 1943  pwd
+ 1944  lear
+ 1945  clear
+ 1946  gemini
+ 1947  clear
+ 1948  pwd
+ 1949  gemini
+ 1950  clear
+ 1951  pwd
+ 1952  source emailtag/bin/activate
+ 1953  python scripts/process_documents_batch.py 
+ 1954  git remote -v
+ 1955  git remote add github git@github.com:pranavmodi/emailtag.git
+ 1956  git remote -v
+ 1957  git push github main
+ 1958  git log
+ 1959  git push origin main
+ 1960  clear
+ 1961  git log
+ 1962  clear
+ 1963  git branch
+ 1964  git push github document-processing
+ 1965  python scripts/process_documents_batch.py 
+ 1966  clear
+ 1967  python scripts/process_documents_batch.py 
+ 1968  clear
+ 1969  python scripts/process_documents_batch.py 
+ 1970  clear
+ 1971  python scripts/process_documents_batch.py 
+ 1972  clear
+ 1973  python scripts/process_documents_batch.py 
+ 1974  clear
+ 1975  python scripts/process_documents_batch.py 
+ 1976  python scripts/process_documents_batch.py 16
+ 1977  clear
+ 1978  python scripts/process_documents_batch.py
+ 1979  clear
+ 1980  claude
+ 1981  pwd
+ 1982  screen -rd claude
+ 1983  which claude
+ 1984  cd work/emailtag/
+ 1985  which claude
+ 1986  npm i -g @anthropic-ai/claude-code
+ 1987  npm cache clean --force
+ 1988  npm i -g @anthropic-ai/claude-code
+ 1989  rm -rf /home/fret/.nvm/versions/node/v18.20.8/lib/node_modules/@anthropic-ai/claude-code
+ 1990  rm -rf /home/fret/.nvm/versions/node/v18.20.8/lib/node_modules/@anthropic-ai/.claude-code-*
+ 1991  npm i -g @anthropic-ai/claude-code
+ 1992  nvm install 20
+ 1993  nvm use 20
+ 1994  npm i -g @anthropic-ai/claude-code
+ 1995  which claude
+ 1996  claude
+ 1997  cd work/precisemcp/
+ 1998  claude
+ 1999  codex
+ 2000  screen -rd emailtag
+ 2001  cd work/emailtag/
+ 2002  clear
+ 2003  history 100 | grep uvicorn
+ 2004  history 100 | grep python
+ 2005  history 1000 > tmpcomm.txt
