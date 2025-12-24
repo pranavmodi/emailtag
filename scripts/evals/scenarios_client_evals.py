@@ -1168,5 +1168,14 @@ Test ID: {UNIQUE_TEST_ID}"""
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": ["Apt status req"]
+    },
+    "53": {
+        "description": "PRE6770 - Apt status req - Short patient ID (4 digits) test for patient extraction and appointment status inquiry",
+        "subject": "Order Status Inquiry",
+        "body_html": (
+            "<p>waht is status of order for pre6770?</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Apt status req"]
     }
 }

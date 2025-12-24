@@ -20,6 +20,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud import patient_conversation_data as pcd_crud
+from app.crud import email as email_crud
 from app.schemas.patient_conversation_data import PatientConversationDataCreate
 from app.services.patient import fetch_patient_by_id, _fetch_patient_study_data
 from app.mcp import call_mcp_tool
@@ -177,8 +178,8 @@ async def extract_and_log_patient_info(
             full_content = f"Subject: {subject}\n\n{content_text}"
             # parent_logger.info(f"Including email subject in extraction: {subject}")
 
-        # Find all unique patient IDs (PREXXXXXX) in the text content (including subject)
-        found_patient_ids = set(re.findall(r"PRE\d{6}", full_content, re.IGNORECASE))
+        # Find all unique patient IDs (PRE followed by 3-6 digits) in the text content (including subject)
+        found_patient_ids = set(re.findall(r"PRE\d{3,6}", full_content, re.IGNORECASE))
         
         # If no patient IDs found, try to extract names and DOI/DOL
         if not found_patient_ids:
@@ -201,7 +202,24 @@ async def extract_and_log_patient_info(
                         found_patient_ids.add(patient_id)
                     else:
                         parent_logger.warning(f"Could not resolve {first_name} {last_name} DOI {doi} to a patient ID")
-        
+
+        # Update email object with extracted patient IDs
+        if found_patient_ids:
+            parent_logger.info(f"📋 Updating email {source_email_id} with extracted patient IDs: {list(found_patient_ids)}")
+            try:
+                email_obj = await email_crud.get(db=db, id=source_email_id)
+                if email_obj:
+                    await email_crud.update(
+                        db=db,
+                        db_obj=email_obj,
+                        obj_in={"extracted_patient_ids": list(found_patient_ids)}
+                    )
+                    parent_logger.info(f"✅ Successfully updated email {source_email_id} with patient IDs")
+                else:
+                    parent_logger.warning(f"⚠️ Could not find email {source_email_id} to update patient IDs")
+            except Exception as e_update:
+                parent_logger.error(f"❌ Error updating email {source_email_id} with patient IDs: {str(e_update)}")
+
         if found_patient_ids:
             # parent_logger.info(f"Processing patient IDs: {found_patient_ids} in conversation {conversation_id} from email {source_email_id}")
             for p_id in found_patient_ids:

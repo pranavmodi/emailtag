@@ -41,20 +41,20 @@ async def generate_call_log_table(patient_id: str, phone_number: str = None) -> 
 
         if not call_log_response or not isinstance(call_log_response, dict):
             logger.warning(f"📞 No valid call log response for patient {patient_id}")
-            return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No recent call history available for this patient.</em></p>'
+            return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No call activity found for the phone number for this patient.</em></p>'
 
         # Extract call log data from MCP response
         # MCP response structure: {"success": true, "data": {"result": [...]}}
         if not call_log_response.get("success"):
             logger.warning(f"📞 Call log request unsuccessful for patient {patient_id}")
-            return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No recent call history available for this patient.</em></p>'
+            return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No call activity found for the phone number for this patient.</em></p>'
 
         data = call_log_response.get("data", {})
         calls = data.get("result", [])
 
         if not calls or len(calls) == 0:
             logger.info(f"📞 No calls in call log for patient {patient_id}")
-            return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No recent call history available for this patient.</em></p>'
+            return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No call activity found for the phone number for this patient.</em></p>'
 
         logger.info(f"📞 Found {len(calls)} call(s) for patient {patient_id}")
 
@@ -64,7 +64,7 @@ async def generate_call_log_table(patient_id: str, phone_number: str = None) -> 
             logger.info(f"📞 Filtered to {len(calls)} call(s) for phone {phone_number}")
 
         if not calls:
-            return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No recent call history available for this patient.</em></p>'
+            return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No call activity found for the phone number for this patient.</em></p>'
 
         # Generate HTML table
         table_html = _format_calls_as_html_table(calls)
