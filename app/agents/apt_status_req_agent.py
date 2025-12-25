@@ -609,14 +609,68 @@ async def handle_apt_status_request_agent_sdk(
     email_sender: str,  # Email sender for authorization verification
     settings_obj: Any = app_settings_instance,
     email_subject: str = None,  # Add email_subject parameter
-    extracted_patient_id: str = None  # Add pre-extracted patient ID parameter
+    extracted_patient_ids: List[str] = None  # Add pre-extracted patient IDs parameter (list)
 ) -> Dict[str, Any]:
     """
     Handles an "Apt Status Req" using the openai-agents SDK with MCP server integration.
+    Supports multiple patient IDs - will send separate responses for each patient.
     Returns a dictionary with agent processing results.
     """
+    # Convert None to empty list for easier handling
+    if extracted_patient_ids is None:
+        extracted_patient_ids = []
+
     logger.info(f"Initiating openai-agents SDK flow with MCP integration for Apt Status Req - Conv ID: {front_conversation_id}")
+    logger.info(f"🔍 MULTI-PATIENT: Processing {len(extracted_patient_ids)} patient ID(s): {extracted_patient_ids}")
     # logger.info(f"🔍 DEBUG APT_STATUS: email_subject parameter = '{email_subject}' (type: {type(email_subject)})")
+
+    # If multiple patient IDs, process each one separately
+    if len(extracted_patient_ids) > 1:
+        logger.info(f"🔄 MULTI-PATIENT MODE: Processing {len(extracted_patient_ids)} patients separately")
+        all_results = []
+
+        for idx, patient_id in enumerate(extracted_patient_ids):
+            logger.info(f"🔄 Processing patient {idx + 1}/{len(extracted_patient_ids)}: {patient_id}")
+
+            # Call this same function recursively with single patient ID
+            result = await handle_apt_status_request_agent_sdk(
+                front_conversation_id=front_conversation_id,
+                current_email_content=current_email_content,
+                structured_history_messages=structured_history_messages,
+                email_sender=email_sender,
+                settings_obj=settings_obj,
+                email_subject=email_subject,
+                extracted_patient_ids=[patient_id]  # Single patient ID in list
+            )
+            all_results.append(result)
+
+        # Return combined results
+        all_handled = all(r.get("agent_handled", False) for r in all_results)
+        all_processed = all(r.get("processed_flag", False) for r in all_results)
+
+        # Archive the conversation after all patient responses have been sent
+        if all_handled and all_processed:
+            logger.info(f"📦 ARCHIVING: All {len(extracted_patient_ids)} patient responses sent successfully, archiving conversation")
+            archive_success = frontapp_service.archive_conversation_in_front(front_conversation_id)
+            if archive_success:
+                logger.info(f"✅ ARCHIVED: Conversation {front_conversation_id} archived successfully after multi-patient responses")
+            else:
+                logger.warning(f"⚠️ ARCHIVE FAILED: Could not archive conversation {front_conversation_id} after multi-patient responses")
+
+        logger.info(f"✅ MULTI-PATIENT COMPLETE: Processed {len(extracted_patient_ids)} patients")
+        return {
+            "agent_handled": all_handled,
+            "processed_flag": all_processed,
+            "details": {
+                "reason": f"Processed {len(extracted_patient_ids)} patients",
+                "patient_results": all_results,
+                "patient_ids": extracted_patient_ids,
+                "conversation_archived": all_handled and all_processed
+            }
+        }
+
+    # From here on, we're processing a single patient ID (or no patient ID)
+    extracted_patient_id = extracted_patient_ids[0] if extracted_patient_ids else None
 
     # Initialize MCP client connection
     mcp_connected = await mcp_client.connect()

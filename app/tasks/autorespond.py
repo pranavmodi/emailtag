@@ -228,29 +228,27 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                 logger.info(f"Email {email_id} (conv: {front_conversation_id}) tagged with '{APT_STATUS_REQ_TAG_NAME}'. Attempting agent SDK via orchestrator.")
 
                 # Use pre-extracted patient IDs from database (extracted before classification)
-                def _get_first_patient_id():
+                def _get_all_patient_ids():
                     try:
                         if email_obj.extracted_patient_ids and len(email_obj.extracted_patient_ids) > 0:
-                            extracted_patient_id = email_obj.extracted_patient_ids[0]  # Use first patient ID for backward compatibility
-                            logger.info(f"🔍 AUTORESPOND: Using pre-extracted patient ID for {email_id}: {extracted_patient_id}")
-                            logger.info(f"🔍 AUTORESPOND: Full list of extracted patient IDs: {email_obj.extracted_patient_ids}")
-                            return extracted_patient_id
+                            logger.info(f"🔍 AUTORESPOND: Found {len(email_obj.extracted_patient_ids)} pre-extracted patient ID(s) for {email_id}: {email_obj.extracted_patient_ids}")
+                            return email_obj.extracted_patient_ids
                         else:
                             logger.info(f"🔍 AUTORESPOND: No pre-extracted patient IDs found for {email_id}")
-                            return None
+                            return []
                     except Exception as e:
                         logger.error(f"Error accessing pre-extracted patient IDs for {email_id}: {e}", exc_info=True)
-                        return None
+                        return []
 
                 agent_result_dict = None
                 async def _run_agent_sdk_orchestrator():
                     nonlocal agent_result_dict
 
-                    # Get pre-extracted patient ID from database
-                    extracted_patient_id = _get_first_patient_id()
+                    # Get all pre-extracted patient IDs from database
+                    extracted_patient_ids = _get_all_patient_ids()
 
                     # If no patient ID found, check if we've already asked for patient details
-                    if not extracted_patient_id:
+                    if not extracted_patient_ids:
                         # Check conversation history for previous "Please provide" requests
                         history_text = " ".join([msg.get("body", "") for msg in structured_history_messages])
                         if "Please provide the patient ID or first name, last name and date of birth" in history_text:
@@ -276,7 +274,7 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                             }
                             return
 
-                    # If we reach here, either patient ID was found OR we've already asked for details
+                    # If we reach here, either patient IDs were found OR we've already asked for details
                     agent_result_dict = await handle_apt_status_request_agent_sdk(
                         front_conversation_id=front_conversation_id,
                         current_email_content=current_email_content,
@@ -284,7 +282,7 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                         email_sender=email_obj.sender,  # Pass sender email for authorization verification
                         settings_obj=settings,  # Pass the main settings module
                         email_subject=email_obj.subject,  # Pass the email subject from DB
-                        extracted_patient_id=extracted_patient_id  # Pass the pre-extracted patient ID
+                        extracted_patient_ids=extracted_patient_ids  # Pass ALL pre-extracted patient IDs
                     )
 
                 # Celery tasks are synchronous, so we run the async orchestrator using asyncio.run()
