@@ -132,6 +132,7 @@ def send_smtp_email(scenario_details, choice_key, unique_id):
                     attachment_file,  # Try the path as-is first
                     os.path.join(os.path.dirname(__file__), attachment_file),  # Relative to this script
                     os.path.join(os.path.dirname(__file__), '..', attachment_file),  # One level up
+                    os.path.join(os.path.dirname(__file__), '..', '..', attachment_file),  # Project root (two levels up)
                 ]
                 
                 attachment_found = False
