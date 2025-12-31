@@ -495,12 +495,11 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
             facility_name = facility_info.get('facility_name', '').strip()
             facility_address = facility_info.get('address', '').strip()
 
-            # Check if location info is unavailable or invalid
-            if (not facility_name or facility_name in ['N/A', 'Not Available', 'Not Available in Database'] or
-                not facility_address or facility_address in ['N/A', 'Not Available', 'Not Available in Database']):
+            # Show only facility address (not facility name)
+            if not facility_address or facility_address in ['N/A', 'Not Available', 'Not Available in Database']:
                 location_display = "N/A"
             else:
-                location_display = f"{facility_name} - {facility_address}"
+                location_display = facility_address
 
             # Note: study_date_time is now used for the main Study Date/Time column (appointment_datetime_str)
 

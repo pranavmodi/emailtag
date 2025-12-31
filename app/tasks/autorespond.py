@@ -155,23 +155,33 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                 structured_history_messages = all_messages
 
         # --- Internal Domain Check ---
-        # Check if the sender is from an internal domain - skip ALL autoresponds if so
+        # Check if the sender is from an internal domain - skip ALL autoresponds if filtering is enabled
         sender_email = email_obj.sender
-        internal_domains = ["@precisemri.com", "@radflow360.com", "@mediflow360.com"]
+        internal_domains = ["@precisemri.com", "@preciseimaging.com", "@radflow360.com", "@mediflow360.com", "@mediflow.com"]
         is_internal_sender = any(domain in sender_email.lower() for domain in internal_domains) if sender_email else False
 
         if is_internal_sender:
-            logger.info(f"🚫 AUTORESPOND BLOCKED: Email {email_id} sender '{sender_email}' is from internal domain. Skipping all autoresponds.")
-            final_status = "processed_internal_sender_no_autorespond"
-            email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_status, is_processed=True))
-            return {
-                "status": "completed_autorespond_phase",
-                "email_id": email_id,
-                "final_db_status": final_status,
-                "auto_response_sent": False,
-                "auto_response_details": {"reason": f"Internal sender detected: {sender_email}"},
-                "agent_handled_response": False
-            }
+            # Check if internal domain filtering is enabled
+            async def check_filtering_enabled():
+                async with AsyncSessionLocal() as async_db:
+                    return await system_settings_crud.get_setting_value(async_db, "skip_internal_domains", default=False)
+
+            skip_internal_domains = asyncio.run(check_filtering_enabled())
+
+            if skip_internal_domains:
+                logger.info(f"🚫 AUTORESPOND BLOCKED: Email {email_id} sender '{sender_email}' is from internal domain and filtering is ENABLED. Skipping all autoresponds.")
+                final_status = "processed_internal_sender_no_autorespond"
+                email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_status, is_processed=True))
+                return {
+                    "status": "completed_autorespond_phase",
+                    "email_id": email_id,
+                    "final_db_status": final_status,
+                    "auto_response_sent": False,
+                    "auto_response_details": {"reason": f"Internal sender detected: {sender_email}, filtering enabled"},
+                    "agent_handled_response": False
+                }
+            else:
+                logger.info(f"ℹ️ INTERNAL DOMAIN FILTERING DISABLED: Email {email_id} sender '{sender_email}' is from internal domain but filtering is OFF. Proceeding with autorespond (testing mode).")
         # --- End Internal Domain Check ---
 
         auto_response_processed_flag = False
