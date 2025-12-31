@@ -128,10 +128,12 @@ export default function Settings2Page() {
   const [autorespond, setAutorespond] =
     useState<AutorespondSettingsResponse | null>(null);
   const [senderVerificationEnabled, setSenderVerificationEnabled] = useState<boolean>(true);
+  const [skipInternalDomains, setSkipInternalDomains] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [autorespondError, setAutorespondError] = useState<string | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [internalDomainsError, setInternalDomainsError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -147,18 +149,21 @@ export default function Settings2Page() {
         if (!mounted) return;
         setUser(auth.username ?? "Admin");
 
-        const [processingPayload, autorespondPayload, workspacePayload] = await Promise.all([
+        const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload] = await Promise.all([
           SettingsApi.getProcessingStatus(),
           SettingsApi.getAutorespondSettings(),
           SettingsApi.getWorkspaceSettings(),
+          SettingsApi.getSkipInternalDomainsStatus(),
         ]);
         if (!mounted) return;
         setStatus(processingPayload);
         setAutorespond(autorespondPayload);
         setSenderVerificationEnabled(workspacePayload.enable_sender_verification);
+        setSkipInternalDomains(internalDomainsPayload.skip_internal_domains);
         setStatusError(null);
         setAutorespondError(null);
         setWorkspaceError(null);
+        setInternalDomainsError(null);
       } catch (error) {
         if (!mounted) return;
         if (error instanceof ApiError && error.status === 401) {
@@ -252,6 +257,27 @@ export default function Settings2Page() {
       setWorkspaceError(message);
     } finally {
       setBusyFlag("sender_verification", false);
+    }
+  };
+
+  const handleSkipInternalDomainsToggle = async (enabled: boolean) => {
+    setBusyFlag("skip_internal_domains", true);
+    try {
+      await SettingsApi.toggleSkipInternalDomains(enabled);
+      setSkipInternalDomains(enabled);
+      setInternalDomainsError(null);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to update internal domain filtering";
+      setInternalDomainsError(message);
+    } finally {
+      setBusyFlag("skip_internal_domains", false);
     }
   };
 
@@ -479,6 +505,39 @@ export default function Settings2Page() {
                 <strong>Testing Mode (OFF):</strong> Sender verification is disabled. All senders can receive patient information. ⚠️ Use only for testing!
               </div>
               {workspaceError && <ErrorBanner message={workspaceError} />}
+
+              <hr className="border-amber-200" />
+
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-slate-900">Internal Domain Filtering</p>
+                  <Badge
+                    className={
+                      skipInternalDomains
+                        ? "bg-green-50 text-green-700 border-green-200"
+                        : "bg-amber-50 text-amber-700 border-amber-200"
+                    }
+                  >
+                    {skipInternalDomains ? "Enabled (Production)" : "Disabled (Testing)"}
+                  </Badge>
+                  <p className="text-xs text-slate-500">
+                    {skipInternalDomains
+                      ? "Internal emails (@preciseimaging.com, @mediflow.com) are skipped"
+                      : "⚠️ Internal emails are processed (Testing mode)"}
+                  </p>
+                </div>
+                <ToggleRail
+                  checked={skipInternalDomains}
+                  disabled={busy.skip_internal_domains}
+                  onCheckedChange={handleSkipInternalDomainsToggle}
+                />
+              </div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
+                <strong>Production Mode (ON):</strong> Emails from @preciseimaging.com and @mediflow.com are automatically skipped and not processed by AI.
+                <br /><br />
+                <strong>Testing Mode (OFF):</strong> All emails are processed regardless of sender domain. ⚠️ Use only for testing!
+              </div>
+              {internalDomainsError && <ErrorBanner message={internalDomainsError} />}
             </CardContent>
           </Card>
         </motion.section>

@@ -1146,6 +1146,7 @@ def _build_reply_all_recipients(conversation_id: str) -> List[str]:
     try:
         conversation_data = get_conversation(conversation_id)
         alias_handle = conversation_data.get("recipient", {}).get("handle")
+        logger.info(f"Conversation alias (system email) for {conversation_id}: {alias_handle}")
     except Exception as e:
         logger.warning(f"Could not fetch conversation {conversation_id} for recipient resolution: {e}")
 
@@ -1161,22 +1162,52 @@ def _build_reply_all_recipients(conversation_id: str) -> List[str]:
             msgs = resp.json().get("_results", [])
             if msgs:
                 latest = msgs[0]  # Front returns most recent first
-                for rcpt in latest.get("recipients", []) or []:
+
+                # Add ALL recipients (to, cc, from) from the recipients array
+                recipients_list = latest.get("recipients", []) or []
+                logger.info(f"Found {len(recipients_list)} recipient(s) in latest message for {conversation_id}")
+                for rcpt in recipients_list:
                     handle = rcpt.get("handle")
+                    role = rcpt.get("role", "unknown")
                     if handle:
                         recipients.add(handle)
+                        logger.info(f"  Added recipient: {handle} (role: {role})")
+
+                # Also try to add the sender from author field (for internal messages)
+                author = latest.get("author")
+                if author:  # Check if author is not None
+                    author_email = author.get("email") or author.get("handle")
+                    if author_email:
+                        recipients.add(author_email)
+                        logger.info(f"  Added message author to recipients: {author_email}")
+                else:
+                    logger.info(f"Author field is null for {conversation_id} (external message - sender should be in recipients 'from')")
     except Exception as e:
         logger.warning(f"Could not build reply-all recipients for {conversation_id}: {e}")
 
-    # Remove our alias from the outbound list
-    if alias_handle and alias_handle in recipients:
-        recipients.discard(alias_handle)
+    # Remove internal domain recipients (system emails) from the outbound list
+    # Use internal domains instead of alias to avoid misconfiguration issues
+    internal_domains = ["@mediflow360.com", "@mediflow.com", "@preciseimaging.com", "@precisemri.com", "@radflow360.com"]
 
-    # Fallback to alias if nothing else found (maintain previous behavior)
-    if not recipients and alias_handle:
-        recipients.add(alias_handle)
+    logger.info(f"Recipients before filtering: {recipients}")
 
-    return list(recipients)
+    # Filter out internal recipients
+    external_recipients = set()
+    for recipient in recipients:
+        is_internal = any(domain in recipient.lower() for domain in internal_domains)
+        if is_internal:
+            logger.info(f"  Removing internal recipient: {recipient}")
+        else:
+            logger.info(f"  Keeping external recipient: {recipient}")
+            external_recipients.add(recipient)
+
+    # If no external recipients found, fall back to alias (backward compatibility)
+    if not external_recipients and alias_handle:
+        logger.info(f"No external recipients found, adding fallback: {alias_handle}")
+        external_recipients.add(alias_handle)
+
+    logger.info(f"Final recipients after filtering: {external_recipients}")
+    return list(external_recipients)
 
 def send_conversation_reply_with_attachment(conversation_id: str, text: str, attachment_path: str) -> bool:
     """Send a reply to a conversation in Front with an attachment."""
@@ -1199,15 +1230,18 @@ def send_conversation_reply_with_attachment(conversation_id: str, text: str, att
         logger.error(f"Error getting conversation details for {conversation_id}: {e}")
         return False
 
+    # Log the recipient list
+    logger.info(f"📧 AUTORESPOND RECIPIENTS (with attachment) for conversation {conversation_id}: {recipients} (Total: {len(recipients)})")
+
     # Append invisible marker to detect our autorespond emails
     invisible_marker = settings.AUTORESPOND_INVISIBLE_MARKER
     html_body = f"{text}{invisible_marker}"
-    
+
     # Prepare multipart form data
     files = {
         'attachments': (os.path.basename(attachment_path), open(attachment_path, 'rb'), 'application/pdf')
     }
-    
+
     # For multipart form data, arrays need to be passed as multiple form fields
     data = {
         'body': html_body,
@@ -1216,19 +1250,19 @@ def send_conversation_reply_with_attachment(conversation_id: str, text: str, att
         'body_format': 'html',
         'type': 'message'
     }
-    
+
     # Add each recipient as a separate form field
     for i, recipient in enumerate(recipients):
         data[f'to[{i}]'] = recipient
-    
+
     headers = {
         "Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}",
         "Accept": "application/json"
         # Don't set Content-Type - httpx will set it automatically for multipart
     }
-    
+
     url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/messages"
-    
+
     logger.info(f"Sending reply with attachment to conversation {conversation_id}")
     
     with httpx.Client(verify=False) as client:
@@ -1282,10 +1316,13 @@ def send_conversation_reply(conversation_id: str, text: str) -> bool:
         logger.error(f"Error getting conversation details for {conversation_id}: {e}")
         return False
 
+    # Log the recipient list
+    logger.info(f"📧 AUTORESPOND RECIPIENTS for conversation {conversation_id}: {recipients} (Total: {len(recipients)})")
+
     # Append invisible marker to detect our autorespond emails
     invisible_marker = settings.AUTORESPOND_INVISIBLE_MARKER
     html_body = f"{text}{invisible_marker}"
-    
+
     headers = {
         "Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}",
         "Content-Type": "application/json",

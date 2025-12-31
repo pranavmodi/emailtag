@@ -111,6 +111,12 @@ class CRUDSystemSettings:
                     "Master switch to enable/disable all incoming email processing. "
                     "When disabled, emails are received and saved but not classified or tagged."
                 )
+            elif setting_key == "skip_internal_domains":
+                description = (
+                    "Filter emails from internal domains (@preciseimaging.com, @mediflow.com). "
+                    "When enabled, emails from these domains are skipped. "
+                    "When disabled (default for testing), all emails are processed."
+                )
 
             setting = SystemSetting(
                 setting_key=setting_key,

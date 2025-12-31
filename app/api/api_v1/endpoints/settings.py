@@ -105,6 +105,91 @@ async def toggle_email_processing(
         )
 
 
+@router.get("/skip-internal-domains-status")
+async def get_skip_internal_domains_status(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get the current status of the internal domain filtering setting.
+
+    When enabled, emails from @preciseimaging.com and @mediflow.com domains are skipped.
+    When disabled (default for testing), all emails are processed regardless of sender domain.
+
+    Returns:
+        Dict with current status and metadata
+    """
+    try:
+        setting = await system_settings_crud.get_by_key(db, "skip_internal_domains")
+
+        if setting:
+            return {
+                "skip_internal_domains": setting.setting_value,
+                "description": setting.description or "Filter emails from internal domains (preciseimaging.com, mediflow.com)",
+                "last_updated": setting.updated_at,
+                "updated_by": setting.updated_by
+            }
+        else:
+            # Default state if setting doesn't exist yet - disabled for testing
+            return {
+                "skip_internal_domains": False,
+                "description": "Filter emails from internal domains (preciseimaging.com, mediflow.com)",
+                "last_updated": None,
+                "updated_by": None
+            }
+    except Exception as e:
+        logger.error(f"Error fetching skip internal domains status: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch skip internal domains status: {str(e)}"
+        )
+
+
+@router.post("/skip-internal-domains-toggle")
+async def toggle_skip_internal_domains(
+    update: SystemSettingUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Toggle the internal domain filtering setting.
+
+    When enabled: Emails from @preciseimaging.com and @mediflow.com are skipped
+    When disabled: All emails are processed (useful for testing)
+
+    Args:
+        update: SystemSettingUpdate with the new enabled/disabled state and optional user
+
+    Returns:
+        Dict with updated status
+    """
+    try:
+        # Update the setting
+        setting = await system_settings_crud.update_setting(
+            db,
+            "skip_internal_domains",
+            update.setting_value,
+            updated_by=update.updated_by
+        )
+
+        # Log the change prominently
+        action = "ENABLED" if update.setting_value else "DISABLED"
+        logger.warning(
+            f"INTERNAL DOMAIN FILTERING {action} by {update.updated_by or 'unknown user'}"
+        )
+
+        return {
+            "skip_internal_domains": setting.setting_value,
+            "description": setting.description or "Filter emails from internal domains (preciseimaging.com, mediflow.com)",
+            "last_updated": setting.updated_at,
+            "updated_by": setting.updated_by
+        }
+    except Exception as e:
+        logger.error(f"Error toggling skip internal domains: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to toggle skip internal domains: {str(e)}"
+        )
+
+
 @router.get("/autorespond-settings", response_model=AllAutorespondSettingsResponse)
 async def get_autorespond_settings(
     db: AsyncSession = Depends(get_db)

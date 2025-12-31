@@ -277,7 +277,38 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
             else:
                 logger.info(f"✅ Processing email from {sender} (not autoresponse)")
                 output_data["action"] = "processing"
-        
+
+        # Check for internal domain filtering
+        with tracer.trace_step(
+            step_name="INTERNAL_DOMAIN_CHECK",
+            step_type=StepTypes.BUSINESS_LOGIC,
+            input_data={"sender": sender}
+        ) as (trace_id, output_data):
+            # Check if internal domain filtering is enabled
+            skip_internal_domains = await system_settings_crud.get_setting_value(db, "skip_internal_domains", default=False)
+            output_data["skip_internal_domains_enabled"] = skip_internal_domains
+
+            if skip_internal_domains:
+                # Define internal domains to filter
+                internal_domains = ["@preciseimaging.com", "@mediflow.com"]
+                sender_lower = sender.lower()
+
+                is_internal = any(domain in sender_lower for domain in internal_domains)
+                output_data["is_internal_domain"] = is_internal
+
+                if is_internal:
+                    logger.info(f"🏢 INTERNAL DOMAIN DETECTED: Skipping email from {sender} (internal domain filtering enabled)")
+                    output_data["action"] = "skipped"
+                    output_data["reason"] = "internal_domain_filtered"
+                    return
+                else:
+                    logger.info(f"✅ External email from {sender} (not internal domain)")
+                    output_data["action"] = "processing"
+            else:
+                logger.info(f"ℹ️ Internal domain filtering DISABLED - processing email from {sender}")
+                output_data["action"] = "processing"
+                output_data["reason"] = "filtering_disabled"
+
         # Create email record
         with tracer.trace_step(
             step_name=TraceSteps.EMAIL_CREATED,
