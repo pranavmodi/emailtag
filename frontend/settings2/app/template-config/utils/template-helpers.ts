@@ -74,10 +74,12 @@ export const generatePreviewHtml = (
   // Get all dummy placeholders
   const dummyPlaceholders = getDummyPlaceholders();
 
-  // Personal injury info (conditionally included)
-  const personalInjuryInfo = showPersonalInjury
-    ? "Important Information regarding personal injury cases<br/>A report containing the findings of the exam will also be sent to the attorney.<br/>A bill will be sent to the attorney once both the patient and the attorney sign all pending liens.<br/>Please make sure to submit a negotiation offer before sending the payment.<br/><br/>"
-    : "";
+  // Get personal injury info template from custom placeholders (matches backend behavior)
+  const personalInjuryTemplate = settings.custom_placeholders?.personal_injury_info ||
+    "Important Information regarding personal injury cases<br/>A report containing the findings of the exam will also be sent to the attorney.<br/>A bill will be sent to the attorney once both the patient and the attorney sign all pending liens.<br/>Please make sure to submit a negotiation offer before sending the payment.<br/><br/>";
+
+  // Personal injury info (conditionally included based on checkbox)
+  const personalInjuryInfo = showPersonalInjury ? personalInjuryTemplate : "";
 
   // Start with unified template
   let formattedTemplate = settings.unified_template || "";
@@ -87,12 +89,16 @@ export const generatePreviewHtml = (
     formattedTemplate = formattedTemplate.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
   });
 
-  // Replace personal injury info (special case)
+  // Replace personal injury info (special case - conditional based on showPersonalInjury)
   formattedTemplate = formattedTemplate.replace(/\{personal_injury_info\}/g, personalInjuryInfo);
 
-  // Replace all custom placeholders (workspace-wide)
+  // Replace all OTHER custom placeholders (workspace-wide), skipping personal_injury_info since it's already handled
   if (settings.custom_placeholders) {
     Object.entries(settings.custom_placeholders).forEach(([key, value]) => {
+      // Skip personal_injury_info since it's handled above with conditional logic
+      if (key === 'personal_injury_info') {
+        return;
+      }
       const regex = new RegExp(`\\{${key}\\}`, 'g');
       formattedTemplate = formattedTemplate.replace(regex, value);
     });
