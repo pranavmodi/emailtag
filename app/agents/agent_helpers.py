@@ -1329,13 +1329,28 @@ async def compile_study_participants(patient_id: str, studies: List[Dict[str, An
 
         if not accession_number:
             failed_studies += 1
+            logger.warning(f"⚠️ STUDY SKIPPED: No accession number found for study: {study}")
             continue
 
+        # Strip "RAM" prefix if present (RadFlow includes it, but API doesn't expect it)
+        original_accession = accession_number
+        if isinstance(accession_number, str) and accession_number.upper().startswith("RAM"):
+            accession_number = accession_number[3:]  # Remove "RAM" prefix
+            logger.info(f"🔧 STRIPPED RAM PREFIX: '{original_accession}' → '{accession_number}'")
+
         try:
+            logger.info(f"📤 CALLING get_study_participants with accession_number: '{accession_number}' (type: {type(accession_number).__name__})")
+            logger.info(f"📋 Study data: accessionNumber={study.get('accessionNumber')}, authorization_number={study.get('authorization_number')}, study_id={study_id}")
+
             participants_result = await mcp_client.call_tool("get_study_participants", {"accession_number": str(accession_number)})
+
+            logger.info(f"📥 RECEIVED get_study_participants response: success={participants_result.get('success')}, has_data={bool(participants_result.get('data'))}, result_count={len(participants_result.get('data', {}).get('result', []))}")
+            if not participants_result.get("success"):
+                logger.warning(f"❌ get_study_participants FAILED for accession {accession_number}: {participants_result.get('error', 'Unknown error')}")
 
             if participants_result.get("success") and participants_result.get("data", {}).get("result"):
                 participants = participants_result["data"]["result"]
+                logger.info(f"✅ Found {len(participants)} participant(s) for accession {accession_number}")
 
                 for participant in participants:
                     participant_data = {
@@ -1354,9 +1369,10 @@ async def compile_study_participants(patient_id: str, studies: List[Dict[str, An
                 successful_studies += 1
             else:
                 failed_studies += 1
+                logger.info(f"⚠️ No participants found for accession {accession_number} (empty result list)")
 
         except Exception as e:
-            logger.error(f"Failed to get participants for accession {accession_number}: {e}")
+            logger.error(f"❌ EXCEPTION calling get_study_participants for accession {accession_number}: {e}")
             failed_studies += 1
             continue
 
