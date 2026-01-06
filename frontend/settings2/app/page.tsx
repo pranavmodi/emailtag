@@ -111,6 +111,12 @@ const MENU_ITEMS = [
     description: "Analyze tag retention and changes",
     icon: "📊",
   },
+  {
+    href: "/lientest",
+    label: "Lien Test Uploads",
+    description: "Review test lien documents",
+    icon: "🧪",
+  },
 ];
 
 const formatDate = (value: string | null) =>
@@ -129,11 +135,13 @@ export default function Settings2Page() {
     useState<AutorespondSettingsResponse | null>(null);
   const [senderVerificationEnabled, setSenderVerificationEnabled] = useState<boolean>(true);
   const [skipInternalDomains, setSkipInternalDomains] = useState<boolean>(false);
+  const [lienTestMode, setLienTestMode] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [autorespondError, setAutorespondError] = useState<string | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [internalDomainsError, setInternalDomainsError] = useState<string | null>(null);
+  const [lienTestModeError, setLienTestModeError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -149,21 +157,24 @@ export default function Settings2Page() {
         if (!mounted) return;
         setUser(auth.username ?? "Admin");
 
-        const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload] = await Promise.all([
+        const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, lienTestModePayload] = await Promise.all([
           SettingsApi.getProcessingStatus(),
           SettingsApi.getAutorespondSettings(),
           SettingsApi.getWorkspaceSettings(),
           SettingsApi.getSkipInternalDomainsStatus(),
+          SettingsApi.getLienTestModeStatus(),
         ]);
         if (!mounted) return;
         setStatus(processingPayload);
         setAutorespond(autorespondPayload);
         setSenderVerificationEnabled(workspacePayload.enable_sender_verification);
         setSkipInternalDomains(internalDomainsPayload.skip_internal_domains);
+        setLienTestMode(lienTestModePayload.lien_test_mode);
         setStatusError(null);
         setAutorespondError(null);
         setWorkspaceError(null);
         setInternalDomainsError(null);
+        setLienTestModeError(null);
       } catch (error) {
         if (!mounted) return;
         if (error instanceof ApiError && error.status === 401) {
@@ -281,6 +292,27 @@ export default function Settings2Page() {
     }
   };
 
+  const handleLienTestModeToggle = async (enabled: boolean) => {
+    setBusyFlag("lien_test_mode", true);
+    try {
+      await SettingsApi.toggleLienTestMode(enabled);
+      setLienTestMode(enabled);
+      setLienTestModeError(null);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to update lien test mode";
+      setLienTestModeError(message);
+    } finally {
+      setBusyFlag("lien_test_mode", false);
+    }
+  };
+
   const handleAutorespondToggle = async (type: string, enabled: boolean) => {
     setBusyFlag(type, true);
     try {
@@ -336,7 +368,7 @@ export default function Settings2Page() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-10">
-      <nav className="grid gap-3 rounded-3xl border border-white/60 bg-white/80 p-3 shadow-xl shadow-slate-900/5 backdrop-blur lg:grid-cols-3">
+      <nav className="grid gap-3 rounded-3xl border border-white/60 bg-white/80 p-3 shadow-xl shadow-slate-900/5 backdrop-blur lg:grid-cols-4">
         {MENU_ITEMS.map((item) => {
           const isActive = item.href === "/";
           return (
@@ -538,6 +570,39 @@ export default function Settings2Page() {
                 <strong>Testing Mode (OFF):</strong> All emails are processed regardless of sender domain. ⚠️ Use only for testing!
               </div>
               {internalDomainsError && <ErrorBanner message={internalDomainsError} />}
+
+              <hr className="border-amber-200" />
+
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-slate-900">Lien Upload Test Mode</p>
+                  <Badge
+                    className={
+                      lienTestMode
+                        ? "bg-blue-50 text-blue-700 border-blue-200"
+                        : "bg-green-50 text-green-700 border-green-200"
+                    }
+                  >
+                    {lienTestMode ? "Test Mode (Local Directory)" : "Production (RadFlow Upload)"}
+                  </Badge>
+                  <p className="text-xs text-slate-500">
+                    {lienTestMode
+                      ? "Lien documents saved to /tmp/lien_test_uploads/ for review"
+                      : "Lien documents uploaded to RadFlow patient files"}
+                  </p>
+                </div>
+                <ToggleRail
+                  checked={lienTestMode}
+                  disabled={busy.lien_test_mode}
+                  onCheckedChange={handleLienTestModeToggle}
+                />
+              </div>
+              <div className="rounded-2xl border border-blue-200 bg-blue-50/80 px-4 py-3 text-sm text-blue-900">
+                <strong>Test Mode (ON):</strong> Lien documents are saved to local directory (/tmp/lien_test_uploads/) organized by conversation ID. View uploaded files at <Link href="/lientest" className="font-semibold underline">/settings/lientest</Link>.
+                <br /><br />
+                <strong>Production Mode (OFF):</strong> Lien documents are uploaded directly to RadFlow patient files via MCP.
+              </div>
+              {lienTestModeError && <ErrorBanner message={lienTestModeError} />}
             </CardContent>
           </Card>
         </motion.section>

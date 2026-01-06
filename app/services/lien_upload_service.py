@@ -6,12 +6,19 @@ accepted lien documents to the patient file via RadFlow API via MCP server.
 """
 import base64
 import httpx
+import os
+from pathlib import Path
 from typing import Dict, Any
 from celery.utils.log import get_task_logger
 from app.core.config import settings
 from app.mcp import call_mcp_tool
+from app.db.session import AsyncSessionLocal
+from app.crud.system_settings import system_settings_crud
 
 logger = get_task_logger(__name__)
+
+# Test mode directory
+LIEN_TEST_UPLOAD_DIR = "/tmp/lien_test_uploads"
 
 
 def _get_doc_type_id(lien_type: str) -> int:
@@ -52,15 +59,17 @@ def _get_doc_type_id(lien_type: str) -> int:
 async def upload_lien_to_radflow(
     patient_id: str,
     lien_type: str,
-    attachment_data: Dict[str, Any]
+    attachment_data: Dict[str, Any],
+    conversation_id: str = None
 ) -> bool:
     """
-    Upload lien document to patient file via RadFlow API.
+    Upload lien document to patient file via RadFlow API or save to test directory.
 
     Args:
         patient_id: Patient ID to upload document for (e.g., "PRE100453")
         lien_type: Type of lien being uploaded (e.g., "Patient Signed Radiology Lien")
         attachment_data: Attachment data dict with 'url' and 'filename' keys
+        conversation_id: Front conversation ID (for test mode file organization)
 
     Returns:
         True if upload successful, False otherwise
@@ -89,14 +98,16 @@ async def upload_lien_to_radflow(
         59: TECH Attorney Signed Lien (ASL Tech)
     """
     try:
+        # Check if test mode is enabled
+        async with AsyncSessionLocal() as db:
+            test_mode_enabled = await system_settings_crud.get_setting_value(db, "lien_test_mode", default=False)
+
         filename = attachment_data.get('filename', 'unknown_lien_document')
         attachment_url = attachment_data.get('url')
 
         if not attachment_url:
             logger.error(f"No attachment URL found for lien upload to patient {patient_id}")
             return False
-
-        logger.info(f"📤 Uploading {lien_type} ({filename}) to patient {patient_id} via MCP server")
 
         # Step 1: Download file from Front API
         async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
@@ -107,12 +118,37 @@ async def upload_lien_to_radflow(
                 logger.error(f"Failed to download attachment from Front: {download_response.status_code}")
                 return False
 
-            # Step 2: Convert to base64
             file_content = download_response.content
-            base64_string = base64.b64encode(file_content).decode('utf-8')
-            logger.info(f"📦 Converted {len(file_content)} bytes to base64 ({len(base64_string)} chars)")
+            logger.info(f"📦 Downloaded {len(file_content)} bytes from Front")
 
-        # Step 3: Upload via MCP server
+        # Step 2: TEST MODE - Save to local directory
+        if test_mode_enabled:
+            logger.info(f"🧪 TEST MODE ENABLED: Saving {lien_type} ({filename}) to local directory instead of uploading to RadFlow")
+
+            if conversation_id:
+                test_dir = Path(LIEN_TEST_UPLOAD_DIR) / conversation_id
+            else:
+                test_dir = Path(LIEN_TEST_UPLOAD_DIR) / "unknown_conversation"
+
+            test_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create filename with patient ID and lien type
+            safe_lien_type = lien_type.replace(" ", "_")
+            test_filename = f"{patient_id}_{safe_lien_type}_{filename}"
+            test_filepath = test_dir / test_filename
+
+            with open(test_filepath, 'wb') as f:
+                f.write(file_content)
+
+            logger.info(f"✅ TEST MODE: Saved lien to {test_filepath}")
+            return True
+
+        # Step 3: PRODUCTION MODE - Upload via MCP server
+        logger.info(f"📤 Uploading {lien_type} ({filename}) to patient {patient_id} via MCP server")
+
+        base64_string = base64.b64encode(file_content).decode('utf-8')
+        logger.info(f"📦 Converted to base64 ({len(base64_string)} chars)")
+
         doc_type_id = _get_doc_type_id(lien_type)
         logger.info(f"📤 Uploading via MCP: DocTypeName='{lien_type}', DocTypeId={doc_type_id}, Patient={patient_id}")
 
@@ -154,10 +190,11 @@ async def upload_lien_pdf_bytes_to_radflow(
     lien_type: str,
     pdf_bytes: bytes,
     filename: str = "lien_document.pdf",
-    signature_type: str = "ASL"
+    signature_type: str = "ASL",
+    conversation_id: str = None
 ) -> bool:
     """
-    Upload lien document PDF bytes directly to patient file via RadFlow API.
+    Upload lien document PDF bytes directly to patient file via RadFlow API or save to test directory.
 
     This function is used for split PDF documents that are already in bytes format.
 
@@ -167,11 +204,16 @@ async def upload_lien_pdf_bytes_to_radflow(
         pdf_bytes: Raw PDF file content as bytes
         filename: Filename for logging purposes
         signature_type: Signature type - "ASL" (Attorney) or "PSL" (Patient). Defaults to "ASL"
+        conversation_id: Front conversation ID (for test mode file organization)
 
     Returns:
         True if upload successful, False otherwise
     """
     try:
+        # Check if test mode is enabled
+        async with AsyncSessionLocal() as db:
+            test_mode_enabled = await system_settings_crud.get_setting_value(db, "lien_test_mode", default=False)
+
         # Determine full lien type name based on short code and signature type
         if lien_type.upper() in ["RAD", "RADIOLOGY"]:
             if signature_type.upper() == "PSL":
@@ -187,6 +229,29 @@ async def upload_lien_pdf_bytes_to_radflow(
             logger.error(f"Unknown lien type: {lien_type}")
             return False
 
+        # TEST MODE - Save to local directory
+        if test_mode_enabled:
+            logger.info(f"🧪 TEST MODE ENABLED: Saving {full_lien_type} ({filename}) to local directory instead of uploading to RadFlow")
+
+            if conversation_id:
+                test_dir = Path(LIEN_TEST_UPLOAD_DIR) / conversation_id
+            else:
+                test_dir = Path(LIEN_TEST_UPLOAD_DIR) / "unknown_conversation"
+
+            test_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create filename with patient ID and lien type
+            safe_lien_type = full_lien_type.replace(" ", "_")
+            test_filename = f"{patient_id}_{safe_lien_type}_{filename}"
+            test_filepath = test_dir / test_filename
+
+            with open(test_filepath, 'wb') as f:
+                f.write(pdf_bytes)
+
+            logger.info(f"✅ TEST MODE: Saved lien to {test_filepath}")
+            return True
+
+        # PRODUCTION MODE - Upload via MCP server
         logger.info(f"📤 Uploading {full_lien_type} ({filename}) to patient {patient_id} via RadFlow API")
 
         # Convert PDF bytes to base64

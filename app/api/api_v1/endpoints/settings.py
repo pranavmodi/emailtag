@@ -1,6 +1,9 @@
 """API endpoints for system settings management."""
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from pathlib import Path
+import os
 from app.db.session import get_db
 from app.crud.system_settings import system_settings_crud
 from app.schemas.system_settings import (
@@ -13,6 +16,9 @@ from app.schemas.system_settings import (
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Lien test uploads directory
+LIEN_TEST_UPLOAD_DIR = "/tmp/lien_test_uploads"
 
 router = APIRouter()
 
@@ -187,6 +193,161 @@ async def toggle_skip_internal_domains(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to toggle skip internal domains: {str(e)}"
+        )
+
+
+@router.get("/lien-test-mode-status")
+async def get_lien_test_mode_status(db: AsyncSession = Depends(get_db)):
+    """Get current lien test mode status."""
+    try:
+        setting = await system_settings_crud.get_by_key(db, "lien_test_mode")
+        if setting:
+            return {
+                "lien_test_mode": setting.setting_value,
+                "description": setting.description,
+                "last_updated": setting.updated_at,
+                "updated_by": setting.updated_by
+            }
+        else:
+            return {
+                "lien_test_mode": False,
+                "description": "Lien upload test mode. When enabled, lien documents are saved to a local directory instead of uploading to RadFlow.",
+                "last_updated": None,
+                "updated_by": None
+            }
+    except Exception as e:
+        logger.error(f"Error fetching lien test mode status: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch lien test mode status: {str(e)}"
+        )
+
+
+@router.post("/lien-test-mode-toggle")
+async def toggle_lien_test_mode(
+    update: SystemSettingUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Toggle lien test mode on/off."""
+    try:
+        setting = await system_settings_crud.update_setting(
+            db,
+            "lien_test_mode",
+            update.setting_value,
+            updated_by=update.updated_by
+        )
+
+        return {
+            "lien_test_mode": setting.setting_value,
+            "description": setting.description or "Lien upload test mode",
+            "last_updated": setting.updated_at,
+            "updated_by": setting.updated_by
+        }
+    except Exception as e:
+        logger.error(f"Error toggling lien test mode: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to toggle lien test mode: {str(e)}"
+        )
+
+
+@router.get("/lien-test-uploads")
+async def list_lien_test_uploads():
+    """List all conversation IDs with lien test uploads."""
+    try:
+        test_dir = Path(LIEN_TEST_UPLOAD_DIR)
+
+        if not test_dir.exists():
+            return {"conversations": []}
+
+        conversations = []
+        for conv_dir in test_dir.iterdir():
+            if conv_dir.is_dir():
+                files = list(conv_dir.glob("*.pdf"))
+                conversations.append({
+                    "conversation_id": conv_dir.name,
+                    "file_count": len(files),
+                    "files": [f.name for f in files]
+                })
+
+        return {"conversations": conversations}
+
+    except Exception as e:
+        logger.error(f"Error listing lien test uploads: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list lien test uploads: {str(e)}"
+        )
+
+
+@router.get("/lien-test-uploads/{conversation_id}")
+async def get_lien_test_uploads_for_conversation(conversation_id: str):
+    """Get all lien files for a specific conversation."""
+    try:
+        conv_dir = Path(LIEN_TEST_UPLOAD_DIR) / conversation_id
+
+        if not conv_dir.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"No test uploads found for conversation {conversation_id}"
+            )
+
+        files = []
+        for file_path in conv_dir.glob("*.pdf"):
+            stat = file_path.stat()
+            files.append({
+                "filename": file_path.name,
+                "size": stat.st_size,
+                "created": stat.st_mtime
+            })
+
+        return {
+            "conversation_id": conversation_id,
+            "files": files
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting lien test uploads for conversation {conversation_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get lien test uploads: {str(e)}"
+        )
+
+
+@router.get("/lien-test-uploads/{conversation_id}/{filename}")
+async def download_lien_test_file(conversation_id: str, filename: str):
+    """Download a specific lien test file."""
+    try:
+        file_path = Path(LIEN_TEST_UPLOAD_DIR) / conversation_id / filename
+
+        if not file_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"File not found: {filename}"
+            )
+
+        # Security check: ensure file is within the test upload directory
+        if not str(file_path.resolve()).startswith(str(Path(LIEN_TEST_UPLOAD_DIR).resolve())):
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied"
+            )
+
+        return FileResponse(
+            path=str(file_path),
+            filename=filename,
+            media_type="application/pdf"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading lien test file {filename}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to download file: {str(e)}"
         )
 
 

@@ -117,6 +117,12 @@ class CRUDSystemSettings:
                     "When enabled, emails from these domains are skipped. "
                     "When disabled (default for testing), all emails are processed."
                 )
+            elif setting_key == "lien_test_mode":
+                description = (
+                    "Lien upload test mode. When enabled, lien documents are saved to a local directory "
+                    "(/tmp/lien_test_uploads/{conversation_id}/) instead of uploading to RadFlow via MCP. "
+                    "Use this for testing lien processing without affecting production data."
+                )
 
             setting = SystemSetting(
                 setting_key=setting_key,

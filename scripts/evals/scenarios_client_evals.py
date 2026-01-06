@@ -1177,5 +1177,48 @@ Test ID: {UNIQUE_TEST_ID}"""
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": ["Apt status req"]
+    },
+    "54": {
+        "description": "America Collins - ASL Combined Liens - Multi-page lien document with both RAD and TECH liens (should be split and uploaded separately)",
+        "subject": "Signed Lien Documents - America Collins",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>Please find attached the signed lien documents for our client America Collins.</p>"
+            "<p>Both radiology and technologist liens are included in the attached packet.</p>"
+            "<p>Kindly process and upload to the patient file.</p>"
+            "<p>Thank you for your prompt attention.</p>"
+            "<p>Best regards,<br>"
+            "Legal Processing Team</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "AMERICA COLLINS LIENS.pdf",
+                "filepath": "data/documents/AMERICA COLLINS LIENS.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
+    },
+    "55": {
+        "description": "Gregory P Karageuzian - ASL Combined Lien - E-signed 2-page document with TECH (page 1) and RAD (page 2) liens (should be split and uploaded separately)",
+        "subject": "E-Signed Lien Documents - Karageuzian, Gregory P",
+        "body_html": (
+            "<p>Hello Precise Imaging,</p>"
+            "<p>Please find attached the electronically signed lien documents for our client Gregory P Karageuzian.</p>"
+            "<p>This packet includes both the Technical (Imaging) Lien and the Radiologist Lien.</p>"
+            "<p>Please process and upload to the patient file accordingly.</p>"
+            "<p>Thank you,</p>"
+            "<p>Law Office</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "ESIGN KARAGEUZIAN_GREGORY P LIEN.pdf",
+                "filepath": "data/documents/ESIGN KARAGEUZIAN_GREGORY P LIEN.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
     }
 }

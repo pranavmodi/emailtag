@@ -388,7 +388,7 @@ def _determine_lien_type(applied_tags: List[str], signature_type: str) -> str:
     else:
         return f"{signature_prefix} Lien"
 
-async def _upload_lien_to_patient_file(patient_id: str, lien_type: str, attachment_data: Dict[str, Any]) -> bool:
+async def _upload_lien_to_patient_file(patient_id: str, lien_type: str, attachment_data: Dict[str, Any], conversation_id: str = None) -> bool:
     """
     Upload lien document to patient file via RadFlow API (using shared service).
 
@@ -396,13 +396,14 @@ async def _upload_lien_to_patient_file(patient_id: str, lien_type: str, attachme
         patient_id: Patient ID to upload document for
         lien_type: Type of lien being uploaded
         attachment_data: Attachment data with URL to download
+        conversation_id: Front conversation ID (for test mode file organization)
 
     Returns:
         True if upload successful, False otherwise
     """
     from app.services.lien_upload_service import upload_lien_to_radflow
 
-    return await upload_lien_to_radflow(patient_id, lien_type, attachment_data)
+    return await upload_lien_to_radflow(patient_id, lien_type, attachment_data, conversation_id)
 
 async def _generate_lien_status_table(patient_id: str, upload_results: List[Dict[str, Any]], signature_type: str = "ASL") -> str:
     """
@@ -1023,7 +1024,8 @@ async def handle_lien_request(
                     lien_type=split_lien_type,
                     pdf_bytes=split_pdf_bytes,
                     filename=f"lien_{split_patient_id}_{split_lien_type}_split_{i+1}.pdf",
-                    signature_type=signature_type  # Pass ASL or PSL
+                    signature_type=signature_type,  # Pass ASL or PSL
+                    conversation_id=front_conversation_id  # For test mode file organization
                 )
 
                 upload_results.append({
@@ -1093,7 +1095,7 @@ async def handle_lien_request(
                     else:
                         att_lien_type_full = lien_type  # Fallback to original
 
-                    attachment_upload_success = await _upload_lien_to_patient_file(patient_id, att_lien_type_full, attachment_data)
+                    attachment_upload_success = await _upload_lien_to_patient_file(patient_id, att_lien_type_full, attachment_data, front_conversation_id)
 
                     upload_results.append({
                         "patient_id": patient_id,
