@@ -1232,5 +1232,27 @@ Test ID: {UNIQUE_TEST_ID}"""
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": ["Apt status req"]
+    },
+    "57": {
+        "description": "D'Edra Hurst - ASL Combined Lien - E-signed 2-page document with TECH (page 1) and RAD (page 2) liens (should be split and uploaded separately)",
+        "subject": "Executed Lien Documents - D'Edra Hurst",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>Please find attached the executed lien documents for our client D'Edra Hurst.</p>"
+            "<p>The attached packet includes both the Technical (Imaging) Lien and the Radiologist Lien.</p>"
+            "<p>Both liens have been signed and executed. Please process and upload to the patient file accordingly.</p>"
+            "<p>Thank you for your prompt attention to this matter.</p>"
+            "<p>Best regards,<br>"
+            "Legal Services</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "2026.01.05 ExecLien PreciseImaging DEdraHurst.pdf",
+                "filepath": "data/documents/2026.01.05 ExecLien PreciseImaging DEdraHurst.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
     }
 }
