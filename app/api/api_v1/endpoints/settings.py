@@ -252,9 +252,12 @@ async def toggle_lien_test_mode(
 
 
 @router.get("/lien-test-uploads")
-async def list_lien_test_uploads():
-    """List all conversation IDs with lien test uploads."""
+async def list_lien_test_uploads(db: AsyncSession = Depends(get_db)):
+    """List all conversation IDs with lien test uploads, ordered by latest first."""
     try:
+        from app.models.email import Email
+        from sqlalchemy import select, func
+
         test_dir = Path(LIEN_TEST_UPLOAD_DIR)
 
         if not test_dir.exists():
@@ -264,11 +267,50 @@ async def list_lien_test_uploads():
         for conv_dir in test_dir.iterdir():
             if conv_dir.is_dir():
                 files = list(conv_dir.glob("*.pdf"))
-                conversations.append({
-                    "conversation_id": conv_dir.name,
+
+                # Get directory modification time (latest file time)
+                latest_file_time = max((f.stat().st_mtime for f in files), default=0) if files else conv_dir.stat().st_mtime
+
+                # Get conversation details from database
+                conv_id = conv_dir.name
+                conv_info = {
+                    "conversation_id": conv_id,
                     "file_count": len(files),
-                    "files": [f.name for f in files]
-                })
+                    "files": [f.name for f in files],
+                    "latest_upload_time": latest_file_time,
+                    "subject": None,
+                    "sender": None,
+                    "email_count": 0
+                }
+
+                # Try to fetch email details from database
+                try:
+                    # Get the most recent email for this conversation
+                    stmt = select(Email).where(
+                        Email.front_conversation_id == conv_id
+                    ).order_by(Email.created_at.desc()).limit(1)
+
+                    result = await db.execute(stmt)
+                    email = result.scalar_one_or_none()
+
+                    if email:
+                        conv_info["subject"] = email.subject
+                        conv_info["sender"] = email.sender_email
+
+                    # Get total email count for this conversation
+                    count_stmt = select(func.count(Email.id)).where(
+                        Email.front_conversation_id == conv_id
+                    )
+                    count_result = await db.execute(count_stmt)
+                    conv_info["email_count"] = count_result.scalar() or 0
+
+                except Exception as db_error:
+                    logger.warning(f"Could not fetch details for conversation {conv_id}: {db_error}")
+
+                conversations.append(conv_info)
+
+        # Sort by latest upload time (most recent first)
+        conversations.sort(key=lambda x: x.get("latest_upload_time", 0), reverse=True)
 
         return {"conversations": conversations}
 

@@ -9,6 +9,10 @@ import {
   FolderOpen,
   Home,
   RefreshCw,
+  Mail,
+  Calendar,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 import { ApiError, SettingsApi } from "@/lib/api";
@@ -28,6 +32,10 @@ type ConversationUpload = {
   conversation_id: string;
   file_count: number;
   files: string[];
+  subject?: string;
+  sender?: string;
+  email_count?: number;
+  latest_upload_time?: number;
 };
 
 type FileDetail = {
@@ -47,9 +55,16 @@ const formatDate = (timestamp: number): string => {
 };
 
 const ErrorBanner = ({ message }: { message: string }) => (
-  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
-    {message}
-  </div>
+  <motion.div
+    initial={{ opacity: 0, y: -10 }}
+    animate={{ opacity: 1, y: 0 }}
+    className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 font-medium shadow-sm"
+  >
+    <div className="flex items-center gap-2">
+      <div className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+      {message}
+    </div>
+  </motion.div>
 );
 
 export default function LienTestPage() {
@@ -113,63 +128,84 @@ export default function LienTestPage() {
     return (
       <section className="flex min-h-screen items-center justify-center px-6 py-16">
         <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
           transition={easing}
-          className="rounded-3xl border border-slate-200/80 bg-white/80 px-10 py-12 text-center shadow-2xl"
+          className="rounded-2xl border border-slate-200 bg-white px-12 py-16 text-center shadow-xl"
         >
-          <p className="text-base font-medium text-slate-500">Loading test uploads…</p>
+          <div className="flex items-center justify-center mb-4">
+            <div className="relative">
+              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-violet-500 animate-pulse" />
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-blue-500 to-violet-500 blur-lg opacity-50 animate-pulse" />
+            </div>
+          </div>
+          <p className="text-base font-semibold text-slate-900 mb-1">Loading Test Uploads</p>
+          <p className="text-sm text-slate-500">Fetching conversation data...</p>
         </motion.div>
       </section>
     );
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-7xl flex-col gap-8 px-6 py-10">
+    <div className="mx-auto flex min-h-screen max-w-7xl flex-col gap-6 px-6 py-8">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={easing}
-        className="flex flex-col gap-4 rounded-3xl border border-white/40 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 p-8 text-white shadow-2xl"
+        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 p-8 shadow-xl"
       >
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-sm uppercase tracking-[0.3em] text-white/70">Lien Testing</p>
-            <h1 className="text-3xl font-semibold">Test Upload Sandbox</h1>
-            <p className="text-white/80">
-              Review lien documents uploaded in test mode, organized by conversation ID.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link href="/">
+        <div className="absolute inset-0 bg-grid-white/5 [mask-image:linear-gradient(0deg,white,rgba(255,255,255,0.5))]" />
+        <div className="relative">
+          <div className="flex flex-wrap items-start justify-between gap-6">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 backdrop-blur-sm ring-1 ring-white/20">
+                  <FileText className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-white/60">Lien Testing</p>
+                  <h1 className="text-3xl font-bold text-white">Test Upload Sandbox</h1>
+                </div>
+              </div>
+              <p className="text-white/90 max-w-2xl">
+                Review and download lien documents uploaded in test mode. All uploads are organized by conversation for easy tracking.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link href="/">
+                <Button
+                  variant="ghost"
+                  className="bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 border-0 shadow-lg"
+                >
+                  <Home className="h-4 w-4" />
+                  Settings
+                </Button>
+              </Link>
               <Button
+                onClick={loadConversations}
                 variant="ghost"
-                className="border-white/30 text-white/90 hover:bg-white/10 hover:text-white"
+                className="bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 border-0 shadow-lg"
               >
-                <Home className="h-4 w-4" />
-                Back to Settings
+                <RefreshCw className="h-4 w-4" />
+                Refresh
               </Button>
-            </Link>
-            <Button
-              onClick={loadConversations}
-              variant="ghost"
-              className="border-white/30 text-white/90 hover:bg-white/10 hover:text-white"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Refresh
-            </Button>
+            </div>
           </div>
-        </div>
-        <div className="grid gap-3 text-sm text-white/80 sm:grid-cols-2">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-white/60">Conversations</p>
-            <p className="text-lg font-semibold">{conversations.length}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-white/60">Total Files</p>
-            <p className="text-lg font-semibold">
-              {conversations.reduce((sum, conv) => sum + conv.file_count, 0)}
-            </p>
+          <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-xl bg-white/10 backdrop-blur-sm p-4 ring-1 ring-white/20">
+              <p className="text-xs font-medium uppercase tracking-wide text-white/70">Conversations</p>
+              <p className="text-2xl font-bold text-white mt-1">{conversations.length}</p>
+            </div>
+            <div className="rounded-xl bg-white/10 backdrop-blur-sm p-4 ring-1 ring-white/20">
+              <p className="text-xs font-medium uppercase tracking-wide text-white/70">Total Files</p>
+              <p className="text-2xl font-bold text-white mt-1">
+                {conversations.reduce((sum, conv) => sum + conv.file_count, 0)}
+              </p>
+            </div>
+            <div className="rounded-xl bg-white/10 backdrop-blur-sm p-4 ring-1 ring-white/20">
+              <p className="text-xs font-medium uppercase tracking-wide text-white/70">Status</p>
+              <p className="text-2xl font-bold text-white mt-1">Active</p>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -182,101 +218,145 @@ export default function LienTestPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={easing}
         >
-          <Card>
-            <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
-              <FolderOpen className="h-16 w-16 text-slate-300" />
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900">No Test Uploads Yet</h3>
-                <p className="text-sm text-slate-500">
-                  Enable test mode in settings and send lien emails to see them here.
+          <Card className="border-dashed border-2 border-slate-200 bg-slate-50/50">
+            <CardContent className="flex flex-col items-center gap-6 py-16 text-center">
+              <div className="rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 p-6">
+                <FolderOpen className="h-16 w-16 text-slate-400" />
+              </div>
+              <div className="max-w-md">
+                <h3 className="text-xl font-semibold text-slate-900 mb-2">No Test Uploads Yet</h3>
+                <p className="text-slate-600 leading-relaxed">
+                  Enable test mode in settings and send lien emails to see them appear here.
+                  All uploads will be saved locally for review.
                 </p>
               </div>
               <Link href="/">
-                <Button variant="outline">Go to Settings</Button>
+                <Button variant="primary" className="mt-2">
+                  <Home className="h-4 w-4 mr-2" />
+                  Go to Settings
+                </Button>
               </Link>
             </CardContent>
           </Card>
         </motion.div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {conversations.map((conversation) => (
+      <div className="space-y-3">
+        {conversations.map((conversation, index) => (
           <motion.div
             key={conversation.conversation_id}
-            initial={{ opacity: 0, y: 24 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={easing}
+            transition={{ ...easing, delay: index * 0.05 }}
           >
-            <Card className="h-full hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-3 text-lg">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg">
-                    <FileText className="h-5 w-5" />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate">{conversation.conversation_id}</p>
-                    <Badge className="mt-1 bg-slate-100 text-slate-600 border-slate-200">
-                      {conversation.file_count} {conversation.file_count === 1 ? "file" : "files"}
-                    </Badge>
+            <Card className="group hover:shadow-lg hover:border-blue-200 transition-all duration-200 border border-slate-200 overflow-hidden">
+              <CardContent className="p-0">
+                <div className="p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4 flex-1 min-w-0">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-500 shadow-md group-hover:shadow-lg transition-shadow">
+                        <Mail className="h-6 w-6 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-slate-900 truncate text-base mb-1">
+                          {conversation.subject || conversation.conversation_id}
+                        </h3>
+                        <div className="flex items-center gap-2 text-sm text-slate-600 mb-3">
+                          <span className="truncate">{conversation.sender || "Unknown sender"}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-medium">
+                            <FileText className="h-3.5 w-3.5" />
+                            {conversation.file_count} {conversation.file_count === 1 ? "file" : "files"}
+                          </div>
+                          {(conversation.email_count ?? 0) > 0 && (
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-medium">
+                              <Mail className="h-3.5 w-3.5" />
+                              {conversation.email_count} {conversation.email_count === 1 ? "email" : "emails"}
+                            </div>
+                          )}
+                          {conversation.latest_upload_time && (
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 text-slate-600 text-xs">
+                              <Calendar className="h-3.5 w-3.5" />
+                              {formatDate(conversation.latest_upload_time)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => loadFileDetails(conversation.conversation_id)}
+                      disabled={isLoadingFiles && selectedConversation === conversation.conversation_id}
+                      variant={selectedConversation === conversation.conversation_id ? "primary" : "ghost"}
+                      className="shrink-0 h-10 px-4 text-sm font-medium"
+                    >
+                      {isLoadingFiles && selectedConversation === conversation.conversation_id ? (
+                        <>
+                          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        <>
+                          {selectedConversation === conversation.conversation_id ? (
+                            <>
+                              <ChevronUp className="mr-2 h-4 w-4" />
+                              Hide Files
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="mr-2 h-4 w-4" />
+                              View Files
+                            </>
+                          )}
+                        </>
+                      )}
+                    </Button>
                   </div>
-                </CardTitle>
-                <CardDescription>
-                  Front conversation with {conversation.file_count} uploaded lien{" "}
-                  {conversation.file_count === 1 ? "document" : "documents"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Button
-                  onClick={() => loadFileDetails(conversation.conversation_id)}
-                  disabled={isLoadingFiles && selectedConversation === conversation.conversation_id}
-                  className="w-full"
-                  variant={
-                    selectedConversation === conversation.conversation_id ? "default" : "outline"
-                  }
-                >
-                  {isLoadingFiles && selectedConversation === conversation.conversation_id ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Loading...
-                    </>
-                  ) : (
-                    <>
-                      <FolderOpen className="mr-2 h-4 w-4" />
-                      {selectedConversation === conversation.conversation_id
-                        ? "Refresh Files"
-                        : "View Files"}
-                    </>
-                  )}
-                </Button>
+                </div>
                 {selectedConversation === conversation.conversation_id && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
                     transition={easing}
-                    className="space-y-2 pt-2"
+                    className="border-t border-slate-100 bg-slate-50/50"
                   >
-                    {fileError && <ErrorBanner message={fileError} />}
-                    {fileDetails.map((file) => (
-                      <div
-                        key={file.filename}
-                        className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm"
-                      >
-                        <div className="flex-1 min-w-0 mr-3">
-                          <p className="font-medium text-slate-900 truncate">{file.filename}</p>
-                          <p className="text-xs text-slate-500">
-                            {formatFileSize(file.size)} • {formatDate(file.created)}
-                          </p>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDownload(conversation.conversation_id, file.filename)}
-                          className="shrink-0"
+                    <div className="p-5 space-y-2">
+                      {fileError && <ErrorBanner message={fileError} />}
+                      {fileDetails.length === 0 && !fileError && (
+                        <p className="text-sm text-slate-500 text-center py-4">No files found</p>
+                      )}
+                      {fileDetails.map((file, fileIndex) => (
+                        <motion.div
+                          key={file.filename}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: fileIndex * 0.05 }}
+                          className="group/file flex items-center justify-between rounded-lg border border-slate-200 bg-white p-3.5 text-sm hover:border-blue-200 hover:shadow-sm transition-all"
                         >
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 group-hover/file:bg-blue-100 transition-colors">
+                              <FileText className="h-5 w-5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-slate-900 truncate">{file.filename}</p>
+                              <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                                <span>{formatFileSize(file.size)}</span>
+                                <span>•</span>
+                                <span>{formatDate(file.created)}</span>
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            onClick={() => handleDownload(conversation.conversation_id, file.filename)}
+                            className="shrink-0 h-9 w-9 p-0 hover:bg-blue-50 hover:text-blue-600"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </motion.div>
+                      ))}
+                    </div>
                   </motion.div>
                 )}
               </CardContent>
