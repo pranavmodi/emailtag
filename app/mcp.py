@@ -94,7 +94,7 @@ class MCPClient:
                     if "result" in json_data and "tools" in json_data["result"]:
                         self.available_tools = json_data["result"]["tools"]
                         self._connected = True
-                        logger.info(f"Connected to MCP server. Available tools: {[tool['name'] for tool in self.available_tools]}")
+                        logger.info(f"Connected to MCP server ({len(self.available_tools)} tools available)")
                         return True
                     else:
                         logger.error(f"MCP server response was valid JSON but not in the expected format: {json_data}")

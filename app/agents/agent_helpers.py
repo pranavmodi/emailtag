@@ -281,7 +281,7 @@ async def get_patient_and_study_info(patient_id: str) -> Dict[str, Any]:
     
     NOTE: This function uses MCP tools since we already have a patient_id.
     """
-    logger.info(f"Helper 'get_patient_and_study_info' called for Patient ID: {patient_id}")
+    # Fetch patient and study info
     try:
         # Ensure MCP client is connected before use
         if not mcp_client.is_connected:
@@ -1320,37 +1320,40 @@ async def compile_study_participants(patient_id: str, studies: List[Dict[str, An
         await mcp_client.connect()
 
     all_participants = []
-    successful_studies = 0
-    failed_studies = 0
+    studies_with_participants = 0
+    studies_without_participants = 0
+
+    # Log studies being checked
+    if studies:
+        logger.info(f"Checking {len(studies)} studies for patient {patient_id}:")
+        for idx, study in enumerate(studies, 1):
+            accession = study.get("accessionNumber", "") or study.get("authorization_number", "")
+            study_desc = study.get("description", "N/A")
+            logger.info(f"  Study {idx}: {accession} - {study_desc}")
+    else:
+        logger.info(f"No studies found for patient {patient_id}")
 
     for study in studies:
         accession_number = study.get("accessionNumber", "") or study.get("authorization_number", "")
         study_id = study.get("study_id") or study.get("id")
 
         if not accession_number:
-            failed_studies += 1
-            logger.warning(f"⚠️ STUDY SKIPPED: No accession number found for study: {study}")
+            studies_without_participants += 1
+            logger.warning(f"Study skipped: No accession number found")
             continue
 
         # Strip "RAM" prefix if present (RadFlow includes it, but API doesn't expect it)
-        original_accession = accession_number
         if isinstance(accession_number, str) and accession_number.upper().startswith("RAM"):
             accession_number = accession_number[3:]  # Remove "RAM" prefix
-            logger.info(f"🔧 STRIPPED RAM PREFIX: '{original_accession}' → '{accession_number}'")
 
         try:
-            logger.info(f"📤 CALLING get_study_participants with accession_number: '{accession_number}' (type: {type(accession_number).__name__})")
-            logger.info(f"📋 Study data: accessionNumber={study.get('accessionNumber')}, authorization_number={study.get('authorization_number')}, study_id={study_id}")
-
             participants_result = await mcp_client.call_tool("get_study_participants", {"accession_number": str(accession_number)})
 
-            logger.info(f"📥 RECEIVED get_study_participants response: success={participants_result.get('success')}, has_data={bool(participants_result.get('data'))}, result_count={len(participants_result.get('data', {}).get('result', []))}")
             if not participants_result.get("success"):
-                logger.warning(f"❌ get_study_participants FAILED for accession {accession_number}: {participants_result.get('error', 'Unknown error')}")
+                logger.warning(f"get_study_participants failed for accession {accession_number}: {participants_result.get('error', 'Unknown error')}")
 
             if participants_result.get("success") and participants_result.get("data", {}).get("result"):
                 participants = participants_result["data"]["result"]
-                logger.info(f"✅ Found {len(participants)} participant(s) for accession {accession_number}")
 
                 for participant in participants:
                     participant_data = {
@@ -1366,22 +1369,21 @@ async def compile_study_participants(patient_id: str, studies: List[Dict[str, An
 
                     all_participants.append(participant_data)
 
-                successful_studies += 1
+                studies_with_participants += 1
             else:
-                failed_studies += 1
-                logger.info(f"⚠️ No participants found for accession {accession_number} (empty result list)")
+                studies_without_participants += 1
 
         except Exception as e:
-            logger.error(f"❌ EXCEPTION calling get_study_participants for accession {accession_number}: {e}")
-            failed_studies += 1
+            logger.error(f"Exception calling get_study_participants for accession {accession_number}: {e}")
+            studies_without_participants += 1
             continue
 
     return {
         "success": True,
         "total_participants": len(all_participants),
         "participants": all_participants,
-        "successful_studies": successful_studies,
-        "failed_studies": failed_studies
+        "studies_with_participants": studies_with_participants,
+        "studies_without_participants": studies_without_participants
     }
 
 
@@ -1436,7 +1438,7 @@ async def verify_sender_authorization(sender_email: str, participants: List[Dict
                any(keyword in participant_type for keyword in ["doctor", "physician"]):
                 return {"status": "verified", "role": "doctor_on_file", "player_info": player_info}
 
-    # Second pass: Domain matches for medical professionals
+    # Second pass: Domain matches for medical professionals AND attorneys (TEMPORARY - enabled for testing)
     if sender_domain:
         for participant in participants:
             participant_domain = participant.get("domain", "").lower()
@@ -1456,6 +1458,18 @@ async def verify_sender_authorization(sender_email: str, participants: List[Dict
                         "domain": participant_domain
                     }
                     return {"status": "domain_verified", "role": "doctor_domain_match", "player_info": player_info}
+
+                # TEMPORARY: Domain match with attorney type (enabled for testing)
+                if "attorney" in participant_role or "law" in participant_role:
+                    player_info = {
+                        "email": participant.get("email", ""),
+                        "role": participant_role,
+                        "type": participant_type,
+                        "accession_number": participant.get("accession_number", ""),
+                        "study_id": participant.get("study_id", ""),
+                        "domain": participant_domain
+                    }
+                    return {"status": "domain_verified", "role": "attorney_domain_match", "player_info": player_info}
 
     # Fallback to domain pattern matching
     if sender_domain:
@@ -1526,18 +1540,22 @@ async def verify_sender_for_patient_access(
 
         participants = participants_result.get("participants", [])
 
-        # Log participants on file for debugging
-        logger.info(f"📋 STUDY PARTICIPANTS ON FILE for patient {patient_id}:")
-        logger.info(f"   Total participants: {len(participants)}")
+        # Log study check summary
+        total_studies = len(studies) if studies else 0
+        studies_with_participants = participants_result.get("studies_with_participants", 0)
+        studies_without_participants = participants_result.get("studies_without_participants", 0)
+        logger.info(f"Checked {total_studies} studies for patient {patient_id}: {studies_with_participants} with participants, {studies_without_participants} without participants")
+
+        # Log participants found (if any)
         if participants:
-            logger.info(f"   Authorized emails:")
-            for idx, participant in enumerate(participants, 1):
+            logger.info(f"Found {len(participants)} participants across studies:")
+            for participant in participants:
                 email = participant.get("email", "N/A")
                 role = participant.get("role", "N/A")
-                participant_type = participant.get("type", "N/A")
-                logger.info(f"      {idx}. {email} - Role: {role}, Type: {participant_type}")
+                accession = participant.get("accession_number", "N/A")
+                logger.info(f"  - {email} ({role}) on study {accession}")
         else:
-            logger.info(f"   No participants found for this patient")
+            logger.info(f"No participants found for patient {patient_id}")
 
         # Verify sender
         verification_result = await verify_sender_authorization(sender_email, participants)
@@ -1553,6 +1571,8 @@ async def verify_sender_for_patient_access(
             message = f"Sender verified as {role} for patient {patient_id}"
         else:
             message = f"Sender not authorized: {role}"
+
+        logger.info(f"Verification result: {message}")
 
         return {
             "authorized": authorized,

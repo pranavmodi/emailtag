@@ -1,0 +1,808 @@
+====================================================================================================
+CONVERSATIONS WITH AUTORESPONDS SENT - LAST 24 HOURS
+Generated: 2026-01-06 07:20:59 UTC
+====================================================================================================
+
+SUMMARY:
+Total conversations with autoresponds sent: 113
+
+Breakdown by agent type:
+  - apt_status_req: 90 autoresponds
+  - asl_lien: 17 autoresponds
+  - psl_lien: 6 autoresponds
+
+====================================================================================================
+
+DETAILED LIST:
+
+1. cnv_1g44ib4i
+   Subject: E-Signed Lien Documents - Karageuzian, Gregory P (TestID: 205684a1-76d8-41a4-a2c7-99f400dab400)
+   From: pranav@possibleminds.in
+   Agent: ASL_LIEN
+   Time: 2026-01-06 06:42:47 UTC
+   Tags: ASL, Rad Lien, Tech Lien
+
+2. cnv_1g43tbpu
+   Subject: EXTERNAL: Re: Requesting Next Available MRI Appointment – Ranjeet Singh (Date of Birth: 7/8/1983; Date of Loss: 12/1/2025)
+   From: fatima@regallawfirm.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-06 03:11:28 UTC
+   Tags: Apt status req
+
+3. cnv_1g43nac2
+   Subject: Re: EXTERNAL: STAT NEW BMS CT REF- Juarez, Gregorio - ALLN1-PRECISE
+   From: btrejocmc@gmail.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-06 02:26:13 UTC
+   Tags: Apt status req
+
+4. cnv_1g43futu
+   Subject: Re: EXTERNAL: Requesting Next Available MRI Appointment (Spanish speaker) – Manuel Ortiz (Date of Birth: 12/20/1963; Date of Loss: 8/15/2025)
+   From: fatima@regallawfirm.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-06 01:31:29 UTC
+   Tags: Apt status req
+
+5. cnv_1g43cj9u
+   Subject: Re: EXTERNAL: New referral - Sugey Michel
+   From: eliana@lacitylaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-06 01:07:16 UTC
+   Tags: Apt status req
+
+6. cnv_1g43c5zm
+   Subject: Re: Sebastian Gutierrez / Precise MRI 
+   From: kevin@legalneeds.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-06 01:05:16 UTC
+   Tags: Apt status req
+
+7. cnv_1g439m4y
+   Subject: EXTERNAL: Shalonda Huston DOB: 05/30/1982
+   From: katrina.pi@ilpros.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-06 00:52:37 UTC
+   Tags: Apt status req
+
+8. cnv_1g430p76
+   Subject: RE: RE: EXTERNAL: New Pi Patient: Brianna Christine Gulley DOL 10/24/2025
+   From: mhidalgo@mylawcompany.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-06 00:12:16 UTC
+   Tags: Apt status req
+
+9. cnv_1g430d8y
+   Subject: RE: EXTERNAL: New Pi Patient: Larry Rey Grady DOL 10/24/2025
+   From: mhidalgo@mylawcompany.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-06 00:10:53 UTC
+   Tags: Apt status req
+
+10. cnv_1g42zytu
+   Subject: EXTERNAL: Re: New MRI Referral - Victor Rivas
+   From: appointment@injurymednetwork.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-06 00:09:02 UTC
+   Tags: Apt status req
+
+11. cnv_1g42wifm
+   Subject: EXTERNAL: MRI Cervical & Lumbar - Eric Diaz
+   From: casemanager1@katerlaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:57:54 UTC
+   Tags: Apt status req
+
+12. cnv_1g42w66q
+   Subject: Re: EXTERNAL: Re: Referral updates: failed attempts to contact patient PRE1112024 - SMITH, JASON K
+   From: andrew@cmplawgroup.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:56:20 UTC
+   Tags: Apt status req
+
+13. cnv_1g42w32q
+   Subject: Re: EXTERNAL: VILLANUEVA,ARMANDO
+   From: christinam@painclinicscc.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:55:57 UTC
+   Tags: Apt status req
+
+14. cnv_1g42v8r6
+   Subject: EXTERNAL: AnnMarie Blevins - DOB: 08/18/1965 
+   From: jaime@lacitylaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:52:34 UTC
+   Tags: Apt status req
+
+15. cnv_1g42v2s2
+   Subject: RE: EXTERNAL: FW: Cintron, Michael - DOL 10/12/2025
+   From: aris@megeredchianlaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:51:53 UTC
+   Tags: Apt status req
+
+16. cnv_1g42sh76
+   Subject: EXTERNAL: Re: SCIP Jovon Garth MRI RT Foot/Ankle Rx
+   From: ma1@sierracoastpain.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:39:06 UTC
+   Tags: Apt status req
+
+17. cnv_1g42s30y
+   Subject: EXTERNAL: Adriana Gisela Serrano Roman DOB 11/06/1991 DOL 08/22/2025
+   From: spe@omegalaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:37:23 UTC
+   Tags: Apt status req
+
+18. cnv_1g42r1ea
+   Subject: Re: EXTERNAL: New Referral Lugarda Villegas DOL: 10/04/2025
+   From: jazmine@nordanyanlaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:32:08 UTC
+   Tags: Apt status req
+
+19. cnv_1g42qk0i
+   Subject: EXTERNAL: Re: New MRI Request: Diego Anapan
+   From: amanda@newflexgroup.org
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:30:10 UTC
+   Tags: Apt status req
+
+20. cnv_1g42pbyq
+   Subject: RE: RE: EXTERNAL: Alondra Sanchez Feria DOL: 07/17/2025
+   From: mhb@bdj.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:24:48 UTC
+   Tags: Apt status req
+
+21. cnv_1g42p6tu
+   Subject: RE: RE: EXTERNAL: Analleli Feria DOL: 07/17/2025
+   From: mhb@bdj.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:24:14 UTC
+   Tags: Apt status req
+
+22. cnv_1g42p3de
+   Subject: RE: RE: EXTERNAL: Margarita Segura  Zuniga DOL: 07/17/2025
+   From: mhb@bdj.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:23:52 UTC
+   Tags: Apt status req
+
+23. cnv_1g42ozwy
+   Subject: RE: RE: EXTERNAL: Leticia Feria DOL: 07/17/2025
+   From: mhb@bdj.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:23:27 UTC
+   Tags: Apt status req
+
+24. cnv_1g42mzte
+   Subject: EXTERNAL: Re: New Patients - Michael and Tiffany Armesto
+   From: guadalupe@troymountsmd.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:15:15 UTC
+   Tags: Apt status req
+
+25. cnv_1g42muhe
+   Subject: Re: EXTERNAL: Rachel Dean: MRI Referrals
+   From: fatima@regallawfirm.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:14:47 UTC
+   Tags: Apt status req
+
+26. cnv_1g42l6s2
+   Subject: Re: RE: EXTERNAL: New referral - Oscar Eulises Ramirez Cruz
+   From: eliana@lacitylaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:08:14 UTC
+   Tags: Apt status req
+
+27. cnv_1g42ktaq
+   Subject: RE: EXTERNAL: Request for Appointment - Richella Glover 8/27/2025
+   From: r.abadie@legalneeds.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:06:51 UTC
+   Tags: Apt status req
+
+28. cnv_1g42jlci
+   Subject: Re: MRI | LAW OFFICE OF SUSANO CORIA | SANTINO MUGA DOA: 10/29/25
+   From: jpa.liaison.solution@gmail.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 23:02:42 UTC
+   Tags: Apt status req
+
+29. cnv_1g42hexe
+   Subject: Re: Automatic reply: EXTERNAL: MARTINEZ, GRACIE - L/S MRI
+   From: kimsimcc@yahoo.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 22:55:52 UTC
+   Tags: Apt status req
+
+30. cnv_1g42ez82
+   Subject: Re: EXTERNAL: Mikeal D. Elliott | 10/04/2025 |
+   From: jennifer@sunsetwestlg.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 22:46:19 UTC
+   Tags: Apt status req
+
+31. cnv_1g42eyc2
+   Subject: EXTERNAL: RE: MARIN JIMENEZ, WBERLEY | 11.26.24 | MREF | PRECISE IMAGING 
+   From: stacy@rafiilaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 22:46:17 UTC
+   Tags: Apt status req
+
+32. cnv_1g42elw2
+   Subject: EXTERNAL: Roberto Valle DOB 7-15-80
+   From: angela@missionimagingmri.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 22:45:21 UTC
+   Tags: Apt status req
+
+33. cnv_1g426riq
+   Subject: Re: EXTERNAL: New Patient Referral: William Tryon
+   From: jessica@rlfwins.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 22:17:32 UTC
+   Tags: Apt status req
+
+34. cnv_1g42326q
+   Subject: EXTERNAL: Re: New MRI Requests: Anthony Vito Taylor and Kaylah Channelle Taylor
+   From: amanda@newflexgroup.org
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 22:05:37 UTC
+   Tags: Apt status req
+
+35. cnv_1g41zr0y
+   Subject: EXTERNAL: STAT- FELIX, MARIA : OPEN MRI APPOINTMENT REQUEST
+   From: info@nationwidemedmri.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 21:57:39 UTC
+   Tags: Apt status req
+
+36. cnv_1g41pjrm
+   Subject: RE: EXTERNAL: re: New Client Referral for Rodrigo Morales
+   From: miriam@davidrickslaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 21:27:27 UTC
+   Tags: Apt status req
+
+37. cnv_1g41okgi
+   Subject: Re: EXTERNAL: New Lien Client - Seleina Flores (DOB: 10/30/1993)
+   From: austin@ghassemilawgroup.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 21:25:03 UTC
+   Tags: Apt status req
+
+38. cnv_1g41kb4i
+   Subject: EXTERNAL: Fwd: Medley, Kim - DOL 05/22/2025
+   From: shadi@theliennetwork.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 21:13:24 UTC
+   Tags: Apt status req
+
+39. cnv_1g41fqaa
+   Subject: Re: EXTERNAL: Re: New order - Vanessa Gomez, DOB: 09-03-1996 - MRI
+   From: anacruz@newflexgroup.org
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 21:02:16 UTC
+   Tags: Apt status req
+
+40. cnv_1g41f2z6
+   Subject: Re: EXTERNAL: Maria Corral De Herrera DOL: 11/18/2025
+   From: jennifer@palattorneys.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 21:01:17 UTC
+   Tags: Apt status req
+
+41. cnv_1g41cj6a
+   Subject: EXTERNAL: Fwd: Accilink Appointment Confirmed: Soufiane Semlali | DoB: Jul 1, 1968
+   From: veronica@accilink.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 20:54:18 UTC
+   Tags: Apt status req
+
+42. cnv_1g29gyaa
+   Subject: RE: EXTERNAL: Allen, Gary DOB: 03/18/1952
+   From: rebecca@swlawllp.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 20:49:24 UTC
+   Tags: Apt status req
+
+43. cnv_1g4134gi
+   Subject: EXTERNAL: Patient ID: PRE1155420 - Taylor Ken Katsumata DOB: 10/16/10
+   From: lupe@culverlegal.com
+   Agent: ASL_LIEN
+   Time: 2026-01-05 20:29:39 UTC
+   Tags: ASL, Rad Lien, Tech Lien
+
+44. cnv_1g412w7m
+   Subject: Re: EXTERNAL: Re: ***MISSING DIAGNOSIS/ICD-10 CODE /REASON FOR EXAM ON THE RX ORDER***
+   From: mds@wildeboerlegal.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 20:29:03 UTC
+   Tags: Apt status req
+
+45. cnv_1g4115ua
+   Subject: Re: EXTERNAL: Accilink Request to Confirm Attendance: Jeffrey Doll | DoB: Oct 7, 1980
+   From: salamanca@maximuslaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 20:24:20 UTC
+   Tags: Apt status req
+
+46. cnv_1fzg88ia
+   Subject: Re: EXTERNAL: Grace Divine Manalang - 10/23/2024
+   From: kevin@primolaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 20:15:16 UTC
+   Tags: Apt status req
+
+47. cnv_1g40xvki
+   Subject: Re: EXTERNAL: Grace Divine Manalang - 10/23/2024
+   From: kevin@primolaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 20:15:15 UTC
+   Tags: Apt status req
+
+48. cnv_1g40wkk2
+   Subject: Re: EXTERNAL: NEW PATIENT: AMAYA ARIANNA SILVA TO PERCISE IMAGING 
+   From: aden@zeuslawfirm.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 20:11:36 UTC
+   Tags: Apt status req
+
+49. cnv_1g40u6xe
+   Subject: EXTERNAL: Salahuddin Temueri DOL 12/04/2025 DOB 11/11/1995
+   From: katherinec@bauman.law
+   Agent: ASL_LIEN
+   Time: 2026-01-05 20:05:55 UTC
+   Tags: ASL, Rad Lien, Tech Lien
+
+50. cnv_1g33dlqq
+   Subject: Re: EXTERNAL: Karagenuzian, Gregory - DOL 06/28/2025
+   From: sonya@maisonlaw.com
+   Agent: ASL_LIEN
+   Time: 2026-01-05 20:04:02 UTC
+   Tags: ASL, Rad Lien, Tech Lien
+
+51. cnv_1g40sqfm
+   Subject: EXTERNAL: Maria Magdalena Diaz Alanis
+   From: janet@pedramlaw.com
+   Agent: ASL_LIEN
+   Time: 2026-01-05 20:02:46 UTC
+   Tags: ASL, Rad Lien, Tech Lien
+
+52. cnv_1g40r3rm
+   Subject: EXTERNAL: Re: Ashley Espindola -- DOL: 10/14/2025
+   From: ashley@larianlaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 19:59:33 UTC
+   Tags: Apt status req
+
+53. cnv_1g40l93m
+   Subject: EXTERNAL: Accilink Request to Confirm Attendance: Criselda Hernandez Tapia | DoB: Oct 13, 2025
+   From: veronica@accilink.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 19:43:54 UTC
+   Tags: Apt status req
+
+54. cnv_1g40k9ci
+   Subject: Re: EXTERNAL: Re: New Appointment Request Arturo Romero Ayala
+   From: alexandra@newflexgroup.org
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 19:41:13 UTC
+   Tags: Apt status req
+
+55. cnv_1g0qp5si
+   Subject: Re: EXTERNAL: ALVAREZ, ALEYDA - DOL 09/30/2024
+   From: ani@anlaw.law
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 19:33:38 UTC
+   Tags: Apt status req
+
+56. cnv_1g40h09e
+   Subject: Re: EXTERNAL: New appointment request for MRI-Jose Chahia
+   From: kevin@newflexgroup.org
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 19:32:23 UTC
+   Tags: Apt status req
+
+57. cnv_1g40ezte
+   Subject: Re: EXTERNAL: Tahee Abdullah Rasheed | DOL: 08/30/2025
+   From: yvb@omegalaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 19:27:27 UTC
+   Tags: Apt status req
+
+58. cnv_1g40cqfm
+   Subject: RE: EXTERNAL: Re: LOPEZ, IRAIS ET. AL. | 3.12.25 | MRI
+   From: aracely@rafiilaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 19:21:24 UTC
+   Tags: Apt status req
+
+59. cnv_1g40bgia
+   Subject: EXTERNAL: A fax has arrived from: '(925) 757-2101'
+   From: westfaxff@westfax.com
+   Agent: PSL_LIEN
+   Time: 2026-01-05 19:18:05 UTC
+   Tags: PSL, Rad Lien, Tech Lien
+
+60. cnv_1g40av0y
+   Subject: EXTERNAL: Re: New Pt: Megan Williams - DOA: 11/20/25
+   From: medicalrecords@reedlawyer.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 19:16:27 UTC
+   Tags: Apt status req
+
+61. cnv_1g409zrm
+   Subject: RE: EXTERNAL: Re: Sergio Martinez DOL 11/14/2025
+   From: joc@bdj.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 19:14:09 UTC
+   Tags: Apt status req
+
+62. cnv_1g409y6q
+   Subject: Re: EXTERNAL: Referral - Roshan Kc
+   From: jeff@crissmanlaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 19:13:59 UTC
+   Tags: Apt status req
+
+63. cnv_1g39u21e
+   Subject: Re: EXTERNAL: Doo Hyun Shin -05/26/2025-Precise Imaging-Billing request
+   From: sppmeds2@bdj.com
+   Agent: ASL_LIEN
+   Time: 2026-01-05 18:58:09 UTC
+   Tags: ASL, Rad Lien
+
+64. cnv_1g402w7m
+   Subject: EXTERNAL: A fax has arrived from: '(925) 757-2101'
+   From: westfaxff@westfax.com
+   Agent: PSL_LIEN
+   Time: 2026-01-05 18:58:05 UTC
+   Tags: PSL, Rad Lien, Tech Lien
+
+65. cnv_1g3zbe4y
+   Subject: Re: EXTERNAL: Bella Farias | PRE1161958
+   From: irene@montgomerysteele.com
+   Agent: ASL_LIEN
+   Time: 2026-01-05 18:57:22 UTC
+   Tags: ASL, Rad Lien, Tech Lien
+
+66. cnv_1g402l8y
+   Subject: EXTERNAL: A fax has arrived from: '(925) 757-2101'
+   From: westfaxff@westfax.com
+   Agent: PSL_LIEN
+   Time: 2026-01-05 18:57:18 UTC
+   Tags: PSL, Tech Lien
+
+67. cnv_1g402k42
+   Subject: EXTERNAL: PRECISE MRI updates
+   From: michelle@sdspine.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 18:57:14 UTC
+   Tags: Apt status req
+
+68. cnv_1g4024wi
+   Subject: EXTERNAL: A fax has arrived from: '(925) 757-2101'
+   From: westfaxff@westfax.com
+   Agent: ASL_LIEN
+   Time: 2026-01-05 18:56:03 UTC
+   Tags: ASL, Rad Lien, Tech Lien
+
+69. cnv_1g4022xe
+   Subject: Re: EXTERNAL: New Patient: Ariel Martinez
+   From: medical@highrisefinancial.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 18:56:00 UTC
+   Tags: Apt status req
+
+70. cnv_1g3zzssy
+   Subject: EXTERNAL: A fax has arrived from: '(925) 757-2101'
+   From: westfaxff@westfax.com
+   Agent: PSL_LIEN
+   Time: 2026-01-05 18:48:55 UTC
+   Tags: PSL, Rad Lien
+
+71. cnv_1g3zvymq
+   Subject: EXTERNAL: Re: NEW REFERRAL: Carrasco Patricio, Angel - DOL 04/04/2024
+   From: arlene@setarehfirm.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 18:38:05 UTC
+   Tags: Apt status req
+
+72. cnv_1g3zvspe
+   Subject: Re: EXTERNAL: Re: 12/29/2025 CASTILLO, JOSE LUIS DOL: 07/26/2025 DR NOURIANS RECOMMENDATIONS
+   From: orders@nourianmd.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 18:37:31 UTC
+   Tags: Apt status req
+
+73. cnv_1g3zu9si
+   Subject: Re: EXTERNAL: Paredes Cortez, Claudia - DOL 10/18/2025
+   From: itzel.cibrian@dklaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 18:33:54 UTC
+   Tags: Apt status req
+
+74. cnv_1g3zqg5u
+   Subject: EXTERNAL: Re:  Merino - Lopez, Joshua - DOL 11/13/2025
+   From: jessica.kim@dklaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 18:23:46 UTC
+   Tags: Apt status req
+
+75. cnv_1g3zpgnm
+   Subject: Re: EXTERNAL: Jimenez, Juan - Jimenez, Natalie -DOL 09/16/2025
+   From: sara@sterinlaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 18:20:58 UTC
+   Tags: Apt status req
+
+76. cnv_1g3zot3m
+   Subject: EXTERNAL: Re: Sergio Aldana -- DOL: 10/14/2025
+   From: ashley@larianlaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 18:19:44 UTC
+   Tags: Apt status req
+
+77. cnv_1f3rdj2q
+   Subject: Re: EXTERNAL: BILLING CONFIRMATION
+   From: brieanna.fhlaw@gmail.com
+   Agent: ASL_LIEN
+   Time: 2026-01-05 18:15:44 UTC
+   Tags: ASL, Rad Lien, Tech Lien
+
+78. cnv_1g3zguc2
+   Subject: RE: EXTERNAL: Cisneros v. Thurmond #7741
+   From: nescobedo@bjlawgroup.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 18:03:56 UTC
+   Tags: Apt status req
+
+79. cnv_1g3zf1ci
+   Subject: Re: EXTERNAL:
+   From: vmontano@saslg.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 18:00:57 UTC
+   Tags: Apt status req
+
+80. cnv_1g2tszrm
+   Subject: EXTERNAL: Re: BAL INQ - Akbar Matani - DOL: 09/29/2025
+   From: rpagano@toferlaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 17:55:33 UTC
+   Tags: Apt status req
+
+81. cnv_1g3zc1ci
+   Subject: Re: EXTERNAL: RE: New referral on Gloria Stevenson
+   From: marina@michaelkahnlaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 17:53:11 UTC
+   Tags: Apt status req
+
+82. cnv_1g3zb7gy
+   Subject: Re: EXTERNAL: MRI Rx: Richard Kuehne, DOB: 09/04/1958
+   From: sgalo@mswlegal.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 17:51:11 UTC
+   Tags: Apt status req
+
+83. cnv_1fvfcmfm
+   Subject: Re: EXTERNAL: MRI Rx: Sergio Mancilla, DOB: 01/16/1961
+   From: sgalo@mswlegal.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 17:47:04 UTC
+   Tags: Apt status req
+
+84. cnv_1g3z89zm
+   Subject: EXTERNAL: Accilink Request to Confirm Attendance: Gidiani Tepale Lopez | DoB: Apr 2, 2001
+   From: veronica@accilink.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 17:44:02 UTC
+   Tags: Apt status req
+
+85. cnv_1g3z7qz6
+   Subject: Re: EXTERNAL: Clavel Solis Gonzalez - Please Start Treatment *ASAP*, DOB: 11/26/1996 DOL: 4/19/2025
+   From: seon@camdenfirm.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 17:42:57 UTC
+   Tags: Apt status req
+
+86. cnv_1g3z7lw2
+   Subject: Re: EXTERNAL: Raul Espitia - Please Start Treatment *ASAP*, DOB: 7/27/1967 DOL: 12/10/2025
+   From: seon@camdenfirm.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 17:42:36 UTC
+   Tags: Apt status req
+
+87. cnv_1g3z7g2a
+   Subject: Re: EXTERNAL: Juan Carlos Gonzalez Elizondo - Please Start Treatment *ASAP*, DOB: 12/4/1969 DOL: 11/19/2025
+   From: seon@camdenfirm.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 17:42:18 UTC
+   Tags: Apt status req
+
+88. cnv_1g3z3xjm
+   Subject: Re: MRI & XRAYS | LAW OFFICE OF SUSANO CORIA | EDUARDO LOPEZ DOA: 10/21/25
+   From: jpa.liaison.solution@gmail.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 17:35:51 UTC
+   Tags: Apt status req
+
+89. cnv_1g3yyhn6
+   Subject: Re: EXTERNAL: Ashley Espindola -- DOL: 10/14/2025
+   From: ashley@larianlaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 17:26:42 UTC
+   Tags: Apt status req
+
+90. cnv_1g3yrrma
+   Subject: EXTERNAL: RE: REYES SOLIS, SILVIA | 11.25.25 | MREF | RADIOLOGY | PRECISE IMAGING 
+   From: zenia@rafiilaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 17:15:34 UTC
+   Tags: Apt status req
+
+91. cnv_1g1vi8pe
+   Subject: Re: EXTERNAL: D'edra Hurst (12/06/1959) | Precise Imaging
+   From: rafael@jnylaw.com
+   Agent: ASL_LIEN
+   Time: 2026-01-05 17:15:18 UTC
+   Tags: ASL, Rad Lien, Tech Lien
+
+92. cnv_1g3yphle
+   Subject: EXTERNAL: SIGNED LIENS
+   From: liens@onsyteimaging.com
+   Agent: ASL_LIEN
+   Time: 2026-01-05 17:11:23 UTC
+   Tags: ASL, Rad Lien
+
+93. cnv_1g3yhmqa
+   Subject: Request : ##RE-169569## raised by you was closed
+   From: care.coordination@simonmed.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 17:00:27 UTC
+   Tags: Apt status req
+
+94. cnv_1g3ygn82
+   Subject: EXTERNAL: Re: MRI appointment request - Shelvin Singh
+   From: thamar@newflexgroup.org
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 16:58:35 UTC
+   Tags: Apt status req
+
+95. cnv_1g3yd5w2
+   Subject: EXTERNAL: Signed Lien - Jesus Cervantes DOB: 03/05/1951
+   From: davidv@bauman.law
+   Agent: ASL_LIEN
+   Time: 2026-01-05 16:51:43 UTC
+   Tags: ASL, Rad Lien, Tech Lien
+
+96. cnv_1g23bqtu
+   Subject: Re: EXTERNAL: Linda Martin - MRI
+   From: assistant@eazyliens.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 16:48:09 UTC
+   Tags: Apt status req
+
+97. cnv_1g3y772q
+   Subject: Re: EXTERNAL: Villarreal, Antonio DOB 09/03/1961 (OPEN MRI)
+   From: brobles@ciglaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 16:38:59 UTC
+   Tags: Apt status req
+
+98. cnv_1g3y753m
+   Subject: Re: EXTERNAL: Accilink Appointment Request: Jeff Moore | DoB: Feb 8, 1971
+   From: cm3@etehadlaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 16:38:50 UTC
+   Tags: Apt status req
+
+99. cnv_1g3y5zma
+   Subject: Re: EXTERNAL: Re: Gliselda and Estrella Calderon DOL 10/22/2025
+   From: info@bonyadipashailaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 16:35:58 UTC
+   Tags: Apt status req
+
+100. cnv_1g3y06tu
+   Subject: Re: EXTERNAL: STAT NEWBMS MRI REF - Jasmine Cardenas -ALLN1-PRECISE
+   From: btrejocmc@gmail.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 16:23:45 UTC
+   Tags: Apt status req
+
+101. cnv_1g3xtc0i
+   Subject: RE: EXTERNAL: Legal Rights Law Center Case# 2510-3018 - Lilian J Juarez-Jimenez
+   From: nancy@legalrightslaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 16:09:42 UTC
+   Tags: Apt status req
+
+102. cnv_1g3xp2aa
+   Subject: RE: EXTERNAL: Legal Rights Law Center Case# 2510-3018 - Lilian J Juarez-Jimenez
+   From: nancy@legalrightslaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 16:03:20 UTC
+   Tags: Apt status req
+
+103. cnv_1g3xo4nm
+   Subject: EXTERNAL: Re: New MRI Request: Martha Mendoza
+   From: josting@newflexgroup.org
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 16:02:12 UTC
+   Tags: Apt status req
+
+104. cnv_1g3xjmmq
+   Subject: EXTERNAL: ESTRADA MORENO, JORGE | 5.26.21 | INQUIRY | PRECISE IMAGING
+   From: esteban@rafiilaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 15:51:27 UTC
+   Tags: Apt status req
+
+105. cnv_1g3xeafm
+   Subject: EXTERNAL: Re: THOMAS, DEWAYNE DARIAN DOB: 01/23/2004 Precise Imaging
+   From: emily@silvainjurylaw.com
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 15:38:58 UTC
+   Tags: Apt status req
+
+106. cnv_1g3x3vv6
+   Subject: RE: EXTERNAL: RE: Victor Manuel Vasquez DOL 10/30/2025
+   From: erika@aa.law
+   Agent: APT_STATUS_REQ
+   Time: 2026-01-05 15:19:31 UTC
+   Tags: Apt status req
+
+107. cnv_1g3uztjm
+   Subject: Signed Lien Documents - America Collins (TestID: 597ad528-15f9-4922-a691-834722d1effa)
+   From: pranav@possibleminds.in
+   Agent: PSL_LIEN
+   Time: 2026-01-05 10:07:32 UTC
+   Tags: PSL, Rad Lien, Tech Lien
+
+108. cnv_1g3uyz9u
+   Subject: Signed PI Lien Packet - Radiologist & Tech (Dec 9) (TestID: ed165a6a-cd67-40f0-9a6b-5294bc37cbf0)
+   From: pranav@possibleminds.in
+   Agent: ASL_LIEN
+   Time: 2026-01-05 10:01:02 UTC
+   Tags: ASL, Rad Lien, Tech Lien
+
+109. cnv_1g3uyec2
+   Subject: Signed Lien Packet - Case 258521 (TestID: 1e203692-87e1-4bd7-b886-d845652bf8df)
+   From: pranav@possibleminds.in
+   Agent: ASL_LIEN
+   Time: 2026-01-05 09:55:32 UTC
+   Tags: ASL, Rad Lien, Tech Lien
+
+110. cnv_1g3uryfm
+   Subject: Signed Lien Packet - Case 258521 (TestID: e23f3d7c-4be9-44fd-afb6-772b5f570231)
+   From: pranav@possibleminds.in
+   Agent: ASL_LIEN
+   Time: 2026-01-05 08:41:16 UTC
+   Tags: ASL, Rad Lien, Tech Lien
+
+111. cnv_1g3urniq
+   Subject: Inder Singh - Signed Lien Documents (TestID: 9e5b2237-4631-4cb8-90f2-6b6f68bfa145)
+   From: pranav@possibleminds.in
+   Agent: PSL_LIEN
+   Time: 2026-01-05 08:36:41 UTC
+   Tags: PSL, Tech Lien
+
+112. cnv_1g3ura8i
+   Subject: Signed PI Lien Packet - Radiologist & Tech (Dec 9) (TestID: c28b976e-a2d8-4e55-91e5-931fe59618b3)
+   From: pranav@possibleminds.in
+   Agent: ASL_LIEN
+   Time: 2026-01-05 08:32:15 UTC
+   Tags: ASL, Rad Lien, Tech Lien
+
+113. cnv_1g3uqz4i
+   Subject: Signed PI Lien Packet - Radiologist & Tech (Dec 9) (TestID: 93d7da35-475c-468f-bb84-83e0d9a4aee1)
+   From: pranav@possibleminds.in
+   Agent: ASL_LIEN
+   Time: 2026-01-05 08:29:14 UTC
+   Tags: ASL, Rad Lien, Tech Lien
+

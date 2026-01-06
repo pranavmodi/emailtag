@@ -619,17 +619,13 @@ async def handle_apt_status_request_agent_sdk(
     if extracted_patient_ids is None:
         extracted_patient_ids = []
 
-    logger.info(f"Initiating openai-agents SDK flow with MCP integration for Apt Status Req - Conv ID: {front_conversation_id}")
-    logger.info(f"🔍 MULTI-PATIENT: Processing {len(extracted_patient_ids)} patient ID(s): {extracted_patient_ids}")
-    # logger.info(f"🔍 DEBUG APT_STATUS: email_subject parameter = '{email_subject}' (type: {type(email_subject)})")
-
     # If multiple patient IDs, process each one separately
     if len(extracted_patient_ids) > 1:
-        logger.info(f"🔄 MULTI-PATIENT MODE: Processing {len(extracted_patient_ids)} patients separately")
+        logger.info(f"Processing {len(extracted_patient_ids)} patients separately")
         all_results = []
 
         for idx, patient_id in enumerate(extracted_patient_ids):
-            logger.info(f"🔄 Processing patient {idx + 1}/{len(extracted_patient_ids)}: {patient_id}")
+            logger.info(f"Processing patient {idx + 1}/{len(extracted_patient_ids)}: {patient_id}")
 
             # Call this same function recursively with single patient ID
             result = await handle_apt_status_request_agent_sdk(
@@ -649,14 +645,13 @@ async def handle_apt_status_request_agent_sdk(
 
         # Archive the conversation after all patient responses have been sent
         if all_handled and all_processed:
-            logger.info(f"📦 ARCHIVING: All {len(extracted_patient_ids)} patient responses sent successfully, archiving conversation")
             archive_success = frontapp_service.archive_conversation_in_front(front_conversation_id)
             if archive_success:
-                logger.info(f"✅ ARCHIVED: Conversation {front_conversation_id} archived successfully after multi-patient responses")
+                logger.info(f"Conversation archived after processing {len(extracted_patient_ids)} patients")
             else:
-                logger.warning(f"⚠️ ARCHIVE FAILED: Could not archive conversation {front_conversation_id} after multi-patient responses")
+                logger.warning(f"Failed to archive conversation {front_conversation_id}")
 
-        logger.info(f"✅ MULTI-PATIENT COMPLETE: Processed {len(extracted_patient_ids)} patients")
+        logger.info(f"Completed processing {len(extracted_patient_ids)} patients")
         return {
             "agent_handled": all_handled,
             "processed_flag": all_processed,
@@ -694,29 +689,17 @@ async def handle_apt_status_request_agent_sdk(
         workspace_settings = await tag_settings_crud.get_settings_dict(db, "WORKSPACE")
         sender_verification_enabled = workspace_settings.get("enable_sender_verification", True)
 
-    logger.info(f"🔐 SENDER VERIFICATION: Enabled = {sender_verification_enabled}")
-
     # Perform sender verification if we have a patient ID and verification is enabled
     if extracted_patient_id and sender_verification_enabled:
-        logger.info(f"🔐 SENDER VERIFICATION: Checking authorization for {email_sender} to access patient {extracted_patient_id}")
-
         # Verify sender authorization
         verification_result = await verify_sender_for_patient_access(
             patient_id=extracted_patient_id,
             sender_email=email_sender
         )
 
-        logger.info(f"🔐 VERIFICATION RESULT: {verification_result['message']}")
-        logger.info(f"   - Authorized: {verification_result['authorized']}")
-        logger.info(f"   - Role: {verification_result['role']}")
-        logger.info(f"   - Status: {verification_result['verification_status']}")
-
         # Handle unauthorized senders
         if not verification_result["authorized"]:
-            logger.warning(f"⚠️ UNAUTHORIZED ACCESS ATTEMPT:")
-            logger.warning(f"   - Sender: {email_sender}")
-            logger.warning(f"   - Patient: {extracted_patient_id}")
-            logger.warning(f"   - Role detected: {verification_result['role']}")
+            logger.warning(f"Unauthorized access: {email_sender} to patient {extracted_patient_id} ({verification_result['role']})")
 
             # Send HIPAA form for unauthorized access
             TEMPLATE_HIPAA_NEEDED = """Hello,
@@ -781,18 +764,16 @@ Thank you."""
                     }
                 }
 
-        # Sender is authorized - log and proceed
-        logger.info(f"✅ SENDER AUTHORIZED:")
-        logger.info(f"   - Sender: {email_sender}")
-        logger.info(f"   - Role: {verification_result['role']}")
-        logger.info(f"   - Patient: {extracted_patient_id}")
-        logger.info(f"   - Proceeding with appointment status request")
+        # Sender is authorized - proceed
+        pass
 
     elif extracted_patient_id and not sender_verification_enabled:
-        logger.info(f"ℹ️ SENDER VERIFICATION DISABLED: Skipping verification for {email_sender} (testing mode)")
+        # Verification disabled in settings
+        pass
 
     else:
-        logger.info(f"ℹ️ SENDER VERIFICATION SKIPPED: No patient ID available yet (will verify in follow-up)")
+        # No patient ID yet - will verify in follow-up
+        pass
 
     # --- END: SENDER VERIFICATION ---
 

@@ -196,8 +196,8 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             logger.warning("determined_tags not passed to autorespond task. Reading from DB, which may be stale.")
             applied_tag_names = [tag.name for tag in email_obj.tags if hasattr(tag, 'name')]
 
-        # DEBUG: Log applied tags
-        logger.info(f"🏷️ AUTORESPOND DEBUG: Email {email_id} has tags: {applied_tag_names}")
+        # Log applied tags
+        logger.info(f"Email {email_id} tags: {applied_tag_names}")
 
         # Extract document processing results for downstream agent use
         document_results = email_obj.ocr_results if hasattr(email_obj, 'ocr_results') and email_obj.ocr_results else None
@@ -235,16 +235,14 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                 auto_response_details = {"reason": "Apt Status Req autorespond is disabled"}
             else:
                 agent_name_for_status = "apt_status_req"
-                logger.info(f"Email {email_id} (conv: {front_conversation_id}) tagged with '{APT_STATUS_REQ_TAG_NAME}'. Attempting agent SDK via orchestrator.")
 
                 # Use pre-extracted patient IDs from database (extracted before classification)
                 def _get_all_patient_ids():
                     try:
                         if email_obj.extracted_patient_ids and len(email_obj.extracted_patient_ids) > 0:
-                            logger.info(f"🔍 AUTORESPOND: Found {len(email_obj.extracted_patient_ids)} pre-extracted patient ID(s) for {email_id}: {email_obj.extracted_patient_ids}")
+                            logger.info(f"Found {len(email_obj.extracted_patient_ids)} pre-extracted patient ID(s) for {email_id}")
                             return email_obj.extracted_patient_ids
                         else:
-                            logger.info(f"🔍 AUTORESPOND: No pre-extracted patient IDs found for {email_id}")
                             return []
                     except Exception as e:
                         logger.error(f"Error accessing pre-extracted patient IDs for {email_id}: {e}", exc_info=True)

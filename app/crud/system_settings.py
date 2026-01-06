@@ -213,7 +213,6 @@ class CRUDSystemSettings:
             autorespond_type,
             default=True
         )
-        logger.info(f"Autorespond '{autorespond_type}' enabled status: {enabled}")
         return enabled
 
     async def toggle_autorespond(

@@ -1220,5 +1220,17 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
+    },
+    "56": {
+        "description": "PRE1168578 - Apt status req - Client inquiry about appointment status using patient ID",
+        "subject": "Appointment Status Inquiry - PRE1168578",
+        "body_html": (
+            "<p>Hello,</p>"
+            "<p>I am following up to check the status of the appointment for patient PRE1168578.</p>"
+            "<p>Can you please confirm if the imaging was completed and when we can expect the results?</p>"
+            "<p>Thank you.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Apt status req"]
     }
 }
