@@ -13,6 +13,10 @@ import {
   Calendar,
   ChevronDown,
   ChevronUp,
+  MessageSquare,
+  Tag,
+  Clock,
+  Trash2,
 } from "lucide-react";
 
 import { ApiError, SettingsApi } from "@/lib/api";
@@ -44,6 +48,22 @@ type FileDetail = {
   created: number;
 };
 
+type ConversationDetails = {
+  tags?: string[];
+};
+
+type ResponseDetail = {
+  conversation_id: string;
+  hasResponse: boolean;
+  message?: string;
+  timestamp?: string;
+  response_text?: string;
+  tags_to_add?: string[];
+  lien_type?: string;
+  signature_type?: string;
+  status?: string;
+};
+
 const formatFileSize = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -71,8 +91,12 @@ export default function LienTestPage() {
   const [conversations, setConversations] = useState<ConversationUpload[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [fileDetails, setFileDetails] = useState<FileDetail[]>([]);
+  const [conversationDetails, setConversationDetails] = useState<ConversationDetails | null>(null);
+  const [responseDetails, setResponseDetails] = useState<ResponseDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
 
@@ -99,8 +123,15 @@ export default function LienTestPage() {
     setIsLoadingFiles(true);
     setFileError(null);
     try {
-      const data = await SettingsApi.getLienTestUploadsByConversation(conversationId);
-      setFileDetails(data.files);
+      // Fetch both files and response data in parallel
+      const [filesData, responseData] = await Promise.all([
+        SettingsApi.getLienTestUploadsByConversation(conversationId),
+        SettingsApi.getLienTestResponse(conversationId)
+      ]);
+
+      setFileDetails(filesData.files);
+      setConversationDetails({ tags: filesData.tags ?? [] });
+      setResponseDetails(responseData);
       setSelectedConversation(conversationId);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
@@ -122,6 +153,40 @@ export default function LienTestPage() {
   const handleDownload = (conversationId: string, filename: string) => {
     const url = SettingsApi.downloadLienTestFile(conversationId, filename);
     window.open(url, "_blank");
+  };
+
+  const getFileUrl = (conversationId: string, filename: string) => {
+    return SettingsApi.downloadLienTestFile(conversationId, filename);
+  };
+
+  const handleViewFile = (conversationId: string, filename: string) => {
+    const url = getFileUrl(conversationId, filename);
+    window.open(url, "_blank");
+  };
+
+  const handleClearAll = async () => {
+    setIsClearing(true);
+    setError(null);
+    try {
+      const result = await SettingsApi.clearAllLienTestUploads();
+      setShowClearConfirm(false);
+      setSelectedConversation(null);
+      setFileDetails([]);
+      setConversationDetails(null);
+      setResponseDetails(null);
+      // Reload conversations to show empty state
+      await loadConversations();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const message =
+        error instanceof Error ? error.message : "Failed to clear test uploads";
+      setError(message);
+    } finally {
+      setIsClearing(false);
+    }
   };
 
   if (isLoading) {
@@ -185,10 +250,22 @@ export default function LienTestPage() {
                 onClick={loadConversations}
                 variant="ghost"
                 className="bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 border-0 shadow-lg"
+                disabled={isClearing}
               >
                 <RefreshCw className="h-4 w-4" />
                 Refresh
               </Button>
+              {conversations.length > 0 && (
+                <Button
+                  onClick={() => setShowClearConfirm(true)}
+                  variant="ghost"
+                  className="bg-rose-500/20 backdrop-blur-sm text-white hover:bg-rose-500/30 border-0 shadow-lg"
+                  disabled={isClearing}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Clear All
+                </Button>
+              )}
             </div>
           </div>
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -211,6 +288,64 @@ export default function LienTestPage() {
       </motion.div>
 
       {error && <ErrorBanner message={error} />}
+
+      {/* Confirmation Dialog */}
+      {showClearConfirm && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => !isClearing && setShowClearConfirm(false)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={easing}
+            className="mx-4 w-full max-w-md rounded-2xl border border-rose-200 bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-100">
+                <Trash2 className="h-6 w-6 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Clear All Test Uploads?</h3>
+                <p className="text-sm text-slate-600">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="mb-6 text-sm text-slate-700 leading-relaxed">
+              This will permanently delete all {conversations.length} conversation{conversations.length !== 1 ? "s" : ""} and their associated files ({conversations.reduce((sum, conv) => sum + conv.file_count, 0)} files total) from the test directory.
+            </p>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => setShowClearConfirm(false)}
+                variant="ghost"
+                className="flex-1 border border-slate-200 hover:bg-slate-50"
+                disabled={isClearing}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleClearAll}
+                className="flex-1 bg-rose-600 text-white hover:bg-rose-700"
+                disabled={isClearing}
+              >
+                {isClearing ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Clearing...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Clear All
+                  </>
+                )}
+              </Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
 
       {conversations.length === 0 && !error && (
         <motion.div
@@ -321,11 +456,109 @@ export default function LienTestPage() {
                     transition={easing}
                     className="border-t border-slate-100 bg-slate-50/50"
                   >
-                    <div className="p-5 space-y-2">
+                    <div className="p-5 space-y-4">
                       {fileError && <ErrorBanner message={fileError} />}
-                      {fileDetails.length === 0 && !fileError && (
-                        <p className="text-sm text-slate-500 text-center py-4">No files found</p>
+
+                      {/* Current Tags */}
+                      {conversationDetails && conversationDetails.tags && conversationDetails.tags.length > 0 && (
+                        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Tag className="h-4 w-4 text-slate-500" />
+                            <p className="text-sm font-semibold text-slate-900">Current Tags</p>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {conversationDetails.tags.map((tag, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700"
+                              >
+                                <Tag className="h-3 w-3" />
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
                       )}
+
+                      {/* Response Section */}
+                      {responseDetails && responseDetails.hasResponse && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.1 }}
+                          className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-5 shadow-sm"
+                        >
+                          <div className="flex items-start gap-3 mb-4">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-500 text-white shadow-md">
+                              <MessageSquare className="h-5 w-5" />
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="text-base font-semibold text-slate-900 mb-1">
+                                Generated Autorespond Message
+                              </h4>
+                              <p className="text-xs text-slate-600">
+                                This message would be sent in production mode
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Tags and Metadata */}
+                          {/* Intentionally hide metadata badges to avoid redundant tag display */}
+
+                          {/* Tags to Add */}
+                          {responseDetails.tags_to_add && responseDetails.tags_to_add.length > 0 && (
+                            <div className="mb-4">
+                              <p className="text-xs font-medium text-slate-700 mb-2">Tags that would be applied:</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {responseDetails.tags_to_add.map((tag, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-sm"
+                                  >
+                                    <Tag className="h-3 w-3" />
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Response Message */}
+                          <div className="rounded-lg bg-white border border-slate-200 p-4 shadow-sm">
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
+                              Message Content:
+                            </p>
+                            <div className="prose prose-sm max-w-none">
+                              {responseDetails.response_text ? (
+                                <div
+                                  className="text-sm text-slate-700 leading-relaxed"
+                                  dangerouslySetInnerHTML={{ __html: responseDetails.response_text }}
+                                />
+                              ) : (
+                                <p className="text-sm text-slate-500">No response content available.</p>
+                              )}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {responseDetails && !responseDetails.hasResponse && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                          <div className="flex items-center gap-2">
+                            <MessageSquare className="h-4 w-4" />
+                            <span className="font-medium">
+                              {responseDetails.message || "No autorespond message generated yet"}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Files Section */}
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-900 mb-3">Uploaded Files</h4>
+                        {fileDetails.length === 0 && !fileError && (
+                          <p className="text-sm text-slate-500 text-center py-4">No files found</p>
+                        )}
                       {fileDetails.map((file, fileIndex) => (
                         <motion.div
                           key={file.filename}
@@ -347,15 +580,26 @@ export default function LienTestPage() {
                               </p>
                             </div>
                           </div>
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleDownload(conversation.conversation_id, file.filename)}
-                            className="shrink-0 h-9 w-9 p-0 hover:bg-blue-50 hover:text-blue-600"
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              onClick={() => handleDownload(conversation.conversation_id, file.filename)}
+                              className="shrink-0 h-9 w-9 p-0 hover:bg-blue-50 hover:text-blue-600"
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              onClick={() => handleViewFile(conversation.conversation_id, file.filename)}
+                              className="shrink-0 h-9 px-3 hover:bg-blue-50 hover:text-blue-600"
+                            >
+                              <FolderOpen className="h-4 w-4 mr-1" />
+                              View
+                            </Button>
+                          </div>
                         </motion.div>
                       ))}
+                      </div>
                     </div>
                   </motion.div>
                 )}

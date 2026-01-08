@@ -31,6 +31,10 @@ RAD_LIEN_TAG = "Rad Lien"
 TECH_LIEN_TAG = "Tech Lien"
 # --- END: Tag Constants ---
 
+# --- BEGIN: Test Mode Constants ---
+LIEN_TEST_UPLOAD_DIR = "/tmp/lien_test_uploads"
+# --- END: Test Mode Constants ---
+
 # --- NOTE: All lien response templates are now managed via /settings/template-config ---
 # Templates are fetched from database via _fetch_lien_templates_from_db()
 
@@ -591,6 +595,98 @@ async def _generate_lien_status_table(patient_id: str, upload_results: List[Dict
         logger.error(f"Error generating lien status table: {e}", exc_info=True)
         return ""
 
+
+async def save_test_mode_response(
+    conversation_id: str,
+    response_text: str,
+    tags_to_add: Optional[List[str]] = None,
+    lien_type: str = None,
+    signature_type: str = None
+) -> Dict[str, Any]:
+    """
+    Saves the generated lien autorespond message to file system for test mode.
+
+    Args:
+        conversation_id: Front conversation ID
+        response_text: The full formatted response message
+        tags_to_add: List of tags that would be applied
+        lien_type: "Rad Lien" or "Tech Lien"
+        signature_type: "ASL" or "PSL"
+
+    Returns:
+        Dict with status and file path
+    """
+    try:
+        test_dir = Path(LIEN_TEST_UPLOAD_DIR) / conversation_id
+        test_dir.mkdir(parents=True, exist_ok=True)
+
+        response_file = test_dir / "response.json"
+
+        response_data = {
+            "timestamp": datetime.now().isoformat(),
+            "conversation_id": conversation_id,
+            "response_text": response_text,
+            "tags_to_add": tags_to_add or [],
+            "lien_type": lien_type,
+            "signature_type": signature_type,
+            "status": "test_mode_saved"
+        }
+
+        with open(response_file, "w") as f:
+            json.dump(response_data, f, indent=2)
+
+        logger.info(f"🧪 TEST MODE: Saved response to {response_file}")
+
+        return {
+            "status": "success",
+            "file_path": str(response_file),
+            "message": "Response saved to file (test mode)"
+        }
+
+    except Exception as e:
+        logger.error(f"Error saving test mode response: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "message": f"Failed to save response: {str(e)}"
+        }
+
+
+async def send_or_save_response(
+    conversation_id: str,
+    response_text: str,
+    tags_to_add: Optional[List[str]] = None,
+    test_mode: bool = False,
+    lien_type: str = None,
+    signature_type: str = None
+) -> None:
+    """
+    Either sends the response via Front API or saves to file based on test_mode.
+
+    Args:
+        conversation_id: Front conversation ID
+        response_text: The full formatted response message
+        tags_to_add: List of tags to add (for both send and save)
+        test_mode: If True, save to file instead of sending
+        lien_type: "Rad Lien" or "Tech Lien" (for test mode metadata)
+        signature_type: "ASL" or "PSL" (for test mode metadata)
+    """
+    if test_mode:
+        # Test mode: save to file
+        await save_test_mode_response(
+            conversation_id=conversation_id,
+            response_text=response_text,
+            tags_to_add=tags_to_add,
+            lien_type=lien_type,
+            signature_type=signature_type
+        )
+    else:
+        # Normal mode: send via Front API
+        await send_reply_to_front_direct(
+            conversation_id=conversation_id,
+            reply_text=response_text,
+            tags_to_add=tags_to_add
+        )
+
 # --- END: Helper Functions ---
 
 # --- BEGIN: Main Agent Handler ---
@@ -603,7 +699,8 @@ async def handle_lien_request(
     signature_type: str,
     document_analysis_results: List[Dict[str, Any]] = None,
     settings_obj: Any = app_settings_instance,
-    email_subject: str = None
+    email_subject: str = None,
+    test_mode: bool = False
 ) -> Dict[str, Any]:
     """
     Unified agent to handle both ASL and PSL lien submissions (Rad Lien or Tech Lien).
@@ -668,9 +765,13 @@ async def handle_lien_request(
 
             # Send reply if template is configured
             if templates.get("modified"):
-                await send_reply_to_front_direct(
+                await send_or_save_response(
                     conversation_id=front_conversation_id,
-                    reply_text=templates["modified"].format(lien_type=lien_type)
+                    response_text=templates["modified"].format(lien_type=lien_type),
+                    tags_to_add=None,
+                    test_mode=test_mode,
+                    lien_type=lien_type,
+                    signature_type=signature_type
                 )
             else:
                 logger.warning(f"Modified lien template not configured for tag '{tag_name}'. No autoresponse sent.")
@@ -711,9 +812,13 @@ async def handle_lien_request(
 
             # Send reply if template is configured
             if templates.get("modified"):
-                await send_reply_to_front_direct(
+                await send_or_save_response(
                     conversation_id=front_conversation_id,
-                    reply_text=templates["modified"].format(lien_type=lien_type)
+                    response_text=templates["modified"].format(lien_type=lien_type),
+                    tags_to_add=None,
+                    test_mode=test_mode,
+                    lien_type=lien_type,
+                    signature_type=signature_type
                 )
             else:
                 logger.warning(f"Modified lien template not configured for tag '{tag_name}'. No autoresponse sent.")
@@ -748,9 +853,13 @@ async def handle_lien_request(
 
             # Send reply if template is configured
             if templates.get("modified"):
-                await send_reply_to_front_direct(
+                await send_or_save_response(
                     conversation_id=front_conversation_id,
-                    reply_text=templates["modified"].format(lien_type=lien_type)
+                    response_text=templates["modified"].format(lien_type=lien_type),
+                    tags_to_add=None,
+                    test_mode=test_mode,
+                    lien_type=lien_type,
+                    signature_type=signature_type
                 )
             else:
                 logger.warning(f"Modified lien template not configured for tag '{tag_name}'. No autoresponse sent.")
@@ -779,9 +888,13 @@ async def handle_lien_request(
 
             # Send reply if template is configured
             if templates.get("invalid_signature"):
-                await send_reply_to_front_direct(
+                await send_or_save_response(
                     conversation_id=front_conversation_id,
-                    reply_text=templates["invalid_signature"].format(lien_type=lien_type)
+                    response_text=templates["invalid_signature"].format(lien_type=lien_type),
+                    tags_to_add=None,
+                    test_mode=test_mode,
+                    lien_type=lien_type,
+                    signature_type=signature_type
                 )
             else:
                 logger.warning(f"Invalid signature template not configured for tag '{tag_name}'. No autoresponse sent.")
@@ -810,9 +923,13 @@ async def handle_lien_request(
 
             # Send unreadable template
             if templates.get("unreadable"):
-                await send_reply_to_front_direct(
+                await send_or_save_response(
                     conversation_id=front_conversation_id,
-                    reply_text=templates["unreadable"].format(lien_type=lien_type)
+                    response_text=templates["unreadable"].format(lien_type=lien_type),
+                    tags_to_add=None,
+                    test_mode=test_mode,
+                    lien_type=lien_type,
+                    signature_type=signature_type
                 )
             else:
                 logger.warning(f"Unreadable template not configured for tag '{tag_name}'. No autoresponse sent.")
@@ -864,9 +981,13 @@ async def handle_lien_request(
         try:
             # Send reply if template is configured
             if templates.get("unreadable"):
-                await send_reply_to_front_direct(
+                await send_or_save_response(
                     conversation_id=front_conversation_id,
-                    reply_text=templates["unreadable"].format(lien_type=lien_type)
+                    response_text=templates["unreadable"].format(lien_type=lien_type),
+                    tags_to_add=None,
+                    test_mode=test_mode,
+                    lien_type=lien_type,
+                    signature_type=signature_type
                 )
             else:
                 logger.warning(f"Unreadable lien template not configured for tag '{tag_name}'. No autoresponse sent.")
@@ -907,9 +1028,13 @@ async def handle_lien_request(
 
             # Send reply if template is configured
             if templates.get("patient_not_found"):
-                await send_reply_to_front_direct(
+                await send_or_save_response(
                     conversation_id=front_conversation_id,
-                    reply_text=templates["patient_not_found"].format(lien_type=lien_type)
+                    response_text=templates["patient_not_found"].format(lien_type=lien_type),
+                    tags_to_add=None,
+                    test_mode=test_mode,
+                    lien_type=lien_type,
+                    signature_type=signature_type
                 )
             else:
                 logger.warning(f"Patient not found template not configured for tag '{tag_name}'. No autoresponse sent.")
@@ -1116,9 +1241,13 @@ async def handle_lien_request(
 
             try:
                 frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
-                await send_reply_to_front_direct(
+                await send_or_save_response(
                     conversation_id=front_conversation_id,
-                    reply_text=f"We encountered an error uploading your {lien_type} to the patient file. A team member will review your submission and complete the upload manually. Thank you for your patience."
+                    response_text=f"We encountered an error uploading your {lien_type} to the patient file. A team member will review your submission and complete the upload manually. Thank you for your patience.",
+                    tags_to_add=None,
+                    test_mode=test_mode,
+                    lien_type=lien_type,
+                    signature_type=signature_type
                 )
 
                 return {
@@ -1211,9 +1340,13 @@ async def handle_lien_request(
         reply_body = templates["success"].format(**placeholder_values)
 
         # Send the response
-        await send_reply_to_front_direct(
+        await send_or_save_response(
             conversation_id=front_conversation_id,
-            reply_text=reply_body
+            response_text=reply_body,
+            tags_to_add=None,
+            test_mode=test_mode,
+            lien_type=lien_type,
+            signature_type=signature_type
         )
 
         logger.info(f"Successfully processed {lien_type} for patient {patient_id} in conversation {front_conversation_id}")
@@ -1236,9 +1369,13 @@ async def handle_lien_request(
         # Tag for human review on processing error
         try:
             frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
-            await send_reply_to_front_direct(
+            await send_or_save_response(
                 conversation_id=front_conversation_id,
-                reply_text=f"We encountered an error processing your {lien_type}. A team member will review your submission and get back to you shortly."
+                response_text=f"We encountered an error processing your {lien_type}. A team member will review your submission and get back to you shortly.",
+                tags_to_add=None,
+                test_mode=test_mode,
+                lien_type=lien_type,
+                signature_type=signature_type
             )
         except Exception as tag_error:
             logger.error(f"Failed to add human review tag: {tag_error}")
@@ -1255,7 +1392,8 @@ async def handle_asl_lien_request(
     email_obj: Any,
     document_analysis_results: List[Dict[str, Any]] = None,
     settings_obj: Any = app_settings_instance,
-    email_subject: str = None
+    email_subject: str = None,
+    test_mode: bool = False
 ) -> Dict[str, Any]:
     """
     Backward compatibility wrapper for ASL lien requests.
@@ -1269,7 +1407,8 @@ async def handle_asl_lien_request(
         signature_type="ASL",
         document_analysis_results=document_analysis_results,
         settings_obj=settings_obj,
-        email_subject=email_subject
+        email_subject=email_subject,
+        test_mode=test_mode
     )
 
 async def handle_psl_lien_request(
@@ -1279,7 +1418,8 @@ async def handle_psl_lien_request(
     email_obj: Any,
     document_analysis_results: List[Dict[str, Any]] = None,
     settings_obj: Any = app_settings_instance,
-    email_subject: str = None
+    email_subject: str = None,
+    test_mode: bool = False
 ) -> Dict[str, Any]:
     """
     Backward compatibility wrapper for PSL lien requests.
@@ -1293,7 +1433,8 @@ async def handle_psl_lien_request(
         signature_type="PSL",
         document_analysis_results=document_analysis_results,
         settings_obj=settings_obj,
-        email_subject=email_subject
+        email_subject=email_subject,
+        test_mode=test_mode
     )
 
 # --- END: Backward Compatibility Wrappers ---

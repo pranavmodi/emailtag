@@ -421,30 +421,56 @@ Report strikethrough_detected: true if you see ANY lines crossing through text, 
 class PDFStrikethroughDetectionService:
     """Main service for PDF strikethrough detection using OpenAI GPT-5.2 Vision."""
 
-    def __init__(self, provider: Optional[str] = None):
+    def __init__(self, provider: Optional[str] = None, confirm_detections: bool = True):
         """
         Initialize the PDF strikethrough detection service.
 
         Args:
             provider: Provider to use. Currently only 'openai' is supported.
                      Legacy providers available in pdf_strikethrough_providers_legacy.py
+            confirm_detections: If True, run detection twice when issues are found to confirm (default: True)
         """
         self.provider_name = provider or getattr(settings, 'STRIKETHROUGH_PROVIDER', 'openai')
+        self.confirm_detections = confirm_detections
 
         if self.provider_name.lower() != 'openai':
             logger.warning(f"Provider '{self.provider_name}' not supported in current version. Using OpenAI as default.")
             self.provider_name = 'openai'
 
         self.provider = OpenAIProvider()
-        logger.info(f"Initialized PDF strikethrough detection service with provider: {self.provider_name}")
-    
+        logger.info(f"Initialized PDF strikethrough detection service with provider: {self.provider_name}, confirm_detections: {confirm_detections}")
+
     async def detect_strikethrough_in_pdf(self, pdf_path: str) -> Dict[str, Any]:
-        """Detect strikethrough text in a PDF file."""
-        return await self.provider.detect_strikethrough_in_pdf(pdf_path)
-    
+        """Detect strikethrough text in a PDF file with optional confirmation."""
+        # First run
+        result = await self.provider.detect_strikethrough_in_pdf(pdf_path)
+
+        # Confirm if enabled
+        if self.confirm_detections:
+            result = await _confirm_detection(
+                self.provider.detect_strikethrough_in_pdf,
+                (pdf_path,),
+                {},
+                result
+            )
+
+        return result
+
     async def detect_strikethrough_from_bytes(self, pdf_bytes: bytes) -> Dict[str, Any]:
-        """Detect strikethrough text from PDF bytes."""
-        return await self.provider.detect_strikethrough_from_bytes(pdf_bytes)
+        """Detect strikethrough text from PDF bytes with optional confirmation."""
+        # First run
+        result = await self.provider.detect_strikethrough_from_bytes(pdf_bytes)
+
+        # Confirm if enabled
+        if self.confirm_detections:
+            result = await _confirm_detection(
+                self.provider.detect_strikethrough_from_bytes,
+                (pdf_bytes,),
+                {},
+                result
+            )
+
+        return result
     
     def get_provider_info(self) -> Dict[str, Any]:
         """Get information about the current provider."""
@@ -460,35 +486,158 @@ class PDFStrikethroughDetectionService:
         }
 
 
+# Confirmation logic for reducing false positives
+async def _confirm_detection(
+    detection_func,
+    detection_args: tuple,
+    detection_kwargs: dict,
+    first_result: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Confirm detection by running it a second time and comparing results.
+
+    Args:
+        detection_func: The detection function to call
+        detection_args: Positional arguments for the function
+        detection_kwargs: Keyword arguments for the function
+        first_result: Result from the first detection run
+
+    Returns:
+        Dictionary with confirmed results
+    """
+    # Check if first run found issues
+    has_strikethrough = len(first_result.get("strikethrough_text", [])) > 0
+    is_blurry = first_result.get("document_quality", "GOOD") in ["BLURRY", "UNREADABLE"]
+
+    if not has_strikethrough and not is_blurry:
+        # No issues found, no need to confirm
+        logger.debug("No issues detected, skipping confirmation")
+        return first_result
+
+    # Log what we're confirming
+    issues_detected = []
+    if has_strikethrough:
+        issues_detected.append(f"strikethrough ({len(first_result['strikethrough_text'])} instances)")
+    if is_blurry:
+        issues_detected.append(f"quality: {first_result['document_quality']}")
+
+    logger.info(f"Confirming detection - issues found: {', '.join(issues_detected)}")
+
+    # Run detection again
+    logger.info("Running confirmation analysis...")
+    second_result = await detection_func(*detection_args, **detection_kwargs)
+
+    # Compare results
+    second_has_strikethrough = len(second_result.get("strikethrough_text", [])) > 0
+    second_is_blurry = second_result.get("document_quality", "GOOD") in ["BLURRY", "UNREADABLE"]
+
+    # Only confirm if both runs agree
+    confirmed_strikethrough = has_strikethrough and second_has_strikethrough
+    confirmed_blurry = is_blurry and second_is_blurry
+
+    # Log confirmation results
+    if confirmed_strikethrough:
+        logger.info(f"✓ Strikethrough CONFIRMED (both runs detected it)")
+    elif has_strikethrough:
+        logger.info(f"✗ Strikethrough NOT confirmed (only first run detected it)")
+
+    if confirmed_blurry:
+        logger.info(f"✓ Quality issue CONFIRMED (both runs: {first_result['document_quality']} / {second_result['document_quality']})")
+    elif is_blurry:
+        logger.info(f"✗ Quality issue NOT confirmed (first: {first_result['document_quality']}, second: {second_result['document_quality']})")
+
+    # Build confirmed result
+    if confirmed_strikethrough and confirmed_blurry:
+        # Both confirmed, use first result
+        logger.info("Both strikethrough and quality issues confirmed")
+        return first_result
+    elif confirmed_strikethrough:
+        # Only strikethrough confirmed, keep strikethrough but reset quality
+        logger.info("Only strikethrough confirmed, resetting quality to GOOD")
+        result = first_result.copy()
+        result["document_quality"] = "GOOD"
+        if "summary" in result:
+            result["summary"]["overall_quality"] = "GOOD"
+        return result
+    elif confirmed_blurry:
+        # Only quality issue confirmed, keep quality but clear strikethrough
+        logger.info("Only quality issue confirmed, clearing strikethrough detections")
+        result = first_result.copy()
+        result["strikethrough_text"] = []
+        if "summary" in result:
+            result["summary"]["total_strikethrough_instances"] = 0
+            result["summary"]["pages_with_strikethrough"] = 0
+        return result
+    else:
+        # Nothing confirmed, return clean result
+        logger.info("No issues confirmed, returning clean result")
+        result = first_result.copy()
+        result["strikethrough_text"] = []
+        result["document_quality"] = "GOOD"
+        if "summary" in result:
+            result["summary"]["total_strikethrough_instances"] = 0
+            result["summary"]["pages_with_strikethrough"] = 0
+            result["summary"]["overall_quality"] = "GOOD"
+        return result
+
+
 # Convenience functions
-async def detect_strikethrough_in_pdf_file(pdf_path: str, provider: Optional[str] = None) -> Dict[str, Any]:
+async def detect_strikethrough_in_pdf_file(pdf_path: str, provider: Optional[str] = None, confirm: bool = True) -> Dict[str, Any]:
     """
     Convenience function to detect strikethrough text in a PDF file.
-    
+
     Args:
         pdf_path: Path to the PDF file
         provider: Provider to use ('google', 'roboflow', or 'openai')
-        
+        confirm: If True, run detection twice when issues are found to confirm (default: True)
+
     Returns:
         Dictionary containing strikethrough detection results
     """
     service = PDFStrikethroughDetectionService(provider=provider)
-    return await service.detect_strikethrough_in_pdf(pdf_path)
+
+    # First run
+    result = await service.detect_strikethrough_in_pdf(pdf_path)
+
+    # Confirm if enabled
+    if confirm:
+        result = await _confirm_detection(
+            service.detect_strikethrough_in_pdf,
+            (pdf_path,),
+            {},
+            result
+        )
+
+    return result
 
 
-async def detect_strikethrough_in_pdf_bytes(pdf_bytes: bytes, provider: Optional[str] = None) -> Dict[str, Any]:
+async def detect_strikethrough_in_pdf_bytes(pdf_bytes: bytes, provider: Optional[str] = None, confirm: bool = True) -> Dict[str, Any]:
     """
     Convenience function to detect strikethrough text from PDF bytes.
-    
+
     Args:
         pdf_bytes: PDF file content as bytes
         provider: Provider to use ('google', 'roboflow', or 'openai')
-        
+        confirm: If True, run detection twice when issues are found to confirm (default: True)
+
     Returns:
         Dictionary containing strikethrough detection results
     """
     service = PDFStrikethroughDetectionService(provider=provider)
-    return await service.detect_strikethrough_from_bytes(pdf_bytes)
+
+    # First run
+    result = await service.detect_strikethrough_from_bytes(pdf_bytes)
+
+    # Confirm if enabled
+    if confirm:
+        result = await _confirm_detection(
+            service.detect_strikethrough_from_bytes,
+            (pdf_bytes,),
+            {},
+            result
+        )
+
+    return result
 
 
 def is_strikethrough_feature_supported(provider: Optional[str] = None) -> bool:

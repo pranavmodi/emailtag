@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from pathlib import Path
 import os
+import json
 from app.db.session import get_db
 from app.crud.system_settings import system_settings_crud
 from app.schemas.system_settings import (
@@ -13,6 +14,7 @@ from app.schemas.system_settings import (
     AutorespondSettingDetail,
     AutorespondToggleRequest
 )
+from app.services.frontapp_service import get_conversation_tags_async
 import logging
 
 logger = logging.getLogger(__name__)
@@ -295,7 +297,7 @@ async def list_lien_test_uploads(db: AsyncSession = Depends(get_db)):
 
                     if email:
                         conv_info["subject"] = email.subject
-                        conv_info["sender"] = email.sender_email
+                        conv_info["sender"] = email.sender
 
                     # Get total email count for this conversation
                     count_stmt = select(func.count(Email.id)).where(
@@ -343,9 +345,19 @@ async def get_lien_test_uploads_for_conversation(conversation_id: str):
                 "created": stat.st_mtime
             })
 
+        # Fetch current tags from Front (best-effort)
+        tag_names: list[str] = []
+        try:
+            front_tags = await get_conversation_tags_async(conversation_id)
+            if front_tags:
+                tag_names = [t.get("name") for t in front_tags if t.get("name")]
+        except Exception as tag_err:
+            logger.warning(f"Could not fetch tags for lien test conversation {conversation_id}: {tag_err}")
+
         return {
             "conversation_id": conversation_id,
-            "files": files
+            "files": files,
+            "tags": tag_names
         }
 
     except HTTPException:
@@ -355,6 +367,53 @@ async def get_lien_test_uploads_for_conversation(conversation_id: str):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get lien test uploads: {str(e)}"
+        )
+
+
+@router.get("/lien-test-uploads/{conversation_id}/response")
+async def get_lien_test_response(conversation_id: str):
+    """Get the generated autorespond message for a lien test conversation."""
+    try:
+        response_file = Path(LIEN_TEST_UPLOAD_DIR) / conversation_id / "response.json"
+
+        if not response_file.exists():
+            # No response generated yet
+            return {
+                "conversation_id": conversation_id,
+                "hasResponse": False,
+                "message": "No autorespond message generated yet"
+            }
+
+        # Security check: ensure file is within the test upload directory
+        if not str(response_file.resolve()).startswith(str(Path(LIEN_TEST_UPLOAD_DIR).resolve())):
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied"
+            )
+
+        # Read and return the response data
+        with open(response_file, "r") as f:
+            response_data = json.load(f)
+
+        return {
+            "conversation_id": conversation_id,
+            "hasResponse": True,
+            **response_data
+        }
+
+    except HTTPException:
+        raise
+    except FileNotFoundError:
+        return {
+            "conversation_id": conversation_id,
+            "hasResponse": False,
+            "message": "No autorespond message generated yet"
+        }
+    except Exception as e:
+        logger.error(f"Error getting lien test response for conversation {conversation_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get response: {str(e)}"
         )
 
 
@@ -390,6 +449,52 @@ async def download_lien_test_file(conversation_id: str, filename: str):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to download file: {str(e)}"
+        )
+
+
+@router.delete("/lien-test-uploads")
+async def clear_all_lien_test_uploads():
+    """Delete all lien test uploads and clear the test directory."""
+    try:
+        import shutil
+
+        test_dir = Path(LIEN_TEST_UPLOAD_DIR)
+
+        if not test_dir.exists():
+            return {
+                "success": True,
+                "message": "No test uploads to clear",
+                "deleted_conversations": 0,
+                "deleted_files": 0
+            }
+
+        # Count conversations and files before deletion
+        deleted_conversations = 0
+        deleted_files = 0
+
+        for conv_dir in test_dir.iterdir():
+            if conv_dir.is_dir():
+                deleted_conversations += 1
+                deleted_files += len(list(conv_dir.glob("*")))
+
+        # Delete the entire directory and recreate it
+        shutil.rmtree(test_dir)
+        test_dir.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Cleared lien test uploads: {deleted_conversations} conversations, {deleted_files} files")
+
+        return {
+            "success": True,
+            "message": f"Cleared {deleted_conversations} conversations and {deleted_files} files",
+            "deleted_conversations": deleted_conversations,
+            "deleted_files": deleted_files
+        }
+
+    except Exception as e:
+        logger.error(f"Error clearing lien test uploads: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to clear test uploads: {str(e)}"
         )
 
 

@@ -515,6 +515,14 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             has_rad_lien = RAD_LIEN_TAG_NAME in applied_tag_names
             has_tech_lien = TECH_LIEN_TAG_NAME in applied_tag_names
             logger.info(f"🔍 PSL LIEN CHECK: Matched PSL lien conditions")
+
+            # Check if lien test mode is enabled
+            async def _check_lien_test_mode():
+                async with AsyncSessionLocal() as async_db:
+                    return await system_settings_crud.get_setting_value(async_db, "lien_test_mode", default=False)
+
+            lien_test_mode_enabled = asyncio.run(_check_lien_test_mode())
+
             # Check if liens autorespond is enabled (consolidated setting)
             if not asyncio.run(_check_autorespond_enabled("autorespond_liens")):
                 logger.info(f"📴 Liens autorespond DISABLED - Skipping PSL agent for email {email_id}")
@@ -522,7 +530,11 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             else:
                 agent_name_for_status = "psl_lien"
                 lien_type = "PSL > Rad Lien" if has_rad_lien else "PSL > Tech Lien"
-                logger.info(f"Email {email_id} tagged with {lien_type}. Attempting PSL Lien agent.")
+
+                if lien_test_mode_enabled:
+                    logger.info(f"🧪 LIEN TEST MODE: Email {email_id} tagged with {lien_type}. Response will be saved to file (not sent)")
+                else:
+                    logger.info(f"Email {email_id} tagged with {lien_type}. Attempting PSL Lien agent.")
 
                 agent_result_dict = None
                 async def _run_psl_lien_agent():
@@ -534,7 +546,8 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                         email_obj=email_obj,
                         document_analysis_results=document_results,
                         settings_obj=settings,
-                        email_subject=email_obj.subject
+                        email_subject=email_obj.subject,
+                        test_mode=lien_test_mode_enabled
                     )
 
                 try:
@@ -561,6 +574,14 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             has_rad_lien = RAD_LIEN_TAG_NAME in applied_tag_names
             has_tech_lien = TECH_LIEN_TAG_NAME in applied_tag_names
             logger.info(f"🔍 ASL LIEN CHECK: Matched ASL lien conditions")
+
+            # Check if lien test mode is enabled
+            async def _check_lien_test_mode():
+                async with AsyncSessionLocal() as async_db:
+                    return await system_settings_crud.get_setting_value(async_db, "lien_test_mode", default=False)
+
+            lien_test_mode_enabled = asyncio.run(_check_lien_test_mode())
+
             # Check if liens autorespond is enabled (consolidated setting)
             if not asyncio.run(_check_autorespond_enabled("autorespond_liens")):
                 logger.info(f"📴 Liens autorespond DISABLED - Skipping ASL agent for email {email_id}")
@@ -568,7 +589,11 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             else:
                 agent_name_for_status = "asl_lien"
                 lien_type = "ASL > Rad Lien" if has_rad_lien else "ASL > Tech Lien"
-                logger.info(f"Email {email_id} tagged with {lien_type}. Attempting ASL Lien agent.")
+
+                if lien_test_mode_enabled:
+                    logger.info(f"🧪 LIEN TEST MODE: Email {email_id} tagged with {lien_type}. Response will be saved to file (not sent)")
+                else:
+                    logger.info(f"Email {email_id} tagged with {lien_type}. Attempting ASL Lien agent.")
 
                 agent_result_dict = None
                 async def _run_asl_lien_agent():
@@ -580,7 +605,8 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                         email_obj=email_obj,
                         document_analysis_results=document_results,
                         settings_obj=settings,
-                        email_subject=email_obj.subject
+                        email_subject=email_obj.subject,
+                        test_mode=lien_test_mode_enabled
                     )
 
                 try:
