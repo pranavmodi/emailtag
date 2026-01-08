@@ -287,7 +287,7 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                         front_conversation_id=front_conversation_id,
                         current_email_content=current_email_content,
                         structured_history_messages=structured_history_messages,
-                        email_sender=email_obj.sender,  # Pass sender email for authorization verification
+                        email_sender=sender_email,  # Pass sender email for authorization verification (may be spoofed for testing)
                         settings_obj=settings,  # Pass the main settings module
                         email_subject=email_obj.subject,  # Pass the email subject from DB
                         extracted_patient_ids=extracted_patient_ids  # Pass ALL pre-extracted patient IDs
@@ -335,7 +335,7 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                 else:
                     logger.info("📋 No pre-extracted patient IDs found in database")
 
-                email_sender = email_obj.sender
+                email_sender = sender_email  # Use spoofed sender if testing is enabled
                 if not email_sender:
                     logger.error(f"Cannot run Medical Records agent for {email_id}: sender email is missing.")
                     auto_response_details = {"reason": "Sender email missing for Medical Records agent."}

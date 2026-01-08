@@ -1394,7 +1394,9 @@ async def verify_sender_authorization(sender_email: str, participants: List[Dict
     This function checks if the sender is listed as a participant (attorney, doctor, etc.)
     for the patient's case. It performs multiple verification passes:
     1. Direct email match - exact match with participant email
-    2. Domain match - same domain as a medical professional participant
+    2. Domain match - same domain as a participant (for both doctors AND attorneys)
+       - Generic domains (gmail, yahoo, etc.) are excluded from domain matching
+       - Only professional/organization domains allow domain matching
     3. Pattern matching - domain contains keywords suggesting attorney/medical entity
 
     Args:
@@ -1409,7 +1411,15 @@ async def verify_sender_authorization(sender_email: str, participants: List[Dict
                 "player_info": dict  # Additional participant information (if verified)
             }
     """
-    sender_domain = sender_email.split('@')[1] if '@' in sender_email else None
+    # Generic/public email domains that require exact email match (no domain matching)
+    GENERIC_DOMAINS = [
+        "gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "aol.com",
+        "icloud.com", "mail.com", "protonmail.com", "zoho.com", "yandex.com",
+        "gmx.com", "inbox.com", "live.com", "msn.com", "me.com"
+    ]
+
+    sender_domain = sender_email.split('@')[1].lower() if '@' in sender_email else None
+    is_generic_domain = sender_domain in GENERIC_DOMAINS if sender_domain else False
 
     # First pass: Direct email matches
     for participant in participants:
@@ -1438,8 +1448,10 @@ async def verify_sender_authorization(sender_email: str, participants: List[Dict
                any(keyword in participant_type for keyword in ["doctor", "physician"]):
                 return {"status": "verified", "role": "doctor_on_file", "player_info": player_info}
 
-    # Second pass: Domain matches for medical professionals AND attorneys (TEMPORARY - enabled for testing)
-    if sender_domain:
+    # Second pass: Domain matches for BOTH doctors AND attorneys
+    # Skip domain matching if sender uses a generic public email domain
+    if sender_domain and not is_generic_domain:
+        logger.info(f"Checking domain match for non-generic domain: {sender_domain}")
         for participant in participants:
             participant_domain = participant.get("domain", "").lower()
             participant_role = participant.get("role", "").lower()
@@ -1457,9 +1469,10 @@ async def verify_sender_authorization(sender_email: str, participants: List[Dict
                         "study_id": participant.get("study_id", ""),
                         "domain": participant_domain
                     }
+                    logger.info(f"Domain match: {sender_email} verified as doctor from {sender_domain}")
                     return {"status": "domain_verified", "role": "doctor_domain_match", "player_info": player_info}
 
-                # TEMPORARY: Domain match with attorney type (enabled for testing)
+                # Domain match with attorney type
                 if "attorney" in participant_role or "law" in participant_role:
                     player_info = {
                         "email": participant.get("email", ""),
@@ -1469,7 +1482,10 @@ async def verify_sender_authorization(sender_email: str, participants: List[Dict
                         "study_id": participant.get("study_id", ""),
                         "domain": participant_domain
                     }
+                    logger.info(f"Domain match: {sender_email} verified as attorney from {sender_domain}")
                     return {"status": "domain_verified", "role": "attorney_domain_match", "player_info": player_info}
+    elif is_generic_domain:
+        logger.info(f"Skipping domain match for generic domain: {sender_domain} - exact email match required")
 
     # Fallback to domain pattern matching
     if sender_domain:

@@ -25,7 +25,9 @@ from app.agents.agent_helpers import (
     send_fallback_reply_and_tag,
     extract_all_patient_ids_from_email_logic,
     send_reply_to_front_direct,
-    send_reply_to_front_with_attachment
+    send_reply_to_front_with_attachment,
+    compile_study_participants,
+    verify_sender_authorization
 )
 # --- END: Agent Helper Imports ---
 
@@ -162,144 +164,6 @@ async def fetch_patient_and_study_info_tool(patient_id: str) -> Dict[str, Any]:
         return {"success": False, "error": f"Exception: {e}"}
 
 
-async def compile_all_participants(patient_id: str, studies: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    Compiles all participants across all studies for a patient.
-    Returns a comprehensive list of participants with their details.
-    """
-    if not mcp_client.is_connected:
-        await mcp_client.connect()
-
-    all_participants = []
-    successful_studies = 0
-    failed_studies = 0
-
-    for study in studies:
-        accession_number = study.get("accessionNumber", "") or study.get("authorization_number", "")
-        study_id = study.get("study_id") or study.get("id")
-
-        if not accession_number:
-            failed_studies += 1
-            logger.warning(f"⚠️ STUDY SKIPPED: No accession number found for study: {study}")
-            continue
-
-        # Strip "RAM" prefix if present (RadFlow includes it, but API doesn't expect it)
-        original_accession = accession_number
-        if isinstance(accession_number, str) and accession_number.upper().startswith("RAM"):
-            accession_number = accession_number[3:]  # Remove "RAM" prefix
-            logger.info(f"🔧 STRIPPED RAM PREFIX: '{original_accession}' → '{accession_number}'")
-
-        try:
-            logger.info(f"📤 CALLING get_study_participants with accession_number: '{accession_number}' (type: {type(accession_number).__name__})")
-            logger.info(f"📋 Study data: accessionNumber={study.get('accessionNumber')}, authorization_number={study.get('authorization_number')}, study_id={study_id}")
-
-            participants_result = await mcp_client.call_tool("get_study_participants", {"accession_number": str(accession_number)})
-
-            logger.info(f"📥 RECEIVED get_study_participants response: success={participants_result.get('success')}, has_data={bool(participants_result.get('data'))}, result_count={len(participants_result.get('data', {}).get('result', []))}")
-            if not participants_result.get("success"):
-                logger.warning(f"❌ get_study_participants FAILED for accession {accession_number}: {participants_result.get('error', 'Unknown error')}")
-
-            if participants_result.get("success") and participants_result.get("data", {}).get("result"):
-                participants = participants_result["data"]["result"]
-                logger.info(f"✅ Found {len(participants)} participant(s) for accession {accession_number}")
-                
-                for participant in participants:
-                    participant_data = {
-                        "email": participant.get("email", "").strip().lower(),
-                        "role": participant.get("playerTypeName", "").lower(),
-                        "type": participant.get("type", "").lower(),
-                        "referrer_id": participant.get("referrerID", ""),
-                        "phone": participant.get("businessPhoneNumber", ""),
-                        "accession_number": accession_number,
-                        "study_id": study_id,
-                        "domain": participant.get("email", "").split("@")[1].lower() if "@" in participant.get("email", "") else ""
-                    }
-                    
-                    all_participants.append(participant_data)
-                
-                successful_studies += 1
-            else:
-                failed_studies += 1
-                logger.info(f"⚠️ No participants found for accession {accession_number} (empty result list)")
-
-        except Exception as e:
-            logger.error(f"❌ EXCEPTION calling get_study_participants for accession {accession_number}: {e}")
-            failed_studies += 1
-            continue
-    
-    return {
-        "success": True,
-        "total_participants": len(all_participants),
-        "participants": all_participants,
-        "successful_studies": successful_studies,
-        "failed_studies": failed_studies
-    }
-
-
-async def verify_sender_against_participants(sender_email: str, participants: List[Dict[str, Any]]) -> Dict[str, str]:
-    """
-    Verifies the sender's email against a compiled list of all participants.
-    This provides efficient verification using pre-compiled participant data.
-    """
-    sender_domain = sender_email.split('@')[1] if '@' in sender_email else None
-
-    # First pass: Direct email matches
-    for participant in participants:
-        participant_email = participant.get("email", "").lower()
-        participant_role = participant.get("role", "").lower()
-        participant_type = participant.get("type", "").lower()
-        
-        # Direct email match
-        if sender_email.lower() == participant_email:
-            player_info = {
-                "email": participant_email,
-                "role": participant_role,
-                "type": participant_type,
-                "accession_number": participant.get("accession_number", ""),
-                "study_id": participant.get("study_id", ""),
-                "referrer_id": participant.get("referrer_id", ""),
-                "phone": participant.get("phone", "")
-            }
-            
-            # Check for attorney roles
-            if "attorney" in participant_role or "law" in participant_role:
-                return {"status": "verified", "role": "attorney_on_file", "player_info": player_info}
-            
-            # Check for doctor/physician roles
-            if any(keyword in participant_role for keyword in ["doctor", "physician", "radiologist"]) or \
-               any(keyword in participant_type for keyword in ["doctor", "physician"]):
-                return {"status": "verified", "role": "doctor_on_file", "player_info": player_info}
-
-    # Second pass: Domain matches for medical professionals
-    if sender_domain:
-        for participant in participants:
-            participant_domain = participant.get("domain", "").lower()
-            participant_role = participant.get("role", "").lower()
-            participant_type = participant.get("type", "").lower()
-            
-            if sender_domain == participant_domain:
-                # Domain match with doctor/physician type
-                if any(keyword in participant_role for keyword in ["doctor", "physician", "radiologist"]) or \
-                   any(keyword in participant_type for keyword in ["doctor", "physician"]):
-                    player_info = {
-                        "email": participant.get("email", ""),
-                        "role": participant_role,
-                        "type": participant_type,
-                        "accession_number": participant.get("accession_number", ""),
-                        "study_id": participant.get("study_id", ""),
-                        "domain": participant_domain
-                    }
-                    return {"status": "domain_verified", "role": "doctor_domain_match", "player_info": player_info}
-
-    # Fallback to domain pattern matching
-    if sender_domain:
-        if any(keyword in sender_domain for keyword in ["law", "legal", "attorney", "lawfirm"]):
-            return {"status": "unverified", "role": "attorney_not_on_file"}
-        
-        if any(keyword in sender_domain for keyword in ["med", "clinic", "hospital", "health", "medical"]):
-            return {"status": "unverified", "role": "doctor_not_on_file"}
-
-    return {"status": "unverified", "role": "unknown"}
 
 
 
@@ -356,7 +220,7 @@ async def handle_release_of_records_request(
     patient_info = patient_result.get("patients", [{}])[0]
     
     # Compile participants
-    participants_result = await compile_all_participants(patient_id, studies)
+    participants_result = await compile_study_participants(patient_id, studies)
     if not participants_result.get("success"):
         logger.error("Failed to compile participants - tagging for human review without sending message")
         await send_fallback_reply_and_tag(
@@ -365,11 +229,11 @@ async def handle_release_of_records_request(
             TAG_AI_HUMAN_REVIEW_REQUIRED
         )
         return {"agent_handled": False, "processed_flag": True, "details": {"reason": "Participant compilation failed - tagged for human review"}}
-    
+
     participants = participants_result.get("participants", [])
-    
+
     # Verify sender
-    verification_result = await verify_sender_against_participants(email_sender, participants)
+    verification_result = await verify_sender_authorization(email_sender, participants)
 
     agent_outcome = {"agent_handled": False, "processed_flag": False}
 
