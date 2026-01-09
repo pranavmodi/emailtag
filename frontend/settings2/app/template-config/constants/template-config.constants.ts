@@ -14,13 +14,18 @@ export const MENU_ITEMS = [
     label: "Autorespond Templates",
     description: "Edit message templates",
     icon: "📝",
-    active: true,
   },
   {
     href: "/tag-statistics",
     label: "Tag Statistics",
     description: "Analyze tag retention and changes",
     icon: "📊",
+  },
+  {
+    href: "/lientest",
+    label: "Autorespond Sandbox",
+    description: "Test autorespond outputs locally",
+    icon: "🧪",
   },
 ] as const;
 

@@ -7,7 +7,6 @@ import {
   Download,
   FileText,
   FolderOpen,
-  Home,
   RefreshCw,
   Mail,
   Calendar,
@@ -15,11 +14,12 @@ import {
   ChevronUp,
   MessageSquare,
   Tag,
-  Clock,
   Trash2,
+  FlaskConical,
 } from "lucide-react";
 
 import { ApiError, SettingsApi } from "@/lib/api";
+import { MENU_ITEMS } from "../template-config/constants/template-config.constants";
 import {
   Card,
   CardContent,
@@ -200,89 +200,99 @@ export default function LienTestPage() {
         >
           <div className="flex items-center justify-center mb-4">
             <div className="relative">
-              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-violet-500 animate-pulse" />
-              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-blue-500 to-violet-500 blur-lg opacity-50 animate-pulse" />
+              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 animate-pulse" />
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 blur-lg opacity-50 animate-pulse" />
             </div>
           </div>
-          <p className="text-base font-semibold text-slate-900 mb-1">Loading Test Uploads</p>
-          <p className="text-sm text-slate-500">Fetching conversation data...</p>
+          <p className="text-base font-semibold text-slate-900 mb-1">Loading Sandbox</p>
+          <p className="text-sm text-slate-500">Fetching test data...</p>
         </motion.div>
       </section>
     );
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-7xl flex-col gap-6 px-6 py-8">
+    <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-10">
+      <nav className="grid gap-3 rounded-3xl border border-white/60 bg-white/80 p-3 shadow-xl shadow-slate-900/5 backdrop-blur lg:grid-cols-4">
+        {MENU_ITEMS.map((item) => {
+          const isActive = item.href === "/lientest";
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`rounded-2xl border p-4 transition hover:-translate-y-1 hover:shadow-lg ${
+                isActive
+                  ? "border-slate-900 bg-slate-900 text-white shadow-lg"
+                  : "border-slate-200 bg-white text-slate-700"
+              }`}
+            >
+              <div className="flex items-center gap-3 text-lg font-semibold">
+                <span>{item.icon}</span>
+                {item.label}
+              </div>
+              <p
+                className={`mt-1 text-sm ${
+                  isActive ? "text-white/80" : "text-slate-500"
+                }`}
+              >
+                {item.description}
+              </p>
+            </Link>
+          );
+        })}
+      </nav>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={easing}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 p-8 shadow-xl"
+        className="flex flex-col gap-4 rounded-3xl border border-white/40 bg-gradient-to-br from-indigo-500 via-purple-500 to-sky-500 p-8 text-white shadow-2xl"
       >
-        <div className="absolute inset-0 bg-grid-white/5 [mask-image:linear-gradient(0deg,white,rgba(255,255,255,0.5))]" />
-        <div className="relative">
-          <div className="flex flex-wrap items-start justify-between gap-6">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 backdrop-blur-sm ring-1 ring-white/20">
-                  <FileText className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wider text-white/60">Lien Testing</p>
-                  <h1 className="text-3xl font-bold text-white">Test Upload Sandbox</h1>
-                </div>
-              </div>
-              <p className="text-white/90 max-w-2xl">
-                Review and download lien documents uploaded in test mode. All uploads are organized by conversation for easy tracking.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link href="/">
-                <Button
-                  variant="ghost"
-                  className="bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 border-0 shadow-lg"
-                >
-                  <Home className="h-4 w-4" />
-                  Settings
-                </Button>
-              </Link>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm uppercase tracking-[0.3em] text-white/70">EmailTag Testing</p>
+            <h1 className="text-3xl font-semibold">Autorespond Sandbox</h1>
+            <p className="text-white/80">
+              Review test mode uploads and autorespond outputs. All conversations processed in test mode appear here for verification.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={loadConversations}
+              variant="ghost"
+              className="bg-white/15 backdrop-blur-sm text-white hover:bg-white/25 border-0"
+              disabled={isClearing}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+            {conversations.length > 0 && (
               <Button
-                onClick={loadConversations}
+                onClick={() => setShowClearConfirm(true)}
                 variant="ghost"
-                className="bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 border-0 shadow-lg"
+                className="bg-rose-500/20 backdrop-blur-sm text-white hover:bg-rose-500/30 border-0"
                 disabled={isClearing}
               >
-                <RefreshCw className="h-4 w-4" />
-                Refresh
+                <Trash2 className="h-4 w-4" />
+                Clear All
               </Button>
-              {conversations.length > 0 && (
-                <Button
-                  onClick={() => setShowClearConfirm(true)}
-                  variant="ghost"
-                  className="bg-rose-500/20 backdrop-blur-sm text-white hover:bg-rose-500/30 border-0 shadow-lg"
-                  disabled={isClearing}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Clear All
-                </Button>
-              )}
-            </div>
+            )}
           </div>
-          <div className="mt-6 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-xl bg-white/10 backdrop-blur-sm p-4 ring-1 ring-white/20">
-              <p className="text-xs font-medium uppercase tracking-wide text-white/70">Conversations</p>
-              <p className="text-2xl font-bold text-white mt-1">{conversations.length}</p>
-            </div>
-            <div className="rounded-xl bg-white/10 backdrop-blur-sm p-4 ring-1 ring-white/20">
-              <p className="text-xs font-medium uppercase tracking-wide text-white/70">Total Files</p>
-              <p className="text-2xl font-bold text-white mt-1">
-                {conversations.reduce((sum, conv) => sum + conv.file_count, 0)}
-              </p>
-            </div>
-            <div className="rounded-xl bg-white/10 backdrop-blur-sm p-4 ring-1 ring-white/20">
-              <p className="text-xs font-medium uppercase tracking-wide text-white/70">Status</p>
-              <p className="text-2xl font-bold text-white mt-1">Active</p>
-            </div>
+        </div>
+        <div className="grid gap-3 text-sm text-white/80 sm:grid-cols-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-white/60">Conversations</p>
+            <p className="text-lg font-semibold">{conversations.length}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-white/60">Total Files</p>
+            <p className="text-lg font-semibold">
+              {conversations.reduce((sum, conv) => sum + conv.file_count, 0)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-white/60">Status</p>
+            <p className="text-lg font-semibold">Active</p>
           </div>
         </div>
       </motion.div>
@@ -309,12 +319,12 @@ export default function LienTestPage() {
                 <Trash2 className="h-6 w-6 text-rose-600" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Clear All Test Uploads?</h3>
+                <h3 className="text-lg font-semibold text-slate-900">Clear All Test Data?</h3>
                 <p className="text-sm text-slate-600">This action cannot be undone</p>
               </div>
             </div>
             <p className="mb-6 text-sm text-slate-700 leading-relaxed">
-              This will permanently delete all {conversations.length} conversation{conversations.length !== 1 ? "s" : ""} and their associated files ({conversations.reduce((sum, conv) => sum + conv.file_count, 0)} files total) from the test directory.
+              This will permanently delete all {conversations.length} conversation{conversations.length !== 1 ? "s" : ""} and their associated files ({conversations.reduce((sum, conv) => sum + conv.file_count, 0)} files total) from the sandbox.
             </p>
             <div className="flex gap-3">
               <Button
@@ -356,18 +366,17 @@ export default function LienTestPage() {
           <Card className="border-dashed border-2 border-slate-200 bg-slate-50/50">
             <CardContent className="flex flex-col items-center gap-6 py-16 text-center">
               <div className="rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 p-6">
-                <FolderOpen className="h-16 w-16 text-slate-400" />
+                <FlaskConical className="h-16 w-16 text-slate-400" />
               </div>
               <div className="max-w-md">
-                <h3 className="text-xl font-semibold text-slate-900 mb-2">No Test Uploads Yet</h3>
+                <h3 className="text-xl font-semibold text-slate-900 mb-2">No Test Data Yet</h3>
                 <p className="text-slate-600 leading-relaxed">
-                  Enable test mode in settings and send lien emails to see them appear here.
-                  All uploads will be saved locally for review.
+                  Enable test mode in settings and trigger autorespond workflows to see outputs here.
+                  Lien uploads and other autorespond test data will appear for review.
                 </p>
               </div>
               <Link href="/">
                 <Button variant="primary" className="mt-2">
-                  <Home className="h-4 w-4 mr-2" />
                   Go to Settings
                 </Button>
               </Link>

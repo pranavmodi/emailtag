@@ -113,8 +113,8 @@ const MENU_ITEMS = [
   },
   {
     href: "/lientest",
-    label: "Lien Test Uploads",
-    description: "Review test lien documents",
+    label: "Autorespond Sandbox",
+    description: "Test autorespond outputs locally",
     icon: "🧪",
   },
 ];
