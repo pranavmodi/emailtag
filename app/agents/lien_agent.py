@@ -92,7 +92,10 @@ async def _fetch_lien_templates_from_db(tag_name: str) -> Dict[str, str]:
                     "unreadable": settings.get("lien_reject_not_readable_template", ""),
                     "patient_not_found": settings.get("lien_patient_not_found_template", ""),
                     "modified": settings.get("lien_reject_no_changes_template", ""),
-                    "invalid_signature": settings.get("lien_reject_sig_not_valid_template", "")
+                    "invalid_signature": settings.get("lien_reject_sig_not_valid_template", ""),
+                    # New specific templates for conditional language
+                    "cover_letter_conditional": settings.get("lien_reject_cover_letter_conditional_template", ""),
+                    "email_conditional": settings.get("lien_reject_email_conditional_template", "")
                 }
     except Exception as e:
         logger.error(f"Failed to fetch lien templates from database: {e}")
@@ -104,7 +107,9 @@ async def _fetch_lien_templates_from_db(tag_name: str) -> Dict[str, str]:
         "unreadable": "",
         "patient_not_found": "",
         "modified": "",
-        "invalid_signature": ""
+        "invalid_signature": "",
+        "cover_letter_conditional": "",
+        "email_conditional": ""
     }
 
 def _check_lien_readability(document_analysis_results: List[Dict[str, Any]]) -> bool:
@@ -175,7 +180,7 @@ def _check_signature_placement(document_analysis_results: List[Dict[str, Any]]) 
                 placement_issues = signature_data.get("placement_issues", [])
 
                 if not placement_valid or placement_issues:
-                    logger.warning(f"⚠️ SIGNATURE PLACEMENT: Invalid placement detected - {placement_issues}")
+                    logger.warning(f"⚠️ SIGNATURE PLACEMENT: Signature(s) COMPLETELY OUTSIDE box - {placement_issues}")
                     return False
 
     # All signatures are properly placed
@@ -729,9 +734,12 @@ async def handle_lien_request(
     logger.info(f"Initiating {signature_type} Lien agent for conv ID: {front_conversation_id}, tags: {applied_tags}")
 
     # Step 1: Analyze email content for conditional language
+    # DISABLED: Email conditional language check disabled per user request
+    # Only PDF/attachment conditional language checks are active
     from app.services.lien.cover_letter_detector import CoverLetterDetector
     cover_letter_detector = CoverLetterDetector()
-    email_analysis = await cover_letter_detector.analyze_email_content(current_email_content)
+    # email_analysis = await cover_letter_detector.analyze_email_content(current_email_content)
+    email_analysis = {"has_conditional_language": False}  # Skip email content check
 
     # Fetch lien templates from database using unified "Lien Templates" tag
     # (All lien templates are stored under this single tag in the database)
@@ -764,17 +772,32 @@ async def handle_lien_request(
             frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED, TAG_LIEN_MODIFIED])
 
             # Send reply if template is configured
-            if templates.get("modified"):
+            # Use specific email conditional template if available, otherwise fall back to modified template
+            template_to_use = templates.get("email_conditional") or templates.get("modified")
+
+            if template_to_use:
+                # Format detected phrases for inclusion in message
+                phrases_text = ""
+                if conditional_phrases:
+                    phrases_list = "\n".join([f"  • {phrase}" for phrase in conditional_phrases[:3]])  # Show up to 3 phrases
+                    phrases_text = f"\n\nDetected language:\n{phrases_list}"
+
+                # Create response text with detected phrases
+                response_text = template_to_use.format(lien_type=lien_type)
+                # Append detected phrases if using the generic modified template
+                if not templates.get("email_conditional") and phrases_text:
+                    response_text += f"<br/><br/><em>Specifically, we detected conditional language in the email message.{phrases_text.replace(chr(10), '<br/>')}</em>"
+
                 await send_or_save_response(
                     conversation_id=front_conversation_id,
-                    response_text=templates["modified"].format(lien_type=lien_type),
+                    response_text=response_text,
                     tags_to_add=None,
                     test_mode=test_mode,
                     lien_type=lien_type,
                     signature_type=signature_type
                 )
             else:
-                logger.warning(f"Modified lien template not configured for tag '{tag_name}'. No autoresponse sent.")
+                logger.warning(f"No suitable template configured for email conditional language. No autoresponse sent.")
 
             return {
                 "agent_handled": True,
@@ -811,17 +834,32 @@ async def handle_lien_request(
             frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED, TAG_LIEN_MODIFIED])
 
             # Send reply if template is configured
-            if templates.get("modified"):
+            # Use specific cover letter conditional template if available, otherwise fall back to modified template
+            template_to_use = templates.get("cover_letter_conditional") or templates.get("modified")
+
+            if template_to_use:
+                # Format detected phrases for inclusion in message
+                phrases_text = ""
+                if cover_letter_phrases:
+                    phrases_list = "\n".join([f"  • {phrase}" for phrase in cover_letter_phrases[:3]])  # Show up to 3 phrases
+                    phrases_text = f"\n\nDetected language:\n{phrases_list}"
+
+                # Create response text with detected phrases
+                response_text = template_to_use.format(lien_type=lien_type)
+                # Append detected phrases if using the generic modified template
+                if not templates.get("cover_letter_conditional") and phrases_text:
+                    response_text += f"<br/><br/><em>Specifically, we detected conditional language in the cover letter.{phrases_text.replace(chr(10), '<br/>')}</em>"
+
                 await send_or_save_response(
                     conversation_id=front_conversation_id,
-                    response_text=templates["modified"].format(lien_type=lien_type),
+                    response_text=response_text,
                     tags_to_add=None,
                     test_mode=test_mode,
                     lien_type=lien_type,
                     signature_type=signature_type
                 )
             else:
-                logger.warning(f"Modified lien template not configured for tag '{tag_name}'. No autoresponse sent.")
+                logger.warning(f"No suitable template configured for cover letter conditional language. No autoresponse sent.")
 
             return {
                 "agent_handled": True,

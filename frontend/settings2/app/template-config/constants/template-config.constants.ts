@@ -240,9 +240,29 @@ www.PreciseMRI.com`,
 
   lien_reject_sig_not_valid_template: `Thank you for submitting the {lien_type}.
 
-We've received your lien document, however there appears to be an issue with the signature placement. The signature may be in the wrong box or outside the designated signature area.
+We've received your lien document, however the signature appears to be completely outside the designated signature area.
 
-Please resubmit the lien with the signature properly placed in the correct box.
+Signatures must be placed inside or at least partially overlapping the signature box. Please resubmit the lien with the signature properly placed in the correct box.
+
+Thank you,
+Precise Imaging Billing Dept.
+www.PreciseMRI.com`,
+
+  lien_reject_cover_letter_conditional_template: `Thank you for submitting the {lien_type}.
+
+We've received your lien submission, however the cover letter contains conditional language or requests modifications to our standard lien terms.
+
+We can only accept liens using our standard, unmodified agreement forms. Please resubmit the lien without the conditional language or contact our billing department to discuss your specific needs.
+
+Thank you,
+Precise Imaging Billing Dept.
+www.PreciseMRI.com`,
+
+  lien_reject_email_conditional_template: `Thank you for submitting the {lien_type}.
+
+We've received your lien submission, however the email message contains conditional language or requests modifications to our standard lien terms.
+
+We can only accept liens using our standard, unmodified agreement forms. Please resubmit the lien without the conditional language or contact our billing department to discuss your specific needs.
 
 Thank you,
 Precise Imaging Billing Dept.
@@ -308,6 +328,8 @@ export const DEFAULT_TAG_SETTINGS = {
   lien_reject_no_changes_template: DEFAULT_LIEN_TEMPLATES.lien_reject_no_changes_template,
   lien_reject_not_readable_template: DEFAULT_LIEN_TEMPLATES.lien_reject_not_readable_template,
   lien_reject_sig_not_valid_template: DEFAULT_LIEN_TEMPLATES.lien_reject_sig_not_valid_template,
+  lien_reject_cover_letter_conditional_template: DEFAULT_LIEN_TEMPLATES.lien_reject_cover_letter_conditional_template,
+  lien_reject_email_conditional_template: DEFAULT_LIEN_TEMPLATES.lien_reject_email_conditional_template,
 
   // Bill Balance templates (multi-scenario tag)
   bill_balance_found_template: "",

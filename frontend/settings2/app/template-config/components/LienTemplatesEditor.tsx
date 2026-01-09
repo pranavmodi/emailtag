@@ -14,7 +14,7 @@ interface LienTemplatesEditorProps {
   onReset: () => void;
 }
 
-type LienScenario = "success" | "patient_not_found" | "reject_no_changes" | "reject_not_readable" | "reject_sig_not_valid";
+type LienScenario = "success" | "patient_not_found" | "reject_no_changes" | "reject_not_readable" | "reject_sig_not_valid" | "reject_cover_letter_conditional" | "reject_email_conditional";
 
 const SCENARIO_OPTIONS: Array<{ value: LienScenario; label: string; description: string; emoji: string; color: string }> = [
   { value: "success", label: "Success", description: "Patient found, lien uploaded", emoji: "✅", color: "green" },
@@ -22,6 +22,8 @@ const SCENARIO_OPTIONS: Array<{ value: LienScenario; label: string; description:
   { value: "reject_no_changes", label: "Reply & Reject - No Changes", description: "Cross-outs, black-outs, added text", emoji: "✏️", color: "red" },
   { value: "reject_not_readable", label: "Reply & Reject - Not Readable", description: "Blurry or poor quality", emoji: "🔍", color: "orange" },
   { value: "reject_sig_not_valid", label: "Reply & Reject - Sig Not Valid", description: "Wrong box or outside designated area", emoji: "🖊️", color: "pink" },
+  { value: "reject_cover_letter_conditional", label: "Reply & Reject - Cover Letter Conditional", description: "Conditional language in cover letter", emoji: "📄", color: "purple" },
+  { value: "reject_email_conditional", label: "Reply & Reject - Email Conditional", description: "Conditional language in email body", emoji: "✉️", color: "blue" },
 ];
 
 export function LienTemplatesEditor({ tagSettings, customPlaceholders, onFieldChange, onSave, onReset }: LienTemplatesEditorProps) {
@@ -35,6 +37,8 @@ export function LienTemplatesEditor({ tagSettings, customPlaceholders, onFieldCh
       reject_no_changes: "lien_reject_no_changes_template",
       reject_not_readable: "lien_reject_not_readable_template",
       reject_sig_not_valid: "lien_reject_sig_not_valid_template",
+      reject_cover_letter_conditional: "lien_reject_cover_letter_conditional_template",
+      reject_email_conditional: "lien_reject_email_conditional_template",
     };
     return keyMap[scenario];
   };
@@ -50,6 +54,8 @@ export function LienTemplatesEditor({ tagSettings, customPlaceholders, onFieldCh
       red: { border: "border-red-200", bg: "bg-gradient-to-br from-red-50 to-rose-50", text: "text-red-900", focusBorder: "focus:border-red-500", focusRing: "focus:ring-red-200" },
       orange: { border: "border-orange-200", bg: "bg-gradient-to-br from-orange-50 to-amber-50", text: "text-orange-900", focusBorder: "focus:border-orange-500", focusRing: "focus:ring-orange-200" },
       pink: { border: "border-pink-200", bg: "bg-gradient-to-br from-pink-50 to-rose-50", text: "text-pink-900", focusBorder: "focus:border-pink-500", focusRing: "focus:ring-pink-200" },
+      purple: { border: "border-purple-200", bg: "bg-gradient-to-br from-purple-50 to-violet-50", text: "text-purple-900", focusBorder: "focus:border-purple-500", focusRing: "focus:ring-purple-200" },
+      blue: { border: "border-blue-200", bg: "bg-gradient-to-br from-blue-50 to-cyan-50", text: "text-blue-900", focusBorder: "focus:border-blue-500", focusRing: "focus:ring-blue-200" },
     };
     return colorMap[color];
   };
@@ -84,7 +90,7 @@ export function LienTemplatesEditor({ tagSettings, customPlaceholders, onFieldCh
           <span className="text-lg">📄</span>
           Lien Response Templates
           <span className="ml-auto rounded-full bg-purple-600 px-2 py-0.5 text-xs text-white">
-            5 Scenarios
+            7 Scenarios
           </span>
         </h3>
         <p className="mb-6 text-xs text-slate-600">

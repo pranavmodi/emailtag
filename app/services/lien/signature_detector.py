@@ -174,7 +174,9 @@ class SignatureDetector:
                 "Focus on designated signature boxes/lines. "
                 "Count only handwritten signatures (pen/ink strokes). Ignore printed/typed names, stamps, initials, checkmarks, or blanks. "
                 "IMPORTANT: Also check if signatures are INSIDE or OUTSIDE their designated signature boxes. "
-                "A signature is considered 'outside' if it appears significantly above, below, or beside the signature box borders. "
+                "CRITICAL: A signature is ONLY considered 'outside' if it is COMPLETELY outside the box with NO overlap or touching. "
+                "If the signature is even partially inside the box or overlaps/touches the box border, consider it 'inside'. "
+                "Only flag as 'outside' if the signature is entirely separate from the signature box area. "
                 "If unsure, answer false. Always return strict JSON with the required boolean fields."
             )
 
@@ -184,7 +186,8 @@ class SignatureDetector:
                 "Use all images: (A) full page, (B) bottom-region crop, (C) CLAHE, (D) thresholded.\n"
                 "Attorney signature areas may be labeled 'Attorney' / 'Attorney Signature'.\n"
                 "Consider true only if there are clear handwritten strokes in or near the attorney signature box/line.\n"
-                "Also check: Is the signature INSIDE the designated signature box? Or is it clearly outside (above, below, or beside the box)?\n"
+                "PLACEMENT CHECK: Is the signature inside the box? Mark 'inside_box: false' ONLY if the signature is COMPLETELY outside with NO overlap.\n"
+                "If the signature partially overlaps the box or touches the border, mark it as 'inside_box: true'.\n"
                 "Return ONLY strict JSON: {\"attorney_signature_present\": true|false, \"attorney_signature_inside_box\": true|false, \"analysis\": \"<brief reason including placement>\"}."
             )
             attorney_text = _call_o3_and_get_text(system_instructions, user_attorney)
@@ -229,9 +232,9 @@ class SignatureDetector:
 
             if attorney_present:
                 if attorney_inside_box:
-                    logger.info("✍️ SIGNATURE: Attorney found (inside box) → ASL")
+                    logger.info("✍️ SIGNATURE: Attorney found (inside/overlapping box) → ASL")
                 else:
-                    logger.info("✍️ SIGNATURE: Attorney found (OUTSIDE box) → ASL with placement issue")
+                    logger.info("✍️ SIGNATURE: Attorney found (COMPLETELY OUTSIDE box) → ASL with placement issue")
                 signature_data = {
                     "patient_signature_present": False,
                     "attorney_signature_present": True,
@@ -250,7 +253,8 @@ class SignatureDetector:
                 "Use all images: (A) full page, (B) bottom-region crop, (C) CLAHE, (D) thresholded.\n"
                 "Patient signature areas may be labeled 'Patient', 'Patient Signature', 'Signature of Patient'.\n"
                 "Consider true only if there are clear handwritten strokes in or near the patient signature box/line.\n"
-                "Also check: Is the signature INSIDE the designated signature box? Or is it clearly outside (above, below, or beside the box)?\n"
+                "PLACEMENT CHECK: Is the signature inside the box? Mark 'inside_box: false' ONLY if the signature is COMPLETELY outside with NO overlap.\n"
+                "If the signature partially overlaps the box or touches the border, mark it as 'inside_box: true'.\n"
                 "Return ONLY strict JSON: {\"patient_signature_present\": true|false, \"patient_signature_inside_box\": true|false, \"analysis\": \"<brief reason including placement>\"}."
             )
             patient_text = _call_o3_and_get_text(system_instructions, user_patient)
@@ -295,9 +299,9 @@ class SignatureDetector:
 
             if patient_present:
                 if patient_inside_box:
-                    logger.info("✍️ SIGNATURE: Patient found (inside box) → PSL")
+                    logger.info("✍️ SIGNATURE: Patient found (inside/overlapping box) → PSL")
                 else:
-                    logger.info("✍️ SIGNATURE: Patient found (OUTSIDE box) → PSL with placement issue")
+                    logger.info("✍️ SIGNATURE: Patient found (COMPLETELY OUTSIDE box) → PSL with placement issue")
                 signature_data = {
                     "patient_signature_present": True,
                     "attorney_signature_present": False,
@@ -314,7 +318,8 @@ class SignatureDetector:
             combined_user = (
                 "Task: Detect BOTH attorney and patient signatures and their placement.\n"
                 "Use images: (A) full page, (B) bottom crop, (C) CLAHE, (D) thresholded.\n"
-                "Check if each signature is INSIDE or OUTSIDE its designated signature box.\n"
+                "PLACEMENT CHECK: Mark 'inside_box: false' ONLY if the signature is COMPLETELY outside with NO overlap.\n"
+                "If the signature partially overlaps the box or touches the border, mark it as 'inside_box: true'.\n"
                 "Return ONLY strict JSON: {\"attorney_signature_present\": true|false, \"attorney_signature_inside_box\": true|false, \"patient_signature_present\": true|false, \"patient_signature_inside_box\": true|false, \"analysis\": \"<brief>\"}."
             )
             combined_text = _call_o3_and_get_text(system_instructions, combined_user)
@@ -344,9 +349,9 @@ class SignatureDetector:
                                 placement_issues.append("patient_signature_outside_box")
 
                             if placement_valid:
-                                logger.info(f"✍️ SIGNATURE: Combined analysis → {lien_type} (all signatures inside boxes)")
+                                logger.info(f"✍️ SIGNATURE: Combined analysis → {lien_type} (all signatures inside/overlapping boxes)")
                             else:
-                                logger.info(f"✍️ SIGNATURE: Combined analysis → {lien_type} (placement issues: {placement_issues})")
+                                logger.info(f"✍️ SIGNATURE: Combined analysis → {lien_type} (signatures COMPLETELY OUTSIDE: {placement_issues})")
 
                             signature_data = {
                                 "patient_signature_present": pat,

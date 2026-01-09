@@ -387,20 +387,23 @@ export default function LienTestPage() {
             <Card className="group hover:shadow-lg hover:border-blue-200 transition-all duration-200 border border-slate-200 overflow-hidden">
               <CardContent className="p-0">
                 <div className="p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-4 flex-1 min-w-0">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-500 shadow-md group-hover:shadow-lg transition-shadow">
-                        <Mail className="h-6 w-6 text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-slate-900 truncate text-base mb-1">
-                          {conversation.subject || conversation.conversation_id}
-                        </h3>
-                        <div className="flex items-center gap-2 text-sm text-slate-600 mb-3">
-                          <span className="truncate">{conversation.sender || "Unknown sender"}</span>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-4 flex-1 min-w-0">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-500 shadow-md group-hover:shadow-lg transition-shadow">
+                          <Mail className="h-6 w-6 text-white" />
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-medium">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-slate-900 truncate text-base mb-1">
+                            {conversation.subject || conversation.conversation_id}
+                          </h3>
+                          <p className="text-xs font-mono text-slate-500 break-all mb-2">
+                            {conversation.conversation_id}
+                          </p>
+                          <div className="flex items-center gap-2 text-sm text-slate-600 mb-3">
+                            <span className="truncate">{conversation.sender || "Unknown sender"}</span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-medium">
                             <FileText className="h-3.5 w-3.5" />
                             {conversation.file_count} {conversation.file_count === 1 ? "file" : "files"}
                           </div>
