@@ -3,11 +3,14 @@
 import logging
 import os
 import httpx
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 from app.core.config import settings
 from app.services.frontapp_service import get_conversation_text, archive_conversation_in_front
 from app.services.openai_service import are_questions_resolved_openai # Import OpenAI service
 from app.services.document_processing_service import DocumentProcessingService
+from app.services.trace_service import create_tracer
+from app.models.processing_trace import StepTypes, TraceStatus
 
 logger = logging.getLogger(__name__)
 
@@ -154,35 +157,95 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
     Returns:
         bool: True if the conversation was archived, False otherwise.
     """
-    
+    # Create tracer for detailed step-by-step logging
+    email_id = str(email_obj.id) if email_obj and hasattr(email_obj, 'id') else None
+    tracer = create_tracer(front_conversation_id, email_id)
+    overall_start = datetime.utcnow()
+
     # Debug logging for archival detection start
     if CLASSIFICATION_DEBUG:
         debug_logger.debug(f"🔍 ARCHIVAL DETECTION START: {front_conversation_id}")
         if email_obj:
             debug_logger.debug(f"🔍 ARCHIVAL: Email object provided with attributes: {list(email_obj.__dict__.keys()) if hasattr(email_obj, '__dict__') else 'No __dict__'}")
 
+    # Log the start of archival check
+    tracer.log_step(
+        step_name="archive_check_start",
+        step_type=StepTypes.BUSINESS_LOGIC,
+        status=TraceStatus.STARTED,
+        input_data={
+            "conversation_id": front_conversation_id,
+            "has_email_obj": email_obj is not None,
+            "has_attachments": email_obj.has_attachments if email_obj else False,
+            "has_ocr_results": bool(email_obj.ocr_results) if email_obj and hasattr(email_obj, 'ocr_results') else False
+        }
+    )
+
     # FIRST CHECK: Check stored OCR results for actionable documents
+    stored_check_start = datetime.utcnow()
     stored_has_actionable = False
+    stored_doc_type = None
+    stored_confidence = None
+    stored_doc_count = 0
+
     if email_obj and hasattr(email_obj, 'ocr_results'):
         doc_results = email_obj.ocr_results
         if doc_results:
+            stored_doc_count = len(doc_results)
             if CLASSIFICATION_DEBUG:
                 debug_logger.debug(f"🔍 ARCHIVAL: Found {len(doc_results)} document processing results in stored ocr_results")
 
             has_actionable, doc_type, confidence = _check_for_actionable_documents(doc_results, source="stored")
             if has_actionable:
+                stored_has_actionable = True
+                stored_doc_type = doc_type
+                stored_confidence = confidence
                 logger.info(f"📁 ARCHIVE PREVENTED (STORED CHECK): {front_conversation_id} - Found {doc_type} document (confidence: {confidence:.2f})")
                 if CLASSIFICATION_DEBUG:
                     debug_logger.debug(f"🔍 ARCHIVAL BLOCKED (STORED): {front_conversation_id} - {doc_type} document prevents archiving (confidence: {confidence:.2f})")
+
+                # Log blocked by stored documents
+                tracer.log_step(
+                    step_name="archive_blocked_stored_docs",
+                    step_type=StepTypes.BUSINESS_LOGIC,
+                    status=TraceStatus.COMPLETED,
+                    input_data={"doc_count": stored_doc_count},
+                    output_data={
+                        "blocked": True,
+                        "reason": "actionable_document_found",
+                        "doc_type": doc_type,
+                        "confidence": confidence,
+                        "decision": "DO_NOT_ARCHIVE"
+                    },
+                    duration_ms=int((datetime.utcnow() - stored_check_start).total_seconds() * 1000)
+                )
                 return False
             else:
                 logger.info(f"📁 ARCHIVE CHECK (STORED): {front_conversation_id} - No actionable documents found in stored results")
 
+    # Log stored check result
+    tracer.log_step(
+        step_name="archive_check_stored_docs",
+        step_type=StepTypes.BUSINESS_LOGIC,
+        status=TraceStatus.COMPLETED,
+        input_data={"doc_count": stored_doc_count},
+        output_data={
+            "has_actionable": False,
+            "checked_documents": stored_doc_count,
+            "result": "PASSED"
+        },
+        duration_ms=int((datetime.utcnow() - stored_check_start).total_seconds() * 1000)
+    )
+
     # SECOND CHECK: Re-process latest email's attachments if it has any
+    fresh_check_start = datetime.utcnow()
+    fresh_doc_count = 0
+
     if email_obj and email_obj.has_attachments:
         logger.info(f"📁 ARCHIVE DOUBLE-CHECK: Starting fresh document processing for latest email in {front_conversation_id}")
 
         fresh_results = await _reprocess_attachments(email_obj)
+        fresh_doc_count = len(fresh_results) if fresh_results else 0
 
         if fresh_results:
             has_actionable, doc_type, confidence = _check_for_actionable_documents(fresh_results, source="fresh")
@@ -190,38 +253,97 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
                 logger.info(f"📁 ARCHIVE PREVENTED (FRESH CHECK): {front_conversation_id} - Found {doc_type} document in fresh processing (confidence: {confidence:.2f})")
                 if CLASSIFICATION_DEBUG:
                     debug_logger.debug(f"🔍 ARCHIVAL BLOCKED (FRESH): {front_conversation_id} - {doc_type} document prevents archiving (confidence: {confidence:.2f})")
+
+                # Log blocked by fresh documents
+                tracer.log_step(
+                    step_name="archive_blocked_fresh_docs",
+                    step_type=StepTypes.BUSINESS_LOGIC,
+                    status=TraceStatus.COMPLETED,
+                    input_data={"reprocessed_count": fresh_doc_count},
+                    output_data={
+                        "blocked": True,
+                        "reason": "actionable_document_found_fresh",
+                        "doc_type": doc_type,
+                        "confidence": confidence,
+                        "decision": "DO_NOT_ARCHIVE"
+                    },
+                    duration_ms=int((datetime.utcnow() - fresh_check_start).total_seconds() * 1000)
+                )
                 return False
             else:
                 logger.info(f"📁 ARCHIVE CHECK (FRESH): {front_conversation_id} - No actionable documents found in fresh processing")
         else:
             logger.info(f"📁 ARCHIVE DOUBLE-CHECK: {front_conversation_id} - No fresh results obtained (reprocessing may have failed)")
+
+        # Log fresh check result
+        tracer.log_step(
+            step_name="archive_check_fresh_docs",
+            step_type=StepTypes.BUSINESS_LOGIC,
+            status=TraceStatus.COMPLETED,
+            input_data={"has_attachments": True},
+            output_data={
+                "reprocessed_count": fresh_doc_count,
+                "has_actionable": False,
+                "result": "PASSED"
+            },
+            duration_ms=int((datetime.utcnow() - fresh_check_start).total_seconds() * 1000)
+        )
     else:
         logger.info(f"📁 ARCHIVE DOUBLE-CHECK: {front_conversation_id} - Latest email has no attachments, skipping fresh processing")
+        tracer.log_step(
+            step_name="archive_check_fresh_docs",
+            step_type=StepTypes.BUSINESS_LOGIC,
+            status=TraceStatus.SKIPPED,
+            input_data={"has_attachments": False},
+            output_data={"result": "SKIPPED_NO_ATTACHMENTS"},
+            duration_ms=int((datetime.utcnow() - fresh_check_start).total_seconds() * 1000)
+        )
 
     # Both checks passed - no actionable documents found
     logger.info(f"📁 ARCHIVE CHECKS PASSED: {front_conversation_id} - Both stored and fresh checks found no actionable documents")
+
+    # THIRD CHECK: OpenAI conversation analysis
+    openai_start = datetime.utcnow()
 
     conversation_data = get_conversation_text(front_conversation_id)
     if not conversation_data or not isinstance(conversation_data, dict):
         logger.error(f"📁 ARCHIVE FAILED: No conversation data for {front_conversation_id}")
         if CLASSIFICATION_DEBUG:
             debug_logger.debug(f"🔍 ARCHIVAL ERROR: No conversation data retrieved for {front_conversation_id}")
+
+        tracer.log_step(
+            step_name="archive_check_openai",
+            step_type=StepTypes.AI_PROCESSING,
+            status=TraceStatus.FAILED,
+            error_data={"reason": "no_conversation_data"},
+            output_data={"decision": "DO_NOT_ARCHIVE"},
+            duration_ms=int((datetime.utcnow() - openai_start).total_seconds() * 1000)
+        )
         return False
 
     conversation_text = conversation_data.get('text', '')
     structured_messages = conversation_data.get('_structured_messages', [])
-    
+
     if CLASSIFICATION_DEBUG:
         debug_logger.debug(f"🔍 ARCHIVAL: Retrieved conversation data:")
         debug_logger.debug(f"🔍 ARCHIVAL: - Stripped text ({len(conversation_text)} chars): {conversation_text[:200]}{'...' if len(conversation_text) > 200 else ''}")
         debug_logger.debug(f"🔍 ARCHIVAL: - Structured messages count: {len(structured_messages)}")
         for i, msg in enumerate(structured_messages):
             debug_logger.debug(f"🔍 ARCHIVAL: - Message {i+1}: ID={msg.get('id')}, Author={msg.get('author_email', msg.get('author_name', 'Unknown'))}, Body='{msg.get('body', '')[:100]}{'...' if len(msg.get('body', '')) > 100 else ''}'")
-    
+
     if not conversation_text.strip() and not structured_messages:
         logger.info(f"📁 ARCHIVE SKIPPED: Empty conversation {front_conversation_id}")
         if CLASSIFICATION_DEBUG:
             debug_logger.debug(f"🔍 ARCHIVAL SKIPPED: Empty conversation text and no structured messages for {front_conversation_id}")
+
+        tracer.log_step(
+            step_name="archive_check_openai",
+            step_type=StepTypes.AI_PROCESSING,
+            status=TraceStatus.SKIPPED,
+            input_data={"reason": "empty_conversation"},
+            output_data={"decision": "DO_NOT_ARCHIVE"},
+            duration_ms=int((datetime.utcnow() - openai_start).total_seconds() * 1000)
+        )
         return False
 
     if CLASSIFICATION_DEBUG:
@@ -238,37 +360,134 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
         logger.error(f"📁 ARCHIVE ANALYSIS FAILED for {front_conversation_id}: {analysis_result.get('summary', 'Unknown error')}")
         if CLASSIFICATION_DEBUG:
             debug_logger.debug(f"🔍 ARCHIVAL ANALYSIS FAILED: {front_conversation_id} - {analysis_result}")
+
+        tracer.log_step(
+            step_name="archive_check_openai",
+            step_type=StepTypes.AI_PROCESSING,
+            status=TraceStatus.FAILED,
+            input_data={
+                "message_count": len(structured_messages),
+                "text_length": len(conversation_text)
+            },
+            output_data={
+                "success": False,
+                "error": analysis_result.get('summary', 'Unknown error'),
+                "decision": "DO_NOT_ARCHIVE"
+            },
+            error_data={"analysis_result": analysis_result},
+            duration_ms=int((datetime.utcnow() - openai_start).total_seconds() * 1000)
+        )
         return False
 
     all_questions_resolved = analysis_result.get("resolved", False)
     unresolved_questions = analysis_result.get("unresolved_questions", [])
-    
+
+    # Log OpenAI analysis result
+    tracer.log_step(
+        step_name="archive_check_openai",
+        step_type=StepTypes.AI_PROCESSING,
+        status=TraceStatus.COMPLETED,
+        input_data={
+            "message_count": len(structured_messages),
+            "text_length": len(conversation_text)
+        },
+        output_data={
+            "resolved": all_questions_resolved,
+            "unresolved_questions": unresolved_questions,
+            "summary": analysis_result.get("summary", ""),
+            "latest_email_analysis": analysis_result.get("latest_email_analysis", {})
+        },
+        duration_ms=int((datetime.utcnow() - openai_start).total_seconds() * 1000)
+    )
+
     if CLASSIFICATION_DEBUG:
         debug_logger.debug(f"🔍 ARCHIVAL DECISION: {front_conversation_id} - resolved: {all_questions_resolved}, unresolved: {unresolved_questions}")
-    
+
     # Essential logging: Archive decision
     if all_questions_resolved:
         try:
             if CLASSIFICATION_DEBUG:
                 debug_logger.debug(f"🔍 ARCHIVAL: Attempting to archive conversation {front_conversation_id} via Front API...")
+
+            front_api_start = datetime.utcnow()
             success = archive_conversation_in_front(front_conversation_id)
+
             if success:
                 logger.info(f"📁 ARCHIVED: {front_conversation_id} - All questions resolved")
                 if CLASSIFICATION_DEBUG:
                     debug_logger.debug(f"🔍 ARCHIVAL SUCCESS: {front_conversation_id} archived successfully")
+
+                # Log successful archive
+                tracer.log_step(
+                    step_name="archive_executed",
+                    step_type=StepTypes.API_CALL,
+                    status=TraceStatus.COMPLETED,
+                    output_data={
+                        "archived": True,
+                        "front_api_success": True,
+                        "decision": "ARCHIVED"
+                    },
+                    duration_ms=int((datetime.utcnow() - front_api_start).total_seconds() * 1000)
+                )
+
+                # Log overall completion
+                tracer.log_step(
+                    step_name="archive_check_complete",
+                    step_type=StepTypes.BUSINESS_LOGIC,
+                    status=TraceStatus.COMPLETED,
+                    output_data={
+                        "final_decision": "ARCHIVED",
+                        "checks_passed": ["stored_docs", "fresh_docs", "openai_resolution"],
+                        "questions_resolved": True
+                    },
+                    duration_ms=int((datetime.utcnow() - overall_start).total_seconds() * 1000)
+                )
                 return True
             else:
                 logger.error(f"📁 ARCHIVE FAILED: Front API error for {front_conversation_id}")
                 if CLASSIFICATION_DEBUG:
                     debug_logger.debug(f"🔍 ARCHIVAL FRONT API ERROR: Failed to archive {front_conversation_id}")
+
+                tracer.log_step(
+                    step_name="archive_executed",
+                    step_type=StepTypes.API_CALL,
+                    status=TraceStatus.FAILED,
+                    error_data={"reason": "front_api_error"},
+                    output_data={"decision": "ARCHIVE_FAILED"},
+                    duration_ms=int((datetime.utcnow() - front_api_start).total_seconds() * 1000)
+                )
                 return False
         except Exception as e:
             logger.error(f"📁 ARCHIVE ERROR: {front_conversation_id} - {e}")
             if CLASSIFICATION_DEBUG:
                 debug_logger.debug(f"🔍 ARCHIVAL EXCEPTION: {front_conversation_id} - {str(e)}")
+
+            tracer.log_step(
+                step_name="archive_executed",
+                step_type=StepTypes.API_CALL,
+                status=TraceStatus.FAILED,
+                error_data={"exception": str(e), "type": type(e).__name__},
+                output_data={"decision": "ARCHIVE_FAILED"},
+                duration_ms=int((datetime.utcnow() - overall_start).total_seconds() * 1000)
+            )
             return False
     else:
         logger.info(f"📁 NOT ARCHIVED: {front_conversation_id} - Unresolved: {unresolved_questions}")
         if CLASSIFICATION_DEBUG:
             debug_logger.debug(f"🔍 ARCHIVAL NOT PERFORMED: {front_conversation_id} - unresolved questions prevent archiving")
+
+        # Log decision not to archive
+        tracer.log_step(
+            step_name="archive_check_complete",
+            step_type=StepTypes.BUSINESS_LOGIC,
+            status=TraceStatus.COMPLETED,
+            output_data={
+                "final_decision": "NOT_ARCHIVED",
+                "reason": "unresolved_questions",
+                "unresolved_questions": unresolved_questions,
+                "checks_passed": ["stored_docs", "fresh_docs"],
+                "checks_failed": ["openai_resolution"]
+            },
+            duration_ms=int((datetime.utcnow() - overall_start).total_seconds() * 1000)
+        )
         return False 
