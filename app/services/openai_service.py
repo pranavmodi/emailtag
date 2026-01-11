@@ -237,11 +237,13 @@ async def are_questions_resolved_openai(conversation_text: str, structured_messa
         if structured_messages:
             debug_logger.debug(f"🔍 RESOLUTION: Provided {len(structured_messages)} structured messages from Front API")
     
-    # STEP 1: Extract email chain structure or use provided structured messages
-    if structured_messages:
+    # STEP 1: Extract email chain structure
+    # Always use OpenAI extraction when there's only 1 message - it might contain forwarded/quoted emails
+    # For multiple messages, we can use structured messages directly as each is a separate email
+    if structured_messages and len(structured_messages) > 1:
         if CLASSIFICATION_DEBUG:
-            debug_logger.debug("🔍 RESOLUTION: Using structured messages instead of OpenAI extraction")
-        
+            debug_logger.debug(f"🔍 RESOLUTION: Multiple structured messages ({len(structured_messages)}) - using them directly")
+
         # Convert structured messages to email chain format
         emails = []
         for i, msg in enumerate(structured_messages, 1):
@@ -256,19 +258,22 @@ async def are_questions_resolved_openai(conversation_text: str, structured_messa
                 "is_forwarded_message": False
             }
             emails.append(email)
-        
+
         email_extraction = {
             "success": True,
             "emails": emails,
             "total_emails": len(emails),
-            "parsing_notes": f"Used structured messages from Front API instead of text parsing ({len(emails)} messages)"
+            "parsing_notes": f"Used structured messages from Front API ({len(emails)} messages)"
         }
-        
+
         if CLASSIFICATION_DEBUG:
             debug_logger.debug(f"🔍 RESOLUTION: Converted {len(emails)} structured messages to email format")
     else:
+        # Single message or no messages - use OpenAI to detect and extract any embedded email chain
+        # OpenAI will intelligently parse forwarded messages, quoted replies, etc.
         if CLASSIFICATION_DEBUG:
-            debug_logger.debug("🔍 RESOLUTION: No structured messages provided, using OpenAI extraction")
+            msg_count = len(structured_messages) if structured_messages else 0
+            debug_logger.debug(f"🔍 RESOLUTION: Using OpenAI extraction ({msg_count} structured message(s) - may contain embedded email chain)")
         email_extraction = await extract_email_chain_openai(conversation_text)
     
     if CLASSIFICATION_DEBUG:

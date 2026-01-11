@@ -150,9 +150,33 @@
             transition: all 0.3s;
         }
 
+        .trace-card.archival {
+            border-left-color: #f59e0b;
+        }
+
         .trace-card:hover {
             box-shadow: 0 8px 15px rgba(0,0,0,0.1);
             transform: translateX(2px);
+        }
+
+        .trace-type-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-right: 10px;
+        }
+
+        .trace-type-badge.archival {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        .trace-type-badge.classification {
+            background-color: #ddd6fe;
+            color: #5b21b6;
         }
 
         .trace-header {
@@ -359,19 +383,18 @@
     <div class="container">
         <!-- User Bar -->
         <div class="user-bar">
-            <div class="user-info">📊 Classification Trace Viewer</div>
+            <div class="user-info">📊 Decision Trace Viewer</div>
             <div class="nav-links">
                 <a href="/settings">Settings</a>
                 <a href="/tag-stats">Tag Stats</a>
-                <a href="/traces">Processing Traces</a>
                 <a href="/logout">Logout</a>
             </div>
         </div>
 
         <!-- Header -->
         <div class="header">
-            <h1>🔍 Classification Trace Viewer</h1>
-            <p>View detailed classification steps, prompts, and LLM responses</p>
+            <h1>🔍 Decision Trace Viewer</h1>
+            <p>View archival decisions, classification steps, prompts, and LLM responses</p>
         </div>
 
         <!-- Search Section -->
@@ -393,23 +416,23 @@
         {% if conversation_id and traces %}
         <!-- Summary -->
         <div class="summary">
-            <h2>📈 Classification Summary</h2>
+            <h2>📈 Decision Summary</h2>
             <div class="summary-grid">
                 <div class="summary-item">
                     <span class="summary-number">{{ total_traces }}</span>
                     <span class="summary-label">Total Steps</span>
                 </div>
                 <div class="summary-item">
+                    <span class="summary-number">{{ archival_traces_count | default(0) }}</span>
+                    <span class="summary-label">Archival Steps</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-number">{{ classification_traces_count | default(0) }}</span>
+                    <span class="summary-label">Classification Steps</span>
+                </div>
+                <div class="summary-item">
                     <span class="summary-number">{{ total_duration }}ms</span>
                     <span class="summary-label">Total Duration</span>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-number">{{ total_tokens }}</span>
-                    <span class="summary-label">Total Tokens</span>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-number">{{ traces[-1].chosen_option if traces else 'N/A' }}</span>
-                    <span class="summary-label">Final Tag</span>
                 </div>
             </div>
         </div>
@@ -417,29 +440,34 @@
         <!-- Traces -->
         <div class="traces-section">
             {% for trace in traces %}
-            <div class="trace-card">
+            <div class="trace-card {{ trace.trace_type }}">
                 <div class="trace-header" onclick="toggleTrace({{ loop.index0 }})">
                     <div class="trace-header-left">
-                        <span class="trace-step-number">{{ trace.step_order + 1 }}</span>
+                        <span class="trace-step-number">{{ loop.index }}</span>
                         <div style="display: inline-block; vertical-align: top;">
                             <div class="trace-title">
+                                <span class="trace-type-badge {{ trace.trace_type }}">{{ trace.trace_type }}</span>
                                 {{ trace.step_name }}
                                 <span class="trace-result">→ {{ trace.chosen_option }}</span>
                             </div>
                             <div class="trace-subtitle">
-                                {% if trace.classification_path %}{{ trace.classification_path }}{% else %}Root Level{% endif %}
+                                {% if trace.classification_path %}{{ trace.classification_path }}{% elif trace.trace_type == 'archival' %}Archival Decision{% else %}Root Level{% endif %}
                                 <span class="badge badge-format">{{ trace.email_format }}</span>
+                                {% if trace.llm_model and trace.llm_model != 'archival_check' %}
                                 <span class="badge badge-model">{{ trace.llm_model }}</span>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
                     <div class="trace-meta">
                         <div class="trace-meta-item">
-                            ⏱️ {{ trace.duration_ms }}ms
+                            ⏱️ {{ trace.duration_ms if trace.duration_ms else 0 }}ms
                         </div>
+                        {% if trace.total_tokens %}
                         <div class="trace-meta-item">
                             🎯 {{ trace.total_tokens }} tokens
                         </div>
+                        {% endif %}
                         <div class="trace-meta-item">
                             <span class="toggle-icon">▼</span>
                         </div>
@@ -447,7 +475,50 @@
                 </div>
 
                 <div class="trace-body" id="trace-{{ loop.index0 }}">
-                    <!-- Prompt Template Section -->
+                    {% if trace.trace_type == 'archival' %}
+                    <!-- Archival Input Data Section -->
+                    <div class="trace-section">
+                        <div class="section-header active" onclick="toggleSection('input-{{ loop.index0 }}')">
+                            <span>📥 Input Data</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="section-content active" id="input-{{ loop.index0 }}">
+                            <div class="code-block">
+                                <pre>{{ trace.input_data | tojson(indent=2) if trace.input_data else 'No input data' }}</pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Archival Output Data Section -->
+                    <div class="trace-section">
+                        <div class="section-header active" onclick="toggleSection('output-{{ loop.index0 }}')">
+                            <span>📤 Output Data / Decision</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="section-content active" id="output-{{ loop.index0 }}">
+                            <div class="code-block">
+                                <pre>{{ trace.output_data | tojson(indent=2) if trace.output_data else 'No output data' }}</pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if trace.error_data %}
+                    <!-- Archival Error Data Section -->
+                    <div class="trace-section">
+                        <div class="section-header" onclick="toggleSection('error-{{ loop.index0 }}')">
+                            <span>❌ Error Data</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="section-content" id="error-{{ loop.index0 }}">
+                            <div class="code-block" style="background-color: #7f1d1d;">
+                                <pre>{{ trace.error_data | tojson(indent=2) }}</pre>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% else %}
+                    <!-- Classification: Prompt Template Section -->
                     <div class="trace-section">
                         <div class="section-header" onclick="toggleSection('prompt-{{ loop.index0 }}')">
                             <span>📝 Prompt Template (Classification Rules)</span>
@@ -460,7 +531,7 @@
                         </div>
                     </div>
 
-                    <!-- Full Prompt Section -->
+                    <!-- Classification: Full Prompt Section -->
                     <div class="trace-section">
                         <div class="section-header" onclick="toggleSection('full-prompt-{{ loop.index0 }}')">
                             <span>📤 Full Prompt Sent to LLM</span>
@@ -473,7 +544,7 @@
                         </div>
                     </div>
 
-                    <!-- LLM Response Section -->
+                    <!-- Classification: LLM Response Section -->
                     <div class="trace-section">
                         <div class="section-header" onclick="toggleSection('response-{{ loop.index0 }}')">
                             <span>📥 LLM Response</span>
@@ -485,6 +556,7 @@
                             </div>
                         </div>
                     </div>
+                    {% endif %}
 
                     <!-- Conversation Summary Section -->
                     {% if trace.conversation_summary %}

@@ -13,6 +13,7 @@ from app.crud.sync import processing_trace as trace_crud_sync
 from app.db.session import SessionLocal
 from app.api.api_v1.dependencies import check_authenticated
 from app.models.classification_trace import ClassificationTrace
+from app.models.processing_trace import EmailProcessingTrace
 
 logger = logging.getLogger(__name__)
 
@@ -215,32 +216,78 @@ async def view_classification_traces_ui(
     conversation_id: Optional[str] = Query(None),
     is_authenticated: bool = Depends(check_authenticated)
 ):
-    """Display the UI for viewing classification traces with collapsible prompts and responses."""
+    """Display the UI for viewing classification and archival traces with collapsible prompts and responses."""
     if not is_authenticated:
         return RedirectResponse(url="/login", status_code=303)
 
     try:
-        traces = []
+        classification_traces = []
+        archival_traces = []
 
         if conversation_id:
-            # Get classification traces for the specific conversation
             db = SessionLocal()
             try:
-                traces = db.query(ClassificationTrace).filter(
+                # Get classification traces
+                classification_traces = db.query(ClassificationTrace).filter(
                     ClassificationTrace.front_conversation_id == conversation_id
                 ).order_by(ClassificationTrace.step_order).all()
 
-                logger.info(f"Fetched {len(traces)} classification traces for conversation {conversation_id}")
+                # Get archival traces from EmailProcessingTrace
+                archival_traces = db.query(EmailProcessingTrace).filter(
+                    EmailProcessingTrace.front_conversation_id == conversation_id,
+                    EmailProcessingTrace.step_name.like("archive_%")
+                ).order_by(EmailProcessingTrace.step_order).all()
+
+                logger.info(f"Fetched {len(classification_traces)} classification traces and {len(archival_traces)} archival traces for conversation {conversation_id}")
             finally:
                 db.close()
 
-        # Convert traces to dict format for template
+        # Convert archival traces to dict format (displayed first)
         traces_data = []
-        for trace in traces:
+
+        for trace in archival_traces:
+            # Determine a display result based on output_data
+            output = trace.output_data or {}
+            decision = output.get("decision") or output.get("final_decision") or output.get("result") or trace.status
+
             trace_dict = {
                 "id": str(trace.id),
+                "trace_type": "archival",
                 "step_name": trace.step_name,
                 "step_order": trace.step_order,
+                "classification_path": None,
+                "llm_model": "archival_check",
+                "prompt_template": None,
+                "full_prompt": None,
+                "llm_response": None,
+                "chosen_option": decision,
+                "conversation_summary": output.get("summary"),
+                "classification_reason": output.get("reason") or (
+                    f"Unresolved questions: {output.get('unresolved_questions')}"
+                    if output.get("unresolved_questions") else None
+                ),
+                "email_format": trace.step_type,
+                "message_count": output.get("message_count"),
+                "started_at": trace.started_at.isoformat() if trace.started_at else None,
+                "completed_at": trace.completed_at.isoformat() if trace.completed_at else None,
+                "duration_ms": trace.duration_ms,
+                "prompt_tokens": None,
+                "completion_tokens": None,
+                "total_tokens": None,
+                "document_analysis": None,
+                "input_data": trace.input_data,
+                "output_data": trace.output_data,
+                "error_data": trace.error_data
+            }
+            traces_data.append(trace_dict)
+
+        # Convert classification traces to dict format
+        for trace in classification_traces:
+            trace_dict = {
+                "id": str(trace.id),
+                "trace_type": "classification",
+                "step_name": trace.step_name,
+                "step_order": trace.step_order + 100,  # Offset to show after archival
                 "classification_path": trace.classification_path,
                 "llm_model": trace.llm_model,
                 "prompt_template": trace.prompt_template,
@@ -257,9 +304,15 @@ async def view_classification_traces_ui(
                 "prompt_tokens": trace.prompt_tokens,
                 "completion_tokens": trace.completion_tokens,
                 "total_tokens": trace.total_tokens,
-                "document_analysis": trace.document_analysis
+                "document_analysis": trace.document_analysis,
+                "input_data": None,
+                "output_data": None,
+                "error_data": None
             }
             traces_data.append(trace_dict)
+
+        # Sort by step_order to maintain proper sequence
+        traces_data.sort(key=lambda x: x["step_order"])
 
         return templates.TemplateResponse(
             "classification_trace_viewer.html",
@@ -268,6 +321,8 @@ async def view_classification_traces_ui(
                 "conversation_id": conversation_id or "",
                 "traces": traces_data,
                 "total_traces": len(traces_data),
+                "archival_traces_count": len(archival_traces),
+                "classification_traces_count": len(classification_traces),
                 "total_duration": sum(t["duration_ms"] for t in traces_data if t["duration_ms"]) if traces_data else 0,
                 "total_tokens": sum(t["total_tokens"] for t in traces_data if t["total_tokens"]) if traces_data else 0
             }
