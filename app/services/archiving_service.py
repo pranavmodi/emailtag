@@ -382,7 +382,28 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
     all_questions_resolved = analysis_result.get("resolved", False)
     unresolved_questions = analysis_result.get("unresolved_questions", [])
 
-    # Log OpenAI analysis result
+    # Extract parsed email chain for trace (simplified for readability)
+    # Sanitize text to remove null characters that PostgreSQL can't store in JSONB
+    def sanitize_text(text: str) -> str:
+        if not text:
+            return ""
+        # Remove null characters and other problematic Unicode
+        return text.replace('\x00', '').replace('\u0000', '')
+
+    email_chain = analysis_result.get("email_chain", [])
+    parsed_emails = []
+    for email in email_chain:
+        body = sanitize_text(email.get("body", ""))
+        parsed_emails.append({
+            "seq": email.get("sequence_number"),
+            "from": sanitize_text(email.get("sender", "unknown")),
+            "date": sanitize_text(email.get("date", "")),
+            "subject": sanitize_text(email.get("subject", "")),
+            "body_preview": (body[:200] + "...") if len(body) > 200 else body,
+            "is_forwarded": email.get("is_forwarded_message", False)
+        })
+
+    # Log OpenAI analysis result with parsed email chain
     tracer.log_step(
         step_name="archive_check_openai",
         step_type=StepTypes.AI_PROCESSING,
@@ -393,9 +414,11 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
         },
         output_data={
             "resolved": all_questions_resolved,
-            "unresolved_questions": unresolved_questions,
-            "summary": analysis_result.get("summary", ""),
-            "latest_email_analysis": analysis_result.get("latest_email_analysis", {})
+            "unresolved_questions": [sanitize_text(q) for q in unresolved_questions],
+            "summary": sanitize_text(analysis_result.get("summary", "")),
+            "latest_email_analysis": sanitize_text(analysis_result.get("latest_email_analysis", "")),
+            "parsed_email_chain": parsed_emails,
+            "total_emails_parsed": len(parsed_emails)
         },
         duration_ms=int((datetime.utcnow() - openai_start).total_seconds() * 1000)
     )
