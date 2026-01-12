@@ -445,7 +445,7 @@ async def _generate_lien_status_table(patient_id: str, upload_results: List[Dict
             result = data.get("result", {})
             patient_esign_link = result.get("patientEsignLink")
             attorney_esign_link = result.get("attorneyEsignLink")
-            lien_status_list = result.get("lienStatusList", [])
+            lien_status_list = result.get("lienStatusList") or []
 
             for lien in lien_status_list:
                 lien_type = lien.get("lienType", "").upper()
