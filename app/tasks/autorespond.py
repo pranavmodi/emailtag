@@ -640,6 +640,71 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                     auto_response_details = {"reason": "ASL Lien agent call failed or returned None."}
         # --- END: ASL Lien Agent Branch ---
 
+        # --- BEGIN: Unknown Signature Lien Agent Branch (Rad Lien or Tech Lien without ASL/PSL) ---
+        elif not agent_handled_response and (RAD_LIEN_TAG_NAME in applied_tag_names or TECH_LIEN_TAG_NAME in applied_tag_names) and ASL_TAG_NAME not in applied_tag_names and PSL_TAG_NAME not in applied_tag_names:
+            has_rad_lien = RAD_LIEN_TAG_NAME in applied_tag_names
+            has_tech_lien = TECH_LIEN_TAG_NAME in applied_tag_names
+            logger.info(f"🔍 UNKNOWN SIGNATURE LIEN CHECK: Matched lien conditions without ASL/PSL signature type")
+
+            # Check if lien test mode is enabled
+            async def _check_lien_test_mode():
+                async with AsyncSessionLocal() as async_db:
+                    return await system_settings_crud.get_setting_value(async_db, "lien_test_mode", default=False)
+
+            lien_test_mode_enabled = asyncio.run(_check_lien_test_mode())
+
+            # Check if liens autorespond is enabled (consolidated setting)
+            if not asyncio.run(_check_autorespond_enabled("autorespond_liens")):
+                logger.info(f"📴 Liens autorespond DISABLED - Skipping lien agent for email {email_id}")
+                auto_response_details = {"reason": "Liens autorespond is disabled"}
+            else:
+                agent_name_for_status = "unknown_sig_lien"
+                lien_types = []
+                if has_rad_lien:
+                    lien_types.append("Rad Lien")
+                if has_tech_lien:
+                    lien_types.append("Tech Lien")
+                lien_type_str = " + ".join(lien_types)
+
+                if lien_test_mode_enabled:
+                    logger.info(f"🧪 LIEN TEST MODE: Email {email_id} tagged with {lien_type_str} (unknown signature). Response will be saved to file (not sent)")
+                else:
+                    logger.info(f"Email {email_id} tagged with {lien_type_str} (unknown signature type). Attempting ASL Lien agent as default handler.")
+
+                # Use ASL agent as the default handler for unknown signature liens
+                agent_result_dict = None
+                async def _run_unknown_sig_lien_agent():
+                    nonlocal agent_result_dict
+                    agent_result_dict = await handle_asl_lien_request(
+                        front_conversation_id=front_conversation_id,
+                        current_email_content=current_email_content,
+                        applied_tags=applied_tag_names,
+                        email_obj=email_obj,
+                        document_analysis_results=document_results,
+                        settings_obj=settings,
+                        email_subject=email_obj.subject,
+                        test_mode=lien_test_mode_enabled
+                    )
+
+                try:
+                    asyncio.run(_run_unknown_sig_lien_agent())
+                except Exception as e:
+                    logger.error(f"Error running Unknown Signature Lien agent for {email_id}: {e}", exc_info=True)
+                    agent_result_dict = {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Agent execution error: {e}"}}
+
+                if agent_result_dict:
+                    agent_handled_response = agent_result_dict.get("agent_handled", False)
+                    auto_response_processed_flag = agent_result_dict.get("processed_flag", False)
+                    auto_response_details = agent_result_dict.get("details", {"reason": "Unknown signature Lien agent processing outcome"})
+                    if agent_handled_response:
+                        logger.info(f"Unknown Signature Lien agent handled response for {front_conversation_id}.")
+                    else:
+                        logger.warning(f"Unknown Signature Lien agent did NOT handle response for {front_conversation_id}.")
+                else:
+                    logger.error(f"Unknown Signature Lien agent call failed to return a result for {front_conversation_id}.")
+                    auto_response_details = {"reason": "Unknown Signature Lien agent call failed or returned None."}
+        # --- END: Unknown Signature Lien Agent Branch ---
+
         current_status_from_tagging = email_obj.status
         final_email_status = "processed_unknown_state" # Default
 
