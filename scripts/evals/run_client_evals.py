@@ -31,25 +31,132 @@ from test_utils import (
 from scenarios_client_evals import CLIENT_EVAL_SCENARIOS
 
 
+# Scenario type definitions based on expected_tags patterns
+SCENARIO_TYPES = {
+    "apt_status": "Appointment Status",
+    "scheduling": "Scheduling Requests",
+    "payment": "Payment Issues",
+    "lien_asl": "ASL Liens",
+    "lien_psl": "PSL Liens",
+    "lien_modified": "Lien Modifications/Fraudulent",
+    "records": "Records & Reports",
+    "billing": "Billing Requests",
+    "other": "Other/Miscellaneous"
+}
+
+
+def get_scenario_type(scenario: Dict[str, Any]) -> str:
+    """
+    Determine the type/category of a scenario based on expected_tags and description.
+    Returns a type key from SCENARIO_TYPES.
+    """
+    expected_tags = scenario.get("expected_tags", [])
+    description = scenario.get("description", "").lower()
+
+    # Convert to set for easier checking
+    tags_set = set(expected_tags)
+
+    # Check for Lien Modified / Fraudulent (check first as it's more specific)
+    if "Lien Modified" in tags_set or "AI: Human review required" in tags_set:
+        return "lien_modified"
+
+    # Check for PSL Liens
+    if "PSL" in tags_set:
+        return "lien_psl"
+
+    # Check for ASL Liens (including "ASL > Rad Lien", "ASL > Tech Lien")
+    if "ASL" in tags_set or any("ASL" in tag for tag in tags_set):
+        return "lien_asl"
+
+    # Check for standalone lien types (Rad Lien, Tech Lien without ASL/PSL)
+    if "Rad Lien" in tags_set or "Tech Lien" in tags_set:
+        return "lien_asl"  # Default to ASL if lien type present
+
+    # Check for Appointment Status
+    if "Apt status req" in tags_set:
+        return "apt_status"
+
+    # Check for Scheduling
+    if "Schedule Request" in tags_set:
+        return "scheduling"
+
+    # Check for Payment issues
+    if "Sent payment but not received" in tags_set:
+        return "payment"
+
+    # Check for Records/Reports
+    if any(tag in tags_set for tag in ["Release of Records", "Reports Request", "Image Request", "CD Requests"]):
+        return "records"
+
+    # Check for Billing
+    if "Bill or balance Request" in tags_set:
+        return "billing"
+
+    # Fallback based on description keywords
+    if "apt status" in description or "appointment" in description:
+        return "apt_status"
+    if "schedule" in description:
+        return "scheduling"
+    if "payment" in description or "sent payment" in description:
+        return "payment"
+    if "lien" in description:
+        return "lien_asl"
+    if "record" in description or "report" in description:
+        return "records"
+    if "bill" in description:
+        return "billing"
+
+    return "other"
+
+
+def get_scenarios_by_type() -> Dict[str, Dict[str, Dict[str, Any]]]:
+    """
+    Organize all scenarios by their type.
+    Returns a dict mapping type_key -> {scenario_key: scenario_details}
+    """
+    by_type: Dict[str, Dict[str, Dict[str, Any]]] = {t: {} for t in SCENARIO_TYPES.keys()}
+
+    for key, scenario in CLIENT_EVAL_SCENARIOS.items():
+        scenario_type = get_scenario_type(scenario)
+        by_type[scenario_type][key] = scenario
+
+    return by_type
+
 
 def display_client_scenarios(verbose: bool = False) -> None:
-    """Display available client evaluation scenarios."""
-    print("\nAvailable client evaluation scenarios:")
-    print("=" * 50)
-    
-    for key, scenario in CLIENT_EVAL_SCENARIOS.items():
-        description = scenario['description']
-        expected_tags = scenario.get('expected_tags', [])
-        
-        if verbose:
-            subject = scenario.get('subject', 'N/A')
-            print(f"  {key}: {description}")
-            print(f"      Subject: {subject}")
-            print(f"      Expected Tags: {expected_tags}")
-        else:
-            print(f"  {key}: {description}")
-    
-    print("=" * 50)
+    """Display available client evaluation scenarios grouped by type."""
+    print("\nAvailable client evaluation scenarios (grouped by type):")
+    print("=" * 70)
+
+    scenarios_by_type = get_scenarios_by_type()
+
+    for type_key, type_name in SCENARIO_TYPES.items():
+        type_scenarios = scenarios_by_type.get(type_key, {})
+        if not type_scenarios:
+            continue
+
+        scenario_keys = sorted(type_scenarios.keys(), key=lambda x: int(x) if x.isdigit() else float('inf'))
+        print(f"\n[{type_key}] {type_name} ({len(type_scenarios)} scenarios)")
+        print("-" * 50)
+
+        for key in scenario_keys:
+            scenario = type_scenarios[key]
+            description = scenario['description']
+            expected_tags = scenario.get('expected_tags', [])
+
+            if verbose:
+                subject = scenario.get('subject', 'N/A')
+                print(f"  {key}: {description}")
+                print(f"      Subject: {subject}")
+                print(f"      Expected Tags: {expected_tags}")
+            else:
+                # Truncate long descriptions
+                if len(description) > 80:
+                    description = description[:77] + "..."
+                print(f"  {key}: {description}")
+
+    print("\n" + "=" * 70)
+    print("\nAvailable types: " + ", ".join(SCENARIO_TYPES.keys()))
 
 
 def _next_scenario_key(existing: Dict[str, Any]) -> str:
@@ -741,23 +848,50 @@ async def main():
     
     # Display scenarios (now including any imported one)
     display_client_scenarios(verbose)
-    
+
+    # Get scenarios organized by type for type-based selection
+    scenarios_by_type = get_scenarios_by_type()
+
     # Get user choice
     print(f"\nTotal client scenarios available: {len(CLIENT_EVAL_SCENARIOS)}")
-    choice = input("Enter scenario number(s) to test (comma-separated or ranges like 30-35) or 'all': ").strip()
-    
+    print("You can enter:")
+    print("  - Scenario numbers: 1,3,5-7")
+    print("  - Type name to run all of that type: lien_asl, apt_status, etc.")
+    print("  - 'all' to run all scenarios")
+    choice = input("\nEnter selection: ").strip()
+
     scenarios_to_run = {}
-    
+
     if choice.lower() == 'all':
         scenarios_to_run = CLIENT_EVAL_SCENARIOS
+    elif choice.lower() in SCENARIO_TYPES:
+        # User selected a type - run all scenarios of that type
+        type_key = choice.lower()
+        type_scenarios = scenarios_by_type.get(type_key, {})
+        if type_scenarios:
+            scenarios_to_run = type_scenarios
+            print(f"Selected type '{type_key}' ({SCENARIO_TYPES[type_key]}): {len(type_scenarios)} scenarios")
+        else:
+            print(f"No scenarios found for type '{type_key}'.")
     else:
-        # Parse comma-separated scenario numbers and ranges
-        scenario_keys = _parse_scenario_selection(choice)
-        for key in scenario_keys:
-            if key in CLIENT_EVAL_SCENARIOS:
-                scenarios_to_run[key] = CLIENT_EVAL_SCENARIOS[key]
+        # Check if input contains type names mixed with numbers
+        parts = [p.strip().lower() for p in choice.split(",")]
+        for part in parts:
+            if part in SCENARIO_TYPES:
+                # Add all scenarios of this type
+                type_scenarios = scenarios_by_type.get(part, {})
+                for key, scenario in type_scenarios.items():
+                    if key not in scenarios_to_run:
+                        scenarios_to_run[key] = scenario
+                print(f"Added {len(type_scenarios)} scenarios from type '{part}'")
             else:
-                print(f"Warning: Client scenario '{key}' not found. Skipping.")
+                # Parse as scenario number(s) or range
+                scenario_keys = _parse_scenario_selection(part)
+                for key in scenario_keys:
+                    if key in CLIENT_EVAL_SCENARIOS:
+                        scenarios_to_run[key] = CLIENT_EVAL_SCENARIOS[key]
+                    else:
+                        print(f"Warning: Client scenario '{key}' not found. Skipping.")
     
     if not scenarios_to_run:
         print("No valid scenarios selected. Exiting.")
