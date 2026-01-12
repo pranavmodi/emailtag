@@ -52,6 +52,8 @@ export function useTagSettings(selectedTag: string, currentUser: string) {
         lien_reject_no_changes_template: response.settings.lien_reject_no_changes_template ?? DEFAULT_LIEN_TEMPLATES.lien_reject_no_changes_template,
         lien_reject_not_readable_template: response.settings.lien_reject_not_readable_template ?? DEFAULT_LIEN_TEMPLATES.lien_reject_not_readable_template,
         lien_reject_sig_not_valid_template: response.settings.lien_reject_sig_not_valid_template ?? DEFAULT_LIEN_TEMPLATES.lien_reject_sig_not_valid_template,
+        lien_reject_cover_letter_conditional_template: response.settings.lien_reject_cover_letter_conditional_template ?? DEFAULT_LIEN_TEMPLATES.lien_reject_cover_letter_conditional_template,
+        lien_reject_email_conditional_template: response.settings.lien_reject_email_conditional_template ?? DEFAULT_LIEN_TEMPLATES.lien_reject_email_conditional_template,
 
         // Bill Balance templates (multi-scenario tag)
         bill_balance_found_template: response.settings.bill_balance_found_template ?? "",

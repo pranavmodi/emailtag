@@ -32,6 +32,23 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SegmentedControl, type SegmentOption } from "@/components/ui/segmented-control";
+
+// Lien mode options for 3-way toggle
+type LienMode = "off" | "sandbox" | "production";
+const LIEN_MODE_OPTIONS: SegmentOption<LienMode>[] = [
+  { value: "off", label: "Off", description: "Lien autorespond disabled" },
+  { value: "sandbox", label: "Sandbox", description: "Save to local directory for testing" },
+  { value: "production", label: "Production", description: "Upload to RadFlow patient files" },
+];
+
+// Bill Balance mode options for 3-way toggle
+type BillBalanceMode = "off" | "sandbox" | "production";
+const BILL_BALANCE_MODE_OPTIONS: SegmentOption<BillBalanceMode>[] = [
+  { value: "off", label: "Off", description: "Bill balance autorespond disabled" },
+  { value: "sandbox", label: "Sandbox", description: "Save to local directory for testing" },
+  { value: "production", label: "Production", description: "Send via Front API" },
+];
 
 const easing = { duration: 0.45, ease: [0.16, 1, 0.3, 1] };
 
@@ -53,12 +70,7 @@ const AUTORESPOND_LAYOUT: Array<{
     accent: "from-emerald-500 to-teal-500",
     icon: FolderOpen,
   },
-  {
-    key: "bill_balance_request",
-    settingKey: "autorespond_bill_balance_request",
-    accent: "from-amber-500 to-orange-500",
-    icon: PiggyBank,
-  },
+  // Note: bill_balance_request removed from here - now uses custom 3-way toggle (off/sandbox/production)
   {
     key: "case_updates",
     settingKey: "autorespond_case_updates",
@@ -71,12 +83,7 @@ const AUTORESPOND_LAYOUT: Array<{
     accent: "from-fuchsia-500 to-rose-500",
     icon: FileWarning,
   },
-  {
-    key: "liens",
-    settingKey: "autorespond_liens",
-    accent: "from-blue-500 to-indigo-600",
-    icon: ShieldCheck,
-  },
+  // Note: liens removed from here - now uses custom 3-way toggle (off/sandbox/production)
 ];
 
 const AUTORESPOND_LOOKUP = AUTORESPOND_LAYOUT.reduce(
@@ -135,13 +142,15 @@ export default function Settings2Page() {
     useState<AutorespondSettingsResponse | null>(null);
   const [senderVerificationEnabled, setSenderVerificationEnabled] = useState<boolean>(true);
   const [skipInternalDomains, setSkipInternalDomains] = useState<boolean>(false);
-  const [lienTestMode, setLienTestMode] = useState<boolean>(false);
+  const [lienMode, setLienMode] = useState<LienMode>("off");
+  const [billBalanceMode, setBillBalanceMode] = useState<BillBalanceMode>("off");
   const [isLoading, setIsLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [autorespondError, setAutorespondError] = useState<string | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [internalDomainsError, setInternalDomainsError] = useState<string | null>(null);
-  const [lienTestModeError, setLienTestModeError] = useState<string | null>(null);
+  const [lienModeError, setLienModeError] = useState<string | null>(null);
+  const [billBalanceModeError, setBillBalanceModeError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -157,24 +166,45 @@ export default function Settings2Page() {
         if (!mounted) return;
         setUser(auth.username ?? "Admin");
 
-        const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, lienTestModePayload] = await Promise.all([
+        const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, lienTestModePayload, billBalanceTestModePayload] = await Promise.all([
           SettingsApi.getProcessingStatus(),
           SettingsApi.getAutorespondSettings(),
           SettingsApi.getWorkspaceSettings(),
           SettingsApi.getSkipInternalDomainsStatus(),
           SettingsApi.getLienTestModeStatus(),
+          SettingsApi.getBillBalanceTestModeStatus(),
         ]);
         if (!mounted) return;
         setStatus(processingPayload);
         setAutorespond(autorespondPayload);
         setSenderVerificationEnabled(workspacePayload.enable_sender_verification);
         setSkipInternalDomains(internalDomainsPayload.skip_internal_domains);
-        setLienTestMode(lienTestModePayload.lien_test_mode);
+        // Derive lienMode from two backend settings
+        const liensEnabled = autorespondPayload.liens?.enabled ?? false;
+        const lienTestMode = lienTestModePayload.lien_test_mode ?? false;
+        if (!liensEnabled) {
+          setLienMode("off");
+        } else if (lienTestMode) {
+          setLienMode("sandbox");
+        } else {
+          setLienMode("production");
+        }
+        // Derive billBalanceMode from two backend settings
+        const billBalanceEnabled = autorespondPayload.bill_balance_request?.enabled ?? false;
+        const billBalanceTestMode = billBalanceTestModePayload.bill_balance_test_mode ?? false;
+        if (!billBalanceEnabled) {
+          setBillBalanceMode("off");
+        } else if (billBalanceTestMode) {
+          setBillBalanceMode("sandbox");
+        } else {
+          setBillBalanceMode("production");
+        }
         setStatusError(null);
         setAutorespondError(null);
         setWorkspaceError(null);
         setInternalDomainsError(null);
-        setLienTestModeError(null);
+        setLienModeError(null);
+        setBillBalanceModeError(null);
       } catch (error) {
         if (!mounted) return;
         if (error instanceof ApiError && error.status === 401) {
@@ -292,12 +322,30 @@ export default function Settings2Page() {
     }
   };
 
-  const handleLienTestModeToggle = async (enabled: boolean) => {
-    setBusyFlag("lien_test_mode", true);
+  const handleLienModeChange = async (mode: LienMode) => {
+    setBusyFlag("lien_mode", true);
     try {
-      await SettingsApi.toggleLienTestMode(enabled);
-      setLienTestMode(enabled);
-      setLienTestModeError(null);
+      // Derive the two backend settings from the mode
+      const liensEnabled = mode !== "off";
+      const testMode = mode === "sandbox";
+
+      // Update both settings
+      await Promise.all([
+        SettingsApi.toggleAutorespond("autorespond_liens", liensEnabled),
+        SettingsApi.toggleLienTestMode(testMode),
+      ]);
+
+      // Update local state
+      setLienMode(mode);
+      setAutorespond((prev) =>
+        prev
+          ? {
+              ...prev,
+              liens: prev.liens ? { ...prev.liens, enabled: liensEnabled } : prev.liens,
+            }
+          : prev
+      );
+      setLienModeError(null);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
@@ -306,10 +354,51 @@ export default function Settings2Page() {
       const message =
         error instanceof Error
           ? error.message
-          : "Failed to update lien test mode";
-      setLienTestModeError(message);
+          : "Failed to update lien mode";
+      setLienModeError(message);
     } finally {
-      setBusyFlag("lien_test_mode", false);
+      setBusyFlag("lien_mode", false);
+    }
+  };
+
+  const handleBillBalanceModeChange = async (mode: BillBalanceMode) => {
+    setBusyFlag("bill_balance_mode", true);
+    try {
+      // Derive the two backend settings from the mode
+      const billBalanceEnabled = mode !== "off";
+      const testMode = mode === "sandbox";
+
+      // Update both settings
+      await Promise.all([
+        SettingsApi.toggleAutorespond("autorespond_bill_balance_request", billBalanceEnabled),
+        SettingsApi.toggleBillBalanceTestMode(testMode),
+      ]);
+
+      // Update local state
+      setBillBalanceMode(mode);
+      setAutorespond((prev) =>
+        prev
+          ? {
+              ...prev,
+              bill_balance_request: prev.bill_balance_request
+                ? { ...prev.bill_balance_request, enabled: billBalanceEnabled }
+                : prev.bill_balance_request,
+            }
+          : prev
+      );
+      setBillBalanceModeError(null);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to update bill balance mode";
+      setBillBalanceModeError(message);
+    } finally {
+      setBusyFlag("bill_balance_mode", false);
     }
   };
 
@@ -570,39 +659,6 @@ export default function Settings2Page() {
                 <strong>Testing Mode (OFF):</strong> All emails are processed regardless of sender domain. ⚠️ Use only for testing!
               </div>
               {internalDomainsError && <ErrorBanner message={internalDomainsError} />}
-
-              <hr className="border-amber-200" />
-
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-slate-900">Lien Upload Test Mode</p>
-                  <Badge
-                    className={
-                      lienTestMode
-                        ? "bg-blue-50 text-blue-700 border-blue-200"
-                        : "bg-green-50 text-green-700 border-green-200"
-                    }
-                  >
-                    {lienTestMode ? "Test Mode (Local Directory)" : "Production (RadFlow Upload)"}
-                  </Badge>
-                  <p className="text-xs text-slate-500">
-                    {lienTestMode
-                      ? "Lien documents saved to /tmp/lien_test_uploads/ for review"
-                      : "Lien documents uploaded to RadFlow patient files"}
-                  </p>
-                </div>
-                <ToggleRail
-                  checked={lienTestMode}
-                  disabled={busy.lien_test_mode}
-                  onCheckedChange={handleLienTestModeToggle}
-                />
-              </div>
-              <div className="rounded-2xl border border-blue-200 bg-blue-50/80 px-4 py-3 text-sm text-blue-900">
-                <strong>Test Mode (ON):</strong> Lien documents are saved to local directory (/tmp/lien_test_uploads/) organized by conversation ID. View uploaded files at <Link href="/lientest" className="font-semibold underline">/settings/lientest</Link>.
-                <br /><br />
-                <strong>Production Mode (OFF):</strong> Lien documents are uploaded directly to RadFlow patient files via MCP.
-              </div>
-              {lienTestModeError && <ErrorBanner message={lienTestModeError} />}
             </CardContent>
           </Card>
         </motion.section>
@@ -731,6 +787,86 @@ export default function Settings2Page() {
               </motion.div>
             );
           })}
+
+          {/* Liens 3-way toggle (Off / Sandbox / Production) */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...easing, delay: 0.08 }}
+            className="h-full"
+          >
+            <Card className={isGlobalDisabled ? "opacity-60" : "opacity-100"}>
+              <CardContent className="space-y-4 pt-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg">
+                        <ShieldCheck className="h-5 w-5" />
+                      </span>
+                      <div>
+                        <p className="text-base font-semibold text-slate-900">
+                          {autorespond?.liens?.label ?? "Liens (ASL & PSL)"}
+                        </p>
+                        <p className="text-xs uppercase tracking-wide text-slate-400">
+                          liens
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-500">
+                      {autorespond?.liens?.description ?? "Automatically upload lien documents and send confirmation responses"}
+                    </p>
+                  </div>
+                  <SegmentedControl
+                    options={LIEN_MODE_OPTIONS}
+                    value={lienMode}
+                    onChange={handleLienModeChange}
+                    disabled={isGlobalDisabled || busy.lien_mode}
+                  />
+                </div>
+                {lienModeError && <ErrorBanner message={lienModeError} />}
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Bill Balance 3-way toggle (Off / Sandbox / Production) */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...easing, delay: 0.1 }}
+            className="h-full"
+          >
+            <Card className={isGlobalDisabled ? "opacity-60" : "opacity-100"}>
+              <CardContent className="space-y-4 pt-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg">
+                        <PiggyBank className="h-5 w-5" />
+                      </span>
+                      <div>
+                        <p className="text-base font-semibold text-slate-900">
+                          {autorespond?.bill_balance_request?.label ?? "Bill or Balance Request"}
+                        </p>
+                        <p className="text-xs uppercase tracking-wide text-slate-400">
+                          bill balance
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-500">
+                      {autorespond?.bill_balance_request?.description ?? "Automatically respond to bill or balance request emails"}
+                    </p>
+                  </div>
+                  <SegmentedControl
+                    options={BILL_BALANCE_MODE_OPTIONS}
+                    value={billBalanceMode}
+                    onChange={handleBillBalanceModeChange}
+                    disabled={isGlobalDisabled || busy.bill_balance_mode}
+                  />
+                </div>
+                {billBalanceModeError && <ErrorBanner message={billBalanceModeError} />}
+              </CardContent>
+            </Card>
+          </motion.div>
         </div>
       </motion.section>
     </div>

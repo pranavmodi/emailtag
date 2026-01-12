@@ -371,13 +371,24 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                         auto_response_details = {"reason": "Medical Records agent call failed or returned None."}
 
         elif BILL_OR_BALANCE_REQUEST_TAG_NAME in applied_tag_names:
+            # Check if bill balance test mode is enabled
+            async def _check_bill_balance_test_mode():
+                async with AsyncSessionLocal() as async_db:
+                    return await system_settings_crud.get_setting_value(async_db, "bill_balance_test_mode", default=False)
+
+            bill_balance_test_mode_enabled = asyncio.run(_check_bill_balance_test_mode())
+
             # Check if bill_balance_request autorespond is enabled
             if not asyncio.run(_check_autorespond_enabled("autorespond_bill_balance_request")):
                 logger.info(f"📴 Bill or Balance Request autorespond DISABLED - Skipping agent for email {email_id}")
                 auto_response_details = {"reason": "Bill or Balance Request autorespond is disabled"}
             else:
                 agent_name_for_status = "bill_balance_request"
-                logger.info(f"Email {email_id} tagged with '{BILL_OR_BALANCE_REQUEST_TAG_NAME}'. Attempting Bill/Balance agent.")
+
+                if bill_balance_test_mode_enabled:
+                    logger.info(f"🧪 BILL BALANCE TEST MODE: Email {email_id} tagged with '{BILL_OR_BALANCE_REQUEST_TAG_NAME}'. Response will be saved to file (not sent)")
+                else:
+                    logger.info(f"Email {email_id} tagged with '{BILL_OR_BALANCE_REQUEST_TAG_NAME}'. Attempting Bill/Balance agent.")
 
                 agent_result_dict = None
                 async def _run_bill_balance_agent():
@@ -387,7 +398,8 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                         current_email_content=current_email_content,
                         structured_history_messages=structured_history_messages,
                         settings_obj=settings,
-                        email_subject=email_obj.subject
+                        email_subject=email_obj.subject,
+                        test_mode=bill_balance_test_mode_enabled
                     )
 
                 try:

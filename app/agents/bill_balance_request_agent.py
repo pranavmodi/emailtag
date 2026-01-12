@@ -37,6 +37,101 @@ from app.agents.templates.bill_balance_templates import (
 logger = get_task_logger(__name__)
 # --- END: Logging ---
 
+# --- BEGIN: Test Mode Support ---
+BILL_BALANCE_TEST_OUTPUT_DIR = "/tmp/bill_balance_test_outputs"
+
+
+async def save_test_mode_response_bill_balance(
+    conversation_id: str,
+    response_text: str,
+    patient_id: str = None,
+    response_type: str = None,
+    details: Dict[str, Any] = None
+) -> Dict[str, Any]:
+    """
+    Saves the generated bill balance response to file system for test mode.
+
+    Args:
+        conversation_id: Front conversation ID
+        response_text: The full formatted response message
+        patient_id: Patient ID if found
+        response_type: Type of response (e.g., "billing_info", "clarification_request", "not_found")
+        details: Additional metadata about the response
+
+    Returns:
+        Dict with status and file path
+    """
+    try:
+        test_dir = Path(BILL_BALANCE_TEST_OUTPUT_DIR) / conversation_id
+        test_dir.mkdir(parents=True, exist_ok=True)
+
+        response_file = test_dir / "response.json"
+
+        response_data = {
+            "timestamp": datetime.now().isoformat(),
+            "conversation_id": conversation_id,
+            "response_text": response_text,
+            "patient_id": patient_id,
+            "response_type": response_type,
+            "details": details or {},
+            "status": "test_mode_saved"
+        }
+
+        with open(response_file, "w") as f:
+            json.dump(response_data, f, indent=2)
+
+        logger.info(f"🧪 TEST MODE: Saved bill balance response to {response_file}")
+
+        return {
+            "status": "success",
+            "file_path": str(response_file),
+            "message": "Response saved to file (test mode)"
+        }
+
+    except Exception as e:
+        logger.error(f"Error saving test mode response: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "message": f"Failed to save response: {str(e)}"
+        }
+
+
+async def send_or_save_response_bill_balance(
+    conversation_id: str,
+    response_text: str,
+    test_mode: bool = False,
+    patient_id: str = None,
+    response_type: str = None,
+    details: Dict[str, Any] = None
+) -> None:
+    """
+    Either sends the response via Front API or saves to file based on test_mode.
+
+    Args:
+        conversation_id: Front conversation ID
+        response_text: The full formatted response message
+        test_mode: If True, save to file instead of sending
+        patient_id: Patient ID if found
+        response_type: Type of response
+        details: Additional metadata
+    """
+    if test_mode:
+        # Test mode: save to file
+        await save_test_mode_response_bill_balance(
+            conversation_id=conversation_id,
+            response_text=response_text,
+            patient_id=patient_id,
+            response_type=response_type,
+            details=details
+        )
+    else:
+        # Normal mode: send via Front API
+        await send_reply_to_front_direct(
+            conversation_id=conversation_id,
+            reply_text=response_text
+        )
+# --- END: Test Mode Support ---
+
 # --- BEGIN: Response Templates ---
 
 # Main template for Bill & Balance response
@@ -242,7 +337,8 @@ async def handle_bill_balance_request(
     current_email_content: str,
     structured_history_messages: List[Dict[str, Any]],
     settings_obj: Any = app_settings_instance,
-    email_subject: str = None
+    email_subject: str = None,
+    test_mode: bool = False
 ) -> Dict[str, Any]:
     """
     Main orchestrator for handling "Bill or balance Request" emails.
@@ -250,8 +346,16 @@ async def handle_bill_balance_request(
     1. If single Patient ID found → auto-reply
     2. If no/multiple patients → ask for clarification (once)
     3. If still can't find → tag for human review
+
+    Args:
+        front_conversation_id: Front conversation ID
+        current_email_content: Current email body
+        structured_history_messages: Conversation history
+        settings_obj: Application settings
+        email_subject: Email subject line
+        test_mode: If True, save responses to file instead of sending via Front API
     """
-    logger.info(f"handle_bill_balance_request called for conversation: {front_conversation_id}")
+    logger.info(f"handle_bill_balance_request called for conversation: {front_conversation_id} (test_mode={test_mode})")
     
     # Check if we've already asked for clarification
     already_asked_for_clarification = _check_if_clarification_request(structured_history_messages)
@@ -265,14 +369,18 @@ async def handle_bill_balance_request(
             logger.info(f"Patient ID still not found after clarification request for conversation {front_conversation_id}. Tagging for human review.")
             
             try:
-                # Add human review tag
-                frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
-                
-                await send_reply_to_front_direct(
+                # Add human review tag (only in non-test mode)
+                if not test_mode:
+                    frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+
+                await send_or_save_response_bill_balance(
                     conversation_id=front_conversation_id,
-                    reply_text=TEMPLATE_REQUEST_PATIENT_ID_AGAIN_ESCALATE
+                    response_text=TEMPLATE_REQUEST_PATIENT_ID_AGAIN_ESCALATE,
+                    test_mode=test_mode,
+                    response_type="human_review_escalation",
+                    details={"action": "tagged_for_human_review"}
                 )
-                
+
                 return {"agent_handled": True, "processed_flag": True, "details": {"action": "tagged_for_human_review"}}
             except Exception as e:
                 logger.error(f"Failed to tag for human review: {e}")
@@ -280,13 +388,16 @@ async def handle_bill_balance_request(
         else:
             # Step 2: First time we can't find patient ID, ask for clarification
             logger.info(f"Patient ID not found for conversation {front_conversation_id}. Requesting clarification.")
-            
+
             try:
-                await send_reply_to_front_direct(
+                await send_or_save_response_bill_balance(
                     conversation_id=front_conversation_id,
-                    reply_text=TEMPLATE_REQUEST_PATIENT_ID
+                    response_text=TEMPLATE_REQUEST_PATIENT_ID,
+                    test_mode=test_mode,
+                    response_type="clarification_request",
+                    details={"action": "requested_clarification"}
                 )
-                
+
                 return {"agent_handled": True, "processed_flag": True, "details": {"action": "requested_clarification"}}
             except Exception as e:
                 logger.error(f"Failed to send clarification request: {e}")
@@ -503,15 +614,23 @@ Thank you,
 Precise Imaging Billing Dept.
 www.PreciseMRI.com
 """
-                        
-                        await send_reply_to_front_direct(
+
+                        await send_or_save_response_bill_balance(
                             conversation_id=front_conversation_id,
-                            reply_text=patient_not_found_response.strip()
+                            response_text=patient_not_found_response.strip(),
+                            test_mode=test_mode,
+                            patient_id=patient_id,
+                            response_type="patient_not_found",
+                            details={
+                                "reason": matched_pattern['description'],
+                                "error_pattern": matched_pattern['pattern'],
+                                "mcp_error": error_message
+                            }
                         )
-                        
+
                         return {
-                            "agent_handled": True, 
-                            "processed_flag": True, 
+                            "agent_handled": True,
+                            "processed_flag": True,
                             "details": {
                                 "action": "sent_patient_not_found_response",
                                 "patient_id": patient_id,
@@ -525,10 +644,11 @@ www.PreciseMRI.com
                         # For other business logic errors, tag for human review
                         error_classification = matched_pattern['action'] if matched_pattern else 'unknown_business_error'
                         logger.error(f"Business logic error [{error_classification}] for patient {patient_id}: {error_message}")
-                        try:
-                            frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
-                        except Exception as tag_error:
-                            logger.error(f"Failed to add human review tag: {tag_error}")
+                        if not test_mode:
+                            try:
+                                frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+                            except Exception as tag_error:
+                                logger.error(f"Failed to add human review tag: {tag_error}")
                         return {
                             "agent_handled": False, 
                             "processed_flag": False, 
@@ -638,15 +758,19 @@ Thank you,
 Precise Imaging Billing Dept.
 www.PreciseMRI.com
 """
-            
-            await send_reply_to_front_direct(
+
+            await send_or_save_response_bill_balance(
                 conversation_id=front_conversation_id,
-                reply_text=no_data_response.strip()
+                response_text=no_data_response.strip(),
+                test_mode=test_mode,
+                patient_id=patient_id,
+                response_type="no_billing_data",
+                details={"reason": "No billing data available"}
             )
-            
+
             return {
-                "agent_handled": True, 
-                "processed_flag": True, 
+                "agent_handled": True,
+                "processed_flag": True,
                 "details": {
                     "action": "sent_no_billing_data_response",
                     "patient_id": patient_id,
@@ -711,15 +835,24 @@ www.PreciseMRI.com
             pass
 
         # Send the response
-        await send_reply_to_front_direct(
+        await send_or_save_response_bill_balance(
             conversation_id=front_conversation_id,
-            reply_text=reply_body
+            response_text=reply_body,
+            test_mode=test_mode,
+            patient_id=patient_id,
+            response_type="comprehensive_billing_info",
+            details={
+                "bill_balance": patient_bill_balance,
+                "liens_signed": all_liens_signed,
+                "studies_found": len(study_details_list),
+                "template_used": "comprehensive" if all_liens_signed else "lien_reminder"
+            }
         )
-        
+
         logger.info(f"Successfully sent comprehensive billing response for patient {patient_id} in conversation {front_conversation_id}")
         return {
-            "agent_handled": True, 
-            "processed_flag": True, 
+            "agent_handled": True,
+            "processed_flag": True,
             "details": {
                 "action": "sent_comprehensive_billing_info",
                 "patient_id": patient_id,
@@ -730,13 +863,14 @@ www.PreciseMRI.com
                 "template_used": "comprehensive" if all_liens_signed else "lien_reminder"
             }
         }
-        
+
     except asyncio.TimeoutError as e:
         logger.error(f"Timeout error during MCP call for patient {patient_id}: {e}")
-        try:
-            frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
-        except Exception as tag_error:
-            logger.error(f"Failed to add human review tag: {tag_error}")
+        if not test_mode:
+            try:
+                frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+            except Exception as tag_error:
+                logger.error(f"Failed to add human review tag: {tag_error}")
         
         # Send user-friendly timeout response
         timeout_response = f"""
@@ -753,13 +887,17 @@ Precise Imaging Billing Dept.
 www.PreciseMRI.com
 """
         try:
-            await send_reply_to_front_direct(
+            await send_or_save_response_bill_balance(
                 conversation_id=front_conversation_id,
-                reply_text=timeout_response.strip()
+                response_text=timeout_response.strip(),
+                test_mode=test_mode,
+                patient_id=patient_id,
+                response_type="timeout_error",
+                details={"reason": "MCP timeout error"}
             )
             return {
-                "agent_handled": True, 
-                "processed_flag": True, 
+                "agent_handled": True,
+                "processed_flag": True,
                 "details": {
                     "action": "sent_timeout_response",
                     "patient_id": patient_id,
@@ -769,20 +907,22 @@ www.PreciseMRI.com
         except Exception as send_error:
             logger.error(f"Failed to send timeout response: {send_error}")
             return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Timeout error and failed to send response: {e}"}}
-    
+
     except ConnectionError as e:
         logger.error(f"Connection error during MCP call for patient {patient_id}: {e}")
-        try:
-            frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
-        except Exception as tag_error:
-            logger.error(f"Failed to add human review tag: {tag_error}")
+        if not test_mode:
+            try:
+                frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+            except Exception as tag_error:
+                logger.error(f"Failed to add human review tag: {tag_error}")
         return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"MCP connection error: {e}"}}
-    
+
     except Exception as e:
         logger.error(f"Unexpected error processing billing request for patient {patient_id}: {e}", exc_info=True)
-        # Tag for human review on processing error
-        try:
-            frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
-        except Exception as tag_error:
-            logger.error(f"Failed to add human review tag: {tag_error}")
+        # Tag for human review on processing error (only in non-test mode)
+        if not test_mode:
+            try:
+                frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+            except Exception as tag_error:
+                logger.error(f"Failed to add human review tag: {tag_error}")
         return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Unexpected processing error: {e}"}}

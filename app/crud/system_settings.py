@@ -123,6 +123,12 @@ class CRUDSystemSettings:
                     "(/tmp/lien_test_uploads/{conversation_id}/) instead of uploading to RadFlow via MCP. "
                     "Use this for testing lien processing without affecting production data."
                 )
+            elif setting_key == "bill_balance_test_mode":
+                description = (
+                    "Bill balance test mode. When enabled, bill balance responses are saved to a local directory "
+                    "(/tmp/bill_balance_test_outputs/{conversation_id}/) instead of sending via Front API. "
+                    "Use this for testing bill balance processing without affecting production data."
+                )
 
             setting = SystemSetting(
                 setting_key=setting_key,

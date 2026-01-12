@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 # Lien test uploads directory
 LIEN_TEST_UPLOAD_DIR = "/tmp/lien_test_uploads"
 
+# Bill balance test outputs directory
+BILL_BALANCE_TEST_OUTPUT_DIR = "/tmp/bill_balance_test_outputs"
+
 router = APIRouter()
 
 
@@ -250,6 +253,199 @@ async def toggle_lien_test_mode(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to toggle lien test mode: {str(e)}"
+        )
+
+
+@router.get("/bill-balance-test-mode-status")
+async def get_bill_balance_test_mode_status(db: AsyncSession = Depends(get_db)):
+    """Get current bill balance test mode status."""
+    try:
+        setting = await system_settings_crud.get_by_key(db, "bill_balance_test_mode")
+        if setting:
+            return {
+                "bill_balance_test_mode": setting.setting_value,
+                "description": setting.description,
+                "last_updated": setting.updated_at,
+                "updated_by": setting.updated_by
+            }
+        else:
+            return {
+                "bill_balance_test_mode": False,
+                "description": "Bill balance test mode. When enabled, responses are saved to a local directory instead of sending via Front API.",
+                "last_updated": None,
+                "updated_by": None
+            }
+    except Exception as e:
+        logger.error(f"Error fetching bill balance test mode status: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch bill balance test mode status: {str(e)}"
+        )
+
+
+@router.post("/bill-balance-test-mode-toggle")
+async def toggle_bill_balance_test_mode(
+    update: SystemSettingUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Toggle bill balance test mode on/off."""
+    try:
+        setting = await system_settings_crud.update_setting(
+            db,
+            "bill_balance_test_mode",
+            update.setting_value,
+            updated_by=update.updated_by
+        )
+
+        return {
+            "bill_balance_test_mode": setting.setting_value,
+            "description": setting.description or "Bill balance test mode",
+            "last_updated": setting.updated_at,
+            "updated_by": setting.updated_by
+        }
+    except Exception as e:
+        logger.error(f"Error toggling bill balance test mode: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to toggle bill balance test mode: {str(e)}"
+        )
+
+
+@router.get("/bill-balance-test-outputs")
+async def list_bill_balance_test_outputs(db: AsyncSession = Depends(get_db)):
+    """List all conversation IDs with bill balance test outputs, ordered by latest first."""
+    try:
+        from app.models.email import Email
+        from sqlalchemy import select
+
+        test_dir = Path(BILL_BALANCE_TEST_OUTPUT_DIR)
+
+        if not test_dir.exists():
+            return {"conversations": []}
+
+        conversations = []
+        for conv_dir in test_dir.iterdir():
+            if conv_dir.is_dir():
+                response_file = conv_dir / "response.json"
+
+                # Get directory modification time
+                latest_time = conv_dir.stat().st_mtime
+                if response_file.exists():
+                    latest_time = max(latest_time, response_file.stat().st_mtime)
+
+                # Get conversation details from database
+                conv_id = conv_dir.name
+                conv_info = {
+                    "conversation_id": conv_id,
+                    "timestamp": latest_time,
+                    "has_response": response_file.exists(),
+                    "subject": None,
+                    "sender": None,
+                }
+
+                # Try to get email info from database
+                try:
+                    stmt = select(Email).where(Email.front_conversation_id == conv_id).limit(1)
+                    result = await db.execute(stmt)
+                    email = result.scalar_one_or_none()
+                    if email:
+                        conv_info["subject"] = email.subject
+                        conv_info["sender"] = email.sender_email
+                except Exception as db_err:
+                    logger.warning(f"Could not fetch email info for {conv_id}: {db_err}")
+
+                # Try to get response data
+                if response_file.exists():
+                    try:
+                        with open(response_file, "r") as f:
+                            response_data = json.load(f)
+                            conv_info["patient_id"] = response_data.get("patient_id")
+                            conv_info["response_type"] = response_data.get("response_type")
+                    except Exception as json_err:
+                        logger.warning(f"Could not parse response.json for {conv_id}: {json_err}")
+
+                conversations.append(conv_info)
+
+        # Sort by timestamp descending (latest first)
+        conversations.sort(key=lambda x: x["timestamp"], reverse=True)
+
+        return {"conversations": conversations}
+    except Exception as e:
+        logger.error(f"Error listing bill balance test outputs: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list bill balance test outputs: {str(e)}"
+        )
+
+
+@router.get("/bill-balance-test-outputs/{conversation_id}/response")
+async def get_bill_balance_test_response(conversation_id: str):
+    """Get the response.json for a specific bill balance test conversation."""
+    try:
+        response_file = Path(BILL_BALANCE_TEST_OUTPUT_DIR) / conversation_id / "response.json"
+
+        if not response_file.exists():
+            raise HTTPException(status_code=404, detail="Response file not found")
+
+        # Security check - ensure path is within test directory
+        if not str(response_file.resolve()).startswith(str(Path(BILL_BALANCE_TEST_OUTPUT_DIR).resolve())):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        with open(response_file, "r") as f:
+            return json.load(f)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reading bill balance test response: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to read response file: {str(e)}"
+        )
+
+
+@router.delete("/bill-balance-test-outputs/{conversation_id}")
+async def delete_bill_balance_test_output(conversation_id: str):
+    """Delete a specific bill balance test output directory."""
+    try:
+        import shutil
+        conv_dir = Path(BILL_BALANCE_TEST_OUTPUT_DIR) / conversation_id
+
+        if not conv_dir.exists():
+            raise HTTPException(status_code=404, detail="Conversation directory not found")
+
+        # Security check
+        if not str(conv_dir.resolve()).startswith(str(Path(BILL_BALANCE_TEST_OUTPUT_DIR).resolve())):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        shutil.rmtree(conv_dir)
+        return {"message": f"Deleted test output for conversation {conversation_id}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting bill balance test output: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete test output: {str(e)}"
+        )
+
+
+@router.delete("/bill-balance-test-outputs")
+async def clear_all_bill_balance_test_outputs():
+    """Clear all bill balance test outputs."""
+    try:
+        import shutil
+        test_dir = Path(BILL_BALANCE_TEST_OUTPUT_DIR)
+
+        if test_dir.exists():
+            shutil.rmtree(test_dir)
+            test_dir.mkdir(parents=True, exist_ok=True)
+
+        return {"message": "All bill balance test outputs cleared"}
+    except Exception as e:
+        logger.error(f"Error clearing bill balance test outputs: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to clear test outputs: {str(e)}"
         )
 
 
