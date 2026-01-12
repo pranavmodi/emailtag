@@ -1254,5 +1254,16 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
+    },
+    "58": {
+        "description": "Bill or balance Request - Requesting outstanding balance confirmation",
+        "subject": "RE: Patient John Smith - Balance Inquiry",
+        "body_html": (
+            "<p>Hello Precise Imaging Billing,</p>"
+            "<p>Please confirm the outstanding balance for patient John Smith (DOB: 01/15/1985).</p>"
+            "<p>Thank you.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Bill or balance Request"]
     }
 }

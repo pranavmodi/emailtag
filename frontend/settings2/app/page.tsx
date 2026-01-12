@@ -119,7 +119,7 @@ const MENU_ITEMS = [
     icon: "📊",
   },
   {
-    href: "/lientest",
+    href: "/sandbox",
     label: "Autorespond Sandbox",
     description: "Test autorespond outputs locally",
     icon: "🧪",
