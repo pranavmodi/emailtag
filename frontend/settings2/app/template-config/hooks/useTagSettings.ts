@@ -58,6 +58,10 @@ export function useTagSettings(selectedTag: string, currentUser: string) {
         // Bill Balance templates (multi-scenario tag)
         bill_balance_found_template: response.settings.bill_balance_found_template ?? "",
         bill_balance_not_found_template: response.settings.bill_balance_not_found_template ?? "",
+        bill_balance_lien_reminder_template: response.settings.bill_balance_lien_reminder_template ?? "",
+        bill_balance_no_data_template: response.settings.bill_balance_no_data_template ?? "",
+        bill_balance_request_patient_id_template: response.settings.bill_balance_request_patient_id_template ?? "",
+        bill_balance_escalation_template: response.settings.bill_balance_escalation_template ?? "",
 
         // Custom placeholders added for PlaceholderManager compatibility
         // (actual workspace placeholders loaded separately in page.tsx)

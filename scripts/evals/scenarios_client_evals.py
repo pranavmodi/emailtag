@@ -1265,5 +1265,20 @@ Test ID: {UNIQUE_TEST_ID}"""
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": ["Bill or balance Request"]
+    },
+    "59": {
+        "description": "Release of Records - Complete itemized billing statements request",
+        "subject": "Records and Billing Request - Diana Karina Alva DOB 2/8/1994",
+        "body_html": (
+            "<p>Good afternoon,</p>"
+            "<p>We are requesting the itemized billing statements from the initial date of service through the most recent visit.</p>"
+            "<p>Patient Information:</p>"
+            "<p>Name: Diana Karina Alva<br/>"
+            "Date of Birth: 2/8/1994<br/>"
+            "Date of Injury: 8/21/2025</p>"
+            "<p>We appreciate your prompt attention to this request.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Release of Records"]
     }
 }

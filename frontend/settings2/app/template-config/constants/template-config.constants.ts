@@ -339,6 +339,10 @@ export const DEFAULT_TAG_SETTINGS = {
   // Bill Balance templates (multi-scenario tag)
   bill_balance_found_template: "",
   bill_balance_not_found_template: "",
+  bill_balance_lien_reminder_template: "",
+  bill_balance_no_data_template: "",
+  bill_balance_request_patient_id_template: "",
+  bill_balance_escalation_template: "",
 
   // Note: custom_placeholders are now stored in WORKSPACE tag, not per-tag
   // This field is added dynamically in the UI for PlaceholderManager
