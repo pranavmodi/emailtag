@@ -156,30 +156,45 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
 
         # --- Internal Domain Check ---
         # Check if the sender is from an internal domain - skip ALL autoresponds if filtering is enabled
+        # UNLESS sandbox mode is enabled, in which case we still generate autoresponds for sandbox
         sender_email = email_obj.sender
         internal_domains = ["@precisemri.com", "@preciseimaging.com", "@radflow360.com", "@mediflow360.com", "@mediflow.com"]
         is_internal_sender = any(domain in sender_email.lower() for domain in internal_domains) if sender_email else False
 
         if is_internal_sender:
             # Check if internal domain filtering is enabled
-            async def check_filtering_enabled():
+            async def check_filtering_and_sandbox():
                 async with AsyncSessionLocal() as async_db:
-                    return await system_settings_crud.get_setting_value(async_db, "skip_internal_domains", default=False)
+                    skip_internal = await system_settings_crud.get_setting_value(async_db, "skip_internal_domains", default=False)
+                    lien_sandbox = await system_settings_crud.get_setting_value(async_db, "lien_test_mode", default=False)
+                    bill_balance_sandbox = await system_settings_crud.get_setting_value(async_db, "bill_balance_test_mode", default=False)
+                    return skip_internal, lien_sandbox, bill_balance_sandbox
 
-            skip_internal_domains = asyncio.run(check_filtering_enabled())
+            skip_internal_domains, lien_test_mode, bill_balance_test_mode = asyncio.run(check_filtering_and_sandbox())
+            any_sandbox_enabled = lien_test_mode or bill_balance_test_mode
 
             if skip_internal_domains:
-                logger.info(f"🚫 AUTORESPOND BLOCKED: Email {email_id} sender '{sender_email}' is from internal domain and filtering is ENABLED. Skipping all autoresponds.")
-                final_status = "processed_internal_sender_no_autorespond"
-                email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_status, is_processed=True))
-                return {
-                    "status": "completed_autorespond_phase",
-                    "email_id": email_id,
-                    "final_db_status": final_status,
-                    "auto_response_sent": False,
-                    "auto_response_details": {"reason": f"Internal sender detected: {sender_email}, filtering enabled"},
-                    "agent_handled_response": False
-                }
+                if any_sandbox_enabled:
+                    # Sandbox mode is enabled - continue processing so autorespond can be generated for sandbox
+                    sandbox_types = []
+                    if lien_test_mode:
+                        sandbox_types.append("lien")
+                    if bill_balance_test_mode:
+                        sandbox_types.append("bill_balance")
+                    logger.info(f"🧪 SANDBOX MODE: Email {email_id} sender '{sender_email}' is internal but sandbox mode is enabled ({', '.join(sandbox_types)}). Processing for sandbox.")
+                else:
+                    # No sandbox mode - block autorespond as usual
+                    logger.info(f"🚫 AUTORESPOND BLOCKED: Email {email_id} sender '{sender_email}' is from internal domain and filtering is ENABLED. Skipping all autoresponds.")
+                    final_status = "processed_internal_sender_no_autorespond"
+                    email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_status, is_processed=True))
+                    return {
+                        "status": "completed_autorespond_phase",
+                        "email_id": email_id,
+                        "final_db_status": final_status,
+                        "auto_response_sent": False,
+                        "auto_response_details": {"reason": f"Internal sender detected: {sender_email}, filtering enabled"},
+                        "agent_handled_response": False
+                    }
             else:
                 logger.info(f"ℹ️ INTERNAL DOMAIN FILTERING DISABLED: Email {email_id} sender '{sender_email}' is from internal domain but filtering is OFF. Proceeding with autorespond (testing mode).")
         # --- End Internal Domain Check ---

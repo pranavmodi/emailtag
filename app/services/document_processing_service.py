@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class DocumentAnalysisResult(BaseModel):
     """Pydantic model for structured document analysis output."""
-    document_type: str  # "lien", "rx", "prescription", "referral", "medical_record", "insurance", "other"
+    document_type: str  # "lien", "lien_reduction", "esign_request", "rx", "medical_record", "hipaa", "case_update", "other"
     description: str    # One-line description of the document content
     patient_id: Optional[str] = None  # Patient ID if found
     confidence: float   # Confidence score 0.0-1.0 for document type classification
@@ -199,7 +199,7 @@ class DocumentProcessingService:
                 "properties": {
                     "document_type": {
                         "type": "string",
-                        "enum": ["lien", "lien_reduction", "rx", "medical_record", "hipaa", "case_update", "other"],
+                        "enum": ["lien", "lien_reduction", "esign_request", "rx", "medical_record", "hipaa", "case_update", "other"],
                         "description": "Type of medical document"
                     },
                     "description": {
@@ -235,6 +235,7 @@ DOCUMENT TYPE CLASSIFICATION:
 - rx: Doctor's prescriptions, orders for imaging/scans, referrals for tests (MRI, CT, X-ray, ultrasound), physician orders for diagnostic procedures, medical referrals from one doctor to another, consultation requests, medication orders
 - lien: Legal lien documents ONLY - attorney lien agreements, lien modifications, lien forms, medical lien paperwork that establish legal financial obligations. These typically contain signature boxes for attorneys/patients and legal language about financial responsibility for medical services.
 - lien_reduction: Lien reduction requests, settlement agreements, lien reduction offers, documents requesting reduction of existing lien amounts. These contain negotiations about reducing the amount owed under an existing lien. Look for terms like "lien reduction", "settlement", "reduce lien amount", "lien settlement", "payment reduction".
+- esign_request: E-sign request documents sent BY Precise Imaging TO attorneys/law firms asking them to electronically sign a lien. These are OUTBOUND reminder/request documents, NOT actual signed liens. They typically contain e-sign links, QR codes, instructions on how to sign electronically, and messages like "Lien e-Sign Request", "e-Sign your client's lien", "Immediate Attention Required", or "requires a signed lien". These are administrative reminders, not the actual lien agreements themselves.
 - medical_record: Medical charts, test results, lab reports, radiology reports, patient history, discharge summaries
 - hipaa: HIPAA authorization forms, HIPAA releases, privacy notices, medical records release authorizations. These are forms that authorize the release or use of protected health information (PHI) under HIPAA regulations. Look for terms like "HIPAA", "Health Insurance Portability", "Protected Health Information", "PHI", "Authorization for Release", "Medical Records Release".
 - case_update: Legal case status updates, attorney communications, and case progression documents. These include: new attorney notifications, drop letters, case drop pending notices, payment promises, liability clearance updates, settlement check status, payment received confirmations, refund requests, and payment dispatch notifications. Look for terms like "New Attorney", "Drop Letter", "Drop Pending", "Promise to send payment", "Waiting to clear liability", "Waiting on settlement check", "Sent payment but not received", "Refund Request", "Payment on way", "case status", "attorney change", "settlement update", "payment status".
@@ -253,6 +254,14 @@ LIEN vs LIEN_REDUCTION:
 - LIEN_REDUCTION documents are requests/offers to reduce existing lien amounts
 - If document establishes a new lien → classify as LIEN
 - If document requests/offers to reduce an existing lien amount → classify as LIEN_REDUCTION
+
+LIEN vs ESIGN_REQUEST:
+- LIEN documents are the ACTUAL lien agreements with signature boxes, legal terms, and financial obligations
+- ESIGN_REQUEST documents are OUTBOUND REMINDERS from Precise Imaging asking attorneys to sign a lien electronically
+- If document IS the actual lien form/agreement → classify as LIEN
+- If document is a REQUEST/REMINDER to sign a lien (contains e-sign links, QR codes, "Lien e-Sign Request" header, instructions to sign) → classify as ESIGN_REQUEST
+- ESIGN_REQUEST documents typically have titles like "Lien e-Sign Request" and contain URLs/QR codes for electronic signing
+- ESIGN_REQUEST is NOT a lien itself - it's an administrative notice asking someone to go sign the actual lien
 
 CASE_UPDATE vs OTHER:
 - CASE_UPDATE documents are specific legal case status communications and attorney correspondence
