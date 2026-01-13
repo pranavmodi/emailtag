@@ -25,17 +25,46 @@ from app.agents.templates.shared_templates import (
     TEMPLATE_REQUEST_PATIENT_ID,
     TEMPLATE_REQUEST_PATIENT_ID_AGAIN_ESCALATE
 )
-# Import bill balance templates
-from app.agents.templates.bill_balance_templates import (
-    COMPREHENSIVE_BILL_BALANCE_TEMPLATE,
-    COMPREHENSIVE_LIEN_REMINDER_TEMPLATE,
-    PATIENT_HEADER_TEMPLATE,
-    SIMPLE_PATIENT_HEADER_TEMPLATE
-)
+# NOTE: Templates now come from database only, no imports needed from bill_balance_templates.py
+
+# Database imports for fetching templates
+from app.db.session import AsyncSessionLocal
+from app.crud.tag_settings import tag_settings_crud
 
 # --- BEGIN: Logging ---
 logger = get_task_logger(__name__)
 # --- END: Logging ---
+
+# Tag name for bill balance templates in database
+BILL_BALANCE_TAG_NAME = "Bill or Balance Request"
+
+
+async def _fetch_bill_balance_templates_from_db() -> Dict[str, str]:
+    """
+    Fetch bill balance templates from database tag_settings.
+
+    Returns:
+        Dictionary with template keys mapped to template content
+    """
+    try:
+        async with AsyncSessionLocal() as db:
+            settings = await tag_settings_crud.get_settings_dict(db, BILL_BALANCE_TAG_NAME)
+            if settings:
+                return {
+                    "found": settings.get("bill_balance_found_template", ""),
+                    "not_found": settings.get("bill_balance_not_found_template", ""),
+                    "lien_reminder": settings.get("bill_balance_lien_reminder_template", ""),
+                    "no_data": settings.get("bill_balance_no_data_template", ""),
+                    "request_patient_id": settings.get("bill_balance_request_patient_id_template", ""),
+                    "escalation": settings.get("bill_balance_escalation_template", ""),
+                    "timeout": settings.get("bill_balance_timeout_template", ""),
+                }
+    except Exception as e:
+        logger.error(f"Failed to fetch bill balance templates from database: {e}")
+
+    # Return empty templates if database fetch fails
+    logger.warning(f"Could not load bill balance templates from database - will use hardcoded fallbacks")
+    return {}
 
 # --- BEGIN: Test Mode Support ---
 BILL_BALANCE_TEST_OUTPUT_DIR = "/tmp/bill_balance_test_outputs"
@@ -132,55 +161,8 @@ async def send_or_save_response_bill_balance(
         )
 # --- END: Test Mode Support ---
 
-# --- BEGIN: Response Templates ---
-
-# Main template for Bill & Balance response
-BILL_BALANCE_TEMPLATE = """
-{report_header}
-Thank you for your request and for using Precise Imaging for your patient's imaging needs.
-{bill_attachment_line}
-
-Patient Information:
-{patient_info}
-
-Billing Status:
-{billing_status_section}
-
-Lien Status:
-{lien_status_table}
-
-To save time, you can download the bills in our portal which also contains the bill balance at the bottom.
-<a href="http://precise.radflow360.com/">Access bills, appointment times, and e-sign liens (Click request login if you don't have an account)</a>
-
-Thank you,
-Precise Imaging Billing Dept.
-http://www.PreciseMRI.com
-"""
-
-# Template for when liens are not signed
-LIEN_REMINDER_TEMPLATE = """
-Thank you for your request and for using Precise Imaging for your patient's imaging needs.
-{report_header}
-
-Patient Information:
-{patient_info}
-
-Billing Status:
-Please review the lien status as we are missing signed liens which must be signed before a bill is produced.
-
-Lien Status:
-{lien_status_table}
-
-
-
-To save time, you can download the bills in our portal which also contains the bill balance at the bottom.
-Access bills, appointment times, and e-sign liens (Click request login if you don't have an account)
-
-Thank you,
-Precise Imaging Billing Dept.
-www.PreciseMRI.com
-"""
-# --- END: Response Templates ---
+# NOTE: Old BILL_BALANCE_TEMPLATE and LIEN_REMINDER_TEMPLATE removed.
+# Templates are now loaded from database or fallback to bill_balance_templates.py
 
 
 # --- Helper Functions for MCP Integration ---
@@ -189,7 +171,7 @@ def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
     """Creates an HTML table for lien statuses that renders properly in email clients."""
     if not lien_statuses:
         return "No lien information available"
-    
+
     # Create HTML table for proper email rendering
     html_parts = []
     html_parts.append('<table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-family: monospace; margin: 10px 0;">')
@@ -247,16 +229,16 @@ def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
 
 def _create_billing_status_table(bill_balance: float, bill_status: Dict[str, Any], study_details: List[Dict[str, Any]]) -> str:
     """Creates an HTML table for billing status with detailed study information."""
-    
+
     # Create the billing status header
     if bill_balance is not None and bill_balance > 0:
-        billing_header = f"The patient's current bill balance is ${bill_balance:.2f}."
+        billing_header = f"The patient's current bill balance is <b>${bill_balance:,.2f}</b>."
     else:
         billing_header = "No outstanding bill balance found."
-    
+
     # Start building the HTML table
     html_parts = []
-    html_parts.append(f'<p>{billing_header}</p>')
+    html_parts.append(f'{billing_header}<br/><br/>')
     
     if study_details:
         html_parts.append('<table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-family: Arial, sans-serif; margin: 10px 0; width: 100%;">')
@@ -266,33 +248,43 @@ def _create_billing_status_table(bill_balance: float, bill_status: Dict[str, Any
         html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Study Date</th>')
         html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Exam Status</th>')
         html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Billing Status</th>')
-        html_parts.append('<th style="text-align: right; padding: 8px; border: 1px solid #ccc;">Amount</th>')
         html_parts.append('</tr>')
         html_parts.append('</thead>')
         html_parts.append('<tbody>')
-        
-        for study in study_details:
-            study_description = study.get('studyDescription', 'Unknown Study')
-            study_date_time = study.get('studyDateTime', 'Unknown Date')
-            # Extract just the date part if time is included
-            study_date = study_date_time.split(' ')[0] if ' ' in study_date_time else study_date_time
 
-            exam_status = study.get('examStatus', 'Unknown Status')
-            billing_status_text = study.get('billingStatus', 'N/A')
+        for study in study_details:
+            study_description = study.get('studyDescription') or 'N/A'
+            study_date_time = study.get('studyDateTime')
+            # Extract just the date part if time is included
+            if study_date_time:
+                study_date = study_date_time.split(' ')[0] if ' ' in study_date_time else study_date_time
+            else:
+                study_date = 'N/A'
+
+            exam_status = study.get('examStatus') or 'N/A'
+            billing_status_raw = study.get('billingStatus') or ''
             billing_amount = study.get('billingAmount')  # This can be None or 0
 
-            # Format billing amount
-            if billing_amount is not None:
-                amount_str = f"${billing_amount:.2f}"
+            # Format combined billing status: "$2,200.00 - Billed on 04/22/2025"
+            if billing_amount is not None and billing_amount > 0:
+                amount_str = f"${billing_amount:,.2f}"
+                # Check if billed and include study date as billed date (only if date is available)
+                if billing_status_raw and 'BILLED' in billing_status_raw.upper() and study_date != 'N/A':
+                    billing_status_combined = f"{amount_str} - Billed on {study_date}"
+                elif billing_status_raw:
+                    billing_status_combined = f"{amount_str} - {billing_status_raw}"
+                else:
+                    billing_status_combined = amount_str
+            elif billing_status_raw:
+                billing_status_combined = billing_status_raw
             else:
-                amount_str = "N/A"
-            
+                billing_status_combined = "N/A"
+
             html_parts.append('<tr>')
             html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{study_description}</td>')
             html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{study_date}</td>')
             html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{exam_status}</td>')
-            html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{billing_status_text}</td>')
-            html_parts.append(f'<td style="text-align: right; padding: 8px; border: 1px solid #ccc;">{amount_str}</td>')
+            html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{billing_status_combined}</td>')
             html_parts.append('</tr>')
         
         html_parts.append('</tbody>')
@@ -302,21 +294,6 @@ def _create_billing_status_table(bill_balance: float, bill_status: Dict[str, Any
     
     return ''.join(html_parts)
 
-def _create_patient_header(patient_data: Dict[str, Any], patient_id: str) -> str:
-    """Creates the patient header with full details if available."""
-    patient_name = patient_data.get('patientName', '')
-    dob = patient_data.get('dateOfBirth', '')
-    doi = patient_data.get('dateOfInjury', '')
-    
-    if patient_name and dob:
-        return PATIENT_HEADER_TEMPLATE.format(
-            patient_id=patient_id,
-            patient_name=patient_name,
-            dob=dob,
-            doi=doi if doi else 'N/A'
-        )
-    else:
-        return SIMPLE_PATIENT_HEADER_TEMPLATE.format(patient_id=patient_id)
 
 def _check_if_clarification_request(conversation_history: List[Dict[str, Any]]) -> bool:
     """
@@ -405,7 +382,10 @@ async def handle_bill_balance_request(
 
     # Step 1: Patient ID found, get patient information and billing information using MCP tools
     logger.info(f"Patient ID {patient_id} found. Fetching patient and billing information via MCP tools.")
-    
+
+    # Fetch templates from database early (needed for all response types)
+    templates = await _fetch_bill_balance_templates_from_db()
+
     try:
         # Import the MCP client function
         from app.mcp import call_mcp_tool
@@ -428,8 +408,11 @@ async def handle_bill_balance_request(
         mcp_duration = time.time() - mcp_start_time
         logger.info(f"MCP tools completed in {mcp_duration:.2f} seconds for patient {patient_id}")
         
-        # Process patient information response
-        patient_header_text = f"Patient ID: {patient_id}"  # Default fallback
+        # Process patient information response - extract individual fields for template placeholders
+        patient_name = "Unknown"
+        formatted_dob = "Unknown"
+        formatted_doi = "Unknown"
+
         if patient_info_response and isinstance(patient_info_response, dict):
             patient_data_section = patient_info_response.get('data', {})
             if patient_data_section and isinstance(patient_data_section, dict):
@@ -440,38 +423,32 @@ async def handle_bill_balance_request(
                     last_name = patient_info.get('last_name', '').strip()
                     birth_date = patient_info.get('birth_date', '')
                     doi = patient_info.get('doi', '')
-                    
+
                     # Format name
                     if first_name and last_name:
-                        full_name = f"{first_name} {last_name}"
+                        patient_name = f"{first_name} {last_name}"
                     elif first_name:
-                        full_name = first_name
+                        patient_name = first_name
                     elif last_name:
-                        full_name = last_name
-                    else:
-                        full_name = "Unknown"
-                    
+                        patient_name = last_name
+
                     # Format DOB (convert from YYYY-MM-DD to MM/DD/YYYY)
-                    formatted_dob = "Unknown"
                     if birth_date:
                         try:
                             date_obj = datetime.strptime(birth_date, '%Y-%m-%d')
                             formatted_dob = date_obj.strftime('%m/%d/%Y')
                         except:
                             formatted_dob = birth_date  # Use as-is if parsing fails
-                    
+
                     # Format DOI (convert from YYYY-MM-DD to MM/DD/YYYY)
-                    formatted_doi = "Unknown"
                     if doi:
                         try:
                             date_obj = datetime.strptime(doi, '%Y-%m-%d')
                             formatted_doi = date_obj.strftime('%m/%d/%Y')
                         except:
                             formatted_doi = doi  # Use as-is if parsing fails
-                    
-                    # Create formatted patient header
-                    patient_header_text = f"{patient_id} - {full_name} - DOB: {formatted_dob} - DOI: {formatted_doi}"
-                    logger.info(f"Formatted patient header: {patient_header_text}")
+
+                    logger.info(f"Patient info: {patient_id} - {patient_name} - DOB: {formatted_dob} - DOI: {formatted_doi}")
                 else:
                     logger.warning(f"No patients found in patient info response for {patient_id}")
             else:
@@ -596,24 +573,16 @@ async def handle_bill_balance_request(
                     
                     if matched_pattern and matched_pattern['action'] in ['patient_not_found', 'patient_inactive']:
                         logger.info(f"Patient {patient_id} - {matched_pattern['description']}")
-                        
-                        # Send a polite "patient not found" response instead of erroring
-                        patient_not_found_response = f"""
-{patient_header_text}
 
-Thank you for your billing inquiry.
+                        # Use DB template for "patient not found" response
+                        not_found_template = templates.get("not_found")
+                        if not not_found_template:
+                            logger.error(f"Missing 'bill_balance_not_found_template' in database for patient {patient_id}")
+                            return {"agent_handled": False, "processed_flag": False, "details": {"reason": "Missing not_found template"}}
 
-We were unable to locate billing information for the provided Patient ID ({patient_id}) in our system. This could mean:
-- The Patient ID may be incorrect or incomplete
-- The patient may not have any services with our facility
-- The patient record may not be set up for billing yet
-
-Please verify the Patient ID and contact our billing department at (888) 555-1212 if you need assistance locating the correct information.
-
-Thank you,
-Precise Imaging Billing Dept.
-www.PreciseMRI.com
-"""
+                        patient_not_found_response = not_found_template.format(
+                            patient_id=patient_id
+                        )
 
                         await send_or_save_response_bill_balance(
                             conversation_id=front_conversation_id,
@@ -738,26 +707,19 @@ www.PreciseMRI.com
         
         if not has_billing_data:
             logger.warning(f"No meaningful billing data found for patient {patient_id}. All values are empty/zero.")
-            # Create patient header for no data response
-            patient_header = _create_patient_header(patient_data, patient_id)
-            
-            # Send a response indicating no billing data available
-            no_data_response = f"""
-{patient_header_text}
 
-Thank you for your billing inquiry.
+            # Use DB template for "no data" response
+            no_data_template = templates.get("no_data")
+            if not no_data_template:
+                logger.error(f"Missing 'bill_balance_no_data_template' in database for patient {patient_id}")
+                return {"agent_handled": False, "processed_flag": False, "details": {"reason": "Missing no_data template"}}
 
-Currently, there is no billing information available in our system for this patient. This could mean:
-- No services have been rendered yet
-- Bills have not been generated
-- The patient account is not set up for billing
-
-Please contact our billing department at (888) 555-1212 for further assistance.
-
-Thank you,
-Precise Imaging Billing Dept.
-www.PreciseMRI.com
-"""
+            no_data_response = no_data_template.format(
+                patient_id=patient_id,
+                patient_name=patient_name,
+                dob=formatted_dob,
+                doi=formatted_doi
+            )
 
             await send_or_save_response_bill_balance(
                 conversation_id=front_conversation_id,
@@ -786,38 +748,47 @@ www.PreciseMRI.com
         
         # Determine if reports are requested
         include_reports = "report" in current_email_content.lower()
-        
-        # Build comprehensive response using new template
+
+        # Build comprehensive response using template (templates already fetched earlier)
         attachments = []
-        
-        # Use the formatted patient header from MCP data
-        patient_header = patient_header_text
-        
+
         # Create sections for the comprehensive template
         billing_status_table = _create_billing_status_table(patient_bill_balance, patient_bill_status, study_details_list)
         lien_status_table = _create_lien_status_table(lien_status_list)
-        
+
         # Log generated HTML tables for debugging
         logger.debug(f"Generated billing_status_table HTML for patient {patient_id}: {billing_status_table}")
         logger.debug(f"Generated lien_status_table HTML for patient {patient_id}: {lien_status_table}")
-        
-        # Determine report header and bill attachment line
-        report_header = "The available final reports have been attached." if include_reports else ""
-        bill_attachment_line = "A copy of the most recent bill is attached." if patient_bill_status.get("isBilled") else ""
-        
+
         if not all_liens_signed:
-            # Generate Lien Reminder response using new comprehensive template
-            reply_body = COMPREHENSIVE_LIEN_REMINDER_TEMPLATE.format(
-                patient_header=patient_header,
+            # Generate Lien Reminder response - use DB template
+            lien_reminder_template = templates.get("lien_reminder")
+            if not lien_reminder_template:
+                logger.error(f"Missing 'bill_balance_lien_reminder_template' in database for patient {patient_id}")
+                return {"agent_handled": False, "processed_flag": False, "details": {"reason": "Missing lien_reminder template"}}
+
+            reply_body = lien_reminder_template.format(
+                patient_id=patient_id,
+                patient_name=patient_name,
+                dob=formatted_dob,
+                doi=formatted_doi,
                 lien_status_table=lien_status_table,
                 billing_status_table=billing_status_table
             )
             subject = f"Re: {patient_id} - Lien Signature Required"
         else:
-            # Generate comprehensive Bill & Balance response using new template
-            reply_body = COMPREHENSIVE_BILL_BALANCE_TEMPLATE.format(
-                patient_header=patient_header,
-                bill_attachment_line=bill_attachment_line,
+            # Generate comprehensive Bill & Balance response - use DB template
+            found_template = templates.get("found")
+            if not found_template:
+                logger.error(f"Missing 'bill_balance_found_template' in database for patient {patient_id}")
+                return {"agent_handled": False, "processed_flag": False, "details": {"reason": "Missing found template"}}
+
+            logger.info(f"Using database template 'bill_balance_found_template' for patient {patient_id}")
+            reply_body = found_template.format(
+                patient_id=patient_id,
+                patient_name=patient_name,
+                dob=formatted_dob,
+                doi=formatted_doi,
                 billing_status_table=billing_status_table,
                 lien_status_table=lien_status_table
             )
@@ -871,21 +842,15 @@ www.PreciseMRI.com
                 frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
             except Exception as tag_error:
                 logger.error(f"Failed to add human review tag: {tag_error}")
-        
-        # Send user-friendly timeout response
-        timeout_response = f"""
-{patient_header_text}
 
-Thank you for your billing inquiry.
+        # Use DB template for timeout response
+        timeout_template = templates.get("timeout")
+        if not timeout_template:
+            logger.error(f"Missing 'bill_balance_timeout_template' in database for patient {patient_id}")
+            return {"agent_handled": False, "processed_flag": False, "details": {"reason": "Missing timeout template"}}
 
-We're currently experiencing delays in retrieving billing information from our system. This is likely temporary.
+        timeout_response = timeout_template.format(patient_id=patient_id)
 
-Please try your request again in a few minutes, or contact our billing department directly at (888) 555-1212 for immediate assistance.
-
-Thank you for your patience,
-Precise Imaging Billing Dept.
-www.PreciseMRI.com
-"""
         try:
             await send_or_save_response_bill_balance(
                 conversation_id=front_conversation_id,

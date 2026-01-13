@@ -23,39 +23,47 @@ from app.crud.tag_settings import tag_settings_crud
 # Bill Balance Templates - migrated from hardcoded templates
 BILL_BALANCE_TEMPLATES = {
     # Main template for when patient is found with billing info
-    # Uses placeholders that are dynamically filled by the agent
-    "bill_balance_found_template": """{patient_header}
-{bill_attachment_line}
+    # Placeholders: {patient_id}, {patient_name}, {dob}, {doi}, {billing_status_table}, {lien_status_table}
+    "bill_balance_found_template": """{patient_id} - {patient_name} - DOB: {dob} - DOI: {doi}
 
+Thank you for your request and for using Precise Imaging for your patient's imaging needs.<br/>
+A copy of the most recent bill is attached.
+
+<b>Billing Status:</b><br/><br/>
 {billing_status_table}
 
+<b>Lien Status:</b><br/><br/>
 {lien_status_table}
 
 To save time, you can access bills, reports, and e-sign liens in our portal:
 <a href="http://precise.radflow360.com/">Precise Imaging Portal</a> (Click "Request Login" if you don't have an account)
 
-Thank you,
-Precise Imaging Billing Dept.
+Thank you,<br/>
+Precise Imaging Billing Dept.<br/>
 www.PreciseMRI.com""",
 
     # Template for when patient needs to sign liens before bill can be produced
-    "bill_balance_lien_reminder_template": """{patient_header}
+    # Placeholders: {patient_id}, {patient_name}, {dob}, {doi}, {billing_status_table}, {lien_status_table}
+    "bill_balance_lien_reminder_template": """{patient_id} - {patient_name} - DOB: {dob} - DOI: {doi}
 
 Thank you for your request. Please review the lien status below, as we are missing required signatures. A bill cannot be produced until all liens are signed.
 
+<b>Lien Status:</b><br/><br/>
 {lien_status_table}
 
+<b>Billing Status:</b><br/><br/>
 {billing_status_table}
 
 To save time, you can e-sign liens in our portal:
 <a href="http://precise.radflow360.com/">Precise Imaging Portal</a> (Click "Request Login" if you don't have an account)
 
-Thank you,
-Precise Imaging Billing Dept.
+Thank you,<br/>
+Precise Imaging Billing Dept.<br/>
 www.PreciseMRI.com""",
 
     # Template for when patient ID is not found in the system
-    "bill_balance_not_found_template": """{patient_header}
+    # Placeholders: {patient_id}
+    "bill_balance_not_found_template": """Patient ID: {patient_id}
 
 Thank you for your billing inquiry.
 
@@ -66,12 +74,13 @@ We were unable to locate billing information for the provided Patient ID ({patie
 
 Please verify the Patient ID and contact our billing department at (888) 555-1212 if you need assistance locating the correct information.
 
-Thank you,
-Precise Imaging Billing Dept.
+Thank you,<br/>
+Precise Imaging Billing Dept.<br/>
 www.PreciseMRI.com""",
 
     # Template for when patient exists but has no billing data
-    "bill_balance_no_data_template": """{patient_header}
+    # Placeholders: {patient_id}, {patient_name}, {dob}, {doi}
+    "bill_balance_no_data_template": """{patient_id} - {patient_name} - DOB: {dob} - DOI: {doi}
 
 Thank you for your billing inquiry.
 
@@ -82,15 +91,31 @@ We found your patient record, but there is currently no billing information avai
 
 Please contact our billing department at (888) 555-1212 for further assistance.
 
-Thank you,
-Precise Imaging Billing Dept.
+Thank you,<br/>
+Precise Imaging Billing Dept.<br/>
 www.PreciseMRI.com""",
 
     # Template for requesting patient ID (first attempt)
+    # No placeholders
     "bill_balance_request_patient_id_template": """Please provide the patient ID or first name, last name and date of birth.""",
 
     # Template for escalation after failed patient identification
-    "bill_balance_escalation_template": """Thank you for the information. We're still having trouble locating your billing details without a Patient ID. A member of our team will personally review your request and get back to you shortly."""
+    # No placeholders
+    "bill_balance_escalation_template": """Thank you for the information. We're still having trouble locating your billing details without a Patient ID. A member of our team will personally review your request and get back to you shortly.""",
+
+    # Template for timeout/system delay response
+    # Placeholders: {patient_id}
+    "bill_balance_timeout_template": """Patient ID: {patient_id}
+
+Thank you for your billing inquiry.
+
+We're currently experiencing delays in retrieving billing information from our system. This is likely temporary.
+
+Please try your request again in a few minutes, or contact our billing department directly at (888) 555-1212 for immediate assistance.
+
+Thank you for your patience,<br/>
+Precise Imaging Billing Dept.<br/>
+www.PreciseMRI.com"""
 }
 
 TAG_NAME = "Bill or Balance Request"

@@ -350,7 +350,7 @@ async def list_bill_balance_test_outputs(db: AsyncSession = Depends(get_db)):
                     email = result.scalar_one_or_none()
                     if email:
                         conv_info["subject"] = email.subject
-                        conv_info["sender"] = email.sender_email
+                        conv_info["sender"] = email.sender
                 except Exception as db_err:
                     logger.warning(f"Could not fetch email info for {conv_id}: {db_err}")
 

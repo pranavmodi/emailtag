@@ -1280,5 +1280,33 @@ Test ID: {UNIQUE_TEST_ID}"""
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": ["Release of Records"]
+    },
+    "60": {
+        "description": "Bill or balance Request - Nestor Morejon balance inquiry with DOB and DOI",
+        "subject": "Balance Request - Nestor Morejon",
+        "body_html": (
+            "<p>Good morning,</p>"
+            "<p>Please provide the current balance for the following patient:</p>"
+            "<p>Patient: Nestor Morejon<br/>"
+            "DOB: 04/01/1958<br/>"
+            "DOI: 11/12/2023</p>"
+            "<p>Thank you for your assistance.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Bill or balance Request"]
+    },
+    "61": {
+        "description": "Bill or balance Request - Isaias Gonzalez balance verification from Santa Clara",
+        "subject": "Precise Imaging - Santa Clara - Balance Verification - Gonzalez, Isaias - DOL 01/28/2025",
+        "body_html": (
+            "<p>Good afternoon,</p>"
+            "<p>Please verify the current balance for the following patient:</p>"
+            "<p>Patient: Isaias Gonzalez<br/>"
+            "DOB: 07/06/1987<br/>"
+            "DOL: 01/28/2025</p>"
+            "<p>Thank you.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Bill or balance Request"]
     }
 }
