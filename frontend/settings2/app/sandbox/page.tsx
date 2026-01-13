@@ -686,10 +686,10 @@ export default function SandboxPage() {
                                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
                                   Message Content:
                                 </p>
-                                <div className="prose prose-sm max-w-none">
+                                <div className="max-w-none">
                                   {responseDetails.response_text ? (
                                     <div
-                                      className="text-sm text-slate-700 leading-relaxed"
+                                      className="text-sm text-slate-700 leading-relaxed [&_ul]:list-disc [&_ul]:ml-6 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:ml-6 [&_ol]:my-2 [&_li]:my-1 [&_p]:my-2 [&_br]:block [&_a]:text-blue-600 [&_a]:underline [&_b]:font-bold [&_strong]:font-bold [&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-slate-300 [&_th]:p-2 [&_th]:bg-slate-50 [&_td]:border [&_td]:border-slate-300 [&_td]:p-2"
                                       dangerouslySetInnerHTML={{ __html: responseDetails.response_text }}
                                     />
                                   ) : (
@@ -1015,10 +1015,10 @@ export default function SandboxPage() {
                               <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
                                 Message Content:
                               </p>
-                              <div className="prose prose-sm max-w-none">
+                              <div className="max-w-none">
                                 {billBalanceResponse.response_text ? (
                                   <div
-                                    className="text-sm text-slate-700 leading-relaxed"
+                                    className="text-sm text-slate-700 leading-relaxed [&_ul]:list-disc [&_ul]:ml-6 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:ml-6 [&_ol]:my-2 [&_li]:my-1 [&_p]:my-2 [&_br]:block [&_a]:text-blue-600 [&_a]:underline [&_b]:font-bold [&_strong]:font-bold [&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-slate-300 [&_th]:p-2 [&_th]:bg-slate-50 [&_td]:border [&_td]:border-slate-300 [&_td]:p-2"
                                     dangerouslySetInnerHTML={{ __html: billBalanceResponse.response_text }}
                                   />
                                 ) : (
