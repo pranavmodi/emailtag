@@ -179,6 +179,24 @@
             color: #5b21b6;
         }
 
+        .trace-type-badge.document_processing {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+
+        .trace-card.document_processing {
+            border-left-color: #10b981;
+        }
+
+        .trace-type-badge.lien_validation {
+            background-color: #fce7f3;
+            color: #9d174d;
+        }
+
+        .trace-card.lien_validation {
+            border-left-color: #ec4899;
+        }
+
         .trace-header {
             padding: 20px 25px;
             cursor: pointer;
@@ -423,6 +441,14 @@
                     <span class="summary-label">Total Steps</span>
                 </div>
                 <div class="summary-item">
+                    <span class="summary-number">{{ document_processing_traces_count | default(0) }}</span>
+                    <span class="summary-label">Documents</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-number">{{ lien_validation_traces_count | default(0) }}</span>
+                    <span class="summary-label">Lien Checks</span>
+                </div>
+                <div class="summary-item">
                     <span class="summary-number">{{ archival_traces_count | default(0) }}</span>
                     <span class="summary-label">Archival Steps</span>
                 </div>
@@ -475,7 +501,251 @@
                 </div>
 
                 <div class="trace-body" id="trace-{{ loop.index0 }}">
-                    {% if trace.trace_type == 'archival' %}
+                    {% if trace.trace_type == 'document_processing' %}
+                    <!-- Document Processing Details Section -->
+                    <div class="trace-section">
+                        <div class="section-header active" onclick="toggleSection('doc-details-{{ loop.index0 }}')">
+                            <span>📄 Document Details</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="section-content active" id="doc-details-{{ loop.index0 }}">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Filename</div>
+                                    <div style="font-size: 1.1em; font-weight: 600; color: #2d3748;">{{ trace.document_analysis.filename if trace.document_analysis else 'N/A' }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Document Type</div>
+                                    <div style="font-size: 1.1em; font-weight: 600; color: #10b981;">{{ trace.document_analysis.document_type if trace.document_analysis else 'N/A' }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Patient ID</div>
+                                    <div style="font-size: 1.1em; font-weight: 600; color: #667eea;">{{ trace.document_analysis.patient_id if trace.document_analysis and trace.document_analysis.patient_id else 'Not Found' }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Confidence</div>
+                                    <div style="font-size: 1.1em; font-weight: 600; color: #f59e0b;">{{ trace.document_analysis.confidence if trace.document_analysis else 'N/A' }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">File Size</div>
+                                    <div style="font-size: 1.1em; font-weight: 600; color: #6366f1;">{{ trace.document_analysis.file_size if trace.document_analysis else 'N/A' }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Processing Status</div>
+                                    <div style="font-size: 1.1em; font-weight: 600; color: #059669;">{{ trace.document_analysis.processing_status if trace.document_analysis else 'N/A' }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Document Description Section -->
+                    {% if trace.document_analysis and trace.document_analysis.description %}
+                    <div class="trace-section">
+                        <div class="section-header active" onclick="toggleSection('doc-desc-{{ loop.index0 }}')">
+                            <span>📝 Document Description</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="section-content active" id="doc-desc-{{ loop.index0 }}">
+                            <div style="background-color: white; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981;">
+                                <p style="margin: 0; color: #2d3748; line-height: 1.6; font-size: 1.05em;">{{ trace.document_analysis.description }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Enhanced Lien Analysis Section -->
+                    {% if trace.document_analysis and trace.document_analysis.enhanced_lien_analysis %}
+                    <div class="trace-section">
+                        <div class="section-header" onclick="toggleSection('lien-analysis-{{ loop.index0 }}')">
+                            <span>⚖️ Enhanced Lien Analysis</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="section-content" id="lien-analysis-{{ loop.index0 }}">
+                            <div class="code-block">
+                                <pre>{{ trace.document_analysis.enhanced_lien_analysis | tojson(indent=2) }}</pre>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Full Document Output Section -->
+                    <div class="trace-section">
+                        <div class="section-header" onclick="toggleSection('doc-output-{{ loop.index0 }}')">
+                            <span>📤 Full Document Output</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="section-content" id="doc-output-{{ loop.index0 }}">
+                            <div class="code-block">
+                                <pre>{{ trace.output_data | tojson(indent=2) if trace.output_data else 'No output data' }}</pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% elif trace.trace_type == 'lien_validation' %}
+                    <!-- Lien Validation Details Section -->
+                    <div class="trace-section">
+                        <div class="section-header active" onclick="toggleSection('lien-details-{{ loop.index0 }}')">
+                            <span>🔍 Validation Details</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="section-content active" id="lien-details-{{ loop.index0 }}">
+                            {% if trace.lien_validation %}
+                            {% if trace.lien_validation.check_type == 'signature' %}
+                            <!-- Signature Check Details -->
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Signature Type</div>
+                                    <div style="font-size: 1.3em; font-weight: 600; color: #ec4899;">{{ trace.lien_validation.lien_signature_type }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Patient Signature</div>
+                                    <div style="font-size: 1.3em; font-weight: 600; color: {{ '#10b981' if trace.lien_validation.patient_signature_present else '#ef4444' }};">{{ '✓ Present' if trace.lien_validation.patient_signature_present else '✗ Not Found' }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Attorney Signature</div>
+                                    <div style="font-size: 1.3em; font-weight: 600; color: {{ '#10b981' if trace.lien_validation.attorney_signature_present else '#ef4444' }};">{{ '✓ Present' if trace.lien_validation.attorney_signature_present else '✗ Not Found' }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Placement Valid</div>
+                                    <div style="font-size: 1.3em; font-weight: 600; color: {{ '#10b981' if trace.lien_validation.placement_valid else '#ef4444' }};">{{ '✓ Valid' if trace.lien_validation.placement_valid else '⚠️ Issues' }}</div>
+                                </div>
+                            </div>
+                            {% if trace.lien_validation.placement_issues %}
+                            <div style="margin-top: 15px; background-color: #fef2f2; padding: 15px; border-radius: 8px; border-left: 4px solid #ef4444;">
+                                <div style="font-weight: 600; color: #dc2626; margin-bottom: 5px;">Placement Issues:</div>
+                                <ul style="margin: 0; padding-left: 20px; color: #7f1d1d;">
+                                    {% for issue in trace.lien_validation.placement_issues %}
+                                    <li>{{ issue }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+
+                            {% elif trace.lien_validation.check_type == 'barcode' %}
+                            <!-- Barcode Detection Details -->
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Barcode Status</div>
+                                    <div style="font-size: 1.3em; font-weight: 600; color: {{ '#10b981' if trace.lien_validation.barcode_found else '#ef4444' }};">{{ '✓ Found' if trace.lien_validation.barcode_found else '✗ Not Found' }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Patient IDs</div>
+                                    <div style="font-size: 1.1em; font-weight: 600; color: #667eea;">{{ trace.lien_validation.patient_ids | join(', ') if trace.lien_validation.patient_ids else 'None' }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Lien Types</div>
+                                    <div style="font-size: 1.1em; font-weight: 600; color: #f59e0b;">{{ trace.lien_validation.lien_types | join(', ') if trace.lien_validation.lien_types else 'None' }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Referrer ID</div>
+                                    <div style="font-size: 1.1em; font-weight: 600; color: #6366f1;">{{ trace.lien_validation.referrer_id or 'N/A' }}</div>
+                                </div>
+                            </div>
+
+                            {% elif trace.lien_validation.check_type == 'cover_letter' %}
+                            <!-- Cover Letter Detection Details -->
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Page Classification</div>
+                                    <div style="font-size: 1.3em; font-weight: 600; color: #ec4899;">{{ trace.lien_validation.page_classification }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Is Cover Letter</div>
+                                    <div style="font-size: 1.3em; font-weight: 600; color: {{ '#f59e0b' if trace.lien_validation.is_cover_letter else '#10b981' }};">{{ '⚠️ Yes' if trace.lien_validation.is_cover_letter else '✓ No' }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Conditional Language</div>
+                                    <div style="font-size: 1.3em; font-weight: 600; color: {{ '#ef4444' if trace.lien_validation.has_conditional_language else '#10b981' }};">{{ '⚠️ Found' if trace.lien_validation.has_conditional_language else '✓ None' }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Confidence</div>
+                                    <div style="font-size: 1.3em; font-weight: 600; color: #6366f1;">{{ trace.lien_validation.cover_letter_confidence or 'N/A' }}</div>
+                                </div>
+                            </div>
+                            {% if trace.lien_validation.conditional_phrases_found %}
+                            <div style="margin-top: 15px; background-color: #fef2f2; padding: 15px; border-radius: 8px; border-left: 4px solid #ef4444;">
+                                <div style="font-weight: 600; color: #dc2626; margin-bottom: 5px;">Conditional Phrases Found:</div>
+                                <ul style="margin: 0; padding-left: 20px; color: #7f1d1d;">
+                                    {% for phrase in trace.lien_validation.conditional_phrases_found %}
+                                    <li>"{{ phrase }}"</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+
+                            {% elif trace.lien_validation.check_type == 'image_quality' %}
+                            <!-- Image Quality Detection Details -->
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Document Quality</div>
+                                    <div style="font-size: 1.5em; font-weight: 600; color: {{ '#10b981' if trace.lien_validation.document_quality == 'GOOD' else ('#f59e0b' if trace.lien_validation.document_quality == 'BLURRY' else '#ef4444') }};">{{ trace.lien_validation.document_quality }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Overall Quality</div>
+                                    <div style="font-size: 1.3em; font-weight: 600; color: #6366f1;">{{ trace.lien_validation.overall_quality or trace.lien_validation.document_quality }}</div>
+                                </div>
+                            </div>
+                            {% if trace.lien_validation.quality_by_page %}
+                            <div style="margin-top: 15px;">
+                                <div style="font-weight: 600; color: #4a5568; margin-bottom: 10px;">Quality by Page:</div>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                                    {% for page in trace.lien_validation.quality_by_page %}
+                                    <div style="background-color: white; padding: 10px; border-radius: 6px; text-align: center;">
+                                        <div style="font-size: 0.85em; color: #718096;">Page {{ page.page }}</div>
+                                        <div style="font-weight: 600; color: {{ '#10b981' if page.quality == 'GOOD' else ('#f59e0b' if page.quality == 'BLURRY' else '#ef4444') }};">{{ page.quality }}</div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% elif trace.lien_validation.check_type == 'strikethrough' %}
+                            <!-- Strikethrough Detection Details -->
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Modifications Detected</div>
+                                    <div style="font-size: 1.3em; font-weight: 600; color: {{ '#ef4444' if trace.lien_validation.strikethrough_detected else '#10b981' }};">{{ '⚠️ Yes' if trace.lien_validation.strikethrough_detected else '✓ No' }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Total Instances</div>
+                                    <div style="font-size: 1.5em; font-weight: 600; color: #f59e0b;">{{ trace.lien_validation.total_instances }}</div>
+                                </div>
+                                <div style="background-color: white; padding: 15px; border-radius: 8px;">
+                                    <div style="color: #718096; font-size: 0.9em; margin-bottom: 5px;">Pages Affected</div>
+                                    <div style="font-size: 1.3em; font-weight: 600; color: #6366f1;">{{ trace.lien_validation.pages_with_strikethrough }} / {{ trace.lien_validation.total_pages or '?' }}</div>
+                                </div>
+                            </div>
+                            {% if trace.lien_validation.strikethrough_instances %}
+                            <div style="margin-top: 15px; background-color: #fef2f2; padding: 15px; border-radius: 8px; border-left: 4px solid #ef4444;">
+                                <div style="font-weight: 600; color: #dc2626; margin-bottom: 10px;">Strikethrough Instances:</div>
+                                {% for instance in trace.lien_validation.strikethrough_instances %}
+                                <div style="background-color: white; padding: 10px; border-radius: 6px; margin-bottom: 8px;">
+                                    <div style="font-weight: 600; color: #4a5568;">Page {{ instance.page_number or 'N/A' }}: "{{ instance.struck_through_text }}"</div>
+                                    <div style="font-size: 0.9em; color: #718096; margin-top: 5px;">{{ instance.visual_description }}</div>
+                                    <div style="font-size: 0.85em; color: #9ca3af;">Confidence: {{ instance.confidence }}</div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            {% endif %}
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Full Output Section -->
+                    <div class="trace-section">
+                        <div class="section-header" onclick="toggleSection('lien-output-{{ loop.index0 }}')">
+                            <span>📤 Raw Output Data</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="section-content" id="lien-output-{{ loop.index0 }}">
+                            <div class="code-block">
+                                <pre>{{ trace.output_data | tojson(indent=2) if trace.output_data else 'No output data' }}</pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% elif trace.trace_type == 'archival' %}
                     <!-- Archival Input Data Section -->
                     <div class="trace-section">
                         <div class="section-header active" onclick="toggleSection('input-{{ loop.index0 }}')">
