@@ -1308,5 +1308,22 @@ Test ID: {UNIQUE_TEST_ID}"""
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": ["Bill or balance Request"]
+    },
+    "62": {
+        "description": "Bill or balance Request - Multiple patients (Ruben Aaron Bravo and Troy Ostrander) - Requesting total charge amounts for two individuals with DOB and DOL",
+        "subject": "Balance Request for Multiple Patients",
+        "body_html": (
+            "<p>Good afternoon,</p>"
+            "<p>I would like to verify the total charge amounts for the following individuals:</p>"
+            "<p>Name: Ruben Aaron Bravo<br/>"
+            "DOB: 06/29/1993<br/>"
+            "DOL: 05/13/2024</p>"
+            "<p>Name: Troy Ostrander<br/>"
+            "DOB: 03/14/1989<br/>"
+            "DOL: 05/13/2024</p>"
+            "<p>Please let me know if you require any additional information.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Bill or balance Request"]
     }
 }

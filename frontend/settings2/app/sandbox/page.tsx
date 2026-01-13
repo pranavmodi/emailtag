@@ -70,7 +70,20 @@ type BillBalanceOutput = {
   subject: string | null;
   sender: string | null;
   patient_id?: string;
+  patient_ids?: string[];  // Multi-patient support
   response_type?: string;
+  response_count?: number;  // Number of patient responses
+};
+
+type SingleBillBalanceResponse = {
+  conversation_id: string;
+  timestamp: string;
+  response_text: string;
+  patient_id?: string;
+  response_type?: string;
+  details?: Record<string, unknown>;
+  status: string;
+  _filename?: string;
 };
 
 type BillBalanceResponseDetail = {
@@ -81,6 +94,9 @@ type BillBalanceResponseDetail = {
   response_type?: string;
   details?: Record<string, unknown>;
   status: string;
+  // Multi-patient support
+  responses?: SingleBillBalanceResponse[];
+  response_count?: number;
 };
 
 type TabType = "liens" | "bill_balance";
@@ -913,7 +929,21 @@ export default function SandboxPage() {
                               <span className="truncate">{output.sender || "Unknown sender"}</span>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
-                              {output.patient_id && (
+                              {/* Show response count if multiple patients */}
+                              {(output.response_count ?? 0) > 1 && (
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 text-xs font-medium">
+                                  <Mail className="h-3.5 w-3.5" />
+                                  {output.response_count} responses
+                                </div>
+                              )}
+                              {/* Show all patient IDs if available */}
+                              {output.patient_ids && output.patient_ids.length > 0 ? (
+                                output.patient_ids.map((pid, idx) => (
+                                  <div key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium">
+                                    Patient: {pid}
+                                  </div>
+                                ))
+                              ) : output.patient_id && (
                                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium">
                                   Patient: {output.patient_id}
                                 </div>
@@ -970,63 +1000,137 @@ export default function SandboxPage() {
                         className="border-t border-slate-100 bg-slate-50/50"
                       >
                         <div className="p-5 space-y-4">
-                          {/* Response Details */}
-                          <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.1 }}
-                            className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 p-5 shadow-sm"
-                          >
-                            <div className="flex items-start gap-3 mb-4">
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500 text-white shadow-md">
-                                <MessageSquare className="h-5 w-5" />
-                              </div>
-                              <div className="flex-1">
-                                <h4 className="text-base font-semibold text-slate-900 mb-1">
-                                  Generated Bill Balance Response
-                                </h4>
-                                <p className="text-xs text-slate-600">
-                                  This message would be sent in production mode
-                                </p>
-                              </div>
+                          {/* Header for multiple responses */}
+                          {(billBalanceResponse.response_count ?? 1) > 1 && (
+                            <div className="flex items-center gap-2 text-sm font-medium text-purple-700 bg-purple-50 px-3 py-2 rounded-lg">
+                              <Mail className="h-4 w-4" />
+                              {billBalanceResponse.response_count} separate emails would be sent (one per patient)
                             </div>
+                          )}
 
-                            {/* Metadata */}
-                            <div className="flex flex-wrap gap-2 mb-4">
-                              {billBalanceResponse.patient_id && (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
-                                  Patient: {billBalanceResponse.patient_id}
-                                </span>
-                              )}
-                              {billBalanceResponse.response_type && (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
-                                  Type: {billBalanceResponse.response_type}
-                                </span>
-                              )}
-                              {billBalanceResponse.status && (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
-                                  Status: {billBalanceResponse.status}
-                                </span>
-                              )}
-                            </div>
+                          {/* Render all responses if available, otherwise fall back to single response */}
+                          {billBalanceResponse.responses && billBalanceResponse.responses.length > 0 ? (
+                            billBalanceResponse.responses.map((response, respIdx) => (
+                              <motion.div
+                                key={respIdx}
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.1 + respIdx * 0.05 }}
+                                className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 p-5 shadow-sm"
+                              >
+                                <div className="flex items-start gap-3 mb-4">
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500 text-white shadow-md">
+                                    <MessageSquare className="h-5 w-5" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <h4 className="text-base font-semibold text-slate-900 mb-1">
+                                      {(billBalanceResponse.responses?.length ?? 0) > 1
+                                        ? `Response ${respIdx + 1} of ${billBalanceResponse.responses?.length}`
+                                        : "Generated Bill Balance Response"
+                                      }
+                                    </h4>
+                                    <p className="text-xs text-slate-600">
+                                      This message would be sent in production mode
+                                    </p>
+                                  </div>
+                                </div>
 
-                            {/* Response Message */}
-                            <div className="rounded-lg bg-white border border-slate-200 p-4 shadow-sm">
-                              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
-                                Message Content:
-                              </p>
-                              <div className="max-w-none">
-                                {billBalanceResponse.response_text ? (
-                                  <div
-                                    className="text-sm text-slate-700 leading-relaxed [&_ul]:list-disc [&_ul]:ml-6 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:ml-6 [&_ol]:my-2 [&_li]:my-1 [&_p]:my-2 [&_br]:block [&_a]:text-blue-600 [&_a]:underline [&_b]:font-bold [&_strong]:font-bold [&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-slate-300 [&_th]:p-2 [&_th]:bg-slate-50 [&_td]:border [&_td]:border-slate-300 [&_td]:p-2"
-                                    dangerouslySetInnerHTML={{ __html: billBalanceResponse.response_text }}
-                                  />
-                                ) : (
-                                  <p className="text-sm text-slate-500">No response content available.</p>
+                                {/* Metadata */}
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                  {response.patient_id && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
+                                      Patient: {response.patient_id}
+                                    </span>
+                                  )}
+                                  {response.response_type && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
+                                      Type: {response.response_type}
+                                    </span>
+                                  )}
+                                  {response.status && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
+                                      Status: {response.status}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Response Message */}
+                                <div className="rounded-lg bg-white border border-slate-200 p-4 shadow-sm">
+                                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
+                                    Message Content:
+                                  </p>
+                                  <div className="max-w-none">
+                                    {response.response_text ? (
+                                      <div
+                                        className="text-sm text-slate-700 leading-relaxed [&_ul]:list-disc [&_ul]:ml-6 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:ml-6 [&_ol]:my-2 [&_li]:my-1 [&_p]:my-2 [&_br]:block [&_a]:text-blue-600 [&_a]:underline [&_b]:font-bold [&_strong]:font-bold [&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-slate-300 [&_th]:p-2 [&_th]:bg-slate-50 [&_td]:border [&_td]:border-slate-300 [&_td]:p-2"
+                                        dangerouslySetInnerHTML={{ __html: response.response_text }}
+                                      />
+                                    ) : (
+                                      <p className="text-sm text-slate-500">No response content available.</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </motion.div>
+                            ))
+                          ) : (
+                            /* Fallback for single response (backward compatibility) */
+                            <motion.div
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.1 }}
+                              className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 p-5 shadow-sm"
+                            >
+                              <div className="flex items-start gap-3 mb-4">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500 text-white shadow-md">
+                                  <MessageSquare className="h-5 w-5" />
+                                </div>
+                                <div className="flex-1">
+                                  <h4 className="text-base font-semibold text-slate-900 mb-1">
+                                    Generated Bill Balance Response
+                                  </h4>
+                                  <p className="text-xs text-slate-600">
+                                    This message would be sent in production mode
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Metadata */}
+                              <div className="flex flex-wrap gap-2 mb-4">
+                                {billBalanceResponse.patient_id && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
+                                    Patient: {billBalanceResponse.patient_id}
+                                  </span>
+                                )}
+                                {billBalanceResponse.response_type && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
+                                    Type: {billBalanceResponse.response_type}
+                                  </span>
+                                )}
+                                {billBalanceResponse.status && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
+                                    Status: {billBalanceResponse.status}
+                                  </span>
                                 )}
                               </div>
-                            </div>
-                          </motion.div>
+
+                              {/* Response Message */}
+                              <div className="rounded-lg bg-white border border-slate-200 p-4 shadow-sm">
+                                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
+                                  Message Content:
+                                </p>
+                                <div className="max-w-none">
+                                  {billBalanceResponse.response_text ? (
+                                    <div
+                                      className="text-sm text-slate-700 leading-relaxed [&_ul]:list-disc [&_ul]:ml-6 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:ml-6 [&_ol]:my-2 [&_li]:my-1 [&_p]:my-2 [&_br]:block [&_a]:text-blue-600 [&_a]:underline [&_b]:font-bold [&_strong]:font-bold [&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-slate-300 [&_th]:p-2 [&_th]:bg-slate-50 [&_td]:border [&_td]:border-slate-300 [&_td]:p-2"
+                                      dangerouslySetInnerHTML={{ __html: billBalanceResponse.response_text }}
+                                    />
+                                  ) : (
+                                    <p className="text-sm text-slate-500">No response content available.</p>
+                                  )}
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
                         </div>
                       </motion.div>
                     )}

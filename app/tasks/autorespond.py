@@ -400,6 +400,20 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             else:
                 agent_name_for_status = "bill_balance_request"
 
+                # Get pre-extracted patient IDs from database (like apt_status_req)
+                def _get_bill_balance_patient_ids():
+                    try:
+                        if email_obj.extracted_patient_ids and len(email_obj.extracted_patient_ids) > 0:
+                            logger.info(f"Found {len(email_obj.extracted_patient_ids)} pre-extracted patient ID(s) for bill balance {email_id}")
+                            return email_obj.extracted_patient_ids
+                        else:
+                            return []
+                    except Exception as e:
+                        logger.error(f"Error accessing pre-extracted patient IDs for bill balance {email_id}: {e}", exc_info=True)
+                        return []
+
+                extracted_patient_ids = _get_bill_balance_patient_ids()
+
                 if bill_balance_test_mode_enabled:
                     logger.info(f"🧪 BILL BALANCE TEST MODE: Email {email_id} tagged with '{BILL_OR_BALANCE_REQUEST_TAG_NAME}'. Response will be saved to file (not sent)")
                 else:
@@ -414,7 +428,8 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                         structured_history_messages=structured_history_messages,
                         settings_obj=settings,
                         email_subject=email_obj.subject,
-                        test_mode=bill_balance_test_mode_enabled
+                        test_mode=bill_balance_test_mode_enabled,
+                        extracted_patient_ids=extracted_patient_ids  # Pass ALL pre-extracted patient IDs
                     )
 
                 try:

@@ -79,6 +79,7 @@ async def save_test_mode_response_bill_balance(
 ) -> Dict[str, Any]:
     """
     Saves the generated bill balance response to file system for test mode.
+    Each patient ID gets its own response file to support multi-patient emails.
 
     Args:
         conversation_id: Front conversation ID
@@ -94,7 +95,13 @@ async def save_test_mode_response_bill_balance(
         test_dir = Path(BILL_BALANCE_TEST_OUTPUT_DIR) / conversation_id
         test_dir.mkdir(parents=True, exist_ok=True)
 
-        response_file = test_dir / "response.json"
+        # Use patient_id in filename to support multiple patients per conversation
+        # If no patient_id, use timestamp to ensure uniqueness
+        if patient_id:
+            response_file = test_dir / f"response_{patient_id}.json"
+        else:
+            timestamp_suffix = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            response_file = test_dir / f"response_{timestamp_suffix}.json"
 
         response_data = {
             "timestamp": datetime.now().isoformat(),
@@ -315,10 +322,12 @@ async def handle_bill_balance_request(
     structured_history_messages: List[Dict[str, Any]],
     settings_obj: Any = app_settings_instance,
     email_subject: str = None,
-    test_mode: bool = False
+    test_mode: bool = False,
+    extracted_patient_ids: List[str] = None  # Add pre-extracted patient IDs parameter (list)
 ) -> Dict[str, Any]:
     """
     Main orchestrator for handling "Bill or balance Request" emails.
+    Supports multiple patient IDs - will send separate responses for each patient.
     Implements the 3-step logic:
     1. If single Patient ID found → auto-reply
     2. If no/multiple patients → ask for clarification (once)
@@ -331,14 +340,60 @@ async def handle_bill_balance_request(
         settings_obj: Application settings
         email_subject: Email subject line
         test_mode: If True, save responses to file instead of sending via Front API
+        extracted_patient_ids: Pre-extracted patient IDs (list)
     """
     logger.info(f"handle_bill_balance_request called for conversation: {front_conversation_id} (test_mode={test_mode})")
-    
+
+    # Convert None to empty list for easier handling
+    if extracted_patient_ids is None:
+        extracted_patient_ids = []
+
+    # If multiple patient IDs, process each one separately
+    if len(extracted_patient_ids) > 1:
+        logger.info(f"Processing {len(extracted_patient_ids)} patients separately for bill balance")
+        all_results = []
+
+        for idx, patient_id in enumerate(extracted_patient_ids):
+            logger.info(f"Processing patient {idx + 1}/{len(extracted_patient_ids)}: {patient_id}")
+
+            # Call this same function recursively with single patient ID
+            result = await handle_bill_balance_request(
+                front_conversation_id=front_conversation_id,
+                current_email_content=current_email_content,
+                structured_history_messages=structured_history_messages,
+                settings_obj=settings_obj,
+                email_subject=email_subject,
+                test_mode=test_mode,
+                extracted_patient_ids=[patient_id]  # Single patient ID in list
+            )
+            all_results.append(result)
+
+        # Return combined results
+        all_handled = all(r.get("agent_handled", False) for r in all_results)
+        all_processed = all(r.get("processed_flag", False) for r in all_results)
+
+        logger.info(f"Completed processing {len(extracted_patient_ids)} patients for bill balance")
+        return {
+            "agent_handled": all_handled,
+            "processed_flag": all_processed,
+            "details": {
+                "reason": f"Processed {len(extracted_patient_ids)} patients",
+                "patient_results": all_results,
+                "patient_ids": extracted_patient_ids
+            }
+        }
+
+    # From here on, we're processing a single patient ID (or no patient ID)
+    # Use pre-extracted patient ID if available, otherwise try to extract from email
+    if extracted_patient_ids:
+        patient_id = extracted_patient_ids[0]
+        logger.info(f"Using pre-extracted patient ID: {patient_id}")
+    else:
+        # Fallback to extraction from email content
+        patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id, email_subject)
+
     # Check if we've already asked for clarification
     already_asked_for_clarification = _check_if_clarification_request(structured_history_messages)
-    
-    # Try to extract patient ID from the email
-    patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id, email_subject)
     
     if not patient_id:
         if already_asked_for_clarification:

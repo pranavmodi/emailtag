@@ -326,21 +326,28 @@ async def list_bill_balance_test_outputs(db: AsyncSession = Depends(get_db)):
         conversations = []
         for conv_dir in test_dir.iterdir():
             if conv_dir.is_dir():
-                response_file = conv_dir / "response.json"
+                # Find all response files (response_*.json pattern for multi-patient support)
+                response_files = list(conv_dir.glob("response_*.json"))
+                # Also check for legacy response.json
+                legacy_response = conv_dir / "response.json"
+                if legacy_response.exists():
+                    response_files.append(legacy_response)
 
                 # Get directory modification time
                 latest_time = conv_dir.stat().st_mtime
-                if response_file.exists():
-                    latest_time = max(latest_time, response_file.stat().st_mtime)
+                for rf in response_files:
+                    latest_time = max(latest_time, rf.stat().st_mtime)
 
                 # Get conversation details from database
                 conv_id = conv_dir.name
                 conv_info = {
                     "conversation_id": conv_id,
                     "timestamp": latest_time,
-                    "has_response": response_file.exists(),
+                    "has_response": len(response_files) > 0,
+                    "response_count": len(response_files),  # Number of responses (patients)
                     "subject": None,
                     "sender": None,
+                    "patient_ids": [],  # List of all patient IDs
                 }
 
                 # Try to get email info from database
@@ -354,15 +361,19 @@ async def list_bill_balance_test_outputs(db: AsyncSession = Depends(get_db)):
                 except Exception as db_err:
                     logger.warning(f"Could not fetch email info for {conv_id}: {db_err}")
 
-                # Try to get response data
-                if response_file.exists():
+                # Try to get response data from all response files
+                for rf in response_files:
                     try:
-                        with open(response_file, "r") as f:
+                        with open(rf, "r") as f:
                             response_data = json.load(f)
-                            conv_info["patient_id"] = response_data.get("patient_id")
-                            conv_info["response_type"] = response_data.get("response_type")
+                            patient_id = response_data.get("patient_id")
+                            if patient_id:
+                                conv_info["patient_ids"].append(patient_id)
+                            # Use first response's type for display
+                            if not conv_info.get("response_type"):
+                                conv_info["response_type"] = response_data.get("response_type")
                     except Exception as json_err:
-                        logger.warning(f"Could not parse response.json for {conv_id}: {json_err}")
+                        logger.warning(f"Could not parse {rf.name} for {conv_id}: {json_err}")
 
                 conversations.append(conv_info)
 
@@ -380,19 +391,60 @@ async def list_bill_balance_test_outputs(db: AsyncSession = Depends(get_db)):
 
 @router.get("/bill-balance-test-outputs/{conversation_id}/response")
 async def get_bill_balance_test_response(conversation_id: str):
-    """Get the response.json for a specific bill balance test conversation."""
-    try:
-        response_file = Path(BILL_BALANCE_TEST_OUTPUT_DIR) / conversation_id / "response.json"
+    """Get all response files for a specific bill balance test conversation.
 
-        if not response_file.exists():
-            raise HTTPException(status_code=404, detail="Response file not found")
+    Returns an object with 'responses' array containing all patient responses.
+    For backward compatibility, also includes top-level fields from first response.
+    """
+    try:
+        conv_dir = Path(BILL_BALANCE_TEST_OUTPUT_DIR) / conversation_id
+
+        if not conv_dir.exists():
+            raise HTTPException(status_code=404, detail="Conversation directory not found")
 
         # Security check - ensure path is within test directory
-        if not str(response_file.resolve()).startswith(str(Path(BILL_BALANCE_TEST_OUTPUT_DIR).resolve())):
+        if not str(conv_dir.resolve()).startswith(str(Path(BILL_BALANCE_TEST_OUTPUT_DIR).resolve())):
             raise HTTPException(status_code=403, detail="Access denied")
 
-        with open(response_file, "r") as f:
-            return json.load(f)
+        # Find all response files
+        response_files = list(conv_dir.glob("response_*.json"))
+        # Also check for legacy response.json
+        legacy_response = conv_dir / "response.json"
+        if legacy_response.exists():
+            response_files.append(legacy_response)
+
+        if not response_files:
+            raise HTTPException(status_code=404, detail="No response files found")
+
+        # Load all responses
+        responses = []
+        for rf in sorted(response_files, key=lambda x: x.stat().st_mtime):
+            try:
+                with open(rf, "r") as f:
+                    response_data = json.load(f)
+                    response_data["_filename"] = rf.name
+                    responses.append(response_data)
+            except Exception as json_err:
+                logger.warning(f"Could not parse {rf.name}: {json_err}")
+
+        if not responses:
+            raise HTTPException(status_code=404, detail="No valid response files found")
+
+        # Return all responses, with first response's fields at top level for backward compatibility
+        first_response = responses[0]
+        return {
+            # Top-level fields from first response (backward compatibility)
+            "conversation_id": first_response.get("conversation_id"),
+            "timestamp": first_response.get("timestamp"),
+            "response_text": first_response.get("response_text"),
+            "patient_id": first_response.get("patient_id"),
+            "response_type": first_response.get("response_type"),
+            "details": first_response.get("details"),
+            "status": first_response.get("status"),
+            # New field: all responses for multi-patient support
+            "responses": responses,
+            "response_count": len(responses)
+        }
     except HTTPException:
         raise
     except Exception as e:
