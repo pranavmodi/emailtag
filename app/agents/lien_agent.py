@@ -391,7 +391,7 @@ def _determine_lien_type(applied_tags: List[str], signature_type: str) -> str:
     signature_prefix = "Attorney Signed" if signature_type == "ASL" else "Patient Signed"
 
     if RAD_LIEN_TAG in applied_tags:
-        return f"{signature_prefix} Radiology Lien"
+        return f"{signature_prefix} Radiologist Lien"
     elif TECH_LIEN_TAG in applied_tags:
         return f"{signature_prefix} Technologist Lien"
     else:
@@ -1186,7 +1186,7 @@ async def handle_lien_request(
                     patient_id=split_patient_id,
                     lien_type=split_lien_type,
                     pdf_bytes=split_pdf_bytes,
-                    filename=f"lien_{split_patient_id}_{split_lien_type}_split_{i+1}.pdf",
+                    filename=f"split_{i+1}.pdf",
                     signature_type=signature_type,  # Pass ASL or PSL
                     conversation_id=front_conversation_id  # For test mode file organization
                 )
@@ -1252,9 +1252,9 @@ async def handle_lien_request(
                             att_lien_type_full = "Attorney Signed Technologist Lien"
                     elif att_lien_type_short == "RAD":
                         if signature_type == "PSL":
-                            att_lien_type_full = "Patient Signed Radiology Lien"
+                            att_lien_type_full = "Patient Signed Radiologist Lien"
                         else:  # ASL
-                            att_lien_type_full = "Attorney Signed Radiology Lien"
+                            att_lien_type_full = "Attorney Signed Radiologist Lien"
                     else:
                         att_lien_type_full = lien_type  # Fallback to original
 

@@ -39,14 +39,14 @@ def _get_doc_type_id(lien_type: str) -> int:
     """
     # PSL (Patient Signed Lien) IDs
     if "Patient Signed" in lien_type:
-        if "Radiology" in lien_type:
+        if "Radiology" in lien_type or "Radiologist" in lien_type:
             return 56  # RAD Patient Signed Lien
         elif "Technologist" in lien_type:
             return 58  # TECH Patient Signed Lien
 
     # ASL (Attorney Signed Lien) IDs
     if "Attorney Signed" in lien_type:
-        if "Radiology" in lien_type:
+        if "Radiology" in lien_type or "Radiologist" in lien_type:
             return 57  # RAD Attorney Signed Lien
         elif "Technologist" in lien_type:
             return 59  # TECH Attorney Signed Lien
@@ -215,11 +215,11 @@ async def upload_lien_pdf_bytes_to_radflow(
             test_mode_enabled = await system_settings_crud.get_setting_value(db, "lien_test_mode", default=False)
 
         # Determine full lien type name based on short code and signature type
-        if lien_type.upper() in ["RAD", "RADIOLOGY"]:
+        if lien_type.upper() in ["RAD", "RADIOLOGY", "RADIOLOGIST"]:
             if signature_type.upper() == "PSL":
-                full_lien_type = "Patient Signed Radiology Lien"
+                full_lien_type = "Patient Signed Radiologist Lien"
             else:  # ASL or default
-                full_lien_type = "Attorney Signed Radiology Lien"
+                full_lien_type = "Attorney Signed Radiologist Lien"
         elif lien_type.upper() in ["TECH", "TC", "TECHNOLOGIST"]:
             if signature_type.upper() == "PSL":
                 full_lien_type = "Patient Signed Technologist Lien"
