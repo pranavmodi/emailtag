@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from app.core.config import settings
 from app.services.frontapp_service import get_conversation_text, archive_conversation_in_front
-from app.services.openai_service import are_questions_resolved_openai # Import OpenAI service
+from app.services.openai_service import are_questions_resolved_openai, verify_archive_decision_openai
 from app.services.document_processing_service import DocumentProcessingService
 from app.services.trace_service import create_tracer
 from app.models.processing_trace import StepTypes, TraceStatus
@@ -428,6 +428,80 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
 
     # Essential logging: Archive decision
     if all_questions_resolved:
+        # FOURTH CHECK: Verification step - second opinion before archiving
+        verification_start = datetime.utcnow()
+        logger.info(f"📁 ARCHIVE VERIFICATION: {front_conversation_id} - Starting second-opinion verification")
+
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug(f"🔍 ARCHIVAL: Starting verification step for {front_conversation_id}")
+
+        verification_result = await verify_archive_decision_openai(
+            analysis_result.get("email_chain", []),
+            analysis_result
+        )
+
+        # Log verification step
+        tracer.log_step(
+            step_name="archive_check_verification",
+            step_type=StepTypes.AI_PROCESSING,
+            status=TraceStatus.COMPLETED if verification_result.get("success") else TraceStatus.FAILED,
+            input_data={
+                "first_analysis_resolved": True,
+                "email_count": len(analysis_result.get("email_chain", []))
+            },
+            output_data={
+                "verified": verification_result.get("verified", False),
+                "recommendation": verification_result.get("recommendation", "DO_NOT_ARCHIVE"),
+                "concerns": [sanitize_text(c) for c in verification_result.get("concerns", [])],
+                "summary": sanitize_text(verification_result.get("summary", ""))
+            },
+            duration_ms=int((datetime.utcnow() - verification_start).total_seconds() * 1000)
+        )
+
+        # Check if verification passed
+        if not verification_result.get("success"):
+            logger.error(f"📁 ARCHIVE VERIFICATION FAILED: {front_conversation_id} - Verification call failed")
+            if CLASSIFICATION_DEBUG:
+                debug_logger.debug(f"🔍 ARCHIVAL VERIFICATION ERROR: {front_conversation_id} - {verification_result}")
+
+            tracer.log_step(
+                step_name="archive_check_complete",
+                step_type=StepTypes.BUSINESS_LOGIC,
+                status=TraceStatus.COMPLETED,
+                output_data={
+                    "final_decision": "NOT_ARCHIVED",
+                    "reason": "verification_call_failed",
+                    "checks_passed": ["stored_docs", "fresh_docs", "openai_resolution"],
+                    "checks_failed": ["verification"]
+                },
+                duration_ms=int((datetime.utcnow() - overall_start).total_seconds() * 1000)
+            )
+            return False
+
+        if not verification_result.get("verified") or verification_result.get("recommendation") != "PROCEED_WITH_ARCHIVE":
+            logger.info(f"📁 ARCHIVE BLOCKED BY VERIFICATION: {front_conversation_id} - Concerns: {verification_result.get('concerns', [])}")
+            if CLASSIFICATION_DEBUG:
+                debug_logger.debug(f"🔍 ARCHIVAL BLOCKED (VERIFICATION): {front_conversation_id} - {verification_result.get('summary', '')}")
+
+            tracer.log_step(
+                step_name="archive_check_complete",
+                step_type=StepTypes.BUSINESS_LOGIC,
+                status=TraceStatus.COMPLETED,
+                output_data={
+                    "final_decision": "NOT_ARCHIVED",
+                    "reason": "verification_concerns",
+                    "concerns": verification_result.get("concerns", []),
+                    "verification_summary": verification_result.get("summary", ""),
+                    "checks_passed": ["stored_docs", "fresh_docs", "openai_resolution"],
+                    "checks_failed": ["verification"]
+                },
+                duration_ms=int((datetime.utcnow() - overall_start).total_seconds() * 1000)
+            )
+            return False
+
+        logger.info(f"📁 ARCHIVE VERIFICATION PASSED: {front_conversation_id} - Proceeding with archive")
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug(f"🔍 ARCHIVAL VERIFICATION PASSED: {front_conversation_id} - {verification_result.get('summary', '')}")
         try:
             if CLASSIFICATION_DEBUG:
                 debug_logger.debug(f"🔍 ARCHIVAL: Attempting to archive conversation {front_conversation_id} via Front API...")
@@ -460,8 +534,9 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
                     status=TraceStatus.COMPLETED,
                     output_data={
                         "final_decision": "ARCHIVED",
-                        "checks_passed": ["stored_docs", "fresh_docs", "openai_resolution"],
-                        "questions_resolved": True
+                        "checks_passed": ["stored_docs", "fresh_docs", "openai_resolution", "verification"],
+                        "questions_resolved": True,
+                        "verification_confirmed": True
                     },
                     duration_ms=int((datetime.utcnow() - overall_start).total_seconds() * 1000)
                 )

@@ -112,23 +112,24 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
     }
 
     payload = {
-        "model": "gpt-4o",
+        "model": "gpt-5",
         "messages": [
             {"role": "system", "content": "You are an expert at parsing email conversations and extracting individual emails in chronological order. Focus on accurate extraction of email metadata and content."},
             {"role": "user", "content": prompt}
         ],
         "response_format": {
-            "type": "json_schema", 
+            "type": "json_schema",
             "json_schema": {
                 "name": "email_chain_extraction",
                 "strict": True,
                 "schema": email_schema
             }
-        }
+        },
+        # GPT-5 uses reasoning_effort instead of temperature
+        "reasoning_effort": "medium",
+        # GPT-5 reasoning models need high token limits because reasoning tokens count toward max_completion_tokens
+        "max_completion_tokens": 16000
     }
-
-    if "o3-mini" not in payload["model"].lower():
-        payload["temperature"] = 0.0
 
     headers = {
         "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
@@ -413,7 +414,7 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
     }
 
     payload = {
-        "model": "gpt-4o",
+        "model": "gpt-5",
         "messages": [
             {"role": "system", "content": "You are an AI assistant that analyzes email conversations to determine if there are outstanding questions, requests, or actions that require a response from Precise Imaging. CRITICAL: Requests for Precise to take action are only resolved when there is confirmation that Precise has actually performed the requested action. A clear request is NOT the same as a completed request."},
             {"role": "user", "content": prompt}
@@ -425,12 +426,12 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
                 "strict": True,
                 "schema": response_schema
             }
-        }
+        },
+        # GPT-5 uses reasoning_effort instead of temperature
+        "reasoning_effort": "medium",
+        # GPT-5 reasoning models need high token limits because reasoning tokens count toward max_completion_tokens
+        "max_completion_tokens": 16000
     }
-    
-    # Add temperature only for non-o3-mini models (though this function uses gpt-4o by default)
-    if "o3-mini" not in payload["model"].lower():
-        payload["temperature"] = 0.0
 
     try:
         # IMPORTANT: Disabling SSL verification is a security risk and should only be done
@@ -523,6 +524,267 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
             "success": False,
             "email_chain": emails
         } 
+
+
+async def verify_archive_decision_openai(
+    emails: List[Dict[str, Any]],
+    first_analysis: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    VERIFICATION STEP: Double-check the archive decision with a skeptical second opinion.
+
+    This function acts as a reviewer that specifically looks for anything the first
+    analysis might have missed. It takes a more conservative approach, looking for
+    any possible action items that could have been overlooked.
+
+    Args:
+        emails: List of structured email objects from the extraction step
+        first_analysis: The result from the first are_questions_resolved_openai call
+
+    Returns:
+        Dict containing:
+            - "verified": bool - True if the archive decision is confirmed correct
+            - "concerns": List[str] - Any concerns or items that might have been missed
+            - "recommendation": str - "PROCEED_WITH_ARCHIVE" or "DO_NOT_ARCHIVE"
+            - "summary": str - Explanation of the verification analysis
+            - "success": bool - Whether the verification call succeeded
+    """
+    if CLASSIFICATION_DEBUG:
+        debug_logger.debug("🔍 ARCHIVE VERIFICATION START - Second Opinion Check")
+        debug_logger.debug(f"🔍 VERIFICATION: First analysis resolved={first_analysis.get('resolved')}, summary={first_analysis.get('summary', '')[:200]}")
+
+    if not settings.OPENAI_API_KEY:
+        logger.error("OPENAI_API_KEY not configured. Cannot verify archive decision.")
+        return {
+            "verified": False,
+            "concerns": ["OpenAI API key not configured"],
+            "recommendation": "DO_NOT_ARCHIVE",
+            "summary": "Verification failed - API key not configured",
+            "success": False
+        }
+
+    if not emails:
+        logger.warning("No emails provided for verification.")
+        return {
+            "verified": True,
+            "concerns": [],
+            "recommendation": "PROCEED_WITH_ARCHIVE",
+            "summary": "No emails to verify - archive decision stands",
+            "success": True
+        }
+
+    # Create email chain summary for verification
+    email_chain_summary = "EMAIL CHAIN (Chronological Order):\n\n"
+    for email in emails:
+        email_chain_summary += f"EMAIL #{email.get('sequence_number', '?')}:\n"
+        email_chain_summary += f"From: {email.get('sender', 'Unknown')}\n"
+        email_chain_summary += f"Date: {email.get('date', 'Unknown')}\n"
+        email_chain_summary += f"Subject: {email.get('subject', 'Unknown')}\n"
+        email_chain_summary += f"To: {', '.join(email.get('recipients_to', []))}\n"
+        if email.get('recipients_cc'):
+            email_chain_summary += f"CC: {', '.join(email.get('recipients_cc', []))}\n"
+        email_chain_summary += f"Body: {email.get('body', '')}\n"
+        email_chain_summary += "---\n\n"
+
+    first_analysis_summary = (
+        f"First Analysis Result:\n"
+        f"- Resolved: {first_analysis.get('resolved', False)}\n"
+        f"- Summary: {first_analysis.get('summary', 'N/A')}\n"
+        f"- Latest Email Analysis: {first_analysis.get('latest_email_analysis', 'N/A')}\n"
+        f"- Unresolved Questions Found: {first_analysis.get('unresolved_questions', [])}\n"
+    )
+
+    prompt = (
+        f"You are a SKEPTICAL REVIEWER performing a second-opinion verification on an archive decision.\n\n"
+        f"A previous AI analysis concluded that this email conversation should be ARCHIVED because all "
+        f"questions/requests have been resolved. Your job is to CHALLENGE this decision and look for "
+        f"anything that might have been missed.\n\n"
+        f"**YOUR MINDSET:** Be conservative and defensive. It's better to keep a conversation open "
+        f"unnecessarily than to archive something that still needs attention. Look for:\n\n"
+        f"1. **Hidden or Implicit Requests:** Did someone ask for something indirectly?\n"
+        f"2. **Incomplete Actions:** Was an action promised but not confirmed as completed?\n"
+        f"3. **Follow-up Expectations:** Does anyone seem to expect a follow-up from Precise Imaging?\n"
+        f"4. **Time-Sensitive Items:** Are there deadlines or appointments that need confirmation?\n"
+        f"5. **Ambiguous Endings:** Does the conversation end in a way that could mean more is needed?\n"
+        f"6. **Cancellation/Changes:** Are there recent requests to cancel, change, or disregard something?\n"
+        f"7. **Document Requests:** Were any documents, records, or images requested but not confirmed sent?\n"
+        f"8. **Scheduling Requests:** Were appointments requested but not confirmed as scheduled?\n"
+        f"9. **Billing/Payment Issues:** Are there unresolved billing questions or payment matters?\n"
+        f"10. **Patient Information Updates:** Were there requests to update patient info that need confirmation?\n\n"
+        f"**IMPORTANT:** If you find ANY reasonable concern that Precise Imaging might still need to take "
+        f"action, recommend NOT archiving. When in doubt, err on the side of keeping the conversation open.\n\n"
+        f"--- FIRST ANALYSIS RESULT ---\n"
+        f"{first_analysis_summary}\n\n"
+        f"--- EMAIL CHAIN TO VERIFY ---\n"
+        f"{email_chain_summary}\n\n"
+        f"**Review the email chain with fresh eyes and determine if archiving is truly safe.**"
+    )
+
+    if CLASSIFICATION_DEBUG:
+        debug_logger.debug("🔍 VERIFICATION: Generated verification prompt")
+        debug_logger.debug(f"🔍 VERIFICATION: Prompt length: {len(prompt)} chars")
+
+    response_schema = {
+        "type": "object",
+        "properties": {
+            "verified": {
+                "type": "boolean",
+                "description": "True ONLY if you are confident the archive decision is correct and no action is needed from Precise Imaging. False if there are any concerns."
+            },
+            "concerns": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "List of specific concerns or items that might have been missed by the first analysis. Include any doubts, even minor ones."
+            },
+            "recommendation": {
+                "type": "string",
+                "enum": ["PROCEED_WITH_ARCHIVE", "DO_NOT_ARCHIVE"],
+                "description": "Final recommendation. Use DO_NOT_ARCHIVE if there are any concerns."
+            },
+            "summary": {
+                "type": "string",
+                "description": "Detailed explanation of your verification analysis, including what you checked and why you reached your conclusion."
+            }
+        },
+        "required": ["verified", "concerns", "recommendation", "summary"],
+        "additionalProperties": False
+    }
+
+    payload = {
+        "model": "gpt-5",
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a skeptical quality assurance reviewer for email archiving decisions. "
+                    "Your job is to find reasons NOT to archive. Be thorough and conservative. "
+                    "If there's any doubt about whether Precise Imaging needs to take action, "
+                    "recommend keeping the conversation open. Missing an action item is worse "
+                    "than keeping an extra conversation in the inbox."
+                )
+            },
+            {"role": "user", "content": prompt}
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "archive_verification",
+                "strict": True,
+                "schema": response_schema
+            }
+        },
+        # GPT-5 uses reasoning_effort instead of temperature
+        "reasoning_effort": "medium",
+        # GPT-5 reasoning models need high token limits because reasoning tokens count toward max_completion_tokens
+        "max_completion_tokens": 16000
+    }
+
+    headers = {
+        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
+            logger.info("🔍 VERIFICATION: Sending second-opinion request to OpenAI...")
+
+            if CLASSIFICATION_DEBUG:
+                debug_logger.debug("🔍 VERIFICATION: Sending request to OpenAI API")
+
+            import time
+            start_time = time.time()
+            response = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+            elapsed_time = time.time() - start_time
+
+            if response.status_code != 200:
+                logger.error(f"❌ OpenAI Verification API Error - Status: {response.status_code}")
+                logger.error(f"❌ Response body: {response.text}")
+                if CLASSIFICATION_DEBUG:
+                    debug_logger.debug(f"🔍 VERIFICATION ERROR: API Status {response.status_code}")
+                return {
+                    "verified": False,
+                    "concerns": [f"API error: {response.status_code}"],
+                    "recommendation": "DO_NOT_ARCHIVE",
+                    "summary": f"Verification failed due to API error: {response.status_code}",
+                    "success": False
+                }
+
+            response.raise_for_status()
+
+            completion = response.json()
+            ai_response_text = completion.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+
+            # Log token usage
+            usage = completion.get('usage', {})
+            total_tokens = usage.get('total_tokens', 0)
+            logger.info(f"📊 Verification response: elapsed_time={elapsed_time:.2f}s, tokens={total_tokens}")
+
+            if CLASSIFICATION_DEBUG:
+                debug_logger.debug("🔍 VERIFICATION: Raw OpenAI response:")
+                debug_logger.debug(ai_response_text)
+
+            try:
+                verification_result = json.loads(ai_response_text)
+
+                result = {
+                    "verified": verification_result["verified"],
+                    "concerns": verification_result["concerns"],
+                    "recommendation": verification_result["recommendation"],
+                    "summary": verification_result["summary"],
+                    "success": True
+                }
+
+                # Log verification result
+                if result["verified"] and result["recommendation"] == "PROCEED_WITH_ARCHIVE":
+                    logger.info(f"✅ VERIFICATION PASSED: Archive decision confirmed - {result['summary'][:200]}")
+                else:
+                    logger.info(f"❌ VERIFICATION FAILED: Concerns found - {result['concerns']}")
+
+                if CLASSIFICATION_DEBUG:
+                    debug_logger.debug(f"🔍 VERIFICATION RESULT: verified={result['verified']}, recommendation={result['recommendation']}")
+                    debug_logger.debug(f"🔍 VERIFICATION CONCERNS: {result['concerns']}")
+
+                return result
+
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.error(f"Failed to parse verification response: {e}")
+                if CLASSIFICATION_DEBUG:
+                    debug_logger.debug(f"🔍 VERIFICATION JSON ERROR: {e}")
+                return {
+                    "verified": False,
+                    "concerns": [f"Failed to parse response: {e}"],
+                    "recommendation": "DO_NOT_ARCHIVE",
+                    "summary": f"Verification failed - parsing error: {e}",
+                    "success": False
+                }
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error during verification: {e.response.status_code}")
+        return {
+            "verified": False,
+            "concerns": [f"HTTP error: {e.response.status_code}"],
+            "recommendation": "DO_NOT_ARCHIVE",
+            "summary": f"Verification failed - HTTP error: {e.response.status_code}",
+            "success": False
+        }
+    except httpx.RequestError as e:
+        logger.error(f"Request error during verification: {str(e)}")
+        return {
+            "verified": False,
+            "concerns": [f"Request error: {str(e)}"],
+            "recommendation": "DO_NOT_ARCHIVE",
+            "summary": f"Verification failed - request error: {str(e)}",
+            "success": False
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error during verification: {str(e)}")
+        return {
+            "verified": False,
+            "concerns": [f"Unexpected error: {str(e)}"],
+            "recommendation": "DO_NOT_ARCHIVE",
+            "summary": f"Verification failed - unexpected error: {str(e)}",
+            "success": False
+        }
 
 
 async def generate_eval_scenario_summary(
