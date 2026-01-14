@@ -22,6 +22,12 @@ export const MENU_ITEMS = [
     icon: "📊",
   },
   {
+    href: "/archived-list",
+    label: "Archived List",
+    description: "View archived conversations by day",
+    icon: "📂",
+  },
+  {
     href: "/sandbox",
     label: "Autorespond Sandbox",
     description: "Test autorespond outputs locally",

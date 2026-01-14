@@ -17,6 +17,7 @@ import {
   Trash2,
   DollarSign,
   FileCheck,
+  ExternalLink,
 } from "lucide-react";
 
 import { ApiError, SettingsApi } from "@/lib/api";
@@ -570,9 +571,16 @@ export default function SandboxPage() {
                               <h3 className="font-semibold text-slate-900 truncate text-base mb-1">
                                 {conversation.subject || conversation.conversation_id}
                               </h3>
-                              <p className="text-xs font-mono text-slate-500 break-all mb-2">
+                              <a
+                                href={`https://app.frontapp.com/open/${conversation.conversation_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs font-mono text-blue-600 hover:text-blue-800 hover:underline break-all mb-2"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 {conversation.conversation_id}
-                              </p>
+                                <ExternalLink className="h-3 w-3 shrink-0" />
+                              </a>
                               <div className="flex items-center gap-2 text-sm text-slate-600 mb-3">
                                 <span className="truncate">{conversation.sender || "Unknown sender"}</span>
                               </div>
@@ -922,9 +930,16 @@ export default function SandboxPage() {
                             <h3 className="font-semibold text-slate-900 truncate text-base mb-1">
                               {output.subject || output.conversation_id}
                             </h3>
-                            <p className="text-xs font-mono text-slate-500 break-all mb-2">
+                            <a
+                              href={`https://app.frontapp.com/open/${output.conversation_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs font-mono text-blue-600 hover:text-blue-800 hover:underline break-all mb-2"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               {output.conversation_id}
-                            </p>
+                              <ExternalLink className="h-3 w-3 shrink-0" />
+                            </a>
                             <div className="flex items-center gap-2 text-sm text-slate-600 mb-3">
                               <span className="truncate">{output.sender || "Unknown sender"}</span>
                             </div>

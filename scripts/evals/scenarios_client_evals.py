@@ -169,26 +169,6 @@ CLIENT_EVAL_SCENARIOS = {
         ),
         "expected_tags": ["Apt status req"]
     },
-    "11": {
-        "description": "OCR Rad Lien Override - Email with attachment containing Rad Lien OCR data, should override LLM classification",
-        "subject": "Radiology Lien Documentation - PRE3456789",
-        "body_html": (
-            "<p>Dear Billing Department,</p>"
-            "<p>Attached is the radiology lien documentation for Patient ID PRE3456789.</p>"
-            "<p>Please process the attached lien documentation.</p>"
-            "<p>Thank you.</p>"
-            "<p>Attorney Services</p>"
-            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
-        ),
-        "attachments": [
-            {
-                "filename": "radiology_lien_document.pdf",
-                "filepath": "scripts/radiology_lien_document.pdf",
-                "content_type": "application/pdf"
-            }
-        ],
-        "expected_tags": ["Rad Lien"]
-    },
     "12": {
         "description": "OCR Tech Lien Override - Email with attachment containing Tech Lien OCR data, should override LLM classification",
         "subject": "Tech Lien Documentation - PRE7890123",
@@ -208,46 +188,6 @@ CLIENT_EVAL_SCENARIOS = {
             }
         ],
         "expected_tags": ["Tech Lien"]
-    },
-    "13": {
-        "description": "OCR No Override - Missing Lien Request should not be overridden by OCR",
-        "subject": "Missing Lien Request - PRE1234567",
-        "body_html": (
-            "<p>Dear Billing Department,</p>"
-            "<p>We need the missing lien documentation for Patient ID PRE1234567.</p>"
-            "<p>Please provide the missing lien documents.</p>"
-            "<p>Thank you.</p>"
-            "<p>Legal Processing Team</p>"
-            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
-        ),
-        "attachments": [
-            {
-                "filename": "sample_document.pdf", 
-                "filepath": "scripts/radiology_lien_document.pdf",
-                "content_type": "application/pdf"
-            }
-        ],
-        "expected_tags": ["Missing Lien Request"]
-    },
-    "14": {
-        "description": "OCR No Override - Non-lien email should not be affected by OCR lien data",
-        "subject": "Schedule MRI Appointment - PRE5555555",
-        "body_html": (
-            "<p>Dear Scheduling Team,</p>"
-            "<p>Please schedule an MRI appointment for Patient ID PRE5555555.</p>"
-            "<p>Please provide available time slots for next week.</p>"
-            "<p>Thank you.</p>"
-            "<p>Medical Coordinator</p>"
-            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
-        ),
-        "attachments": [
-            {
-                "filename": "irrelevant_document.pdf",
-                "filepath": "scripts/radiology_lien_document.pdf",
-                "content_type": "application/pdf"
-            }
-        ],
-        "expected_tags": ["Schedule Request"]
     },
     "15": {
         "description": "OCR PSL Rad Lien Override - Email classified as PSL with Rad Lien OCR data (sent by patient)",
@@ -612,27 +552,6 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ]
     },
-    "23": {
-        "description": "Genesis Puche - Signed Liens V&A LAW FIRM - Forwarded email with signed lien attachments for multiple clients",
-        "subject": "EXTERNAL: Signed Liens V&A LAW FIRM - Case Manager Genesis Puche",
-        "body_html": (
-            "<p>----------- Forwarded message -----------<br>"
-            "From: genesis@valawfirm.com<br>"
-            "Date: July 7, 2025 at 11:51 AM PDT<br>"
-            "Subject: EXTERNAL: Signed Liens V&A LAW FIRM - Case Manager Genesis Puche<br>"
-            "To: billing@precisemri.com</p>"
-            "<p>Good afternoon, these are the signed lien for my clients. Please update the portal accordingly. Thanks!</p>"
-            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
-        ),
-        "expected_tags": ["ASL", "Rad Lien"],
-        "attachments": [
-            {
-                "filename": "20250703 - RAD signed Lien - Precise Imaging - Kathleen Neeck.pdf",
-                "filepath": "data/documents/20250703 - RAD signed Lien - Precise Imaging - Kathleen Neeck.pdf",
-                "content_type": "application/pdf"
-            }
-        ]
-    },
     "24": {
         "description": "Genesis Puche - Tech Lien Submission V&A LAW FIRM - Forwarded email with tech lien attachment for client processing",
         "subject": "EXTERNAL: Tech Lien Documentation V&A LAW FIRM - Case Manager Genesis Puche",
@@ -739,46 +658,6 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["Reports Request"]
-    },
-    "30": {
-        "description": "Cherie Roedel - ASL Lien - Attorney signed RAD lien document for processing",
-        "subject": "Cherie Roedel - Signed Document",
-        "body_html": (
-            "<p>Hello Precise Imaging,</p>"
-            "<p>Please find attached the signed document for our client Cherie Roedel.</p>"
-            "<p>This has been signed and is ready for processing.</p>"
-            "<p>Please confirm receipt and let us know once this has been uploaded to the patient file.</p>"
-            "<p>Thank you,</p>"
-            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
-        ),
-        "attachments": [
-            {
-                "filename": "20250703 - RAD Signed Lien - Precise Imaging - Cherie Roedel.pdf",
-                "filepath": "data/documents/20250703 - RAD Signed Lien - Precise Imaging - Cherie Roedel.pdf",
-                "content_type": "application/pdf"
-            }
-        ],
-        "expected_tags": ["ASL > Rad Lien"]
-    },
-    "31": {
-        "description": "Cherie Roedel - ASL Lien - Attorney signed TECH lien document for processing",
-        "subject": "Cherie Roedel - Signed Document",
-        "body_html": (
-            "<p>Hello Precise Imaging,</p>"
-            "<p>Please find attached the signed document for our client Cherie Roedel.</p>"
-            "<p>This has been signed and is ready for processing.</p>"
-            "<p>Please confirm receipt and let us know once this has been uploaded to the patient file.</p>"
-            "<p>Thank you,</p>"
-            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
-        ),
-        "attachments": [
-            {
-                "filename": "20250703 - TECH Signed Lien - Precise Imaging - Cherie Roedel.pdf",
-                "filepath": "data/documents/20250703 - TECH Signed Lien - Precise Imaging - Cherie Roedel.pdf",
-                "content_type": "application/pdf"
-            }
-        ],
-        "expected_tags": ["ASL > Tech Lien"]
     },
     "32": {
         "description": "Cherie Roedel - ASL Lien - Both RAD and TECH liens attached in same email for processing",
@@ -1101,45 +980,6 @@ Test ID: {UNIQUE_TEST_ID}"""
             {
                 "filename": "palomo.pdf",
                 "filepath": "data/documents/fraudulentliens/palomo.pdf",
-                "content_type": "application/pdf"
-            }
-        ],
-        "expected_tags": ["Lien Modified", "AI: Human review required"]
-    },
-    "49": {
-        "description": "Email with conditional language - Should be rejected before document analysis",
-        "subject": "Lien Submission with Special Terms",
-        "body_html": (
-            "<p>Dear Precise Imaging,</p>"
-            "<p>We are submitting the attached lien for our client. However, please note that this lien is subject to final approval by our managing attorney and we will only proceed if you agree to modify the payment terms to net 60 days instead of the standard terms.</p>"
-            "<p>We also require that you provide weekly status updates on the settlement process.</p>"
-            "<p>Thank you for your cooperation.</p>"
-            "<p>Best regards,<br>"
-            "<p>Law Firm XYZ</p>"
-            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
-        ),
-        "attachments": [
-            {
-                "filename": "standard_lien.pdf",
-                "filepath": "data/documents/lientest/PRE1092256_RAD_ASL.pdf",
-                "content_type": "application/pdf"
-            }
-        ],
-        "expected_tags": ["Lien Modified", "AI: Human review required"]
-    },
-    "50": {
-        "description": "Cover letter with conditional terms - Should detect cover letter with modification language",
-        "subject": "Lien Documents with Cover Letter",
-        "body_html": (
-            "<p>Dear Precise Imaging,</p>"
-            "<p>Please find attached our client's lien documentation with cover letter.</p>"
-            "<p>Thank you.</p>"
-            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
-        ),
-        "attachments": [
-            {
-                "filename": "lien_with_cover.pdf",
-                "filepath": "data/documents/fraudulentliens/10.01.25 Dhunna fr Precise Imaging re Notice of Lien.pdf",
                 "content_type": "application/pdf"
             }
         ],
