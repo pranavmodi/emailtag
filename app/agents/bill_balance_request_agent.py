@@ -199,23 +199,20 @@ def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
             patient_date = lien.get('patientSignedLienDate', '')
             # Only show date if it exists and is not None/empty/null
             if patient_date and str(patient_date).lower() not in ['none', 'null', '']:
-                # Clean up the date format if it's too long
-                if len(patient_date) > 20:
-                    # Try to extract just the date part (first 10 characters usually)
-                    patient_date = patient_date[:10] if '/' in patient_date[:10] or '-' in patient_date[:10] else patient_date[:20]
+                # Extract just the date part, removing any time component
+                patient_date = patient_date.split()[0] if ' ' in patient_date else patient_date
                 patient_sig = f"Signed {patient_date}"
             else:
                 patient_sig = "Signed"
         else:
             patient_sig = "Not Signed"
-            
+
         if lien.get('hasAttorneySigned', False):
             attorney_date = lien.get('attorneySignedDate', '')
             # Only show date if it exists and is not None/empty/null
             if attorney_date and str(attorney_date).lower() not in ['none', 'null', '']:
-                # Clean up the date format if it's too long
-                if len(attorney_date) > 20:
-                    attorney_date = attorney_date[:10] if '/' in attorney_date[:10] or '-' in attorney_date[:10] else attorney_date[:20]
+                # Extract just the date part, removing any time component
+                attorney_date = attorney_date.split()[0] if ' ' in attorney_date else attorney_date
                 attorney_sig = f"Signed {attorney_date}"
             else:
                 attorney_sig = "Signed"

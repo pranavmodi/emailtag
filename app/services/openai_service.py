@@ -112,7 +112,7 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
     }
 
     payload = {
-        "model": "gpt-5",
+        "model": "gpt-5-nano",
         "messages": [
             {"role": "system", "content": "You are an expert at parsing email conversations and extracting individual emails in chronological order. Focus on accurate extraction of email metadata and content."},
             {"role": "user", "content": prompt}
@@ -125,9 +125,7 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
                 "schema": email_schema
             }
         },
-        # GPT-5 uses reasoning_effort instead of temperature
         "reasoning_effort": "medium",
-        # GPT-5 reasoning models need high token limits because reasoning tokens count toward max_completion_tokens
         "max_completion_tokens": 16000
     }
 
@@ -137,7 +135,7 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
     }
 
     try:
-        async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
+        async with httpx.AsyncClient(timeout=120.0, verify=False) as client:
             logger.info("STEP 1: Extracting email chain structure...")
             logger.info(f"📤 Sending extraction request to OpenAI (model: {payload['model']}, conversation_length: {len(conversation_text)} chars)")
 
@@ -206,10 +204,21 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
                     debug_logger.debug(f"🔍 EMAIL EXTRACTION JSON ERROR: {e}, Raw response: {ai_response_text}")
                 return {"success": False, "emails": [], "error": f"Parsing error: {e}"}
                 
-    except Exception as e:
-        logger.error(f"Error extracting email chain: {e}")
+    except httpx.TimeoutException as e:
+        logger.error(f"Error extracting email chain: TIMEOUT after 120s - {type(e).__name__}: {e}")
         if CLASSIFICATION_DEBUG:
-            debug_logger.debug(f"🔍 EMAIL EXTRACTION EXCEPTION: {e}")
+            debug_logger.debug(f"🔍 EMAIL EXTRACTION TIMEOUT: {type(e).__name__}: {e}")
+        return {"success": False, "emails": [], "error": f"Timeout: {e}"}
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Error extracting email chain: HTTP {e.response.status_code} - {type(e).__name__}: {e}")
+        logger.error(f"Response body: {e.response.text}")
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug(f"🔍 EMAIL EXTRACTION HTTP ERROR: {type(e).__name__}: {e}, Response: {e.response.text}")
+        return {"success": False, "emails": [], "error": f"HTTP {e.response.status_code}: {e}"}
+    except Exception as e:
+        logger.error(f"Error extracting email chain: {type(e).__name__}: {e}", exc_info=True)
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug(f"🔍 EMAIL EXTRACTION EXCEPTION: {type(e).__name__}: {e}")
         return {"success": False, "emails": [], "error": str(e)}
 
 
@@ -427,9 +436,7 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
                 "schema": response_schema
             }
         },
-        # GPT-5 uses reasoning_effort instead of temperature
         "reasoning_effort": "medium",
-        # GPT-5 reasoning models need high token limits because reasoning tokens count toward max_completion_tokens
         "max_completion_tokens": 16000
     }
 
