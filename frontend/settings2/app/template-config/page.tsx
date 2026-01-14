@@ -27,15 +27,12 @@ import { BillBalanceTemplatesEditor } from "./components/BillBalanceTemplatesEdi
 import { UnifiedTemplateEditor } from "./components/UnifiedTemplateEditor";
 import { AptStatusReqTemplatesEditor } from "./components/AptStatusReqTemplatesEditor";
 import PlaceholderSection from "./components/PlaceholderSection";
-import { TemplatePreview } from "./components/TemplatePreview";
 import { DocumentAttachments } from "./components/DocumentAttachments";
 import { useTagSettings, normalizeCustomPlaceholdersFromSettings } from "./hooks/useTagSettings";
 
 export default function TemplateConfigPage() {
   const [currentUser, setCurrentUser] = useState("Admin");
   const [selectedTag, setSelectedTag] = useState(TAG_OPTIONS[0].value);
-  const [showPreview, setShowPreview] = useState(true);
-  const [showPersonalInjuryInPreview, setShowPersonalInjuryInPreview] = useState(true);
   const [baseCustomPlaceholders, setBaseCustomPlaceholders] = useState<Record<string, string>>({
     ...DEFAULT_CUSTOM_PLACEHOLDERS,
   });
@@ -313,17 +310,6 @@ export default function TemplateConfigPage() {
                     currentUser={currentUser}
                   />
                 </>
-              )}
-
-              {/* Template Preview - Only show for Apt status req */}
-              {selectedTag === "Apt status req" && (
-                <TemplatePreview
-                  tagSettings={{...tagSettings, custom_placeholders: mergedCustomPlaceholders}}
-                  showPreview={showPreview}
-                  setShowPreview={setShowPreview}
-                  showPersonalInjuryInPreview={showPersonalInjuryInPreview}
-                  setShowPersonalInjuryInPreview={setShowPersonalInjuryInPreview}
-                />
               )}
 
               {/* Metadata */}

@@ -129,9 +129,21 @@ export function DocumentAttachments({
     }
   };
 
+  const handleView = (attachment: TemplateAttachmentResponse) => {
+    const url = TemplatesApi.getAttachmentViewUrl(tagName, attachment.id);
+    window.open(url, "_blank");
+  };
+
   const handleDownload = (attachment: TemplateAttachmentResponse) => {
     const url = TemplatesApi.getAttachmentDownloadUrl(tagName, attachment.id);
     window.open(url, "_blank");
+  };
+
+  const isViewableInBrowser = (mimeType: string): boolean => {
+    return (
+      mimeType === "application/pdf" ||
+      mimeType.startsWith("image/")
+    );
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -358,6 +370,33 @@ export function DocumentAttachments({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {isViewableInBrowser(attachment.mime_type) && (
+                      <button
+                        onClick={() => handleView(attachment)}
+                        className="rounded-lg bg-emerald-100 p-2 text-emerald-700 transition-colors hover:bg-emerald-200"
+                        title="View in new tab"
+                      >
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                          />
+                        </svg>
+                      </button>
+                    )}
                     <button
                       onClick={() => handleDownload(attachment)}
                       className="rounded-lg bg-sky-100 p-2 text-sky-700 transition-colors hover:bg-sky-200"

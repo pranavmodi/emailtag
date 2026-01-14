@@ -499,6 +499,61 @@ async def get_attachment(
         )
 
 
+@router.get("/tag-settings/{tag_name}/attachments/{attachment_id}/view")
+async def view_attachment(
+    tag_name: str,
+    attachment_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    View an attachment file inline (opens in browser).
+
+    Args:
+        tag_name: Name of the tag
+        attachment_id: UUID of the attachment
+
+    Returns:
+        File content served inline for browser viewing
+    """
+    try:
+        attachment_uuid = uuid.UUID(attachment_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid attachment ID format")
+
+    try:
+        attachment = await template_attachment_crud.get_by_id(db, attachment_uuid)
+        if not attachment or attachment.tag_name != tag_name:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Attachment not found"
+            )
+
+        # Get file content
+        file_content = template_attachment_crud.get_file_content(attachment)
+        if file_content is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Attachment file not found on disk"
+            )
+
+        # Serve inline for viewing in browser
+        return Response(
+            content=file_content,
+            media_type=attachment.mime_type,
+            headers={
+                "Content-Disposition": f'inline; filename="{attachment.filename}"'
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error viewing attachment '{attachment_id}': {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to view attachment: {str(e)}"
+        )
+
+
 @router.get("/tag-settings/{tag_name}/attachments/{attachment_id}/download")
 async def download_attachment(
     tag_name: str,
@@ -513,7 +568,7 @@ async def download_attachment(
         attachment_id: UUID of the attachment
 
     Returns:
-        File content as binary response
+        File content as binary response (forces download)
     """
     try:
         attachment_uuid = uuid.UUID(attachment_id)
