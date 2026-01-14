@@ -25,6 +25,7 @@ from app.mcp import default_mcp_client as mcp_client # Import default configured
 from app.db.session import AsyncSessionLocal
 from app.crud.message_template import message_template_crud
 from app.crud.tag_settings import tag_settings_crud
+from app.crud.template_attachment import template_attachment_crud
 # Import templates from their locations (as fallback)
 from app.agents.templates.appointment_status_templates import (
     TEMPLATE_APPOINTMENT_FOUND_DETAILED,
@@ -62,6 +63,22 @@ DEFAULT_PORTAL_LINKS = {
     "bills_appointments_liens": "https://example.com/portal/bills",
     "reports_images": "https://example.com/portal/reports"
 }
+
+# Default HIPAA template (fallback if not configured in settings)
+DEFAULT_HIPAA_TEMPLATE = """Hello,
+
+To proceed with your request for patient information, we require authorization. Please complete the attached HIPAA release form and reply to this email with the completed document.
+
+Thank you for your cooperation."""
+
+# Default unauthorized template (fallback when HIPAA form can't be sent)
+DEFAULT_UNAUTHORIZED_TEMPLATE = """Hello,
+
+We're unable to automatically provide patient information as you are not currently listed as an authorized party for this patient's case.
+
+A team member will review your request and contact you shortly.
+
+Thank you."""
 
 # # Unified template (standard approach - replaces all legacy template parts)
 # # COMMENTED OUT: If DB settings are missing, we should log an error instead of using a default
@@ -107,7 +124,7 @@ async def get_tag_settings_from_db(tag_name: str = "Apt status req") -> dict:
 
     STANDARD APPROACH:
     - Load custom_placeholders from WORKSPACE tag (global placeholders)
-    - Load unified_template from tag-specific settings
+    - Load all scenario templates from tag-specific settings
 
     Returns a dict with settings, falling back to defaults if not found.
     """
@@ -122,7 +139,7 @@ async def get_tag_settings_from_db(tag_name: str = "Apt status req") -> dict:
             else:
                 logger.warning(f"⚠️ No WORKSPACE custom placeholders found, using defaults")
 
-            # Load tag-specific settings (unified_template only)
+            # Load tag-specific settings (all templates)
             settings_dict = await tag_settings_crud.get_settings_dict(db, tag_name)
 
             if settings_dict:
@@ -131,8 +148,16 @@ async def get_tag_settings_from_db(tag_name: str = "Apt status req") -> dict:
                 return {
                     # Custom placeholders (workspace-wide, loaded from WORKSPACE tag)
                     "custom_placeholders": custom_placeholders,
-                    # Unified template (tag-specific)
-                    "unified_template": settings_dict.get("unified_template"),
+                    # All scenario templates (new naming convention)
+                    "apt_status_unified_template": settings_dict.get("apt_status_unified_template") or settings_dict.get("unified_template"),
+                    "apt_status_not_found_template": settings_dict.get("apt_status_not_found_template"),
+                    "apt_status_db_error_template": settings_dict.get("apt_status_db_error_template"),
+                    "apt_status_request_id_template": settings_dict.get("apt_status_request_id_template"),
+                    "apt_status_request_id_escalate_template": settings_dict.get("apt_status_request_id_escalate_template"),
+                    "apt_status_hipaa_template": settings_dict.get("apt_status_hipaa_template") or settings_dict.get("hipaa_template"),
+                    "apt_status_unauthorized_template": settings_dict.get("apt_status_unauthorized_template"),
+                    # Legacy alias for backward compatibility
+                    "unified_template": settings_dict.get("apt_status_unified_template") or settings_dict.get("unified_template"),
                     # Extract specific values for backward compatibility in code
                     "scheduling_phone": custom_placeholders.get("scheduling_phone", DEFAULT_SCHEDULING_PHONE),
                     "no_show_policy": custom_placeholders.get("no_show_policy", DEFAULT_NO_SHOW_POLICY),
@@ -142,10 +167,17 @@ async def get_tag_settings_from_db(tag_name: str = "Apt status req") -> dict:
                     }
                 }
             else:
-                logger.error(f"❌ CRITICAL: No settings found for '{tag_name}' in database! Template must be configured in /settings/template-config")
+                logger.error(f"❌ CRITICAL: No settings found for '{tag_name}' in database! Templates must be configured in /settings/template-config")
                 return {
-                    "custom_placeholders": custom_placeholders,  # Use workspace placeholders even if tag not found
-                    "unified_template": None,  # No default - must be configured in DB
+                    "custom_placeholders": custom_placeholders,
+                    "apt_status_unified_template": None,
+                    "apt_status_not_found_template": None,
+                    "apt_status_db_error_template": None,
+                    "apt_status_request_id_template": None,
+                    "apt_status_request_id_escalate_template": None,
+                    "apt_status_hipaa_template": None,
+                    "apt_status_unauthorized_template": None,
+                    "unified_template": None,
                     "scheduling_phone": custom_placeholders.get("scheduling_phone", DEFAULT_SCHEDULING_PHONE),
                     "no_show_policy": custom_placeholders.get("no_show_policy", DEFAULT_NO_SHOW_POLICY),
                     "portal_links": {
@@ -154,10 +186,17 @@ async def get_tag_settings_from_db(tag_name: str = "Apt status req") -> dict:
                     }
                 }
     except Exception as e:
-        logger.error(f"❌ CRITICAL: Error fetching tag settings from database: {e}. Template must be configured in /settings/template-config", exc_info=True)
+        logger.error(f"❌ CRITICAL: Error fetching tag settings from database: {e}. Templates must be configured in /settings/template-config", exc_info=True)
         return {
             "custom_placeholders": {},
-            "unified_template": None,  # No default - must be configured in DB
+            "apt_status_unified_template": None,
+            "apt_status_not_found_template": None,
+            "apt_status_db_error_template": None,
+            "apt_status_request_id_template": None,
+            "apt_status_request_id_escalate_template": None,
+            "apt_status_hipaa_template": None,
+            "apt_status_unauthorized_template": None,
+            "unified_template": None,
             "scheduling_phone": DEFAULT_SCHEDULING_PHONE,
             "no_show_policy": DEFAULT_NO_SHOW_POLICY,
             "portal_links": DEFAULT_PORTAL_LINKS
@@ -226,19 +265,34 @@ def _generate_appointment_table_html(studies: List[Dict[str, Any]]) -> str:
 # --- BEGIN: Reply Generation Helper ---
 async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) -> str:
     """
-    Generates response from template, fetching from database first, falling back to hardcoded templates.
+    Generates response from template using templates from tag settings.
+    All templates must be configured in /settings/template-config.
     """
-    # Fetch templates from database with fallback to hardcoded templates
+    # Load templates from tag settings (with fallback to hardcoded for backward compatibility)
     async with AsyncSessionLocal() as db:
-        template_apt_found = await message_template_crud.get_template_body(
-            db, "apt_status_req_found", default=TEMPLATE_APPOINTMENT_FOUND_DETAILED
-        )
-        template_not_found = await message_template_crud.get_template_body(
-            db, "apt_status_req_not_found", default=TEMPLATE_APPOINTMENT_NOT_FOUND_FOR_ID
-        )
-        template_db_error = await message_template_crud.get_template_body(
-            db, "apt_status_req_db_error", default=TEMPLATE_DB_ERROR
-        )
+        apt_settings = await tag_settings_crud.get_settings_dict(db, "Apt status req")
+
+    # Get templates from settings (new keys) with fallback to legacy keys and hardcoded defaults
+    template_not_found = (
+        data.get("apt_status_not_found_template") or
+        (apt_settings.get("apt_status_not_found_template") if apt_settings else None) or
+        TEMPLATE_APPOINTMENT_NOT_FOUND_FOR_ID
+    )
+    template_db_error = (
+        data.get("apt_status_db_error_template") or
+        (apt_settings.get("apt_status_db_error_template") if apt_settings else None) or
+        TEMPLATE_DB_ERROR
+    )
+    template_request_id = (
+        data.get("apt_status_request_id_template") or
+        (apt_settings.get("apt_status_request_id_template") if apt_settings else None) or
+        TEMPLATE_REQUEST_PATIENT_ID
+    )
+    template_request_id_escalate = (
+        data.get("apt_status_request_id_escalate_template") or
+        (apt_settings.get("apt_status_request_id_escalate_template") if apt_settings else None) or
+        TEMPLATE_REQUEST_PATIENT_ID_AGAIN_ESCALATE
+    )
 
     # logger.info(f"Generating reply for scenario: {scenario} with data: {data}")
     if scenario == "appointments_found" and data.get("studies"):
@@ -318,12 +372,16 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
         # logger.info(f"DEBUG: Generated HTML response: {formatted_template}")
         return formatted_template
     elif scenario == "id_missing_first_attempt":
-        return TEMPLATE_REQUEST_PATIENT_ID
+        logger.info(f"Using template for id_missing_first_attempt from settings")
+        return template_request_id
     elif scenario == "id_missing_second_attempt":
-        return TEMPLATE_REQUEST_PATIENT_ID_AGAIN_ESCALATE
+        logger.info(f"Using template for id_missing_second_attempt from settings")
+        return template_request_id_escalate
     elif scenario == "id_not_found_in_system":
+        logger.info(f"Using template for id_not_found_in_system from settings")
         return template_not_found.format(patient_id=data.get("patient_id", "N/A"))
     elif scenario == "db_error":
+        logger.info(f"Using template for db_error from settings")
         return template_db_error.format(patient_id=data.get("patient_id", "N/A"))
     else:
         logger.warning(f"Unknown scenario or missing data for reply generation: {scenario}")
@@ -549,8 +607,16 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                 "scheduling_phone": scheduling_phone,
                 "no_show_policy": no_show_policy,
                 "links": portal_links,
-                # Unified template (standard approach)
-                "unified_template": db_settings.get("unified_template"),  # No default - must be in DB
+                # All scenario templates (new naming convention)
+                "apt_status_unified_template": db_settings.get("apt_status_unified_template"),
+                "apt_status_not_found_template": db_settings.get("apt_status_not_found_template"),
+                "apt_status_db_error_template": db_settings.get("apt_status_db_error_template"),
+                "apt_status_request_id_template": db_settings.get("apt_status_request_id_template"),
+                "apt_status_request_id_escalate_template": db_settings.get("apt_status_request_id_escalate_template"),
+                "apt_status_hipaa_template": db_settings.get("apt_status_hipaa_template"),
+                "apt_status_unauthorized_template": db_settings.get("apt_status_unauthorized_template"),
+                # Legacy alias for backward compatibility
+                "unified_template": db_settings.get("apt_status_unified_template") or db_settings.get("unified_template"),
                 # Custom placeholders (workspace-wide)
                 "custom_placeholders": db_settings.get("custom_placeholders", {}),
                 # Patient demographics for template placeholders
@@ -701,68 +767,98 @@ async def handle_apt_status_request_agent_sdk(
         if not verification_result["authorized"]:
             logger.warning(f"Unauthorized access: {email_sender} to patient {extracted_patient_id} ({verification_result['role']})")
 
-            # Send HIPAA form for unauthorized access
-            TEMPLATE_HIPAA_NEEDED = """Hello,
+            # Load HIPAA template from settings (with fallback to default)
+            hipaa_template = DEFAULT_HIPAA_TEMPLATE
+            unauthorized_template = DEFAULT_UNAUTHORIZED_TEMPLATE
+            hipaa_form_path = None
 
-To proceed with your request for patient information, we require authorization. Please complete the attached HIPAA release form and reply to this email with the completed document.
+            async with AsyncSessionLocal() as db:
+                # Load HIPAA and unauthorized templates from tag settings
+                apt_settings = await tag_settings_crud.get_settings_dict(db, "Apt status req")
+                if apt_settings:
+                    # Try new key first, then legacy key
+                    if apt_settings.get("apt_status_hipaa_template"):
+                        hipaa_template = apt_settings.get("apt_status_hipaa_template")
+                        logger.info("Loaded HIPAA template from tag settings (new key)")
+                    elif apt_settings.get("hipaa_template"):
+                        hipaa_template = apt_settings.get("hipaa_template")
+                        logger.info("Loaded HIPAA template from tag settings (legacy key)")
+                    else:
+                        logger.info("Using default HIPAA template (not configured in settings)")
 
-Thank you for your cooperation."""
+                    if apt_settings.get("apt_status_unauthorized_template"):
+                        unauthorized_template = apt_settings.get("apt_status_unauthorized_template")
+                        logger.info("Loaded unauthorized template from tag settings")
+                else:
+                    logger.info("Using default HIPAA template (no settings found)")
 
-            hipaa_form_path = "/home/fret/work/emailtag/app/agents/templates/Medical-Release-Form.pdf"
+                # Load HIPAA form from template attachments
+                # First try to find one with template_key="hipaa_form", then fall back to any PDF attachment
+                attachments = await template_attachment_crud.get_by_tag_and_template(
+                    db, "Apt status req", "hipaa_form"
+                )
+                if not attachments:
+                    # Fall back to any attachment for this tag (first PDF found)
+                    all_attachments = await template_attachment_crud.get_by_tag_name(db, "Apt status req")
+                    attachments = [a for a in all_attachments if a.mime_type == "application/pdf"]
 
-            result = await send_reply_to_front_with_attachment(
-                front_conversation_id,
-                TEMPLATE_HIPAA_NEEDED,
-                hipaa_form_path,
-                tags_to_add=["AI handled", TAG_AI_HUMAN_REVIEW_REQUIRED]
+                if attachments:
+                    # Use the most recent attachment
+                    hipaa_form_path = attachments[0].file_path
+                    logger.info(f"Using HIPAA form from database: {hipaa_form_path}")
+                else:
+                    logger.error("No HIPAA form found in database! Please upload via /settings/template-config")
+
+            # Only try to send with attachment if we have a HIPAA form
+            if hipaa_form_path:
+                result = await send_reply_to_front_with_attachment(
+                    front_conversation_id,
+                    hipaa_template,
+                    hipaa_form_path,
+                    tags_to_add=["AI handled", TAG_AI_HUMAN_REVIEW_REQUIRED]
+                )
+
+                if result.get("status") == "success":
+                    logger.info(f"✅ Sent HIPAA form to unauthorized sender and tagged for review")
+                    return {
+                        "agent_handled": True,
+                        "processed_flag": True,
+                        "details": {
+                            "action": "sender_not_authorized_hipaa_sent",
+                            "sender": email_sender,
+                            "patient_id": extracted_patient_id,
+                            "role": verification_result["role"],
+                            "verification_status": verification_result["verification_status"],
+                            "reason": "Sender not authorized - HIPAA form sent"
+                        }
+                    }
+                else:
+                    logger.error(f"Failed to send HIPAA form with attachment: {result}")
+
+            # Fallback: No HIPAA form available or failed to send - use unauthorized template
+            logger.info("Using unauthorized template (no HIPAA form or send failed)")
+
+            await send_reply_to_front_direct(
+                conversation_id=front_conversation_id,
+                reply_text=unauthorized_template
             )
 
-            if result.get("status") == "success":
-                logger.info(f"✅ Sent HIPAA form to unauthorized sender and tagged for review")
-                return {
-                    "agent_handled": True,
-                    "processed_flag": True,
-                    "details": {
-                        "action": "sender_not_authorized_hipaa_sent",
-                        "sender": email_sender,
-                        "patient_id": extracted_patient_id,
-                        "role": verification_result["role"],
-                        "verification_status": verification_result["verification_status"],
-                        "reason": "Sender not authorized - HIPAA form sent"
-                    }
+            frontapp_service.add_conversation_tags(
+                front_conversation_id,
+                [TAG_AI_HUMAN_REVIEW_REQUIRED]
+            )
+
+            return {
+                "agent_handled": True,
+                "processed_flag": True,
+                "details": {
+                    "action": "sender_not_authorized_escalated",
+                    "sender": email_sender,
+                    "patient_id": extracted_patient_id,
+                    "role": verification_result["role"],
+                    "reason": "Sender not authorized - escalated to human review (no HIPAA form configured)"
                 }
-            else:
-                logger.error(f"Failed to send HIPAA form with attachment: {result}")
-                # Fallback to simple unauthorized message
-                TEMPLATE_UNAUTHORIZED = """Hello,
-
-We're unable to automatically provide patient information as you are not currently listed as an authorized party for this patient's case.
-
-A team member will review your request and contact you shortly.
-
-Thank you."""
-
-                await send_reply_to_front_direct(
-                    conversation_id=front_conversation_id,
-                    reply_text=TEMPLATE_UNAUTHORIZED
-                )
-
-                frontapp_service.add_conversation_tags(
-                    front_conversation_id,
-                    [TAG_AI_HUMAN_REVIEW_REQUIRED]
-                )
-
-                return {
-                    "agent_handled": True,
-                    "processed_flag": True,
-                    "details": {
-                        "action": "sender_not_authorized_escalated",
-                        "sender": email_sender,
-                        "patient_id": extracted_patient_id,
-                        "role": verification_result["role"],
-                        "reason": "Sender not authorized - escalated to human review"
-                    }
-                }
+            }
 
         # Sender is authorized - proceed
         pass

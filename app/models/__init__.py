@@ -9,4 +9,5 @@ from .system_settings import SystemSetting  # noqa
 from .message_template import MessageTemplate  # noqa
 from .tag_settings import TagSettings  # noqa
 from .user import User  # noqa
-from .session import Session  # noqa 
+from .session import Session  # noqa
+from .template_attachment import TemplateAttachment  # noqa

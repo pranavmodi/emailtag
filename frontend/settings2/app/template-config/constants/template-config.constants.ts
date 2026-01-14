@@ -165,6 +165,75 @@ export const DUMMY_CALL_LOG_TABLE = `<table border="1" cellpadding="8" cellspaci
 </tbody>
 </table>`;
 
+// ============================================================================
+// APT STATUS REQ TEMPLATES
+// ============================================================================
+
+export const DEFAULT_APT_STATUS_TEMPLATES = {
+  // Success - Appointment found with details
+  apt_status_unified_template: `Dear {first_name} {last_name},<br/>
+In regards to patient ID (MRN): {patient_id_confirmed}<br/><br/>
+
+<b>How to Schedule:</b><br/><br/>
+
+<ul>
+  <li>Schedule online 24/7 via the <a href="https://app.radflow360.com/patient-portal" target="_blank">patient portal</a></li>
+  <li>Call <b>800-558-2223</b></li>
+</ul><br/>
+
+<b>Rescheduling / No Show Policy:</b><br/>
+**If the patient cannot make the appointment please contact us within 48 hours of the appointment to reschedule or cancel to avoid any no-show fees. Two no-shows will require a $50 no-show payment before being scheduled for a 3rd time.**<br/><br/>
+
+Here is a summary of the patient's exams we currently have entered into our system:<br/>
+{appointment_table}<br/>
+
+{personal_injury_info}
+
+<b>What You Can Access in the RadFlow 360 Portal</b><br/><br/>
+
+<ul>
+  <li>View all patient exams and status</li>
+  <li>Reports & Documents</li>
+  <li>View Images, Download, and Burn to CD</li>
+  <li>Provide Case Updates</li>
+  <li>Submit & Approve Bill Offers</li>
+  <li>Pay online via credit card and ACH</li>
+</ul><br/>
+
+<a href="https://app.radflow360.com/patient-portal" target="_blank"><b>Login or Create Your Free Account Today</b></a>`,
+
+  // No appointments found for patient ID
+  apt_status_not_found_template: `We found your Patient ID: {patient_id}, but could not find any upcoming appointments. If you believe this is an error, please provide the approximate date and type of your exam so our team can investigate further. A member of our team will also review this request.`,
+
+  // Database/technical error
+  apt_status_db_error_template: `We encountered a technical difficulty while trying to fetch your appointment details for Patient ID: {patient_id}. Our team has been notified and will look into this.`,
+
+  // First request for patient ID
+  apt_status_request_id_template: `Please provide the patient ID or first name, last name and date of birth.`,
+
+  // Escalation after failed patient ID request
+  apt_status_request_id_escalate_template: `Thank you for the information. We're still having trouble locating your appointment details without a Patient ID. A member of our team will personally review your request and get back to you shortly.`,
+
+  // HIPAA authorization request (for unauthorized senders)
+  apt_status_hipaa_template: `Hello,
+
+To proceed with your request for patient information, we require authorization. Please complete the attached HIPAA release form and reply to this email with the completed document.
+
+Thank you for your cooperation.`,
+
+  // Unauthorized fallback (when HIPAA form can't be sent)
+  apt_status_unauthorized_template: `Hello,
+
+We're unable to automatically provide patient information as you are not currently listed as an authorized party for this patient's case.
+
+A team member will review your request and contact you shortly.
+
+Thank you.`,
+};
+
+// Legacy export for backward compatibility
+export const DEFAULT_HIPAA_TEMPLATE = DEFAULT_APT_STATUS_TEMPLATES.apt_status_hipaa_template;
+
 export const DEFAULT_UNIFIED_TEMPLATE = `Dear {first_name} {last_name},<br/>
 In regards to patient ID (MRN): {patient_id_confirmed}<br/><br/>
 
@@ -330,8 +399,18 @@ www.PreciseMRI.com`
  * NO LEGACY FIELDS - All settings use this standardized approach
  */
 export const DEFAULT_TAG_SETTINGS = {
-  // Unified template (for single-template tags like Apt status req)
-  unified_template: DEFAULT_UNIFIED_TEMPLATE,
+  // Apt status req templates (multi-scenario)
+  apt_status_unified_template: DEFAULT_APT_STATUS_TEMPLATES.apt_status_unified_template,
+  apt_status_not_found_template: DEFAULT_APT_STATUS_TEMPLATES.apt_status_not_found_template,
+  apt_status_db_error_template: DEFAULT_APT_STATUS_TEMPLATES.apt_status_db_error_template,
+  apt_status_request_id_template: DEFAULT_APT_STATUS_TEMPLATES.apt_status_request_id_template,
+  apt_status_request_id_escalate_template: DEFAULT_APT_STATUS_TEMPLATES.apt_status_request_id_escalate_template,
+  apt_status_hipaa_template: DEFAULT_APT_STATUS_TEMPLATES.apt_status_hipaa_template,
+  apt_status_unauthorized_template: DEFAULT_APT_STATUS_TEMPLATES.apt_status_unauthorized_template,
+
+  // Legacy aliases for backward compatibility
+  unified_template: DEFAULT_APT_STATUS_TEMPLATES.apt_status_unified_template,
+  hipaa_template: DEFAULT_APT_STATUS_TEMPLATES.apt_status_hipaa_template,
 
   // Lien templates (multi-scenario tag)
   lien_success_template: DEFAULT_LIEN_TEMPLATES.lien_success_template,

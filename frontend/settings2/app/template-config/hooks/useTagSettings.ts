@@ -10,6 +10,7 @@ import {
   DEFAULT_TAG_SETTINGS,
   DEFAULT_CUSTOM_PLACEHOLDERS,
   DEFAULT_LIEN_TEMPLATES,
+  DEFAULT_APT_STATUS_TEMPLATES,
 } from "../constants/template-config.constants";
 import { getTagLabel } from "../utils/template-helpers";
 
@@ -43,8 +44,18 @@ export function useTagSettings(selectedTag: string, currentUser: string) {
       const response = await TemplatesApi.getTagSettings(tagName);
 
       const nextSettings = {
-        // Unified template (single-template tags like Apt status req)
-        unified_template: response.settings.unified_template ?? "",
+        // Apt status req templates (multi-scenario)
+        apt_status_unified_template: response.settings.apt_status_unified_template ?? response.settings.unified_template ?? DEFAULT_APT_STATUS_TEMPLATES.apt_status_unified_template,
+        apt_status_not_found_template: response.settings.apt_status_not_found_template ?? DEFAULT_APT_STATUS_TEMPLATES.apt_status_not_found_template,
+        apt_status_db_error_template: response.settings.apt_status_db_error_template ?? DEFAULT_APT_STATUS_TEMPLATES.apt_status_db_error_template,
+        apt_status_request_id_template: response.settings.apt_status_request_id_template ?? DEFAULT_APT_STATUS_TEMPLATES.apt_status_request_id_template,
+        apt_status_request_id_escalate_template: response.settings.apt_status_request_id_escalate_template ?? DEFAULT_APT_STATUS_TEMPLATES.apt_status_request_id_escalate_template,
+        apt_status_hipaa_template: response.settings.apt_status_hipaa_template ?? response.settings.hipaa_template ?? DEFAULT_APT_STATUS_TEMPLATES.apt_status_hipaa_template,
+        apt_status_unauthorized_template: response.settings.apt_status_unauthorized_template ?? DEFAULT_APT_STATUS_TEMPLATES.apt_status_unauthorized_template,
+
+        // Legacy aliases for backward compatibility
+        unified_template: response.settings.apt_status_unified_template ?? response.settings.unified_template ?? DEFAULT_APT_STATUS_TEMPLATES.apt_status_unified_template,
+        hipaa_template: response.settings.apt_status_hipaa_template ?? response.settings.hipaa_template ?? DEFAULT_APT_STATUS_TEMPLATES.apt_status_hipaa_template,
 
         // Lien templates (multi-scenario tag)
         lien_success_template: response.settings.lien_success_template ?? DEFAULT_LIEN_TEMPLATES.lien_success_template,

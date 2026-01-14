@@ -25,8 +25,10 @@ import { PlaceholderManager } from "./components/PlaceholderManager";
 import { LienTemplatesEditor } from "./components/LienTemplatesEditor";
 import { BillBalanceTemplatesEditor } from "./components/BillBalanceTemplatesEditor";
 import { UnifiedTemplateEditor } from "./components/UnifiedTemplateEditor";
+import { AptStatusReqTemplatesEditor } from "./components/AptStatusReqTemplatesEditor";
 import PlaceholderSection from "./components/PlaceholderSection";
 import { TemplatePreview } from "./components/TemplatePreview";
+import { DocumentAttachments } from "./components/DocumentAttachments";
 import { useTagSettings, normalizeCustomPlaceholdersFromSettings } from "./hooks/useTagSettings";
 
 export default function TemplateConfigPage() {
@@ -264,34 +266,53 @@ export default function TemplateConfigPage() {
 
               {/* Lien Templates Editor - Show for Lien Templates tag */}
               {selectedTag === "Lien Templates" && (
-                <LienTemplatesEditor
-                  tagSettings={tagSettings}
-                  customPlaceholders={mergedCustomPlaceholders}
-                  onFieldChange={handleFieldChange}
-                  onSave={handleSaveTagSettings}
-                  onReset={handleResetTagSettings}
-                />
+                <>
+                  <LienTemplatesEditor
+                    tagSettings={tagSettings}
+                    customPlaceholders={mergedCustomPlaceholders}
+                    onFieldChange={handleFieldChange}
+                    onSave={handleSaveTagSettings}
+                    onReset={handleResetTagSettings}
+                  />
+                  <DocumentAttachments
+                    tagName={selectedTag}
+                    currentUser={currentUser}
+                  />
+                </>
               )}
 
               {/* Bill Balance Templates Editor - Show for Bill or Balance Request tag */}
               {selectedTag === "Bill or Balance Request" && (
-                <BillBalanceTemplatesEditor
-                  tagSettings={tagSettings}
-                  customPlaceholders={mergedCustomPlaceholders}
-                  onFieldChange={handleFieldChange}
-                  onSave={handleSaveTagSettings}
-                  onReset={handleResetTagSettings}
-                />
+                <>
+                  <BillBalanceTemplatesEditor
+                    tagSettings={tagSettings}
+                    customPlaceholders={mergedCustomPlaceholders}
+                    onFieldChange={handleFieldChange}
+                    onSave={handleSaveTagSettings}
+                    onReset={handleResetTagSettings}
+                  />
+                  <DocumentAttachments
+                    tagName={selectedTag}
+                    currentUser={currentUser}
+                  />
+                </>
               )}
 
-              {/* Unified Template Editor - Show for Apt status req */}
+              {/* Apt Status Req Templates Editor - Show for Apt status req */}
               {selectedTag === "Apt status req" && (
-                <UnifiedTemplateEditor
-                  tagSettings={tagSettings}
-                  onFieldChange={handleFieldChange}
-                  onSave={handleSaveTagSettings}
-                  onReset={handleResetTagSettings}
-                />
+                <>
+                  <AptStatusReqTemplatesEditor
+                    tagSettings={tagSettings}
+                    customPlaceholders={mergedCustomPlaceholders}
+                    onFieldChange={handleFieldChange}
+                    onSave={handleSaveTagSettings}
+                    onReset={handleResetTagSettings}
+                  />
+                  <DocumentAttachments
+                    tagName={selectedTag}
+                    currentUser={currentUser}
+                  />
+                </>
               )}
 
               {/* Template Preview - Only show for Apt status req */}

@@ -1,10 +1,14 @@
 """API endpoints for message template and tag settings management."""
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
 from app.db.session import get_db
 from app.crud.message_template import message_template_crud
 from app.crud.tag_settings import tag_settings_crud
+from app.crud.template_attachment import template_attachment_crud
 from app.schemas.message_template import (
     MessageTemplateResponse,
     MessageTemplateListResponse,
@@ -16,6 +20,11 @@ from app.schemas.tag_settings import (
     TagSettingsListResponse,
     TagSettingsCreate,
     TagSettingsUpdate
+)
+from app.schemas.template_attachment import (
+    TemplateAttachmentResponse,
+    TemplateAttachmentListResponse,
+    TemplateAttachmentUploadResponse
 )
 
 logger = logging.getLogger(__name__)
@@ -331,4 +340,265 @@ async def delete_tag_settings(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete tag settings: {str(e)}"
+        )
+
+
+# ============================================================================
+# TEMPLATE ATTACHMENTS ENDPOINTS
+# ============================================================================
+
+# Allowed MIME types for uploads
+ALLOWED_MIME_TYPES = {
+    "application/pdf",
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+@router.get("/tag-settings/{tag_name}/attachments", response_model=TemplateAttachmentListResponse)
+async def list_tag_attachments(
+    tag_name: str,
+    template_key: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get all attachments for a specific tag.
+
+    Args:
+        tag_name: Name of the tag
+        template_key: Optional template key to filter by
+
+    Returns:
+        List of attachments for the tag
+    """
+    try:
+        attachments = await template_attachment_crud.get_by_tag_and_template(
+            db, tag_name, template_key
+        )
+        return TemplateAttachmentListResponse(
+            items=attachments,
+            total=len(attachments)
+        )
+    except Exception as e:
+        logger.error(f"Error fetching attachments for tag '{tag_name}': {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch attachments: {str(e)}"
+        )
+
+
+@router.post("/tag-settings/{tag_name}/attachments", response_model=TemplateAttachmentUploadResponse)
+async def upload_tag_attachment(
+    tag_name: str,
+    file: UploadFile = File(...),
+    template_key: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    uploaded_by: Optional[str] = Form(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Upload an attachment for a tag.
+
+    Args:
+        tag_name: Name of the tag
+        file: The file to upload
+        template_key: Optional template key within the tag
+        description: Optional description
+        uploaded_by: User uploading
+
+    Returns:
+        Created attachment details
+    """
+    try:
+        # Validate file type
+        if file.content_type not in ALLOWED_MIME_TYPES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File type '{file.content_type}' not allowed. Allowed types: {', '.join(ALLOWED_MIME_TYPES)}"
+            )
+
+        # Read file content
+        file_content = await file.read()
+
+        # Validate file size
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)} MB"
+            )
+
+        # Create attachment
+        attachment = await template_attachment_crud.create(
+            db,
+            tag_name=tag_name,
+            filename=file.filename or "unnamed",
+            file_content=file_content,
+            mime_type=file.content_type,
+            template_key=template_key,
+            description=description,
+            uploaded_by=uploaded_by
+        )
+
+        logger.warning(f"📎 Attachment '{file.filename}' uploaded for tag '{tag_name}' by {uploaded_by or 'unknown user'}")
+
+        return TemplateAttachmentUploadResponse(
+            attachment=attachment,
+            message=f"File '{file.filename}' uploaded successfully"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading attachment for tag '{tag_name}': {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload attachment: {str(e)}"
+        )
+
+
+@router.get("/tag-settings/{tag_name}/attachments/{attachment_id}")
+async def get_attachment(
+    tag_name: str,
+    attachment_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get attachment metadata.
+
+    Args:
+        tag_name: Name of the tag
+        attachment_id: UUID of the attachment
+
+    Returns:
+        Attachment metadata
+    """
+    try:
+        attachment_uuid = uuid.UUID(attachment_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid attachment ID format")
+
+    try:
+        attachment = await template_attachment_crud.get_by_id(db, attachment_uuid)
+        if not attachment or attachment.tag_name != tag_name:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Attachment not found"
+            )
+        return attachment
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching attachment '{attachment_id}': {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch attachment: {str(e)}"
+        )
+
+
+@router.get("/tag-settings/{tag_name}/attachments/{attachment_id}/download")
+async def download_attachment(
+    tag_name: str,
+    attachment_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Download an attachment file.
+
+    Args:
+        tag_name: Name of the tag
+        attachment_id: UUID of the attachment
+
+    Returns:
+        File content as binary response
+    """
+    try:
+        attachment_uuid = uuid.UUID(attachment_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid attachment ID format")
+
+    try:
+        attachment = await template_attachment_crud.get_by_id(db, attachment_uuid)
+        if not attachment or attachment.tag_name != tag_name:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Attachment not found"
+            )
+
+        # Get file content
+        file_content = template_attachment_crud.get_file_content(attachment)
+        if file_content is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Attachment file not found on disk"
+            )
+
+        return Response(
+            content=file_content,
+            media_type=attachment.mime_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{attachment.filename}"'
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading attachment '{attachment_id}': {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to download attachment: {str(e)}"
+        )
+
+
+@router.delete("/tag-settings/{tag_name}/attachments/{attachment_id}")
+async def delete_attachment(
+    tag_name: str,
+    attachment_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete an attachment.
+
+    Args:
+        tag_name: Name of the tag
+        attachment_id: UUID of the attachment
+
+    Returns:
+        Success message
+    """
+    try:
+        attachment_uuid = uuid.UUID(attachment_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid attachment ID format")
+
+    try:
+        # Verify attachment belongs to this tag
+        attachment = await template_attachment_crud.get_by_id(db, attachment_uuid)
+        if not attachment or attachment.tag_name != tag_name:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Attachment not found"
+            )
+
+        filename = attachment.filename
+        deleted = await template_attachment_crud.delete(db, attachment_uuid)
+
+        if deleted:
+            logger.warning(f"📎 Attachment '{filename}' deleted from tag '{tag_name}'")
+            return {"message": f"Attachment '{filename}' deleted successfully"}
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail="Attachment not found"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting attachment '{attachment_id}': {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete attachment: {str(e)}"
         )
