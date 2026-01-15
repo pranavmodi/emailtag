@@ -410,7 +410,9 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
         status=TraceStatus.COMPLETED,
         input_data={
             "message_count": len(structured_messages),
-            "text_length": len(conversation_text)
+            "text_length": len(conversation_text),
+            "extraction_openai_payload": analysis_result.get("extraction_openai_payload"),
+            "analysis_openai_payload": analysis_result.get("analysis_openai_payload")
         },
         output_data={
             "resolved": all_questions_resolved,
@@ -428,16 +430,25 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
 
     # Essential logging: Archive decision
     if all_questions_resolved:
-        # FOURTH CHECK: Verification step - second opinion before archiving
+        # FOURTH CHECK: Verification step - independent second opinion before archiving
+        # This step fetches data directly from Front API for a truly independent check
         verification_start = datetime.utcnow()
-        logger.info(f"📁 ARCHIVE VERIFICATION: {front_conversation_id} - Starting second-opinion verification")
+        logger.info(f"📁 ARCHIVE VERIFICATION: {front_conversation_id} - Starting independent second-opinion verification")
 
         if CLASSIFICATION_DEBUG:
-            debug_logger.debug(f"🔍 ARCHIVAL: Starting verification step for {front_conversation_id}")
+            debug_logger.debug(f"🔍 ARCHIVAL: Starting independent verification step for {front_conversation_id}")
 
+        # Build a brief summary of first analysis for context (optional)
+        first_analysis_summary = (
+            f"Resolved: True\n"
+            f"Summary: {analysis_result.get('summary', 'N/A')}\n"
+            f"Emails parsed: {len(parsed_emails)}"
+        )
+
+        # Verification fetches data directly from Front API - independent from first analysis
         verification_result = await verify_archive_decision_openai(
-            analysis_result.get("email_chain", []),
-            analysis_result
+            front_conversation_id,
+            first_analysis_summary
         )
 
         # Log verification step
@@ -447,7 +458,10 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
             status=TraceStatus.COMPLETED if verification_result.get("success") else TraceStatus.FAILED,
             input_data={
                 "first_analysis_resolved": True,
-                "email_count": len(analysis_result.get("email_chain", []))
+                "conversation_id": front_conversation_id,
+                "structured_messages_fetched": verification_result.get("structured_messages_count", 0),
+                "emails_built_for_verification": verification_result.get("emails_built", 0),
+                "verification_openai_payload": verification_result.get("verification_openai_payload")
             },
             output_data={
                 "verified": verification_result.get("verified", False),

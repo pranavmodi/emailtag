@@ -138,6 +138,7 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
         async with httpx.AsyncClient(timeout=120.0, verify=False) as client:
             logger.info("STEP 1: Extracting email chain structure...")
             logger.info(f"📤 Sending extraction request to OpenAI (model: {payload['model']}, conversation_length: {len(conversation_text)} chars)")
+            logger.info(f"📝 Input text: {conversation_text[:300]}{'...' if len(conversation_text) > 300 else ''}")
 
             if CLASSIFICATION_DEBUG:
                 debug_logger.debug("🔍 EMAIL EXTRACTION: Sending request to OpenAI API")
@@ -178,10 +179,17 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
                 extraction_result = json.loads(ai_response_text)
 
                 num_emails = len(extraction_result.get('emails', []))
+                parsing_notes = extraction_result.get('parsing_notes', '')
                 logger.info(f"✅ Successfully parsed extraction result: {num_emails} emails found")
+
+                # Log details when 0 emails found to help debug
+                if num_emails == 0:
+                    logger.warning(f"⚠️ OpenAI returned 0 emails. Parsing notes: {parsing_notes}")
+                    logger.warning(f"⚠️ Raw extraction response: {ai_response_text[:500]}...")
 
                 if CLASSIFICATION_DEBUG:
                     debug_logger.debug(f"🔍 EMAIL EXTRACTION: Parsed {num_emails} emails from response")
+                    debug_logger.debug(f"🔍 EMAIL EXTRACTION: Parsing notes: {parsing_notes}")
                     for i, email in enumerate(extraction_result.get('emails', []), 1):
                         debug_logger.debug(f"🔍 EMAIL EXTRACTION: Email {i} - From: {email.get('sender', 'N/A')}, Subject: {email.get('subject', 'N/A')}")
 
@@ -190,7 +198,8 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
                     "emails": extraction_result.get("emails", []),
                     "total_emails": extraction_result.get("total_emails", 0),
                     "parsing_notes": extraction_result.get("parsing_notes", ""),
-                    "openai_prompt": prompt  # Include the prompt that was sent
+                    "openai_prompt": prompt,  # Include the prompt that was sent
+                    "openai_payload": payload  # Include full payload for tracing
                 }
 
                 if CLASSIFICATION_DEBUG:
@@ -246,38 +255,67 @@ async def are_questions_resolved_openai(conversation_text: str, structured_messa
         debug_logger.debug(f"🔍 RESOLUTION: Input conversation text ({len(conversation_text)} chars): {conversation_text[:300]}{'...' if len(conversation_text) > 300 else ''}")
         if structured_messages:
             debug_logger.debug(f"🔍 RESOLUTION: Provided {len(structured_messages)} structured messages from Front API")
-    
-    # STEP 1: Extract email chain structure using OpenAI
-    # Always use OpenAI extraction - it handles all cases:
-    # - Single message with embedded forwarded chain
-    # - Multiple messages where any one might contain a forwarded chain
-    # - Plain conversation with no forwarding
-    # OpenAI intelligently parses the full conversation text and extracts all individual emails
-    if CLASSIFICATION_DEBUG:
-        msg_count = len(structured_messages) if structured_messages else 0
-        debug_logger.debug(f"🔍 RESOLUTION: Using OpenAI extraction on full conversation ({msg_count} Front message(s), {len(conversation_text)} chars)")
-    email_extraction = await extract_email_chain_openai(conversation_text)
-    
-    if CLASSIFICATION_DEBUG:
-        debug_logger.debug(f"🔍 RESOLUTION: Email extraction result: {email_extraction}")
-    
-    if not email_extraction["success"]:
-        logger.error(f"Step 1 failed: {email_extraction.get('error', 'Unknown error')}")
+
+    # STEP 1: Build email chain from structured_messages (preferred) or extract via OpenAI (fallback)
+    # Using structured_messages directly is faster and more reliable since Front API already parsed the messages
+    emails = []
+    email_extraction = {"success": True, "emails": [], "total_emails": 0, "parsing_notes": "", "openai_payload": None}
+
+    if structured_messages:
+        # PRIMARY: Use structured messages from Front API directly (no OpenAI call needed)
+        logger.info(f"📧 Using {len(structured_messages)} structured message(s) from Front API directly (skipping OpenAI extraction)")
         if CLASSIFICATION_DEBUG:
-            debug_logger.debug(f"🔍 RESOLUTION ERROR: Email extraction failed: {email_extraction.get('error', 'Unknown error')}")
-        return {
-            "resolved": False,
-            "unresolved_questions": [],
-            "summary": f"Email extraction failed: {email_extraction.get('error', 'Unknown error')}",
-            "success": False,
-            "email_chain": []
-        }
-    
-    emails = email_extraction["emails"]
+            debug_logger.debug(f"🔍 RESOLUTION: Building email chain from {len(structured_messages)} structured messages")
+
+        for i, msg in enumerate(structured_messages, 1):
+            emails.append({
+                "sequence_number": i,
+                "sender": msg.get("author_email") or msg.get("author_handle") or msg.get("author_name") or "unknown",
+                "date": msg.get("created_at", ""),
+                "subject": "",  # Front messages don't have individual subjects
+                "recipients_to": [],
+                "recipients_cc": [],
+                "body": msg.get("body", ""),
+                "is_forwarded_message": False
+            })
+
+        email_extraction["emails"] = emails
+        email_extraction["total_emails"] = len(emails)
+        email_extraction["parsing_notes"] = "Used structured messages from Front API directly"
+
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug(f"🔍 RESOLUTION: Built {len(emails)} emails from structured messages")
+    else:
+        # FALLBACK: No structured messages available, use OpenAI extraction on conversation text
+        # This handles cases like forwarded email chains embedded in a single message
+        logger.info(f"📧 No structured messages available, falling back to OpenAI extraction")
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug(f"🔍 RESOLUTION: Using OpenAI extraction on conversation text ({len(conversation_text)} chars)")
+
+        email_extraction = await extract_email_chain_openai(conversation_text)
+
+        if CLASSIFICATION_DEBUG:
+            debug_logger.debug(f"🔍 RESOLUTION: Email extraction result: {email_extraction}")
+
+        if not email_extraction["success"]:
+            logger.error(f"OpenAI extraction failed: {email_extraction.get('error', 'Unknown error')}")
+            if CLASSIFICATION_DEBUG:
+                debug_logger.debug(f"🔍 RESOLUTION ERROR: Email extraction failed: {email_extraction.get('error', 'Unknown error')}")
+            return {
+                "resolved": False,
+                "unresolved_questions": [],
+                "summary": f"Email extraction failed: {email_extraction.get('error', 'Unknown error')}",
+                "success": False,
+                "email_chain": []
+            }
+
+        emails = email_extraction["emails"]
+
     if not emails:
-        logger.warning("No emails found in conversation.")
+        # Only return "no emails" if we truly have nothing
+        logger.warning("No emails found in conversation and no structured messages available.")
         if CLASSIFICATION_DEBUG:
-            debug_logger.debug("🔍 RESOLUTION: No emails found in conversation")
+            debug_logger.debug("🔍 RESOLUTION: No emails found in conversation and no structured messages")
         return {
             "resolved": True,
             "unresolved_questions": [],
@@ -482,7 +520,9 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
                     "summary": analysis_result["summary"],
                     "latest_email_analysis": latest_email_analysis,
                     "success": True,
-                    "email_chain": emails  # Include structured emails from step 1
+                    "email_chain": emails,  # Include structured emails from step 1
+                    "extraction_openai_payload": email_extraction.get("openai_payload"),  # Step 1 payload
+                    "analysis_openai_payload": payload  # Step 2 payload
                 }
                 
                 # Essential logging: Archive analysis result
@@ -501,9 +541,11 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
                     "unresolved_questions": [],
                     "summary": f"Failed to parse analysis response: {e}",
                     "success": False,
-                    "email_chain": emails
+                    "email_chain": emails,
+                    "extraction_openai_payload": email_extraction.get("openai_payload"),
+                    "analysis_openai_payload": payload
                 }
-                
+
     except httpx.HTTPStatusError as e:
         logger.error(f"HTTP error calling OpenAI: {e.response.status_code} - {e.response.text}", exc_info=True)
         return {
@@ -511,7 +553,9 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
             "unresolved_questions": [],
             "summary": f"HTTP error calling OpenAI: {e.response.status_code}",
             "success": False,
-            "email_chain": emails
+            "email_chain": emails,
+            "extraction_openai_payload": email_extraction.get("openai_payload"),
+            "analysis_openai_payload": payload
         }
     except httpx.RequestError as e:
         logger.error(f"Request error calling OpenAI: {str(e)}", exc_info=True)
@@ -520,7 +564,9 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
             "unresolved_questions": [],
             "summary": f"Request error calling OpenAI: {str(e)}",
             "success": False,
-            "email_chain": emails
+            "email_chain": emails,
+            "extraction_openai_payload": email_extraction.get("openai_payload"),
+            "analysis_openai_payload": payload
         }
     except Exception as e:
         logger.error(f"Unexpected error during OpenAI call: {str(e)}", exc_info=True)
@@ -529,24 +575,25 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
             "unresolved_questions": [],
             "summary": f"Unexpected error during OpenAI call: {str(e)}",
             "success": False,
-            "email_chain": emails
+            "email_chain": emails,
+            "extraction_openai_payload": email_extraction.get("openai_payload"),
+            "analysis_openai_payload": payload
         } 
 
 
 async def verify_archive_decision_openai(
-    emails: List[Dict[str, Any]],
-    first_analysis: Dict[str, Any]
+    front_conversation_id: str,
+    first_analysis_summary: str = ""
 ) -> Dict[str, Any]:
     """
     VERIFICATION STEP: Double-check the archive decision with a skeptical second opinion.
 
-    This function acts as a reviewer that specifically looks for anything the first
-    analysis might have missed. It takes a more conservative approach, looking for
-    any possible action items that could have been overlooked.
+    This function fetches conversation data DIRECTLY from Front API for a completely
+    independent second opinion, rather than relying on data from the first analysis.
 
     Args:
-        emails: List of structured email objects from the extraction step
-        first_analysis: The result from the first are_questions_resolved_openai call
+        front_conversation_id: The Front conversation ID to fetch and verify
+        first_analysis_summary: Optional summary from first analysis for context
 
     Returns:
         Dict containing:
@@ -556,9 +603,12 @@ async def verify_archive_decision_openai(
             - "summary": str - Explanation of the verification analysis
             - "success": bool - Whether the verification call succeeded
     """
+    # Import here to avoid circular imports
+    from app.services.frontapp_service import get_conversation_text
+
     if CLASSIFICATION_DEBUG:
-        debug_logger.debug("🔍 ARCHIVE VERIFICATION START - Second Opinion Check")
-        debug_logger.debug(f"🔍 VERIFICATION: First analysis resolved={first_analysis.get('resolved')}, summary={first_analysis.get('summary', '')[:200]}")
+        debug_logger.debug("🔍 ARCHIVE VERIFICATION START - Independent Second Opinion Check")
+        debug_logger.debug(f"🔍 VERIFICATION: Fetching fresh data from Front for {front_conversation_id}")
 
     if not settings.OPENAI_API_KEY:
         logger.error("OPENAI_API_KEY not configured. Cannot verify archive decision.")
@@ -570,15 +620,57 @@ async def verify_archive_decision_openai(
             "success": False
         }
 
-    if not emails:
-        logger.warning("No emails provided for verification.")
+    # Fetch conversation data directly from Front API (independent from first analysis)
+    try:
+        conversation_data = get_conversation_text(front_conversation_id)
+        if not conversation_data or not isinstance(conversation_data, dict):
+            logger.warning(f"No conversation data retrieved from Front for verification: {front_conversation_id}")
+            return {
+                "verified": False,
+                "concerns": ["Could not fetch conversation data from Front"],
+                "recommendation": "DO_NOT_ARCHIVE",
+                "summary": "Verification failed - could not retrieve conversation data",
+                "success": False
+            }
+    except Exception as e:
+        logger.error(f"Error fetching conversation data for verification: {e}")
+        return {
+            "verified": False,
+            "concerns": [f"Error fetching data: {str(e)}"],
+            "recommendation": "DO_NOT_ARCHIVE",
+            "summary": f"Verification failed - error fetching data: {str(e)}",
+            "success": False
+        }
+
+    structured_messages = conversation_data.get('_structured_messages', [])
+    conversation_text = conversation_data.get('text', '')
+
+    if not structured_messages and not conversation_text.strip():
+        logger.warning(f"No messages found in conversation {front_conversation_id} for verification.")
         return {
             "verified": True,
             "concerns": [],
             "recommendation": "PROCEED_WITH_ARCHIVE",
-            "summary": "No emails to verify - archive decision stands",
+            "summary": "No messages to verify - archive decision stands",
             "success": True
         }
+
+    # Build email chain from structured messages (independent extraction)
+    emails = []
+    for i, msg in enumerate(structured_messages, 1):
+        emails.append({
+            "sequence_number": i,
+            "sender": msg.get("author_email") or msg.get("author_handle") or msg.get("author_name") or "unknown",
+            "date": msg.get("created_at", ""),
+            "subject": "",
+            "recipients_to": [],
+            "recipients_cc": [],
+            "body": msg.get("body", ""),
+            "is_forwarded_message": False
+        })
+
+    if CLASSIFICATION_DEBUG:
+        debug_logger.debug(f"🔍 VERIFICATION: Built {len(emails)} emails from {len(structured_messages)} structured messages")
 
     # Create email chain summary for verification
     email_chain_summary = "EMAIL CHAIN (Chronological Order):\n\n"
@@ -593,19 +685,21 @@ async def verify_archive_decision_openai(
         email_chain_summary += f"Body: {email.get('body', '')}\n"
         email_chain_summary += "---\n\n"
 
-    first_analysis_summary = (
-        f"First Analysis Result:\n"
-        f"- Resolved: {first_analysis.get('resolved', False)}\n"
-        f"- Summary: {first_analysis.get('summary', 'N/A')}\n"
-        f"- Latest Email Analysis: {first_analysis.get('latest_email_analysis', 'N/A')}\n"
-        f"- Unresolved Questions Found: {first_analysis.get('unresolved_questions', [])}\n"
-    )
+    # Build the prompt - include first analysis summary if provided
+    first_analysis_context = ""
+    if first_analysis_summary:
+        first_analysis_context = (
+            f"--- FIRST ANALYSIS RESULT (for context only) ---\n"
+            f"{first_analysis_summary}\n\n"
+        )
 
     prompt = (
-        f"You are a SKEPTICAL REVIEWER performing a second-opinion verification on an archive decision.\n\n"
+        f"You are a SKEPTICAL REVIEWER performing an INDEPENDENT second-opinion verification on an archive decision.\n\n"
         f"A previous AI analysis concluded that this email conversation should be ARCHIVED because all "
-        f"questions/requests have been resolved. Your job is to CHALLENGE this decision and look for "
-        f"anything that might have been missed.\n\n"
+        f"questions/requests have been resolved. Your job is to INDEPENDENTLY REVIEW the email chain "
+        f"and CHALLENGE this decision by looking for anything that might have been missed.\n\n"
+        f"**IMPORTANT:** You are performing a FRESH, INDEPENDENT analysis. Do NOT rely on the first analysis. "
+        f"Read the email chain yourself and form your own conclusions.\n\n"
         f"**YOUR MINDSET:** Be conservative and defensive. It's better to keep a conversation open "
         f"unnecessarily than to archive something that still needs attention. Look for:\n\n"
         f"1. **Hidden or Implicit Requests:** Did someone ask for something indirectly?\n"
@@ -620,9 +714,8 @@ async def verify_archive_decision_openai(
         f"10. **Patient Information Updates:** Were there requests to update patient info that need confirmation?\n\n"
         f"**IMPORTANT:** If you find ANY reasonable concern that Precise Imaging might still need to take "
         f"action, recommend NOT archiving. When in doubt, err on the side of keeping the conversation open.\n\n"
-        f"--- FIRST ANALYSIS RESULT ---\n"
-        f"{first_analysis_summary}\n\n"
-        f"--- EMAIL CHAIN TO VERIFY ---\n"
+        f"{first_analysis_context}"
+        f"--- EMAIL CHAIN TO VERIFY (fetched fresh from source) ---\n"
         f"{email_chain_summary}\n\n"
         f"**Review the email chain with fresh eyes and determine if archiving is truly safe.**"
     )
@@ -713,7 +806,8 @@ async def verify_archive_decision_openai(
                     "concerns": [f"API error: {response.status_code}"],
                     "recommendation": "DO_NOT_ARCHIVE",
                     "summary": f"Verification failed due to API error: {response.status_code}",
-                    "success": False
+                    "success": False,
+                    "verification_openai_payload": payload
                 }
 
             response.raise_for_status()
@@ -738,7 +832,10 @@ async def verify_archive_decision_openai(
                     "concerns": verification_result["concerns"],
                     "recommendation": verification_result["recommendation"],
                     "summary": verification_result["summary"],
-                    "success": True
+                    "success": True,
+                    "verification_openai_payload": payload,
+                    "structured_messages_count": len(structured_messages),
+                    "emails_built": len(emails)
                 }
 
                 # Log verification result
@@ -762,7 +859,8 @@ async def verify_archive_decision_openai(
                     "concerns": [f"Failed to parse response: {e}"],
                     "recommendation": "DO_NOT_ARCHIVE",
                     "summary": f"Verification failed - parsing error: {e}",
-                    "success": False
+                    "success": False,
+                    "verification_openai_payload": payload
                 }
 
     except httpx.HTTPStatusError as e:
@@ -772,7 +870,8 @@ async def verify_archive_decision_openai(
             "concerns": [f"HTTP error: {e.response.status_code}"],
             "recommendation": "DO_NOT_ARCHIVE",
             "summary": f"Verification failed - HTTP error: {e.response.status_code}",
-            "success": False
+            "success": False,
+            "verification_openai_payload": payload
         }
     except httpx.RequestError as e:
         logger.error(f"Request error during verification: {str(e)}")
@@ -781,7 +880,8 @@ async def verify_archive_decision_openai(
             "concerns": [f"Request error: {str(e)}"],
             "recommendation": "DO_NOT_ARCHIVE",
             "summary": f"Verification failed - request error: {str(e)}",
-            "success": False
+            "success": False,
+            "verification_openai_payload": payload
         }
     except Exception as e:
         logger.error(f"Unexpected error during verification: {str(e)}")
@@ -790,7 +890,8 @@ async def verify_archive_decision_openai(
             "concerns": [f"Unexpected error: {str(e)}"],
             "recommendation": "DO_NOT_ARCHIVE",
             "summary": f"Verification failed - unexpected error: {str(e)}",
-            "success": False
+            "success": False,
+            "verification_openai_payload": payload
         }
 
 

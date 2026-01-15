@@ -503,10 +503,6 @@ async def _fetch_front_conversation_and_build_scenario(conversation_id: str, ver
             candidate = candidate[:200].rstrip()
         scenario_description = candidate
 
-    # Ensure the body contains the test ID placeholder like other scenarios (in plain text)
-    if "{UNIQUE_TEST_ID}" not in (chosen_body_html or ""):
-        chosen_body_html = f"{chosen_body_html}\n\nTest ID: {{UNIQUE_TEST_ID}}"
-
     # Download attachments and prepare scenario attachments list
     scenario_attachments = _download_attachments_for_conversation(resolved_conversation_id, messages, verbose=verbose)
 

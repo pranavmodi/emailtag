@@ -64,9 +64,9 @@ def send_smtp_email(scenario_details, choice_key, unique_id):
         print("Critical Error: DEFAULT_RECIPIENT_EMAIL environment variable is not set. Add it to your .env file before running tests.")
         return False
 
-    # Add unique_id to subject and body
+    # Add unique_id to subject for tracking
     subject_with_id = f"{subject} (TestID: {unique_id})"
-    body_html_with_id = body_html.replace("{UNIQUE_TEST_ID}", unique_id)
+    body_html_with_id = body_html
 
     # Randomize invoice number for scenario "1"
     if choice_key == "1": 

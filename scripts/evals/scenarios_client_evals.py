@@ -1165,5 +1165,11 @@ Test ID: {UNIQUE_TEST_ID}"""
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": ["Bill or balance Request"]
+    },
+    "63": {
+        "description": "PRE1164231 - Apt status req - Simple exam status inquiry using patient ID",
+        "subject": "Exam Status Inquiry",
+        "body_html": "<p>What is the exam status for PRE1164231?</p>",
+        "expected_tags": ["Apt status req"]
     }
 }
