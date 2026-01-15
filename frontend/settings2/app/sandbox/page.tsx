@@ -18,6 +18,8 @@ import {
   DollarSign,
   FileCheck,
   ExternalLink,
+  Search,
+  X,
 } from "lucide-react";
 
 import { ApiError, SettingsApi } from "@/lib/api";
@@ -142,6 +144,9 @@ export default function SandboxPage() {
   const [lienError, setLienError] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
 
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+
   // Bill Balance state
   const [billBalanceOutputs, setBillBalanceOutputs] = useState<BillBalanceOutput[]>([]);
   const [selectedBillBalance, setSelectedBillBalance] = useState<string | null>(null);
@@ -242,6 +247,30 @@ export default function SandboxPage() {
     loadConversations();
     loadBillBalanceOutputs();
   }, []);
+
+  // Filter conversations based on search query
+  const filteredConversations = conversations.filter((conv) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      conv.conversation_id.toLowerCase().includes(query) ||
+      (conv.subject?.toLowerCase().includes(query) ?? false) ||
+      (conv.sender?.toLowerCase().includes(query) ?? false)
+    );
+  });
+
+  // Filter bill balance outputs based on search query
+  const filteredBillBalanceOutputs = billBalanceOutputs.filter((output) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      output.conversation_id.toLowerCase().includes(query) ||
+      (output.subject?.toLowerCase().includes(query) ?? false) ||
+      (output.sender?.toLowerCase().includes(query) ?? false) ||
+      (output.patient_id?.toLowerCase().includes(query) ?? false) ||
+      (output.patient_ids?.some(pid => pid.toLowerCase().includes(query)) ?? false)
+    );
+  });
 
   const handleDownload = (conversationId: string, filename: string) => {
     const url = SettingsApi.downloadLienTestFile(conversationId, filename);
@@ -434,6 +463,26 @@ export default function SandboxPage() {
         </button>
       </div>
 
+      {/* Search Input */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <input
+          type="text"
+          placeholder="Search by conversation ID, subject, sender, or patient ID..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 placeholder-slate-400 outline-none transition-all focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
       {/* Liens Tab */}
       {activeTab === "liens" && (
         <>
@@ -524,7 +573,7 @@ export default function SandboxPage() {
             </motion.div>
           )}
 
-          {conversations.length === 0 && !lienError && (
+          {filteredConversations.length === 0 && !lienError && (
             <motion.div
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
@@ -533,26 +582,37 @@ export default function SandboxPage() {
               <Card className="border-dashed border-2 border-slate-200 bg-slate-50/50">
                 <CardContent className="flex flex-col items-center gap-6 py-16 text-center">
                   <div className="rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 p-6">
-                    <FileCheck className="h-16 w-16 text-slate-400" />
+                    {searchQuery ? <Search className="h-16 w-16 text-slate-400" /> : <FileCheck className="h-16 w-16 text-slate-400" />}
                   </div>
                   <div className="max-w-md">
-                    <h3 className="text-xl font-semibold text-slate-900 mb-2">No Lien Test Data Yet</h3>
+                    <h3 className="text-xl font-semibold text-slate-900 mb-2">
+                      {searchQuery ? "No Matching Results" : "No Lien Test Data Yet"}
+                    </h3>
                     <p className="text-slate-600 leading-relaxed">
-                      Enable lien sandbox mode in settings and process lien emails to see outputs here.
+                      {searchQuery
+                        ? `No lien conversations match "${searchQuery}". Try a different search term.`
+                        : "Enable lien sandbox mode in settings and process lien emails to see outputs here."
+                      }
                     </p>
                   </div>
-                  <Link href="/">
-                    <Button variant="primary" className="mt-2">
-                      Go to Settings
+                  {searchQuery ? (
+                    <Button variant="ghost" className="mt-2 border border-slate-200" onClick={() => setSearchQuery("")}>
+                      Clear Search
                     </Button>
-                  </Link>
+                  ) : (
+                    <Link href="/">
+                      <Button variant="primary" className="mt-2">
+                        Go to Settings
+                      </Button>
+                    </Link>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
           )}
 
           <div className="space-y-3">
-            {conversations.map((conversation, index) => (
+            {filteredConversations.map((conversation, index) => (
               <motion.div
                 key={conversation.conversation_id}
                 initial={{ opacity: 0, y: 20 }}
@@ -883,7 +943,7 @@ export default function SandboxPage() {
             </motion.div>
           )}
 
-          {billBalanceOutputs.length === 0 && !billBalanceError && (
+          {filteredBillBalanceOutputs.length === 0 && !billBalanceError && (
             <motion.div
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
@@ -892,26 +952,37 @@ export default function SandboxPage() {
               <Card className="border-dashed border-2 border-slate-200 bg-slate-50/50">
                 <CardContent className="flex flex-col items-center gap-6 py-16 text-center">
                   <div className="rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 p-6">
-                    <DollarSign className="h-16 w-16 text-slate-400" />
+                    {searchQuery ? <Search className="h-16 w-16 text-slate-400" /> : <DollarSign className="h-16 w-16 text-slate-400" />}
                   </div>
                   <div className="max-w-md">
-                    <h3 className="text-xl font-semibold text-slate-900 mb-2">No Bill Balance Test Data Yet</h3>
+                    <h3 className="text-xl font-semibold text-slate-900 mb-2">
+                      {searchQuery ? "No Matching Results" : "No Bill Balance Test Data Yet"}
+                    </h3>
                     <p className="text-slate-600 leading-relaxed">
-                      Enable bill balance sandbox mode in settings and process bill balance emails to see outputs here.
+                      {searchQuery
+                        ? `No bill balance conversations match "${searchQuery}". Try a different search term.`
+                        : "Enable bill balance sandbox mode in settings and process bill balance emails to see outputs here."
+                      }
                     </p>
                   </div>
-                  <Link href="/">
-                    <Button variant="primary" className="mt-2">
-                      Go to Settings
+                  {searchQuery ? (
+                    <Button variant="ghost" className="mt-2 border border-slate-200" onClick={() => setSearchQuery("")}>
+                      Clear Search
                     </Button>
-                  </Link>
+                  ) : (
+                    <Link href="/">
+                      <Button variant="primary" className="mt-2">
+                        Go to Settings
+                      </Button>
+                    </Link>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
           )}
 
           <div className="space-y-3">
-            {billBalanceOutputs.map((output, index) => (
+            {filteredBillBalanceOutputs.map((output, index) => (
               <motion.div
                 key={output.conversation_id}
                 initial={{ opacity: 0, y: 20 }}

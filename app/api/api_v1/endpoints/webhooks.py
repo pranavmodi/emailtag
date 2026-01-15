@@ -291,7 +291,7 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
 
             if skip_internal_domains:
                 # Define internal domains to filter
-                internal_domains = ["@preciseimaging.com", "@mediflow.com"]
+                internal_domains = ["@precisemri.com", "@mediflow.com"]
                 sender_lower = sender.lower()
 
                 is_internal = any(domain in sender_lower for domain in internal_domains)

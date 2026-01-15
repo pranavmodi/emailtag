@@ -618,7 +618,7 @@ export default function Settings2Page() {
                   </Badge>
                   <p className="text-xs text-slate-500">
                     {skipInternalDomains
-                      ? "Internal emails (@preciseimaging.com, @mediflow.com) are skipped"
+                      ? "Internal emails (@precisemri.com, @mediflow.com) are skipped"
                       : "⚠️ Internal emails are processed (Testing mode)"}
                   </p>
                 </div>
@@ -629,7 +629,7 @@ export default function Settings2Page() {
                 />
               </div>
               <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
-                <strong>Production Mode (ON):</strong> Emails from @preciseimaging.com and @mediflow.com are automatically skipped and not processed by AI.
+                <strong>Production Mode (ON):</strong> Emails from @precisemri.com and @mediflow.com are automatically skipped and not processed by AI.
                 <br /><br />
                 <strong>Testing Mode (OFF):</strong> All emails are processed regardless of sender domain. ⚠️ Use only for testing!
               </div>

@@ -221,7 +221,7 @@ export const TEMPLATE_PLACEHOLDERS: PlaceholderSet = {
       {
         key: "{scheduling_link}",
         description: "Online scheduling link",
-        example: "https://schedule.preciseimaging.com"
+        example: "https://schedule.precisemri.com"
       }
     ]
   }

@@ -123,7 +123,7 @@ async def get_skip_internal_domains_status(
     """
     Get the current status of the internal domain filtering setting.
 
-    When enabled, emails from @preciseimaging.com and @mediflow.com domains are skipped.
+    When enabled, emails from @precisemri.com and @mediflow.com domains are skipped.
     When disabled (default for testing), all emails are processed regardless of sender domain.
 
     Returns:
@@ -135,7 +135,7 @@ async def get_skip_internal_domains_status(
         if setting:
             return {
                 "skip_internal_domains": setting.setting_value,
-                "description": setting.description or "Filter emails from internal domains (preciseimaging.com, mediflow.com)",
+                "description": setting.description or "Filter emails from internal domains (precisemri.com, mediflow.com)",
                 "last_updated": setting.updated_at,
                 "updated_by": setting.updated_by
             }
@@ -143,7 +143,7 @@ async def get_skip_internal_domains_status(
             # Default state if setting doesn't exist yet - disabled for testing
             return {
                 "skip_internal_domains": False,
-                "description": "Filter emails from internal domains (preciseimaging.com, mediflow.com)",
+                "description": "Filter emails from internal domains (precisemri.com, mediflow.com)",
                 "last_updated": None,
                 "updated_by": None
             }
@@ -163,7 +163,7 @@ async def toggle_skip_internal_domains(
     """
     Toggle the internal domain filtering setting.
 
-    When enabled: Emails from @preciseimaging.com and @mediflow.com are skipped
+    When enabled: Emails from @precisemri.com and @mediflow.com are skipped
     When disabled: All emails are processed (useful for testing)
 
     Args:
@@ -189,7 +189,7 @@ async def toggle_skip_internal_domains(
 
         return {
             "skip_internal_domains": setting.setting_value,
-            "description": setting.description or "Filter emails from internal domains (preciseimaging.com, mediflow.com)",
+            "description": setting.description or "Filter emails from internal domains (precisemri.com, mediflow.com)",
             "last_updated": setting.updated_at,
             "updated_by": setting.updated_by
         }

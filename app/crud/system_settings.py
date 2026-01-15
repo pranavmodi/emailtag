@@ -113,7 +113,7 @@ class CRUDSystemSettings:
                 )
             elif setting_key == "skip_internal_domains":
                 description = (
-                    "Filter emails from internal domains (@preciseimaging.com, @mediflow.com). "
+                    "Filter emails from internal domains (@precisemri.com, @mediflow.com). "
                     "When enabled, emails from these domains are skipped. "
                     "When disabled (default for testing), all emails are processed."
                 )
