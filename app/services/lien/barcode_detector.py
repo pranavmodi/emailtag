@@ -15,6 +15,7 @@ import io
 import os
 from pathlib import Path
 import math
+import uuid
 from scipy import ndimage
 from skimage import filters, morphology, measure
 import pytesseract
@@ -134,7 +135,9 @@ class BarcodeDetector:
                 pil_image = Image.fromarray(gray_image)
                 
                 # Save temporary image for zxing (it works with file paths)
-                temp_path = self.tmp_dir / f"temp_zxing_{process_name.replace(' ', '_')}.png"
+                # Use UUID to avoid race conditions with multiple concurrent workers
+                unique_id = uuid.uuid4().hex[:8]
+                temp_path = self.tmp_dir / f"temp_zxing_{process_name.replace(' ', '_')}_{unique_id}.png"
                 pil_image.save(temp_path)
                 
                 # Try to decode with zxing

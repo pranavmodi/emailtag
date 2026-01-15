@@ -110,10 +110,14 @@ Report strikethrough if you see:
 - Even if it's just parts of sentences or fragments
 - Heavy black markings that clearly obscure/cross out text
 
-DO NOT report:
+DO NOT report as strikethrough:
 - Underlined text (lines under, not through)
 - Highlighted or circled text
 - Checkboxes or form marks
+- SIGNATURES - pen strokes in signature boxes/lines are NOT strikethroughs
+- Handwritten signatures even if they appear as dark marks or lines
+- Any marks inside designated signature areas (e.g., "Signature", "Attorney's Signature", "Patient Signature" boxes)
+- Cursive or scribbled writing that is clearly a signature
 
 PART 2: DOCUMENT QUALITY ASSESSMENT
 
@@ -258,6 +262,18 @@ Report strikethrough_detected: true if you see ANY lines crossing through text, 
                     for instance in parsed_result.get("strikethrough_instances", []):
                         struck_text = instance.get("struck_through_text", "").strip()
                         confidence = instance.get("confidence", 0.0)
+                        location = instance.get("location", "").lower()
+                        visual_desc = instance.get("visual_description", "").lower()
+
+                        # Filter out signature-related false positives
+                        signature_keywords = ["signature", "firma", "sign here", "signed", "signing"]
+                        is_signature_area = any(kw in location for kw in signature_keywords) or \
+                                          any(kw in visual_desc for kw in signature_keywords) or \
+                                          any(kw in struck_text.lower() for kw in signature_keywords)
+
+                        if is_signature_area:
+                            logger.info(f"✗ Rejected strikethrough - signature area detected: '{struck_text[:50]}...' at '{location}'")
+                            continue
 
                         # Only require that we have some text/description and reasonable confidence
                         if struck_text and confidence >= 0.5:
@@ -507,9 +523,10 @@ async def _confirm_detection(
     """
     # Check if first run found issues
     has_strikethrough = len(first_result.get("strikethrough_text", [])) > 0
-    is_blurry = first_result.get("document_quality", "GOOD") in ["BLURRY", "UNREADABLE"]
+    # Only flag for confirmation if UNREADABLE (not BLURRY - BLURRY is acceptable)
+    is_unreadable = first_result.get("document_quality", "GOOD") == "UNREADABLE"
 
-    if not has_strikethrough and not is_blurry:
+    if not has_strikethrough and not is_unreadable:
         # No issues found, no need to confirm
         logger.debug("No issues detected, skipping confirmation")
         return first_result
@@ -518,7 +535,7 @@ async def _confirm_detection(
     issues_detected = []
     if has_strikethrough:
         issues_detected.append(f"strikethrough ({len(first_result['strikethrough_text'])} instances)")
-    if is_blurry:
+    if is_unreadable:
         issues_detected.append(f"quality: {first_result['document_quality']}")
 
     logger.info(f"Confirming detection - issues found: {', '.join(issues_detected)}")
@@ -529,11 +546,12 @@ async def _confirm_detection(
 
     # Compare results
     second_has_strikethrough = len(second_result.get("strikethrough_text", [])) > 0
-    second_is_blurry = second_result.get("document_quality", "GOOD") in ["BLURRY", "UNREADABLE"]
+    # Only confirm UNREADABLE if both runs agree it's UNREADABLE
+    second_is_unreadable = second_result.get("document_quality", "GOOD") == "UNREADABLE"
 
     # Only confirm if both runs agree
     confirmed_strikethrough = has_strikethrough and second_has_strikethrough
-    confirmed_blurry = is_blurry and second_is_blurry
+    confirmed_unreadable = is_unreadable and second_is_unreadable
 
     # Log confirmation results
     if confirmed_strikethrough:
@@ -541,13 +559,13 @@ async def _confirm_detection(
     elif has_strikethrough:
         logger.info(f"✗ Strikethrough NOT confirmed (only first run detected it)")
 
-    if confirmed_blurry:
+    if confirmed_unreadable:
         logger.info(f"✓ Quality issue CONFIRMED (both runs: {first_result['document_quality']} / {second_result['document_quality']})")
-    elif is_blurry:
+    elif is_unreadable:
         logger.info(f"✗ Quality issue NOT confirmed (first: {first_result['document_quality']}, second: {second_result['document_quality']})")
 
     # Build confirmed result
-    if confirmed_strikethrough and confirmed_blurry:
+    if confirmed_strikethrough and confirmed_unreadable:
         # Both confirmed, use first result
         logger.info("Both strikethrough and quality issues confirmed")
         return first_result
@@ -559,9 +577,9 @@ async def _confirm_detection(
         if "summary" in result:
             result["summary"]["overall_quality"] = "GOOD"
         return result
-    elif confirmed_blurry:
-        # Only quality issue confirmed, keep quality but clear strikethrough
-        logger.info("Only quality issue confirmed, clearing strikethrough detections")
+    elif confirmed_unreadable:
+        # Only quality issue confirmed (UNREADABLE), keep quality but clear strikethrough
+        logger.info("Only quality issue confirmed (UNREADABLE), clearing strikethrough detections")
         result = first_result.copy()
         result["strikethrough_text"] = []
         if "summary" in result:

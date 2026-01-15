@@ -140,12 +140,13 @@ def _check_lien_readability(document_analysis_results: List[Dict[str, Any]]) -> 
             logger.warning(f"Low analysis confidence ({confidence}) - document may be unreadable")
             return False
 
-        # Check if description indicates readability issues
+        # Check if description indicates the document is truly unreadable
+        # Note: "blurry" is acceptable - only flag if document is completely unreadable
         description = analysis_data.get("description", "").lower()
-        readability_issues = ["blurry", "unclear", "unreadable", "poor quality", "distorted", "corrupted"]
+        unreadable_issues = ["unreadable", "illegible", "corrupted", "cannot read"]
 
-        if any(issue in description for issue in readability_issues):
-            logger.warning(f"Document description indicates readability issues: {description}")
+        if any(issue in description for issue in unreadable_issues):
+            logger.warning(f"Document description indicates unreadable: {description}")
             return False
 
     return True
@@ -195,7 +196,7 @@ def _check_document_quality(email_obj: Any) -> Tuple[bool, str]:
 
     Returns:
         Tuple of (is_readable: bool, quality: str)
-        - is_readable: True if quality is GOOD, False if BLURRY or UNREADABLE
+        - is_readable: True if quality is GOOD or BLURRY, False only if UNREADABLE
         - quality: "GOOD", "BLURRY", or "UNREADABLE"
     """
     if not hasattr(email_obj, 'lien_modification_results') or not email_obj.lien_modification_results:
@@ -208,12 +209,13 @@ def _check_document_quality(email_obj: Any) -> Tuple[bool, str]:
         # Extract quality from the result
         document_quality = result.get("document_quality", "GOOD")
 
-        if document_quality in ["BLURRY", "UNREADABLE"]:
-            logger.warning(f"📄 QUALITY: Poor document quality detected - {document_quality}")
+        # Only flag as unreadable if quality is UNREADABLE (BLURRY is acceptable)
+        if document_quality == "UNREADABLE":
+            logger.warning(f"📄 QUALITY: Document is UNREADABLE - requesting clearer scan")
             return (False, document_quality)
 
-    # All attachments have good quality
-    logger.info("📄 QUALITY: All documents assessed as GOOD quality")
+    # All attachments have acceptable quality (GOOD or BLURRY)
+    logger.info("📄 QUALITY: All documents assessed as readable (GOOD or BLURRY)")
     return (True, "GOOD")
 
 def _check_duplicate_barcodes(document_analysis_results: List[Dict[str, Any]]) -> bool:
@@ -1012,36 +1014,43 @@ async def handle_lien_request(
             logger.error(f"Failed to handle duplicate barcodes: {e}")
             return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to handle duplicate barcodes: {e}"}}
 
-    # Check lien readability
-    if document_analysis_results and not _check_lien_readability(document_analysis_results):
-        logger.info(f"Lien document unreadable for conversation {front_conversation_id}. Requesting clearer version.")
-
-        try:
-            # Send reply if template is configured
-            if templates.get("unreadable"):
-                await send_or_save_response(
-                    conversation_id=front_conversation_id,
-                    response_text=templates["unreadable"].format(lien_type=lien_type),
-                    tags_to_add=None,
-                    test_mode=test_mode,
-                    lien_type=lien_type,
-                    signature_type=signature_type
-                )
-            else:
-                logger.warning(f"Unreadable lien template not configured for tag '{tag_name}'. No autoresponse sent.")
-
-            return {
-                "agent_handled": True,
-                "processed_flag": True,
-                "details": {
-                    "action": "requested_clearer_document",
-                    "lien_type": lien_type,
-                    "signature_type": signature_type
-                }
-            }
-        except Exception as e:
-            logger.error(f"Failed to request clearer document: {e}")
-            return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to request clearer document: {e}"}}
+    # NOTE: _check_lien_readability is DISABLED as of 2026-01-15
+    # Reason: Redundant with _check_document_quality() which uses AI vision to assess quality.
+    # _check_lien_readability checks OCR confidence and analysis success, but this was causing
+    # false positives (flagging documents as unreadable when they were actually readable).
+    # The _check_document_quality() function (called earlier) now handles quality assessment
+    # and only flags documents as unreadable if BOTH AI vision runs return "UNREADABLE".
+    # Keeping this code in case we need to re-enable for edge cases.
+    #
+    # if document_analysis_results and not _check_lien_readability(document_analysis_results):
+    #     logger.info(f"Lien document unreadable for conversation {front_conversation_id}. Requesting clearer version.")
+    #
+    #     try:
+    #         # Send reply if template is configured
+    #         if templates.get("unreadable"):
+    #             await send_or_save_response(
+    #                 conversation_id=front_conversation_id,
+    #                 response_text=templates["unreadable"].format(lien_type=lien_type),
+    #                 tags_to_add=None,
+    #                 test_mode=test_mode,
+    #                 lien_type=lien_type,
+    #                 signature_type=signature_type
+    #             )
+    #         else:
+    #             logger.warning(f"Unreadable lien template not configured for tag '{tag_name}'. No autoresponse sent.")
+    #
+    #         return {
+    #             "agent_handled": True,
+    #             "processed_flag": True,
+    #             "details": {
+    #                 "action": "requested_clearer_document",
+    #                 "lien_type": lien_type,
+    #                 "signature_type": signature_type
+    #             }
+    #         }
+    #     except Exception as e:
+    #         logger.error(f"Failed to request clearer document: {e}")
+    #         return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to request clearer document: {e}"}}
 
     # Extract patient ID - First check if it was already extracted from document barcode
     patient_id = None
