@@ -13,6 +13,12 @@ from app.agents.agent_helpers import call_mcp_tool
 logger = logging.getLogger(__name__)
 
 
+def _get_no_call_activity_message() -> str:
+    """Generate the 'no call activity' message with current timestamp."""
+    current_time = datetime.now().strftime("%-m/%-d/%Y %-I:%M %p")
+    return f'<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No call activity found for patient\'s phone number as of {current_time}</em></p>'
+
+
 async def generate_call_log_table(patient_id: str, phone_number: str = None) -> str:
     """
     Generate HTML table showing call history for a patient.
@@ -41,20 +47,20 @@ async def generate_call_log_table(patient_id: str, phone_number: str = None) -> 
 
         if not call_log_response or not isinstance(call_log_response, dict):
             logger.warning(f"📞 No valid call log response for patient {patient_id}")
-            return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No call activity found for the phone number for this patient.</em></p>'
+            return _get_no_call_activity_message()
 
         # Extract call log data from MCP response
         # MCP response structure: {"success": true, "data": {"result": [...]}}
         if not call_log_response.get("success"):
             logger.warning(f"📞 Call log request unsuccessful for patient {patient_id}")
-            return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No call activity found for the phone number for this patient.</em></p>'
+            return _get_no_call_activity_message()
 
         data = call_log_response.get("data", {})
         calls = data.get("result", [])
 
         if not calls or len(calls) == 0:
             logger.info(f"📞 No calls in call log for patient {patient_id}")
-            return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No call activity found for the phone number for this patient.</em></p>'
+            return _get_no_call_activity_message()
 
         logger.info(f"📞 Found {len(calls)} call(s) for patient {patient_id}")
 
@@ -64,7 +70,7 @@ async def generate_call_log_table(patient_id: str, phone_number: str = None) -> 
             logger.info(f"📞 Filtered to {len(calls)} call(s) for phone {phone_number}")
 
         if not calls:
-            return '<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No call activity found for the phone number for this patient.</em></p>'
+            return _get_no_call_activity_message()
 
         # Generate HTML table
         table_html = _format_calls_as_html_table(calls)
