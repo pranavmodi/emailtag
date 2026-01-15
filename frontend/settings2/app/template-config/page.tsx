@@ -149,7 +149,7 @@ export default function TemplateConfigPage() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-10">
-      <nav className="grid gap-3 rounded-3xl border border-white/60 bg-white/80 p-3 shadow-xl shadow-slate-900/5 backdrop-blur lg:grid-cols-4">
+      <nav className="grid gap-3 rounded-3xl border border-white/60 bg-white/80 p-3 shadow-xl shadow-slate-900/5 backdrop-blur sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
         {MENU_ITEMS.map((item) => {
           const isActive = item.href === "/template-config";
           return (

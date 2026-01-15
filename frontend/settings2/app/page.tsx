@@ -33,6 +33,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl, type SegmentOption } from "@/components/ui/segmented-control";
+import { MENU_ITEMS } from "./template-config/constants/template-config.constants";
 
 // Lien mode options for 3-way toggle
 type LienMode = "off" | "sandbox" | "production";
@@ -99,32 +100,6 @@ const STATUS_BADGE = {
   disabled: "bg-rose-50 text-rose-600 border-rose-200",
 } as const;
 
-const MENU_ITEMS = [
-  {
-    href: "/",
-    label: "System Settings",
-    description: "Configure email processing behavior",
-    icon: "⚙️",
-  },
-  {
-    href: "/template-config",
-    label: "Autorespond Templates",
-    description: "Edit message templates",
-    icon: "📝",
-  },
-  {
-    href: "/tag-statistics",
-    label: "Tag Statistics",
-    description: "Analyze tag retention and changes",
-    icon: "📊",
-  },
-  {
-    href: "/sandbox",
-    label: "Autorespond Sandbox",
-    description: "Test autorespond outputs locally",
-    icon: "🧪",
-  },
-];
 
 const formatDate = (value: string | null) =>
   value ? new Date(value).toLocaleString() : "Never";
@@ -457,7 +432,7 @@ export default function Settings2Page() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-10">
-      <nav className="grid gap-3 rounded-3xl border border-white/60 bg-white/80 p-3 shadow-xl shadow-slate-900/5 backdrop-blur lg:grid-cols-4">
+      <nav className="grid gap-3 rounded-3xl border border-white/60 bg-white/80 p-3 shadow-xl shadow-slate-900/5 backdrop-blur sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
         {MENU_ITEMS.map((item) => {
           const isActive = item.href === "/";
           return (

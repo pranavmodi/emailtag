@@ -33,6 +33,12 @@ export const MENU_ITEMS = [
     description: "Test autorespond outputs locally",
     icon: "🧪",
   },
+  {
+    href: "/reprocess",
+    label: "Reprocess",
+    description: "Trigger conversation processing",
+    icon: "🔄",
+  },
 ] as const;
 
 export const SHOW_TEMPLATE_EDITOR = false;

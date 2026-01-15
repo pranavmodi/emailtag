@@ -26,6 +26,7 @@ from app.services.patient import fetch_patient_by_id
 from app.helpers.patient_extraction import extract_and_log_patient_info
 from app.services.trace_service import create_tracer, TraceLogger
 from app.models.processing_trace import StepTypes, TraceSteps, TraceStatus
+from app.services.frontapp_service import get_conversation_async, get_conversation_text
 
 logger = logging.getLogger(__name__)
 
@@ -513,4 +514,190 @@ async def frontapp_outbound_webhook(
         logger.info(f"Raw Outbound Webhook Body (on general error): {body.decode()}")
         # Still return 202
 
-    return {"status": "outbound_payload_logged"} 
+    return {"status": "outbound_payload_logged"}
+
+
+@router.post("/reprocess/{conversation_id}", status_code=status.HTTP_202_ACCEPTED)
+async def reprocess_conversation(
+    conversation_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Manually trigger processing for a conversation by ID.
+
+    Fetches the conversation from Front API and processes it as if it were
+    a new inbound message from the webhook.
+
+    Args:
+        conversation_id: The Front conversation ID to reprocess
+        db: Database session
+
+    Returns:
+        Dict[str, Any]: Response with email_id and status
+    """
+    logger.info(f"Reprocess request received for conversation: {conversation_id}")
+
+    # Create tracer for this reprocess request
+    tracer = create_tracer(front_conversation_id=conversation_id)
+
+    try:
+        # Step 1: Fetch conversation data from Front API
+        with tracer.trace_step(
+            step_name="FETCH_CONVERSATION",
+            step_type=StepTypes.API_CALL,
+            input_data={"conversation_id": conversation_id}
+        ) as (trace_id, output_data):
+            conversation_data = await get_conversation_async(conversation_id)
+
+            if not conversation_data:
+                output_data["error"] = "Conversation not found in Front"
+                logger.warning(f"Conversation {conversation_id} not found in Front API")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Conversation {conversation_id} not found in Front"
+                )
+
+            output_data["conversation_found"] = True
+            output_data["subject"] = conversation_data.get("subject", "")
+
+        # Step 2: Fetch conversation messages (synchronous function, run in executor)
+        with tracer.trace_step(
+            step_name="FETCH_MESSAGES",
+            step_type=StepTypes.API_CALL,
+            input_data={"conversation_id": conversation_id}
+        ) as (trace_id, output_data):
+            loop = asyncio.get_event_loop()
+            conversation_text_data = await loop.run_in_executor(
+                None, get_conversation_text, conversation_id
+            )
+
+            output_data["messages_fetched"] = True
+            output_data["message_count"] = len(conversation_text_data.get("_structured_messages", []))
+
+        # Step 3: Extract relevant data for email record
+        structured_messages = conversation_text_data.get("_structured_messages", [])
+
+        if not structured_messages:
+            logger.warning(f"No messages found in conversation {conversation_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"No messages found in conversation {conversation_id}"
+            )
+
+        # Get the latest message
+        latest_message = structured_messages[-1] if structured_messages else {}
+
+        # Extract sender from latest message or conversation data
+        sender = (
+            latest_message.get("author_email")
+            or latest_message.get("author_handle")
+            or conversation_data.get("recipient", {}).get("handle", "unknown@reprocess.local")
+        )
+
+        # Extract subject
+        subject = conversation_data.get("subject", "")
+
+        # Extract content from latest message
+        content_text = latest_message.get("body", "")
+        content_html = latest_message.get("body", "")  # Front stores HTML in body
+
+        # Get full conversation text for context
+        full_text = conversation_text_data.get("text", "")
+        if full_text:
+            content_text = full_text
+
+        # Extract recipients
+        recipients = []
+        last_msg_details = conversation_text_data.get("last_message_details", {})
+        if last_msg_details:
+            recipients_to = last_msg_details.get("recipients_to", [])
+            recipients_cc = last_msg_details.get("recipients_cc", [])
+            if isinstance(recipients_to, list):
+                recipients.extend(recipients_to)
+            if isinstance(recipients_cc, list):
+                recipients.extend(recipients_cc)
+
+        # Step 4: Create email record
+        with tracer.trace_step(
+            step_name=TraceSteps.EMAIL_CREATED,
+            step_type=StepTypes.DATABASE,
+            input_data={
+                "sender": sender,
+                "subject": subject,
+                "source": "reprocess_endpoint"
+            }
+        ) as (trace_id, output_data):
+            email_create = EmailCreate(
+                front_message_id=f"reprocess_{conversation_id}_{int(asyncio.get_event_loop().time())}",
+                front_conversation_id=conversation_id,
+                sender=sender,
+                recipients=recipients,
+                subject=subject,
+                content_text=content_text,
+                content_html=content_html,
+                has_attachments=False,  # We don't have attachment info from this flow
+                raw_data={
+                    "source": "reprocess_endpoint",
+                    "conversation_data": conversation_data,
+                    "latest_message": latest_message,
+                }
+            )
+
+            db_email = await email_crud.create(db=db, obj_in=email_create)
+            output_data["email_id"] = str(db_email.id)
+            output_data["created_successfully"] = True
+
+        # Step 5: Extract patient info
+        await extract_and_log_patient_info(db, content_text, conversation_id, db_email.id, logger, subject)
+
+        # Step 6: Check if processing is enabled and queue
+        with tracer.trace_step(
+            step_name=TraceSteps.PROCESSING_CHECK,
+            step_type=StepTypes.VALIDATION,
+            input_data={"email_id": str(db_email.id)}
+        ) as (trace_id, output_data):
+            processing_enabled = await system_settings_crud.is_email_processing_enabled(db)
+            output_data["processing_enabled"] = processing_enabled
+
+            if not processing_enabled:
+                await email_crud.update(
+                    db=db,
+                    db_obj=db_email,
+                    obj_in={"status": "processing_disabled"}
+                )
+                output_data["action"] = "disabled"
+                logger.warning(f"Email processing is DISABLED. Email {db_email.id} saved but NOT queued.")
+                return {
+                    "status": "created_but_not_queued",
+                    "email_id": str(db_email.id),
+                    "conversation_id": conversation_id,
+                    "reason": "processing_disabled"
+                }
+
+        # Step 7: Queue for processing
+        with tracer.trace_step(
+            step_name=TraceSteps.TASK_QUEUED,
+            step_type=StepTypes.TASK_QUEUE,
+            input_data={"email_id": str(db_email.id), "queue": "emails"}
+        ) as (trace_id, output_data):
+            process_email.apply_async(args=[str(db_email.id)], queue='emails')
+            output_data["queued_successfully"] = True
+
+        logger.info(f"Successfully queued conversation {conversation_id} for reprocessing as email {db_email.id}")
+
+        return {
+            "status": "queued",
+            "email_id": str(db_email.id),
+            "conversation_id": conversation_id,
+            "sender": sender,
+            "subject": subject
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error reprocessing conversation {conversation_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error reprocessing conversation: {str(e)}"
+        )
