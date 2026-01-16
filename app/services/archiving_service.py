@@ -100,6 +100,16 @@ async def _reprocess_attachments(email_obj) -> List[Dict[str, Any]]:
 
                 logger.info(f"📁 ARCHIVE DOUBLE-CHECK: Processed attachment {filename} - status: {processing_result.get('processing_status')}")
 
+                # Log detailed classification info
+                doc_analysis = processing_result.get('document_analysis', {})
+                if doc_analysis.get('success'):
+                    data = doc_analysis.get('data', {})
+                    doc_type = data.get('document_type', 'unknown')
+                    description = data.get('description', 'N/A')
+                    confidence = data.get('confidence', 0)
+                    logger.info(f"📁 ARCHIVE DOUBLE-CHECK CLASSIFICATION: {filename} → Type: '{doc_type}' (confidence: {confidence:.2f})")
+                    logger.info(f"📁 ARCHIVE DOUBLE-CHECK REASON: {description}")
+
             except httpx.HTTPError as e:
                 logger.error(f"📁 ARCHIVE DOUBLE-CHECK: Failed to download {filename}: {e}")
                 continue

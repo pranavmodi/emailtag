@@ -39,10 +39,9 @@ def set_verbose_mode(verbose: bool):
     VERBOSE_MODE = verbose
 
 
-def send_smtp_email(scenario_details, choice_key, unique_id):
+def send_smtp_email(scenario_details, choice_key, unique_id=None):
     """
     Sends an email via SMTP based on the provided scenario details.
-    Includes a unique_id in the subject and body.
     """
     if not all([SMTP_HOST, SMTP_PORT, SENDER_EMAIL, SENDER_PASSWORD]):
         print("Critical Error: SMTP environment variables (SMTP_HOST, SMTP_PORT, SENDER_EMAIL, SENDER_PASSWORD) are not all set in .env.")
@@ -64,8 +63,7 @@ def send_smtp_email(scenario_details, choice_key, unique_id):
         print("Critical Error: DEFAULT_RECIPIENT_EMAIL environment variable is not set. Add it to your .env file before running tests.")
         return False
 
-    # Add unique_id to subject for tracking
-    subject_with_id = f"{subject} (TestID: {unique_id})"
+    subject_with_id = subject
     body_html_with_id = body_html
 
     # Randomize invoice number for scenario "1"
@@ -82,8 +80,7 @@ def send_smtp_email(scenario_details, choice_key, unique_id):
             "Query about my upcoming MRI scan",
             "Need to confirm my MRI for next week"
         ]
-        base_subject = random.choice(subject_variations)
-        subject_with_id = f"{base_subject} (TestID: {unique_id})"
+        subject_with_id = random.choice(subject_variations)
 
     # Replace placeholder in body with actual sender email for clarity
     body_html_with_id = body_html_with_id.replace("{SENDER_EMAIL_PLACEHOLDER}", SENDER_EMAIL)

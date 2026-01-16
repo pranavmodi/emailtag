@@ -19,6 +19,22 @@ def _get_no_call_activity_message() -> str:
     return f'<p style="background-color: #ffeb3b; padding: 10px; border-radius: 5px;"><em>No call activity found for patient\'s phone number as of {current_time}</em></p>'
 
 
+def _format_phone_number(phone: str) -> str:
+    """Format phone number as xxx-xxx-xxxx."""
+    if not phone:
+        return "N/A"
+    # Remove all non-digit characters
+    digits = ''.join(c for c in phone if c.isdigit())
+    # If we have 10 digits, format as xxx-xxx-xxxx
+    if len(digits) == 10:
+        return f"{digits[:3]}-{digits[3:6]}-{digits[6:]}"
+    # If we have 11 digits starting with 1, strip the 1 and format
+    if len(digits) == 11 and digits[0] == '1':
+        return f"{digits[1:4]}-{digits[4:7]}-{digits[7:]}"
+    # Otherwise return original (cleaned up or as-is)
+    return phone if phone else "N/A"
+
+
 async def generate_call_log_table(patient_id: str, phone_number: str = None) -> str:
     """
     Generate HTML table showing call history for a patient.
@@ -101,7 +117,7 @@ def _format_calls_as_html_table(calls: List[Dict[str, Any]]) -> str:
                 <th style="text-align: left; padding: 10px; border: 1px solid #ddd;">Date/Time</th>
                 <th style="text-align: left; padding: 10px; border: 1px solid #ddd;">Phone #</th>
                 <th style="text-align: center; padding: 10px; border: 1px solid #ddd;">Direction</th>
-                <th style="text-align: left; padding: 10px; border: 1px solid #ddd;">Disposition</th>
+                <th style="text-align: left; padding: 10px; border: 1px solid #ddd;">Result of the Call</th>
             </tr>
         </thead>
         <tbody>
@@ -131,12 +147,15 @@ def _format_calls_as_html_table(calls: List[Dict[str, Any]]) -> str:
                 formatted_datetime = date_time_str
 
         # MCP response uses 'phoneNumber' instead of 'phone_number'
-        phone_number = call.get("phoneNumber", call.get("phone_number", call.get("phone", "N/A")))
+        phone_number = call.get("phoneNumber", call.get("phone_number", call.get("phone", "")))
+        phone_number = _format_phone_number(phone_number)
 
         # MCP response uses 'phoneDirection' instead of 'direction'
         direction = call.get("phoneDirection", call.get("direction", "N/A"))
 
-        disposition = call.get("disposition", call.get("status", "N/A"))
+        disposition = call.get("disposition", call.get("status", ""))
+        if not disposition or disposition.strip() == "":
+            disposition = "Unknown"
 
         # Determine direction display and icon
         if direction.lower() == "inbound":

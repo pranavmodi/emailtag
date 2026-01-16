@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class DocumentAnalysisResult(BaseModel):
     """Pydantic model for structured document analysis output."""
-    document_type: str  # "lien", "lien_reduction", "esign_request", "rx", "medical_record", "hipaa", "case_update", "other"
+    document_type: str  # "lien", "lien_reduction", "esign_request", "rx", "medical_record", "hipaa", "case_update", "bill", "other"
     description: str    # One-line description of the document content
     patient_id: Optional[str] = None  # Patient ID if found
     confidence: float   # Confidence score 0.0-1.0 for document type classification
@@ -199,7 +199,7 @@ class DocumentProcessingService:
                 "properties": {
                     "document_type": {
                         "type": "string",
-                        "enum": ["lien", "lien_reduction", "esign_request", "rx", "medical_record", "hipaa", "case_update", "other"],
+                        "enum": ["lien", "lien_reduction", "esign_request", "rx", "medical_record", "hipaa", "case_update", "bill", "other"],
                         "description": "Type of medical document"
                     },
                     "description": {
@@ -239,6 +239,7 @@ DOCUMENT TYPE CLASSIFICATION:
 - medical_record: Medical charts, test results, lab reports, radiology reports, patient history, discharge summaries
 - hipaa: HIPAA authorization forms, HIPAA releases, privacy notices, medical records release authorizations. These are forms that authorize the release or use of protected health information (PHI) under HIPAA regulations. Look for terms like "HIPAA", "Health Insurance Portability", "Protected Health Information", "PHI", "Authorization for Release", "Medical Records Release".
 - case_update: Legal case status updates, attorney communications, and case progression documents. These include: new attorney notifications, drop letters, case drop pending notices, payment promises, liability clearance updates, settlement check status, payment received confirmations, refund requests, and payment dispatch notifications. Look for terms like "New Attorney", "Drop Letter", "Drop Pending", "Promise to send payment", "Waiting to clear liability", "Waiting on settlement check", "Sent payment but not received", "Refund Request", "Payment on way", "case status", "attorney change", "settlement update", "payment status".
+- bill: Invoices, statements, bills, or billing documents showing amounts owed for services already rendered. These are NOT liens. Bills show itemized charges, total balances due, payment amounts, or copies of bills being sent to attorneys/patients. Look for terms like "bill", "invoice", "statement", "balance due", "amount owed", "charges", "copy of our bill", "total due", "payment due". Bills may include offers or final amounts like "$X,XXX FINAL" but they are statements of amounts, not legal agreements.
 - other: Any document that doesn't fit the above categories, including insurance cards, authorization forms, insurance verification documents, coverage letters, intake forms, patient information forms
 
 CRITICAL DISTINCTIONS:
@@ -269,6 +270,15 @@ CASE_UPDATE vs OTHER:
 - If document discusses case status, attorney changes, settlement progress, or payment updates → classify as CASE_UPDATE
 - If document is general correspondence or doesn't relate to case progression → classify as OTHER
 
+LIEN vs BILL:
+- LIEN documents are LEGAL AGREEMENTS that establish future financial obligations - the patient/attorney agrees to pay from settlement proceeds
+- BILL documents are INVOICES/STATEMENTS showing amounts already owed for services rendered - they state what is due, not create a legal agreement
+- If document has signature boxes and legal language about agreeing to pay → classify as LIEN
+- If document shows itemized charges, balances due, or is "a copy of our bill" → classify as BILL
+- Bills often accompany negotiations/offers (e.g., "best we can do is $4,720 FINAL") but are NOT liens
+- A bill being sent to an attorney is still a BILL, not a LIEN - it's an invoice, not a legal agreement
+- IMPORTANT: If a PDF contains BOTH a bill AND a lien attachment/notice, classify as BILL if the FIRST pages show billing/invoice content. The primary document type is determined by what appears FIRST in the PDF, not by attachments or subsequent pages.
+
 PATIENT ID EXTRACTION:
 Precise Imaging patient IDs follow this format: PRE followed by 6-8 digits (e.g., PRE123456, PRE1234567, PRE12345678)
 - Look for patterns like "PRE123456" or "Patient ID: PRE1234567" 
@@ -278,11 +288,11 @@ Precise Imaging patient IDs follow this format: PRE followed by 6-8 digits (e.g.
 
 ANALYSIS REQUIREMENTS:
 1. Carefully examine all text across ALL pages of the document
-2. Identify the primary purpose of the document by considering content from all pages
+2. Identify the primary purpose of the document by looking at the FIRST few pages - they determine the document type
 3. Look for any patient identifiers matching the PRE format on any page
 4. Provide a one-line description of what the document contains based on all pages
 5. Give a confidence score based on how clearly you can read and classify the document across all pages
-6. If multiple pages contain different document types, classify based on the primary/most important content"""
+6. If multiple pages contain different document types (e.g., bill + lien attachment), classify based on what the FIRST pages show - that is the primary document being sent"""
                     },
                     {
                         "role": "user",
@@ -305,6 +315,7 @@ ANALYSIS REQUIREMENTS:
                         "schema": schema
                     }
                 },
+                "temperature": 0,
                 "max_output_tokens": 1000
             }
             

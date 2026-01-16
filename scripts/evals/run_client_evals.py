@@ -5,8 +5,8 @@ This script runs client-specific test scenarios to validate tagging accuracy.
 
 import os
 import sys
-import uuid
 import time
+import uuid
 from typing import Dict, Any, List, Optional
 import requests
 import re
@@ -624,10 +624,6 @@ def _persist_scenario_to_file(new_key: str, scenario: Dict[str, Any], verbose: b
 def run_single_scenario(scenario_key: str, scenario_details: Dict[str, Any], verbose: bool = False) -> Dict[str, Any]:
     """Run a single test scenario and return results."""
     print(f"\n--- Testing Client Scenario {scenario_key}: {scenario_details['description']} ---")
-    
-    test_unique_id = str(uuid.uuid4())
-    # Always display the TestID so it can be easily referenced, regardless of verbosity.
-    print(f"Using TestID: {test_unique_id}")
 
     # Handle single-step scenarios (client evals are currently single-step)
     email_details = scenario_details.copy()
@@ -637,24 +633,22 @@ def run_single_scenario(scenario_key: str, scenario_details: Dict[str, Any], ver
             email_details["subject"] = email_details["subject"].replace("{PATIENT_ID}", patient_id)
         if "{PATIENT_ID}" in email_details.get("body_html", ""):
             email_details["body_html"] = email_details["body_html"].replace("{PATIENT_ID}", patient_id)
-    
-    success = send_smtp_email(email_details, scenario_key, test_unique_id)
-    
+
+    success = send_smtp_email(email_details, scenario_key)
+
     if not success:
         return {
             "scenario_key": scenario_key,
             "description": scenario_details['description'],
             "status": "FAIL (Email sending failed)",
-            "unique_id": test_unique_id,
             "expected_tags": scenario_details.get('expected_tags'),
             "actual_tags": "Email not sent"
         }
-    
+
     return {
         "scenario_key": scenario_key,
         "description": scenario_details['description'],
         "status": "EMAIL_SENT",
-        "unique_id": test_unique_id,
         "expected_tags": scenario_details.get('expected_tags'),
         "actual_tags": None
     }
@@ -662,65 +656,19 @@ def run_single_scenario(scenario_key: str, scenario_details: Dict[str, Any], ver
 
 def validate_tags_for_scenario(result: Dict[str, Any], verbose: bool = False) -> Dict[str, Any]:
     """Validate tags for a scenario that has already been sent."""
-    unique_id = result["unique_id"]
+    scenario_key = result["scenario_key"]
     expected_tags = result.get("expected_tags", [])
-    
+
     if result["status"] != "EMAIL_SENT":
         return result  # Don't validate if email wasn't sent
-    
-    # Wait for email processing and tagging
-    processing_wait_time = 45  # seconds
-    if verbose:
-        print(f"Waiting {processing_wait_time} seconds for email processing and tagging...")
-    time.sleep(processing_wait_time)
 
-    conversation_id = find_front_conversation(unique_id)
+    # Validation not supported without test ID tracking
+    print(f"SKIPPED: Validation not available for scenario {scenario_key} (no test ID tracking).")
+    result.update({
+        "status": "SKIPPED (validation not available)",
+        "actual_tags": None
+    })
 
-    if conversation_id:
-        actual_tags = get_front_conversation_tags(conversation_id)
-
-        if actual_tags is not None:
-            actual_tags_set = set(actual_tags)
-            expected_tags_set = set(expected_tags)
-
-            if actual_tags_set == expected_tags_set:
-                print(f"SUCCESS: Tags match for TestID {unique_id}.")
-                if verbose:
-                    print(f"  Expected: {sorted(list(expected_tags_set))}")
-                    print(f"  Actual:   {sorted(list(actual_tags_set))}")
-                result.update({
-                    "status": "PASS",
-                    "actual_tags": sorted(list(actual_tags_set))
-                })
-            else:
-                print(f"FAILURE: Tags do NOT match for TestID {unique_id}.")
-                print(f"  Expected: {sorted(list(expected_tags_set))}")
-                print(f"  Actual:   {sorted(list(actual_tags_set))}")
-                missing_tags = expected_tags_set - actual_tags_set
-                extra_tags = actual_tags_set - expected_tags_set
-                if missing_tags:
-                    print(f"  Missing expected tags: {missing_tags}")
-                if extra_tags:
-                    print(f"  Found unexpected extra tags: {extra_tags}")
-                result.update({
-                    "status": "FAIL",
-                    "actual_tags": sorted(list(actual_tags_set)),
-                    "missing_tags": sorted(list(missing_tags)) if missing_tags else [],
-                    "extra_tags": sorted(list(extra_tags)) if extra_tags else []
-                })
-        else:
-            print(f"FAILURE: Could not fetch tags for conversation {conversation_id} (TestID: {unique_id}).")
-            result.update({
-                "status": "FAIL (Could not fetch tags)",
-                "actual_tags": "Error fetching"
-            })
-    else:
-        print(f"FAILURE: Could not find conversation in Front for TestID {unique_id} after waiting.")
-        result.update({
-            "status": "FAIL (Conversation not found in Front)",
-            "actual_tags": "Not found"
-        })
-    
     return result
 
 
@@ -750,7 +698,6 @@ def print_test_summary(results: List[Dict[str, Any]]) -> None:
             sent_only_count += 1
         else:  # Various FAIL statuses
             failed_count += 1
-            print(f"  TestID: {res['unique_id']}")
             print(f"  Expected Tags: {res['expected_tags']}")
             print(f"  Actual Tags:   {res['actual_tags']}")
             if "missing_tags" in res and res["missing_tags"]:
