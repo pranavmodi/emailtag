@@ -136,7 +136,8 @@ def _check_for_actionable_documents(doc_results: List[Dict[str, Any]], source: s
     Returns:
         Tuple of (has_actionable, doc_type, confidence)
     """
-    actionable_doc_types = ['rx', 'lien', 'medical_record', 'case_update']
+    # All document types except "other" are actionable and prevent archiving
+    non_actionable_doc_types = ['other']
 
     for result in doc_results:
         if isinstance(result, dict):
@@ -149,11 +150,45 @@ def _check_for_actionable_documents(doc_results: List[Dict[str, Any]], source: s
                 if CLASSIFICATION_DEBUG:
                     debug_logger.debug(f"🔍 ARCHIVE CHECK ({source}): Document analysis - type: {doc_type}, confidence: {confidence:.2f}")
 
-                # Check if document is actionable
-                if doc_type in actionable_doc_types and confidence > 0.7:
+                # Check if document is actionable (all types except "other")
+                if doc_type and doc_type not in non_actionable_doc_types and confidence > 0.7:
                     return True, doc_type, confidence
 
     return False, None, None
+
+
+def _extract_document_summaries(doc_results: List[Dict[str, Any]], source: str = "stored") -> List[Dict[str, str]]:
+    """
+    Extract document descriptions/summaries from document processing results.
+
+    Args:
+        doc_results: List of document processing results
+        source: Source of the results ("stored" or "fresh") for logging
+
+    Returns:
+        List of dicts with document_type and description
+    """
+    summaries = []
+
+    for result in doc_results:
+        if isinstance(result, dict):
+            doc_analysis = result.get('document_analysis', {})
+            if doc_analysis.get('success') and doc_analysis.get('data'):
+                doc_data = doc_analysis['data']
+                doc_type = doc_data.get('document_type', 'unknown')
+                description = doc_data.get('description', '')
+
+                if description:
+                    summaries.append({
+                        "document_type": doc_type,
+                        "description": description,
+                        "source": source
+                    })
+
+                    if CLASSIFICATION_DEBUG:
+                        debug_logger.debug(f"🔍 ARCHIVE DOC SUMMARY ({source}): type={doc_type}, description={description[:100]}...")
+
+    return summaries
 
 
 async def check_and_archive_conversation(front_conversation_id: str, email_obj=None) -> bool:
@@ -191,6 +226,11 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
         }
     )
 
+    # Initialize document summaries collection for OpenAI analysis
+    document_summaries: List[Dict[str, str]] = []
+    stored_doc_results: List[Dict[str, Any]] = []
+    fresh_doc_results: List[Dict[str, Any]] = []
+
     # FIRST CHECK: Check stored OCR results for actionable documents
     stored_check_start = datetime.utcnow()
     stored_has_actionable = False
@@ -201,6 +241,7 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
     if email_obj and hasattr(email_obj, 'ocr_results'):
         doc_results = email_obj.ocr_results
         if doc_results:
+            stored_doc_results = doc_results  # Save for summary extraction
             stored_doc_count = len(doc_results)
             if CLASSIFICATION_DEBUG:
                 debug_logger.debug(f"🔍 ARCHIVAL: Found {len(doc_results)} document processing results in stored ocr_results")
@@ -255,6 +296,7 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
         logger.info(f"📁 ARCHIVE DOUBLE-CHECK: Starting fresh document processing for latest email in {front_conversation_id}")
 
         fresh_results = await _reprocess_attachments(email_obj)
+        fresh_doc_results = fresh_results if fresh_results else []  # Save for summary extraction
         fresh_doc_count = len(fresh_results) if fresh_results else 0
 
         if fresh_results:
@@ -356,11 +398,18 @@ async def check_and_archive_conversation(front_conversation_id: str, email_obj=N
         )
         return False
 
+    # Extract document summaries from stored and fresh results for OpenAI analysis
+    if stored_doc_results:
+        document_summaries.extend(_extract_document_summaries(stored_doc_results, source="stored"))
+    if fresh_doc_results:
+        document_summaries.extend(_extract_document_summaries(fresh_doc_results, source="fresh"))
+
     if CLASSIFICATION_DEBUG:
         debug_logger.debug(f"🔍 ARCHIVAL: Sending to OpenAI for resolution analysis...")
+        debug_logger.debug(f"🔍 ARCHIVAL: Including {len(document_summaries)} document summaries in analysis")
 
-    # Pass both stripped text and structured messages to OpenAI service
-    analysis_result = await are_questions_resolved_openai(conversation_text, structured_messages)
+    # Pass conversation data and document summaries to OpenAI service
+    analysis_result = await are_questions_resolved_openai(conversation_text, structured_messages, document_summaries)
 
     if CLASSIFICATION_DEBUG:
         debug_logger.debug(f"🔍 ARCHIVAL: OpenAI analysis result: {analysis_result}")

@@ -231,7 +231,7 @@ async def extract_email_chain_openai(conversation_text: str) -> Dict[str, Any]:
         return {"success": False, "emails": [], "error": str(e)}
 
 
-async def are_questions_resolved_openai(conversation_text: str, structured_messages: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+async def are_questions_resolved_openai(conversation_text: str, structured_messages: List[Dict[str, Any]] = None, document_summaries: List[Dict[str, str]] = None) -> Dict[str, Any]:
     """
     STEP 2: Uses structured email chain to analyze if all questions have been addressed.
     This is a 2-step process:
@@ -241,6 +241,9 @@ async def are_questions_resolved_openai(conversation_text: str, structured_messa
     Args:
         conversation_text: The full text of the conversation.
         structured_messages: Optional list of structured message data from Front API.
+        document_summaries: Optional list of document summaries from attachments with keys:
+            - document_type: Type of document (e.g., "lien", "rx", "other")
+            - description: Content summary of the document
 
     Returns:
         Dict[str, Any]: Structured response containing:
@@ -326,26 +329,29 @@ async def are_questions_resolved_openai(conversation_text: str, structured_messa
 
     if CLASSIFICATION_DEBUG:
         debug_logger.debug(f"🔍 RESOLUTION: Processing {len(emails)} extracted emails for resolution analysis")
+        if document_summaries:
+            debug_logger.debug(f"🔍 RESOLUTION: Including {len(document_summaries)} document summaries")
 
-    
+
     # STEP 2: Analyze the structured emails for resolution
-    return await _analyze_structured_emails_for_resolution(emails, email_extraction)
+    return await _analyze_structured_emails_for_resolution(emails, email_extraction, document_summaries)
 
 
-async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]], email_extraction: Dict[str, Any]) -> Dict[str, Any]:
+async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]], email_extraction: Dict[str, Any], document_summaries: List[Dict[str, str]] = None) -> Dict[str, Any]:
     """
     STEP 2: Analyze structured emails to determine if questions are resolved.
-    
+
     Args:
         emails: List of structured email objects from step 1
         email_extraction: Full extraction result from step 1
+        document_summaries: Optional list of document summaries from attachments
         
     Returns:
         Analysis result with resolution status
     """
     # Create a readable summary of the email chain for analysis
     email_chain_summary = "EMAIL CHAIN (Chronological Order):\n\n"
-    
+
     for email in emails:
         email_chain_summary += f"EMAIL #{email.get('sequence_number', '?')}:\n"
         email_chain_summary += f"From: {email.get('sender', 'Unknown')}\n"
@@ -356,6 +362,18 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
             email_chain_summary += f"CC: {', '.join(email.get('recipients_cc', []))}\n"
         email_chain_summary += f"Body: {email.get('body', '')}\n"
         email_chain_summary += "---\n\n"
+
+    # Build document summaries section if available
+    document_section = ""
+    if document_summaries:
+        document_section = "\n--- ATTACHED DOCUMENTS ---\n"
+        document_section += "The following documents were attached to the email(s). Review their content for any unresolved requests or actions:\n\n"
+        for i, doc in enumerate(document_summaries, 1):
+            doc_type = doc.get('document_type', 'unknown')
+            description = doc.get('description', 'No description available')
+            document_section += f"DOCUMENT #{i} (Type: {doc_type}):\n"
+            document_section += f"{description}\n"
+            document_section += "---\n\n"
 
     prompt = (
         f"Analyze the following email chain to determine if there are any outstanding questions, requests, or actions "
@@ -415,6 +433,19 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
         f"    * Simple informational updates from external parties (e.g., 'FYI, the client is pending').\n"
         f"    * **Attorney Status Exception:** If Precise *asked* for a case status, and an attorney *responds* "
         f"with a status (e.g., 'client is pending,' 'under review'), that specific inquiry is **RESOLVED**.\n\n"
+        f"### Step 4: Analyze Attached Documents\n"
+        f"If there are attached documents listed below, review their content summaries for any unresolved items:\n\n"
+        f"* **Document-Based UNRESOLVED Items:**\n"
+        f"    * Lien documents that need processing or signing\n"
+        f"    * Prescription/RX orders that need to be scheduled\n"
+        f"    * Medical records requests that need fulfillment\n"
+        f"    * Bills or invoices that need payment processing\n"
+        f"    * HIPAA forms that need to be filed or processed\n"
+        f"    * E-signature requests pending action\n"
+        f"    * Case updates requiring follow-up from Precise Imaging\n"
+        f"    * Any document content indicating pending requests or required actions\n\n"
+        f"**If any attached document contains unresolved requests or actions for Precise Imaging, "
+        f"the thread is UNRESOLVED.**\n\n"
         f"--- END ANALYSIS ---\n\n"
         f"**IMPORTANT: In your response, you MUST provide a 'latest_email_analysis' field that contains:**\n"
         f"1. Who sent the most recent/final/last email (external party or Precise Imaging)\n"
@@ -423,9 +454,11 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
         f"4. **DEFENSIVE CHECK:** Does the email contain cancellation/disregard language? Review the full email chain "
         f"to determine if Precise may have already taken action (scheduled appointment, entered order, initiated process) "
         f"that now needs to be CANCELLED or UNDONE. If yes, explain what action Precise needs to take.\n"
-        f"5. The decision made based on this email alone (RESOLVED or UNRESOLVED)\n\n"
+        f"5. **DOCUMENT CHECK:** If attached documents are present, note any unresolved items found in them.\n"
+        f"6. The decision made based on the email chain AND attached documents (RESOLVED or UNRESOLVED)\n\n"
         f"**Email Chain to Analyze:**\n"
         f"{email_chain_summary}"
+        f"{document_section}"
     )
 
     headers = {
