@@ -709,7 +709,7 @@ function ClassificationTracesContent() {
   };
 
   const handleViewTrace = (conversationId: string) => {
-    router.push(`/classification-traces?conversation_id=${encodeURIComponent(conversationId)}`);
+    window.open(`/settings/classification-traces?conversation_id=${encodeURIComponent(conversationId)}`, '_blank');
   };
 
   const handleBackToList = () => {
