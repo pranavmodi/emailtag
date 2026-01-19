@@ -517,8 +517,8 @@ async def _analyze_structured_emails_for_resolution(emails: List[Dict[str, Any]]
         # For production, ensure your system's CA certificates are up-to-date
         # or provide a specific CA bundle path to httpx.AsyncClient(verify=...).
         # You might also investigate using the 'certifi' package.
-        async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
-            
+        async with httpx.AsyncClient(timeout=180.0, verify=False) as client:
+
             # Log the raw request for debugging
             logger.info(f"🔗 OPENAI RESOLUTION ANALYSIS REQUEST:")
             # logger.info(f"📍 Endpoint: https://api.openai.com/v1/chat/completions")
