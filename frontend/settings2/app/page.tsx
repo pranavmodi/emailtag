@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   BadgeCheck,
+  Ban,
   CalendarDays,
   ClipboardList,
   FileWarning,
@@ -14,7 +15,9 @@ import {
   MailSearch,
   MessageSquare,
   PiggyBank,
+  Plus,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 
 import { ApiError, SettingsApi } from "@/lib/api";
@@ -126,6 +129,9 @@ export default function Settings2Page() {
   const [internalDomainsError, setInternalDomainsError] = useState<string | null>(null);
   const [lienModeError, setLienModeError] = useState<string | null>(null);
   const [billBalanceModeError, setBillBalanceModeError] = useState<string | null>(null);
+  const [noActionList, setNoActionList] = useState<string[]>([]);
+  const [noActionError, setNoActionError] = useState<string | null>(null);
+  const [newNoActionItem, setNewNoActionItem] = useState<string>("");
   const [busy, setBusy] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -141,13 +147,14 @@ export default function Settings2Page() {
         if (!mounted) return;
         setUser(auth.username ?? "Admin");
 
-        const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, lienTestModePayload, billBalanceTestModePayload] = await Promise.all([
+        const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, lienTestModePayload, billBalanceTestModePayload, noActionPayload] = await Promise.all([
           SettingsApi.getProcessingStatus(),
           SettingsApi.getAutorespondSettings(),
           SettingsApi.getWorkspaceSettings(),
           SettingsApi.getSkipInternalDomainsStatus(),
           SettingsApi.getLienTestModeStatus(),
           SettingsApi.getBillBalanceTestModeStatus(),
+          SettingsApi.getNoActionList(),
         ]);
         if (!mounted) return;
         setStatus(processingPayload);
@@ -174,12 +181,15 @@ export default function Settings2Page() {
         } else {
           setBillBalanceMode("production");
         }
+        // Set no-action list
+        setNoActionList(noActionPayload.no_action_list || []);
         setStatusError(null);
         setAutorespondError(null);
         setWorkspaceError(null);
         setInternalDomainsError(null);
         setLienModeError(null);
         setBillBalanceModeError(null);
+        setNoActionError(null);
       } catch (error) {
         if (!mounted) return;
         if (error instanceof ApiError && error.status === 401) {
@@ -402,6 +412,48 @@ export default function Settings2Page() {
       setAutorespondError(message);
     } finally {
       setBusyFlag(type, false);
+    }
+  };
+
+  const handleAddNoActionItem = async () => {
+    const item = newNoActionItem.trim();
+    if (!item) return;
+
+    setBusyFlag("no_action_add", true);
+    try {
+      const result = await SettingsApi.addNoActionItem(item);
+      setNoActionList(result.no_action_list);
+      setNewNoActionItem("");
+      setNoActionError(null);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const message =
+        error instanceof Error ? error.message : "Failed to add item";
+      setNoActionError(message);
+    } finally {
+      setBusyFlag("no_action_add", false);
+    }
+  };
+
+  const handleRemoveNoActionItem = async (item: string) => {
+    setBusyFlag(`no_action_remove_${item}`, true);
+    try {
+      const result = await SettingsApi.removeNoActionItem(item);
+      setNoActionList(result.no_action_list);
+      setNoActionError(null);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const message =
+        error instanceof Error ? error.message : "Failed to remove item";
+      setNoActionError(message);
+    } finally {
+      setBusyFlag(`no_action_remove_${item}`, false);
     }
   };
 
@@ -843,6 +895,96 @@ export default function Settings2Page() {
             </Card>
           </motion.div>
         </div>
+      </motion.section>
+
+      {/* No Action List Section */}
+      <motion.section
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ ...easing, delay: 0.15 }}
+      >
+        <Card className="h-full border-slate-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-3 text-2xl">
+              <Ban className="h-6 w-6 text-slate-600" /> No Action List
+            </CardTitle>
+            <CardDescription>
+              Email addresses and domains on this list will still be tagged by AI, but no automated
+              replies or document uploads will be performed.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Add new item form */}
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={newNoActionItem}
+                onChange={(e) => setNewNoActionItem(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !busy.no_action_add) {
+                    handleAddNoActionItem();
+                  }
+                }}
+                placeholder="user@example.com or @domain.com"
+                className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              />
+              <Button
+                onClick={handleAddNoActionItem}
+                disabled={busy.no_action_add || !newNoActionItem.trim()}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-white hover:bg-slate-800"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add
+              </Button>
+            </div>
+
+            {/* List of items */}
+            {noActionList.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-700">
+                  {noActionList.length} {noActionList.length === 1 ? "entry" : "entries"}
+                </p>
+                <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                  {noActionList.map((item) => (
+                    <div
+                      key={item}
+                      className="flex items-center justify-between rounded-lg bg-white px-4 py-2 shadow-sm"
+                    >
+                      <span className="font-mono text-sm text-slate-700">{item}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveNoActionItem(item)}
+                        disabled={busy[`no_action_remove_${item}`]}
+                        className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                        title="Remove"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/50 px-4 py-8 text-center">
+                <Ban className="mx-auto h-8 w-8 text-slate-300" />
+                <p className="mt-2 text-sm text-slate-500">
+                  No entries yet. Add email addresses or domains above.
+                </p>
+              </div>
+            )}
+
+            {/* Help text */}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
+              <strong>Supported formats:</strong>
+              <ul className="mt-1 list-inside list-disc space-y-1">
+                <li><code className="rounded bg-slate-200 px-1">user@example.com</code> - Match a specific email address</li>
+                <li><code className="rounded bg-slate-200 px-1">@example.com</code> - Match any email from that domain</li>
+              </ul>
+            </div>
+
+            {noActionError && <ErrorBanner message={noActionError} />}
+          </CardContent>
+        </Card>
       </motion.section>
     </div>
   );

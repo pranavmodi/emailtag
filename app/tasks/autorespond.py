@@ -199,6 +199,44 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                 logger.info(f"ℹ️ INTERNAL DOMAIN FILTERING DISABLED: Email {email_id} sender '{sender_email}' is from internal domain but filtering is OFF. Proceeding with autorespond (testing mode).")
         # --- End Internal Domain Check ---
 
+        # --- No Action List Check ---
+        # Check if the sender is on the no-action list - skip ALL autoresponds but still allow tagging
+        async def _check_no_action_list(sender: str) -> bool:
+            """Check if sender email/domain is on the no-action list."""
+            from app.crud.tag_settings import tag_settings_crud
+            async with AsyncSessionLocal() as async_db:
+                workspace_settings = await tag_settings_crud.get_settings_dict(async_db, "WORKSPACE")
+                no_action_list = workspace_settings.get("no_action_list", [])
+                if not no_action_list or not sender:
+                    return False
+                sender_lower = sender.lower()
+                for entry in no_action_list:
+                    # Check for exact email match or domain match
+                    if entry.startswith("@"):
+                        # Domain pattern - check if sender ends with domain
+                        if sender_lower.endswith(entry):
+                            return True
+                    else:
+                        # Exact email match
+                        if sender_lower == entry:
+                            return True
+                return False
+
+        is_on_no_action_list = asyncio.run(_check_no_action_list(sender_email))
+        if is_on_no_action_list:
+            logger.info(f"🚫 NO-ACTION LIST: Email {email_id} sender '{sender_email}' is on the no-action list. Skipping all autoresponds (tagging still applied).")
+            final_status = "processed_no_action_list"
+            email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_status, is_processed=True))
+            return {
+                "status": "completed_autorespond_phase",
+                "email_id": email_id,
+                "final_db_status": final_status,
+                "auto_response_sent": False,
+                "auto_response_details": {"reason": f"Sender '{sender_email}' is on the no-action list"},
+                "agent_handled_response": False
+            }
+        # --- End No Action List Check ---
+
         auto_response_processed_flag = False
         auto_response_details = None
         agent_handled_response = False

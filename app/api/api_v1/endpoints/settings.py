@@ -1039,4 +1039,170 @@ async def update_sender_verification(
             detail=f"Failed to update sender verification setting: {str(e)}"
         )
 
+# --- No Action List Endpoints ---
+
+@router.get("/workspace-settings/no-action-list")
+async def get_no_action_list(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get the list of email addresses and domains that should not trigger
+    automated actions (replies or uploads). These senders will still be
+    tagged by AI but no automated actions will be performed.
+
+    Returns:
+        Dictionary with no_action_list array and metadata
+    """
+    try:
+        from app.crud.tag_settings import tag_settings_crud
+
+        workspace_settings = await tag_settings_crud.get_settings_dict(db, "WORKSPACE")
+        no_action_list = workspace_settings.get("no_action_list", [])
+
+        return {
+            "no_action_list": no_action_list,
+            "count": len(no_action_list),
+            "description": "Email addresses and domains that will be tagged but not receive automated replies or uploads"
+        }
+    except Exception as e:
+        logger.error(f"Error fetching no-action list: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch no-action list: {str(e)}"
+        )
+
+
+@router.post("/workspace-settings/no-action-list")
+async def add_no_action_item(
+    item: str,
+    updated_by: str = "Admin",
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Add an email address or domain to the no-action list.
+
+    Items can be:
+    - Full email addresses: user@example.com
+    - Domain patterns: @example.com (will match any email from that domain)
+
+    Args:
+        item: Email address or domain pattern to add
+        updated_by: Username of person making the change
+
+    Returns:
+        Updated no-action list
+    """
+    try:
+        from app.crud.tag_settings import tag_settings_crud
+
+        # Normalize the item (lowercase, strip whitespace)
+        normalized_item = item.strip().lower()
+
+        if not normalized_item:
+            raise HTTPException(status_code=400, detail="Item cannot be empty")
+
+        # Basic validation
+        if "@" not in normalized_item:
+            raise HTTPException(
+                status_code=400,
+                detail="Item must be an email address (user@domain.com) or domain pattern (@domain.com)"
+            )
+
+        # Get current workspace settings
+        workspace_settings = await tag_settings_crud.get_settings_dict(db, "WORKSPACE")
+        no_action_list = workspace_settings.get("no_action_list", [])
+
+        # Check for duplicates
+        if normalized_item in no_action_list:
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{normalized_item}' is already in the no-action list"
+            )
+
+        # Add the item
+        no_action_list.append(normalized_item)
+        workspace_settings["no_action_list"] = no_action_list
+
+        # Save back to database
+        await tag_settings_crud.update(db, "WORKSPACE", workspace_settings, updated_by)
+
+        logger.info(f"Added '{normalized_item}' to no-action list by {updated_by}")
+
+        return {
+            "success": True,
+            "message": f"Added '{normalized_item}' to no-action list",
+            "no_action_list": no_action_list,
+            "count": len(no_action_list),
+            "updated_by": updated_by
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding to no-action list: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to add to no-action list: {str(e)}"
+        )
+
+
+@router.delete("/workspace-settings/no-action-list/{item:path}")
+async def remove_no_action_item(
+    item: str,
+    updated_by: str = "Admin",
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Remove an email address or domain from the no-action list.
+
+    Args:
+        item: Email address or domain pattern to remove
+        updated_by: Username of person making the change
+
+    Returns:
+        Updated no-action list
+    """
+    try:
+        from app.crud.tag_settings import tag_settings_crud
+        from urllib.parse import unquote
+
+        # URL decode and normalize the item
+        decoded_item = unquote(item)
+        normalized_item = decoded_item.strip().lower()
+
+        # Get current workspace settings
+        workspace_settings = await tag_settings_crud.get_settings_dict(db, "WORKSPACE")
+        no_action_list = workspace_settings.get("no_action_list", [])
+
+        # Check if item exists
+        if normalized_item not in no_action_list:
+            raise HTTPException(
+                status_code=404,
+                detail=f"'{normalized_item}' not found in no-action list"
+            )
+
+        # Remove the item
+        no_action_list.remove(normalized_item)
+        workspace_settings["no_action_list"] = no_action_list
+
+        # Save back to database
+        await tag_settings_crud.update(db, "WORKSPACE", workspace_settings, updated_by)
+
+        logger.info(f"Removed '{normalized_item}' from no-action list by {updated_by}")
+
+        return {
+            "success": True,
+            "message": f"Removed '{normalized_item}' from no-action list",
+            "no_action_list": no_action_list,
+            "count": len(no_action_list),
+            "updated_by": updated_by
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing from no-action list: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to remove from no-action list: {str(e)}"
+        )
+
 # --- END: Workspace Settings Endpoints ---
