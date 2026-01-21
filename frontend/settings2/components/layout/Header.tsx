@@ -125,84 +125,109 @@ export function Header({ user, currentPage }: HeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-slate-200/60">
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
-        <nav className="flex items-center gap-1 text-sm font-medium">
-          {/* Primary menu items */}
-          {primaryItems.map((item) => (
+    <header className="sticky top-0 z-30 bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50 border-b border-slate-200/60 py-4">
+      <nav className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-6">
+        {/* Primary menu items - card style */}
+        {primaryItems.map((item) => {
+          const active = isActive(item.href);
+          return (
             <Link
               key={item.href}
               href={item.href}
-              className={`rounded-lg px-3 py-1.5 transition-colors ${
-                isActive(item.href)
-                  ? "bg-indigo-50 text-indigo-700 font-semibold"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              className={`rounded-2xl border p-4 transition hover:-translate-y-1 hover:shadow-lg ${
+                active
+                  ? "border-slate-900 bg-slate-900 text-white shadow-lg"
+                  : "border-slate-200 bg-white text-slate-700"
               }`}
             >
-              <span className="mr-1">{item.icon}</span>
-              {item.label}
+              <div className="flex items-center gap-3 text-lg font-semibold">
+                <span>{item.icon}</span>
+                {item.label}
+              </div>
+              <p
+                className={`mt-1 text-sm ${
+                  active ? "text-white/80" : "text-slate-500"
+                }`}
+              >
+                {item.description}
+              </p>
             </Link>
-          ))}
+          );
+        })}
 
-          {/* More dropdown */}
-          <div className="relative" ref={moreMenuRef}>
-            <button
-              onClick={() => setMoreMenuOpen(!moreMenuOpen)}
-              className={`flex items-center gap-1 rounded-lg px-3 py-1.5 transition-colors ${
-                isCurrentPageSecondary
-                  ? "bg-indigo-50 text-indigo-700 font-semibold"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              }`}
-            >
+        {/* More dropdown - same card style */}
+        <div className="relative" ref={moreMenuRef}>
+          <button
+            onClick={() => setMoreMenuOpen(!moreMenuOpen)}
+            className={`rounded-2xl border p-4 transition hover:-translate-y-1 hover:shadow-lg ${
+              isCurrentPageSecondary
+                ? "border-slate-900 bg-slate-900 text-white shadow-lg"
+                : "border-slate-200 bg-white text-slate-700"
+            }`}
+          >
+            <div className="flex items-center gap-3 text-lg font-semibold">
               {isCurrentPageSecondary && currentPage ? (
                 <>
-                  <span className="mr-1">{currentPage.icon}</span>
+                  <span>{currentPage.icon}</span>
                   {currentPage.label}
                 </>
               ) : (
-                "More"
+                <>
+                  <span>📋</span>
+                  More
+                </>
               )}
               <ChevronDown
-                className={`h-4 w-4 transition-transform ${
+                className={`h-5 w-5 transition-transform ${
                   moreMenuOpen ? "rotate-180" : ""
                 }`}
               />
-            </button>
+            </div>
+            <p
+              className={`mt-1 text-sm ${
+                isCurrentPageSecondary ? "text-white/80" : "text-slate-500"
+              }`}
+            >
+              {isCurrentPageSecondary && currentPage
+                ? secondaryItems.find((i) => i.href === pathname)?.description
+                : "Additional tools"}
+            </p>
+          </button>
 
-            {/* Dropdown menu */}
-            {moreMenuOpen && (
-              <div className="absolute left-0 top-full mt-1 w-56 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-                {secondaryItems.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setMoreMenuOpen(false)}
-                    className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                      isActive(item.href)
-                        ? "bg-indigo-50 text-indigo-700 font-medium"
-                        : "text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    <span>{item.icon}</span>
-                    <div>
-                      <div className="font-medium">{item.label}</div>
-                      <div className="text-xs text-slate-500">
-                        {item.description}
-                      </div>
+          {/* Dropdown menu */}
+          {moreMenuOpen && (
+            <div className="absolute left-0 top-full z-50 mt-2 w-64 rounded-xl border border-slate-200 bg-white py-2 shadow-xl">
+              {secondaryItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMoreMenuOpen(false)}
+                  className={`flex items-center gap-3 px-4 py-3 transition-colors ${
+                    isActive(item.href)
+                      ? "bg-slate-100 text-slate-900"
+                      : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="text-lg">{item.icon}</span>
+                  <div>
+                    <div className="font-medium">{item.label}</div>
+                    <div className="text-xs text-slate-500">
+                      {item.description}
                     </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        </nav>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
 
-        <div className="flex items-center gap-3 text-sm text-slate-500">
+        {/* User info - pushed to the right */}
+        <div className="ml-auto flex items-center gap-3 text-sm text-slate-500">
           <span>
             Logged in as <strong className="text-slate-700">{user}</strong>
           </span>
         </div>
-      </div>
+      </nav>
     </header>
   );
 }
