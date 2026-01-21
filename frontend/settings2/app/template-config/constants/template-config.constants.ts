@@ -28,6 +28,12 @@ export const MENU_ITEMS = [
     icon: "📂",
   },
   {
+    href: "/ai-training",
+    label: "AI Training",
+    description: "View AI training conversations",
+    icon: "🧠",
+  },
+  {
     href: "/sandbox",
     label: "Autorespond Sandbox",
     description: "Test autorespond outputs locally",

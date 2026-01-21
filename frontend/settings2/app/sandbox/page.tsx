@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Download,
@@ -22,8 +21,10 @@ import {
   X,
 } from "lucide-react";
 
+import Link from "next/link";
+
 import { ApiError, SettingsApi } from "@/lib/api";
-import { MENU_ITEMS } from "../template-config/constants/template-config.constants";
+import { Header } from "@/components/layout/Header";
 import {
   Card,
   CardContent,
@@ -128,6 +129,9 @@ const ErrorBanner = ({ message }: { message: string }) => (
 );
 
 export default function SandboxPage() {
+  // Auth state
+  const [user, setUser] = useState<string>("Admin");
+
   // Tab state
   const [activeTab, setActiveTab] = useState<TabType>("liens");
 
@@ -242,6 +246,25 @@ export default function SandboxPage() {
       setIsLoadingBillBalanceResponse(false);
     }
   };
+
+  // Auth check
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const auth = await SettingsApi.getAuthStatus();
+        if (!auth.authenticated) {
+          window.location.href = "/login";
+          return;
+        }
+        setUser(auth.username ?? "Admin");
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          window.location.href = "/login";
+        }
+      }
+    };
+    checkAuth();
+  }, []);
 
   useEffect(() => {
     loadConversations();
@@ -358,36 +381,10 @@ export default function SandboxPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-10">
-      <nav className="grid gap-3 rounded-3xl border border-white/60 bg-white/80 p-3 shadow-xl shadow-slate-900/5 backdrop-blur sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-        {MENU_ITEMS.map((item) => {
-          const isActive = item.href === "/sandbox";
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`rounded-2xl border p-4 transition hover:-translate-y-1 hover:shadow-lg ${
-                isActive
-                  ? "border-slate-900 bg-slate-900 text-white shadow-lg"
-                  : "border-slate-200 bg-white text-slate-700"
-              }`}
-            >
-              <div className="flex items-center gap-3 text-lg font-semibold">
-                <span>{item.icon}</span>
-                {item.label}
-              </div>
-              <p
-                className={`mt-1 text-sm ${
-                  isActive ? "text-white/80" : "text-slate-500"
-                }`}
-              >
-                {item.description}
-              </p>
-            </Link>
-          );
-        })}
-      </nav>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
+      <Header user={user} currentPage={{ label: "Sandbox", icon: "🧪" }} />
 
+      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1227,6 +1224,7 @@ export default function SandboxPage() {
           </div>
         </>
       )}
+      </main>
     </div>
   );
 }

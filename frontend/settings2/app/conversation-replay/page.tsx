@@ -26,6 +26,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Header } from "@/components/layout/Header";
 
 const easing = { duration: 0.45, ease: [0.16, 1, 0.3, 1] };
 
@@ -185,7 +186,10 @@ export default function ConversationReplayPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-4xl flex-col gap-8 px-6 py-10">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
+      <Header user={user} currentPage={{ label: "Replay", icon: "🔁" }} />
+
+      <main className="mx-auto flex max-w-4xl flex-col gap-8 px-6 py-10">
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -418,6 +422,7 @@ export default function ConversationReplayPage() {
           </div>
         </div>
       )}
+      </main>
     </div>
   );
 }

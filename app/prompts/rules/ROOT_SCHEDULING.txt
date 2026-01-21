@@ -44,7 +44,11 @@ Please use the following rules to sub-classify the provided email content, alrea
    - **NOTE**: If an email says "keep the appointment at [original time]" after a reschedule was discussed, this is a 'Cancel Request' (canceling the reschedule), NOT a 'Reschedule Request'.
 
    - If the email mentions both a **missed/no-show appointment AND an intent to reschedule** (e.g., "did not attend...reschedule", "no-show...need to reschedule", "missed appointment...call to reschedule"), classify as 'Reschedule Request'.
- If there is ANY attachment with document type "rx" (prescription/referral), ALWAYS classify as 'RX' regardless of email content. However this rule applies only if there is document of type RX
 
+   **CRITICAL - RX Document Detection Rule:**
+   - This rule applies ONLY if the "ATTACHED DOCUMENTS ANALYSIS" section above shows a document with `Document Type: rx`.
+   - If the document analysis section shows a document with type "rx", classify as 'RX' regardless of email content.
+   - **IMPORTANT**: Email text mentioning "attached Rx", "attached referral", or "see attached prescription" does NOT count as having an RX document. You MUST verify that the ATTACHED DOCUMENTS ANALYSIS section actually lists a document with type "rx".
+   - If there is NO "ATTACHED DOCUMENTS ANALYSIS" section, or if the section does NOT contain any document with type "rx", then this rule does NOT apply - proceed with normal classification based on email content.
 
 --- END Scheduling Sub-Classification RULES ---

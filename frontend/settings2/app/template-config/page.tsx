@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { BadgeCheck } from "lucide-react";
 
@@ -13,10 +12,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Header } from "@/components/layout/Header";
 
 import {
   DEFAULT_CUSTOM_PLACEHOLDERS,
-  MENU_ITEMS,
   TAG_OPTIONS,
 } from "./constants/template-config.constants";
 import { getTagLabel } from "./utils/template-helpers";
@@ -148,36 +147,10 @@ export default function TemplateConfigPage() {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-10">
-      <nav className="grid gap-3 rounded-3xl border border-white/60 bg-white/80 p-3 shadow-xl shadow-slate-900/5 backdrop-blur sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-        {MENU_ITEMS.map((item) => {
-          const isActive = item.href === "/template-config";
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`rounded-2xl border p-4 transition hover:-translate-y-1 hover:shadow-lg ${
-                isActive
-                  ? "border-slate-900 bg-slate-900 text-white shadow-lg"
-                  : "border-slate-200 bg-white text-slate-700"
-              }`}
-            >
-              <div className="flex items-center gap-3 text-lg font-semibold">
-                <span>{item.icon}</span>
-                {item.label}
-              </div>
-              <p
-                className={`mt-1 text-sm ${
-                  isActive ? "text-white/80" : "text-slate-500"
-                }`}
-              >
-                {item.description}
-              </p>
-            </Link>
-          );
-        })}
-      </nav>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
+      <Header user={currentUser} currentPage={{ label: "Templates", icon: "📝" }} />
 
+      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
       <Card className="rounded-3xl border border-white/40 bg-gradient-to-br from-indigo-500 via-purple-500 to-sky-500 p-8 text-white shadow-2xl">
         <CardHeader className="p-0">
           <CardTitle className="flex flex-wrap items-center justify-between gap-4 text-3xl">
@@ -338,6 +311,7 @@ export default function TemplateConfigPage() {
           )}
         </CardContent>
       </Card>
+      </main>
     </div>
   );
 }

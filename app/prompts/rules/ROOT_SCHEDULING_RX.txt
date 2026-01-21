@@ -7,9 +7,10 @@ Please use the following rules to sub-classify the provided email content, alrea
 --- START RX Sub-Classification RULES ---
 
 **🔴 HIGHEST PRIORITY RULE - RX Document Type Detection:**
+   - This rule applies ONLY if the "ATTACHED DOCUMENTS ANALYSIS" section above contains a document with `Document Type: rx`.
    - If the document analysis section includes ANY document with type "rx" (case-insensitive), immediately classify as 'RX' regardless of email content. This rule takes precedence over ALL other rules below.
-   - Check the document_analysis_results for any entry where `document_type` equals "rx".
-   - If found, skip all other analysis and return 'RX' classification.
+   - **CRITICAL**: Email text mentioning "attached Rx", "attached referral", or "see attached prescription" does NOT satisfy this rule. You MUST verify that the ATTACHED DOCUMENTS ANALYSIS section actually lists a document with `Document Type: rx`.
+   - If there is NO "ATTACHED DOCUMENTS ANALYSIS" section, or if NO document in that section has type "rx", then this rule does NOT apply - proceed with normal classification rules below.
 
 1. **RX-Related Status or Request**: Based on the email content, determine the specific status or request concerning a prescription (RX) or related appointment, and classify as follows:
 
@@ -30,7 +31,7 @@ Please use the following rules to sub-classify the provided email content, alrea
 
    Focus ONLY on what the current email is stating, not what previous emails in the conversation requested.
 
-   - If the email has an attachment of type RX and/or is a **direct request for a new prescription or a refill**, classify as 'RX'.
+   - If the ATTACHED DOCUMENTS ANALYSIS section shows a document with type "rx", OR if the email is a **direct request for a new prescription or a refill** (without referencing an attachment), classify as 'RX'. Note: Email text mentioning "attached Rx" without actual document analysis confirmation does NOT count.
    - If the email is **requesting authorization or approval to proceed with an existing appointment or referral** (e.g., "Can we get the authorization for [patient]?", "Need authorization to proceed", "Requesting approval for scheduled MRI"), classify as 'RX'.
    - If the email has a **PASSWORD-PROTECTED or ENCRYPTED attachment** (indicated in the document analysis section) AND the recipient email address is "scheduling@precisemri.com" (check the "To:" field in email metadata), classify as 'RX'. Password-protected documents sent to the scheduling inbox are typically referral documents (prescriptions/RX) that require security for patient privacy.
    - If the email content **includes a password** (e.g., "the password is...", "password: xyz", "here is the password", "pw:", "passcode:", or similar password-sharing language), classify as 'RX'. Emails that share passwords are typically providing access to password-protected referral documents (prescriptions).

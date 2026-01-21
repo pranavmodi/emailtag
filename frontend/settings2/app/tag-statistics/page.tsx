@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -27,7 +26,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { MENU_ITEMS } from "../template-config/constants/template-config.constants";
+import { Header } from "@/components/layout/Header";
 
 const TAG_GROUPS: Array<{ label: string; options: string[] }> = [
   {
@@ -434,36 +433,10 @@ export default function TagStatisticsPage() {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-10">
-      <nav className="grid gap-3 rounded-3xl border border-white/60 bg-white/80 p-3 shadow-xl shadow-slate-900/5 backdrop-blur sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-        {MENU_ITEMS.map((item) => {
-          const isActive = item.href === "/tag-statistics";
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`rounded-2xl border p-4 transition hover:-translate-y-1 hover:shadow-lg ${
-                isActive
-                  ? "border-slate-900 bg-slate-900 text-white shadow-lg"
-                  : "border-slate-200 bg-white text-slate-700"
-              }`}
-            >
-              <div className="flex items-center gap-3 text-lg font-semibold">
-                <span>{item.icon}</span>
-                {item.label}
-              </div>
-              <p
-                className={`mt-1 text-sm ${
-                  isActive ? "text-white/80" : "text-slate-500"
-                }`}
-              >
-                {item.description}
-              </p>
-            </Link>
-          );
-        })}
-      </nav>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
+      <Header user={user} currentPage={{ label: "Tag Statistics", icon: "📊" }} />
 
+      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
       <motion.section
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -834,6 +807,7 @@ export default function TagStatisticsPage() {
           {archiveResult && <ArchivedConversationsTable result={archiveResult} />}
         </motion.section>
       )}
+      </main>
     </div>
   );
 }

@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { motion } from "framer-motion";
 import { SettingsApi, ReprocessApi, ApiError, ReprocessResponse } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { MENU_ITEMS } from "../template-config/constants/template-config.constants";
+import { Header } from "@/components/layout/Header";
 
 const easing = { duration: 0.45, ease: [0.16, 1, 0.3, 1] };
 
@@ -127,37 +126,10 @@ export default function ReprocessPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-10">
-      {/* Navigation */}
-      <nav className="grid gap-3 rounded-3xl border border-white/60 bg-white/80 p-3 shadow-xl shadow-slate-900/5 backdrop-blur sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-        {MENU_ITEMS.map((item) => {
-          const isActive = item.href === "/reprocess";
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`group flex flex-col gap-1 rounded-2xl px-4 py-3 transition-all ${
-                isActive
-                  ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg"
-                  : "hover:bg-slate-50"
-              }`}
-            >
-              <span className="text-lg">{item.icon}</span>
-              <span
-                className={`text-sm font-medium ${isActive ? "text-white" : "text-slate-700"}`}
-              >
-                {item.label}
-              </span>
-              <span
-                className={`text-xs ${isActive ? "text-white/80" : "text-slate-400"}`}
-              >
-                {item.description}
-              </span>
-            </Link>
-          );
-        })}
-      </nav>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
+      <Header user={user} currentPage={{ label: "Reprocess", icon: "🔄" }} />
 
+      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
       {/* Hero Section */}
       <motion.section
         initial={{ opacity: 0, y: 24 }}
@@ -335,15 +307,7 @@ export default function ReprocessPage() {
         </motion.section>
       )}
 
-      {/* Footer */}
-      <motion.footer
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ ...easing, delay: 0.15 }}
-        className="text-center text-sm text-slate-400"
-      >
-        Logged in as <span className="font-medium text-slate-600">{user}</span>
-      </motion.footer>
+      </main>
     </div>
   );
 }

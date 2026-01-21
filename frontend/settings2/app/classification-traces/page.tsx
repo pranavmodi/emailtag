@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -27,7 +26,7 @@ import { ApiError, ClassificationTracesApi, SettingsApi, type FullTracesResponse
 import type { RecentConversation, ClassificationTrace } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { MENU_ITEMS } from "../template-config/constants/template-config.constants";
+import { Header } from "@/components/layout/Header";
 
 const easing = { duration: 0.45, ease: [0.16, 1, 0.3, 1] };
 
@@ -722,26 +721,7 @@ function ClassificationTracesContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
-      {/* Navigation Header */}
-      <header className="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-slate-200/60">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
-          <nav className="flex items-center gap-1 text-sm font-medium">
-            {MENU_ITEMS.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-              >
-                <span className="mr-1">{item.icon}</span>
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-          <div className="flex items-center gap-3 text-sm text-slate-500">
-            <span>Logged in as <strong className="text-slate-700">{user}</strong></span>
-          </div>
-        </div>
-      </header>
+      <Header user={user} currentPage={{ label: "Traces", icon: "🔍" }} />
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-6 py-8">

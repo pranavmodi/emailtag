@@ -412,6 +412,184 @@ async def get_all_tags_statistics(
     )
 
 
+@router.get("/ai-training-conversations")
+async def get_ai_training_conversations(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(20, ge=1, le=100, description="Number of conversations per page"),
+    days: int = Query(14, ge=1, le=90, description="Number of days to look back"),
+    filter_tags: str = Query(None, description="Comma-separated list of tags to filter by (must have ALL)"),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Get conversations tagged with 'AI:Training' from Front API.
+    Supports pagination and filtering by additional tags.
+
+    Args:
+        page: Page number (1-indexed)
+        page_size: Number of conversations per page
+        days: Number of days to look back
+        filter_tags: Optional comma-separated list of additional tags to filter by
+
+    Returns:
+        Dict with conversations, pagination info, and available tags for filtering
+    """
+    import httpx
+    from datetime import datetime, timedelta
+    from app.core.config import settings
+    from typing import Set
+
+    logger.info(f"Fetching AI:Training conversations - page={page}, page_size={page_size}, days={days}, filter_tags={filter_tags}")
+
+    if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Front API not configured"
+        )
+
+    headers = {
+        "Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}",
+        "Accept": "application/json",
+    }
+
+    # Calculate time threshold
+    after_timestamp = (datetime.now() - timedelta(days=days)).timestamp()
+
+    # Parse filter tags
+    additional_tags = []
+    if filter_tags:
+        additional_tags = [t.strip() for t in filter_tags.split(",") if t.strip()]
+
+    # First, get the AI:Training tag ID
+    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+        # Get all tags
+        tags_url = f"{settings.FRONT_API_BASE_URL}/tags"
+        tags_response = await client.get(tags_url, headers=headers)
+        tags_response.raise_for_status()
+        all_tags = tags_response.json().get("_results", [])
+
+        # Find AI:Training tag
+        ai_training_tag_id = None
+        tag_id_to_name = {}
+        for tag in all_tags:
+            tag_id_to_name[tag["id"]] = tag["name"]
+            if tag["name"].lower() == "ai:training":
+                ai_training_tag_id = tag["id"]
+
+        if not ai_training_tag_id:
+            return {
+                "conversations": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 0,
+                "available_tags": [],
+                "filter_tags": additional_tags,
+                "days": days,
+                "error": "AI:Training tag not found in Front"
+            }
+
+        # Fetch conversations with AI:Training tag
+        conversations_url = f"{settings.FRONT_API_BASE_URL}/tags/{ai_training_tag_id}/conversations"
+        params = {"limit": 100, "sort_by": "date", "sort_order": "desc"}
+
+        all_conversations = []
+        seen_ids: Set[str] = set()
+        available_tags_set: Set[str] = set()
+        max_pages = 20
+        current_page = 1
+        consecutive_old_pages = 0
+
+        while current_page <= max_pages:
+            response = await client.get(conversations_url, headers=headers, params=params)
+            response.raise_for_status()
+            data = response.json()
+            conversations = data.get("_results", [])
+            pagination = data.get("_pagination", {})
+
+            page_had_valid_conv = False
+
+            for conv in conversations:
+                conv_id = conv.get("id")
+                created_at = conv.get("created_at", 0)
+
+                if conv_id and conv_id not in seen_ids:
+                    seen_ids.add(conv_id)
+
+                    # Filter by timestamp
+                    if created_at < after_timestamp:
+                        continue
+
+                    # Get tags for this conversation
+                    conv_tags = conv.get("tags", [])
+                    tag_names = [t.get("name", "") for t in conv_tags if t.get("name")]
+
+                    # Collect available tags for filtering
+                    for tag_name in tag_names:
+                        if tag_name.lower() != "ai:training":
+                            available_tags_set.add(tag_name)
+
+                    # Apply additional tag filter if specified
+                    if additional_tags:
+                        has_all_tags = all(at.lower() in [tn.lower() for tn in tag_names] for at in additional_tags)
+                        if not has_all_tags:
+                            continue
+
+                    # Build conversation object
+                    recipient = conv.get("recipient", {})
+                    all_conversations.append({
+                        "conversation_id": conv_id,
+                        "subject": conv.get("subject"),
+                        "recipient": recipient.get("handle") if recipient else None,
+                        "status": conv.get("status"),
+                        "created_at": datetime.fromtimestamp(created_at).isoformat() if created_at else None,
+                        "tags": tag_names,
+                        "front_url": f"https://app.frontapp.com/open/{conv_id}"
+                    })
+                    page_had_valid_conv = True
+
+            if not page_had_valid_conv:
+                consecutive_old_pages += 1
+                if consecutive_old_pages >= 3:
+                    break
+            else:
+                consecutive_old_pages = 0
+
+            next_url = pagination.get("next")
+            if not next_url:
+                break
+
+            conversations_url = next_url
+            params = {}
+            current_page += 1
+            await asyncio.sleep(0.05)  # Small delay to avoid rate limits
+
+    # Sort by created_at descending
+    all_conversations.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+
+    # Calculate pagination
+    total = len(all_conversations)
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_conversations = all_conversations[start_idx:end_idx]
+
+    # Sort available tags alphabetically
+    available_tags = sorted(list(available_tags_set))
+
+    logger.info(f"Found {total} AI:Training conversations, returning page {page} with {len(paginated_conversations)} items")
+
+    return {
+        "conversations": paginated_conversations,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "available_tags": available_tags,
+        "filter_tags": additional_tags,
+        "days": days
+    }
+
+
 @router.get("/archived-conversations", response_model=ArchivedConversationsResponse)
 async def get_archived_conversations(
     target_date: date = Query(..., description="Date to query archived conversations (format: YYYY-MM-DD)"),
