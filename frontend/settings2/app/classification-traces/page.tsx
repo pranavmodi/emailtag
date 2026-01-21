@@ -745,7 +745,19 @@ function ClassificationTracesContent() {
             </div>
             <p className="mt-2 text-slate-600">
               {conversationIdParam
-                ? `Viewing traces for conversation: ${conversationIdParam}`
+                ? (
+                  <>
+                    Viewing traces for conversation:{" "}
+                    <a
+                      href={`https://app.frontapp.com/open/${conversationIdParam}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
+                    >
+                      {conversationIdParam}
+                    </a>
+                  </>
+                )
                 : "View classification decisions, archival traces, and LLM interactions for processed conversations."
               }
             </p>

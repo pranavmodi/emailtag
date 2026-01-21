@@ -126,7 +126,7 @@ export function Header({ user, currentPage }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-30 bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50 border-b border-slate-200/60 py-4">
-      <nav className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-6">
+      <nav className="mx-auto flex max-w-6xl flex-wrap items-stretch gap-3 px-6">
         {/* Primary menu items - card style */}
         {primaryItems.map((item) => {
           const active = isActive(item.href);
@@ -134,18 +134,18 @@ export function Header({ user, currentPage }: HeaderProps) {
             <Link
               key={item.href}
               href={item.href}
-              className={`rounded-2xl border p-4 transition hover:-translate-y-1 hover:shadow-lg ${
+              className={`w-52 h-24 flex flex-col justify-center rounded-2xl border p-4 transition hover:-translate-y-1 hover:shadow-lg ${
                 active
                   ? "border-slate-900 bg-slate-900 text-white shadow-lg"
                   : "border-slate-200 bg-white text-slate-700"
               }`}
             >
-              <div className="flex items-center gap-3 text-lg font-semibold">
+              <div className="flex items-center gap-2 text-base font-semibold">
                 <span>{item.icon}</span>
-                {item.label}
+                <span className="truncate">{item.label}</span>
               </div>
               <p
-                className={`mt-1 text-sm ${
+                className={`mt-1 text-xs line-clamp-2 ${
                   active ? "text-white/80" : "text-slate-500"
                 }`}
               >
@@ -159,32 +159,32 @@ export function Header({ user, currentPage }: HeaderProps) {
         <div className="relative" ref={moreMenuRef}>
           <button
             onClick={() => setMoreMenuOpen(!moreMenuOpen)}
-            className={`rounded-2xl border p-4 transition hover:-translate-y-1 hover:shadow-lg ${
+            className={`w-52 h-24 flex flex-col justify-center rounded-2xl border p-4 text-left transition hover:-translate-y-1 hover:shadow-lg ${
               isCurrentPageSecondary
                 ? "border-slate-900 bg-slate-900 text-white shadow-lg"
                 : "border-slate-200 bg-white text-slate-700"
             }`}
           >
-            <div className="flex items-center gap-3 text-lg font-semibold">
+            <div className="flex items-center gap-2 text-base font-semibold">
               {isCurrentPageSecondary && currentPage ? (
                 <>
                   <span>{currentPage.icon}</span>
-                  {currentPage.label}
+                  <span className="flex-1 truncate">{currentPage.label}</span>
                 </>
               ) : (
                 <>
                   <span>📋</span>
-                  More
+                  <span className="flex-1">More</span>
                 </>
               )}
               <ChevronDown
-                className={`h-5 w-5 transition-transform ${
+                className={`h-4 w-4 flex-shrink-0 transition-transform ${
                   moreMenuOpen ? "rotate-180" : ""
                 }`}
               />
             </div>
             <p
-              className={`mt-1 text-sm ${
+              className={`mt-1 text-xs line-clamp-2 ${
                 isCurrentPageSecondary ? "text-white/80" : "text-slate-500"
               }`}
             >
