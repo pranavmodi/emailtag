@@ -1360,6 +1360,12 @@ async def handle_lien_request(
             else:
                 logger.warning(f"Invalid data structure in patient info response for {patient_id}")
 
+        # Wait for RadFlow to update signature status after document upload
+        # RadFlow needs approximately 5 minutes to process uploaded documents and update signature status
+        logger.info(f"⏳ Waiting 5 minutes for RadFlow to update signature status for patient {patient_id}...")
+        await asyncio.sleep(300)  # 5 minutes = 300 seconds
+        logger.info(f"✅ Wait complete. Proceeding to generate lien status table for patient {patient_id}")
+
         # Generate lien status table
         lien_status_table = await _generate_lien_status_table(patient_id, upload_results, signature_type)
 
