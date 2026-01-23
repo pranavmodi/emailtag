@@ -1408,5 +1408,17 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["Patient Demo"]
+    },
+    "75": {
+        "description": "PRE1171578 - Apt status req - Client inquiry about appointment/imaging status using patient ID",
+        "subject": "Status Update Request - PRE1171578",
+        "body_html": (
+            "<p>Hello,</p>"
+            "<p>Can you please provide a status update for patient PRE1171578?</p>"
+            "<p>We would like to know if the imaging has been completed.</p>"
+            "<p>Thank you.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Apt status req"]
     }
 }
