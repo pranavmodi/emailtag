@@ -1356,15 +1356,17 @@ async def compile_study_participants(patient_id: str, studies: List[Dict[str, An
                 participants = participants_result["data"]["result"]
 
                 for participant in participants:
+                    # Use 'or ""' to handle None values from the API
+                    email = (participant.get("email") or "").strip().lower()
                     participant_data = {
-                        "email": participant.get("email", "").strip().lower(),
-                        "role": participant.get("playerTypeName", "").lower(),
-                        "type": participant.get("type", "").lower(),
-                        "referrer_id": participant.get("referrerID", ""),
-                        "phone": participant.get("businessPhoneNumber", ""),
+                        "email": email,
+                        "role": (participant.get("playerTypeName") or "").lower(),
+                        "type": (participant.get("type") or "").lower(),
+                        "referrer_id": participant.get("referrerID") or "",
+                        "phone": participant.get("businessPhoneNumber") or "",
                         "accession_number": accession_number,
                         "study_id": study_id,
-                        "domain": participant.get("email", "").split("@")[1].lower() if "@" in participant.get("email", "") else ""
+                        "domain": email.split("@")[1].lower() if "@" in email else ""
                     }
 
                     all_participants.append(participant_data)
@@ -1385,6 +1387,95 @@ async def compile_study_participants(patient_id: str, studies: List[Dict[str, An
         "studies_with_participants": studies_with_participants,
         "studies_without_participants": studies_without_participants
     }
+
+
+async def verify_sender_via_radflow_contacts(sender_email: str) -> Dict[str, Any]:
+    """
+    Verifies if the sender's email exists in the RadFlow contact database.
+
+    This function calls the RadFlow contactVerifyEmail endpoint to check if the
+    sender's email is registered as a known contact. This allows emails from
+    known contacts (like attorneys or doctors) to bypass HIPAA form requirements
+    even if they're not directly on file for a specific patient.
+
+    Args:
+        sender_email: Email address of the sender
+
+    Returns:
+        Dictionary containing:
+            {
+                "found": bool,  # Whether the email was found in contacts
+                "email": str,   # The matched email (if found)
+                "error": str    # Error message (if any)
+            }
+    """
+    if not sender_email or '@' not in sender_email:
+        return {"found": False, "email": None, "error": "Invalid email format"}
+
+    # Check if RadFlow contact verification is configured
+    contact_verify_url = app_settings_instance.RADFLOW_CONTACT_VERIFY_URL
+    contact_verify_auth = app_settings_instance.RADFLOW_CONTACT_VERIFY_AUTH
+
+    if not contact_verify_url or not contact_verify_auth:
+        logger.debug("RadFlow contact verification not configured, skipping")
+        return {"found": False, "email": None, "error": None}
+
+    # Extract domain from sender email
+    sender_domain = sender_email.split('@')[1].lower()
+    sender_email_lower = sender_email.lower()
+
+    try:
+        # Note: verify=False to handle RadFlow staging server SSL certificate issues
+        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+            # Call the RadFlow contactVerifyEmail endpoint
+            url = f"{contact_verify_url}/{sender_domain}"
+            headers = {
+                "accept": "*/*",
+                "Authorization": contact_verify_auth
+            }
+
+            response = await client.post(url, headers=headers, content="")
+
+            if response.status_code != 200:
+                logger.warning(f"RadFlow contact verify API returned status {response.status_code}")
+                return {"found": False, "email": None, "error": f"API returned status {response.status_code}"}
+
+            data = response.json()
+
+            # Check if the response indicates success
+            if data.get("status") != 1 or data.get("responseStatus") != "Success":
+                logger.warning(f"RadFlow contact verify API returned unsuccessful response: {data}")
+                return {"found": False, "email": None, "error": "API returned unsuccessful response"}
+
+            # Parse the result - it's a JSON string containing a nested array
+            result_str = data.get("result", "[]")
+            try:
+                result_data = json.loads(result_str)
+                # The result is a nested array: [[{Email: ...}, ...]]
+                if result_data and isinstance(result_data, list) and len(result_data) > 0:
+                    contacts = result_data[0] if isinstance(result_data[0], list) else result_data
+                else:
+                    contacts = []
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse RadFlow contact verify result: {result_str}")
+                return {"found": False, "email": None, "error": "Failed to parse API response"}
+
+            # Check if sender's email is in the contacts list
+            for contact in contacts:
+                contact_email = contact.get("Email", "").lower()
+                if contact_email == sender_email_lower:
+                    logger.info(f"Sender {sender_email} found in RadFlow contacts database")
+                    return {"found": True, "email": contact_email, "error": None}
+
+            logger.debug(f"Sender {sender_email} not found in RadFlow contacts for domain {sender_domain}")
+            return {"found": False, "email": None, "error": None}
+
+    except httpx.TimeoutException:
+        logger.error("Timeout calling RadFlow contact verify API")
+        return {"found": False, "email": None, "error": "API timeout"}
+    except Exception as e:
+        logger.error(f"Exception calling RadFlow contact verify API: {e}")
+        return {"found": False, "email": None, "error": str(e)}
 
 
 async def verify_sender_authorization(sender_email: str, participants: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1507,9 +1598,10 @@ async def verify_sender_for_patient_access(
     High-level function to verify if a sender is authorized to access patient information.
 
     This is the main entry point for sender verification. It:
-    1. Fetches patient and study information (if not provided)
-    2. Compiles all participants for the patient's studies
-    3. Verifies the sender against the participants
+    1. Checks if sender exists in RadFlow contacts database (known attorneys, doctors, etc.)
+    2. If not found in contacts, fetches patient and study information
+    3. Compiles all participants for the patient's studies
+    4. Verifies the sender against the participants
 
     Args:
         patient_id: The patient's ID
@@ -1520,13 +1612,28 @@ async def verify_sender_for_patient_access(
         Dictionary containing:
             {
                 "authorized": True/False,
-                "verification_status": str,  # "verified", "domain_verified", "unverified"
-                "role": str,  # e.g., "attorney_on_file", "doctor_on_file", etc.
+                "verification_status": str,  # "contact_verified", "verified", "domain_verified", "unverified"
+                "role": str,  # e.g., "known_contact", "attorney_on_file", "doctor_on_file", etc.
                 "player_info": dict,  # Participant information (if verified)
                 "message": str  # Human-readable message about verification result
             }
     """
     try:
+        # First, check RadFlow contacts database
+        # If the sender is a known contact (attorney, doctor, etc.), they're authorized
+        # regardless of whether they're on file for this specific patient
+        radflow_contact_result = await verify_sender_via_radflow_contacts(sender_email)
+        if radflow_contact_result.get("found"):
+            logger.info(f"Sender {sender_email} verified via RadFlow contacts database")
+            return {
+                "authorized": True,
+                "verification_status": "contact_verified",
+                "role": "known_contact",
+                "player_info": {"email": radflow_contact_result.get("email")},
+                "message": f"Sender verified as known contact in RadFlow database",
+                "total_participants": 0
+            }
+
         # Fetch studies if not provided
         if studies is None:
             mcp_results = await get_patient_and_study_info(patient_id)

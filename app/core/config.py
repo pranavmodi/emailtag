@@ -149,6 +149,10 @@ class Settings(BaseSettings):
     RADFLOW_UPLOAD_ENDPOINT: str  # RadFlow API endpoint for uploading patient documents
     RADFLOW_LIEN_DOCTYPE_ID: int = 1  # Document type ID for lien documents
 
+    # RadFlow Contact Verification API
+    RADFLOW_CONTACT_VERIFY_URL: Optional[str] = None  # RadFlow API endpoint for verifying contacts by domain
+    RADFLOW_CONTACT_VERIFY_AUTH: Optional[str] = None  # Basic auth token for contact verify API
+
     @field_validator("ASYNC_DATABASE_URL", mode="before")
     def assemble_async_db_connection(cls, v: Optional[str], info) -> Any:
         """Assemble async database connection string if not provided."""
