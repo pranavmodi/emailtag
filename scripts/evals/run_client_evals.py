@@ -39,6 +39,7 @@ SCENARIO_TYPES = {
     "lien_asl": "ASL Liens",
     "lien_psl": "PSL Liens",
     "lien_modified": "Lien Modifications/Fraudulent",
+    "patient_demo": "Patient Demographics",
     "records": "Records & Reports",
     "billing": "Billing Requests",
     "other": "Other/Miscellaneous"
@@ -55,6 +56,10 @@ def get_scenario_type(scenario: Dict[str, Any]) -> str:
 
     # Convert to set for easier checking
     tags_set = set(expected_tags)
+
+    # Check for Patient Demo (check early as it's specific)
+    if "Patient Demo" in tags_set:
+        return "patient_demo"
 
     # Check for Lien Modified / Fraudulent (check first as it's more specific)
     if "Lien Modified" in tags_set or "AI: Human review required" in tags_set:
@@ -93,6 +98,8 @@ def get_scenario_type(scenario: Dict[str, Any]) -> str:
         return "billing"
 
     # Fallback based on description keywords
+    if "patient demo" in description or "patient demographic" in description:
+        return "patient_demo"
     if "apt status" in description or "appointment" in description:
         return "apt_status"
     if "schedule" in description:

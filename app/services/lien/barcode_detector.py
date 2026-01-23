@@ -83,31 +83,52 @@ class BarcodeDetector:
     def _is_valid_lien_type(self, lien_type: str) -> bool:
         """
         Check if a lien type is valid (not a numeric code or other non-lien data).
-        
+
         Args:
             lien_type: The lien type to validate
-            
+
         Returns:
             True if valid lien type, False otherwise
         """
         lien_type_upper = lien_type.upper()
-        
+
         # Known valid lien types
         valid_types = {
-            'RAD', 'RADIOLOGY', 
+            'RAD', 'RADIOLOGY',
             'TC', 'TECH', 'TECHNOLOGIST',
             'MRI', 'CT', 'XRAY', 'ULTRASOUND'  # Add other valid types as needed
         }
-        
+
         # Filter out purely numeric codes (like '000', '019')
         if lien_type.isdigit():
             return False
-        
+
         # Filter out very short codes that are likely not lien types
         if len(lien_type) <= 2 and lien_type not in valid_types:
             return False
-        
+
         return lien_type_upper in valid_types
+
+    def _is_patient_demo_barcode(self, second_component: str) -> bool:
+        """
+        Check if a barcode represents a patient demographic document.
+
+        Patient demo barcodes have a numeric doc type ID in the second component,
+        specifically "019" for patient demographic forms.
+
+        Args:
+            second_component: The second component of the barcode (after first ^)
+
+        Returns:
+            True if this is a patient demo barcode, False otherwise
+        """
+        # Patient demo documents have numeric doc type IDs
+        # The specific doc type for patient demo is 019
+        if second_component.isdigit():
+            # Currently only 019 is recognized as patient demo
+            # Can be extended to include other numeric doc types in the future
+            return second_component == "019"
+        return False
     
     def _scan_with_both_libraries(self, gray_image, process_name: str) -> List:
         """
@@ -744,15 +765,18 @@ class BarcodeDetector:
             all_parsed_barcodes = []
             all_lien_types = set()
             all_patient_ids = set()
+            lien_patient_ids = set()  # Patient IDs from lien barcodes
+            patient_demo_patient_ids = set()  # Patient IDs from patient demo barcodes
+            all_doc_type_ids = set()  # Numeric doc type IDs (for patient demo)
             primary_patient_id = None
             primary_referrer_id = None
-            
+
             for i, barcode_info in enumerate(all_barcodes):
                 barcode_data = barcode_info["data"]
                 barcode_type = barcode_info["type"]
-                
+
                 logger.info(f"🔍 PARSING: '{barcode_data}'")
-                
+
                 # Parse barcode data
                 parsed_data = self._parse_barcode_value(barcode_data)
                 all_parsed_barcodes.append({
@@ -760,22 +784,31 @@ class BarcodeDetector:
                     "raw_value": barcode_data,
                     "parsed_data": parsed_data
                 })
-                
-                # Collect lien types from all barcodes (filter for valid lien types only)
-                lien_type = parsed_data.get("LienType", "").upper()
-                if lien_type and self._is_valid_lien_type(lien_type):
-                    all_lien_types.add(lien_type)
-                
+
                 # Collect all unique patient IDs from all barcodes
                 patient_id = parsed_data.get("PatientID", "")
                 if patient_id and patient_id.startswith("PRE"):
                     all_patient_ids.add(patient_id)
-                
+
+                    # Categorize patient ID by barcode type
+                    if parsed_data.get("is_patient_demo", False):
+                        patient_demo_patient_ids.add(patient_id)
+                        doc_type_id = parsed_data.get("DocTypeID", "")
+                        if doc_type_id:
+                            all_doc_type_ids.add(doc_type_id)
+                        logger.info(f"🔍 BARCODE: Patient demo barcode for patient {patient_id}, DocTypeID={doc_type_id}")
+                    else:
+                        # Collect lien types from non-patient-demo barcodes
+                        lien_type = parsed_data.get("LienType", "").upper()
+                        if lien_type and self._is_valid_lien_type(lien_type):
+                            all_lien_types.add(lien_type)
+                            lien_patient_ids.add(patient_id)
+
                 # Use first barcode's patient ID and referrer ID as primary
                 if i == 0:
                     primary_patient_id = parsed_data.get("PatientID", "")
                     primary_referrer_id = parsed_data.get("ReferrerID", "")
-            
+
             # Combine all lien types and patient IDs found across all barcodes
             combined_lien_types = list(all_lien_types)
             combined_patient_ids = list(all_patient_ids)
@@ -783,12 +816,16 @@ class BarcodeDetector:
                 logger.info(f"🔍 BARCODE: Lien types found: {combined_lien_types}")
             if combined_patient_ids:
                 logger.info(f"🔍 BARCODE: Patient IDs found: {combined_patient_ids}")
-            
+            if patient_demo_patient_ids:
+                logger.info(f"🔍 BARCODE: Patient demo patient IDs: {list(patient_demo_patient_ids)}")
+            if lien_patient_ids:
+                logger.info(f"🔍 BARCODE: Lien patient IDs: {list(lien_patient_ids)}")
+
             # Get first raw barcode value for backward compatibility
             first_raw_value = "Not found"
             if all_parsed_barcodes:
                 first_raw_value = all_parsed_barcodes[0].get("raw_value", "Not found")
-            
+
             return {
                 "barcode_found": True,
                 "raw_value": first_raw_value,  # Add for display script compatibility
@@ -797,7 +834,11 @@ class BarcodeDetector:
                     "PatientID": primary_patient_id,  # First patient ID for backward compatibility
                     "PatientIDs": combined_patient_ids,  # All unique patient IDs found
                     "LienTypes": combined_lien_types,  # All lien types found
-                    "ReferrerID": primary_referrer_id
+                    "ReferrerID": primary_referrer_id,
+                    # New fields for patient demo support
+                    "lien_patient_ids": list(lien_patient_ids),  # Patient IDs from lien barcodes only
+                    "patient_demo_patient_ids": list(patient_demo_patient_ids),  # Patient IDs from patient demo barcodes
+                    "doc_type_ids": list(all_doc_type_ids)  # Numeric doc type IDs (e.g., ["019"])
                 },
                 "all_barcodes": all_barcodes  # Include all found barcodes for debugging
             }
@@ -809,33 +850,50 @@ class BarcodeDetector:
                 "error": str(e)
             }
     
-    def _parse_barcode_value(self, barcode_value: str) -> Dict[str, str]:
+    def _parse_barcode_value(self, barcode_value: str) -> Dict[str, Any]:
         """
         Parse barcode value using ^ separator.
-        
+
         Args:
             barcode_value: Raw barcode string
-            
+
         Returns:
-            Dictionary with parsed components
+            Dictionary with parsed components including:
+                - PatientID: Patient ID from first component
+                - LienType: Lien type (empty for patient demo)
+                - DocTypeID: Document type ID for patient demo (e.g., "019")
+                - ReferrerID: Referrer ID if present
+                - is_patient_demo: True if this is a patient demo barcode
         """
         try:
             components = barcode_value.split('^')
-            
+
+            second_component = components[1] if len(components) > 1 else ""
+
+            # Check if this is a patient demo barcode (numeric doc type like "019")
+            is_patient_demo = self._is_patient_demo_barcode(second_component)
+
             parsed = {
                 "PatientID": components[0] if len(components) > 0 else "",
-                "LienType": components[1] if len(components) > 1 else "",
-                "ReferrerID": components[2] if len(components) > 2 else ""
+                "LienType": second_component if not second_component.isdigit() else "",
+                "DocTypeID": second_component if second_component.isdigit() else "",
+                "ReferrerID": components[2] if len(components) > 2 else "",
+                "is_patient_demo": is_patient_demo
             }
-            
-            logger.info(f"🔍 PARSED: {parsed}")
+
+            if is_patient_demo:
+                logger.info(f"🔍 PARSED (PATIENT DEMO): {parsed}")
+            else:
+                logger.info(f"🔍 PARSED: {parsed}")
             return parsed
-            
+
         except Exception as e:
             logger.error(f"Error parsing barcode value '{barcode_value}': {e}")
             return {
                 "PatientID": "",
                 "LienType": "",
+                "DocTypeID": "",
                 "ReferrerID": "",
+                "is_patient_demo": False,
                 "parse_error": str(e)
             }

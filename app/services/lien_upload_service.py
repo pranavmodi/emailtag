@@ -32,6 +32,7 @@ def _get_doc_type_id(lien_type: str) -> int:
         DocTypeId for RadFlow API
 
     DocTypeId Mapping:
+        19: Patient Demographic Document
         56: RAD Patient Signed Lien (PSL Rad)
         57: RAD Attorney Signed Lien (ASL Rad)
         58: TECH Patient Signed Lien (PSL Tech)
@@ -54,6 +55,10 @@ def _get_doc_type_id(lien_type: str) -> int:
     # Fallback
     logger.error(f"Unknown lien type: {lien_type}. Using default DocTypeId.")
     return settings.RADFLOW_LIEN_DOCTYPE_ID
+
+
+# DocTypeId constant for patient demographic documents
+PATIENT_DEMO_DOC_TYPE_ID = 19
 
 
 async def upload_lien_to_radflow(
@@ -291,4 +296,98 @@ async def upload_lien_pdf_bytes_to_radflow(
         return False
     except Exception as e:
         logger.error(f"Unexpected error uploading lien PDF bytes to patient file: {e}", exc_info=True)
+        return False
+
+
+async def upload_patient_demo_to_radflow(
+    patient_id: str,
+    pdf_bytes: bytes,
+    filename: str = "patient_demo.pdf",
+    doc_type_id: str = "019",
+    conversation_id: str = None
+) -> bool:
+    """
+    Upload patient demographic document PDF bytes to patient file via RadFlow API.
+
+    Patient demo documents have a numeric doc type ID (e.g., "019") and are uploaded
+    with DocTypeId 19 to RadFlow.
+
+    Args:
+        patient_id: Patient ID to upload document for (e.g., "PRE100453")
+        pdf_bytes: Raw PDF file content as bytes
+        filename: Filename for logging purposes
+        doc_type_id: Document type ID from barcode (e.g., "019")
+        conversation_id: Front conversation ID (for test mode file organization)
+
+    Returns:
+        True if upload successful, False otherwise
+    """
+    try:
+        # Check if test mode is enabled
+        async with AsyncSessionLocal() as db:
+            test_mode_enabled = await system_settings_crud.get_setting_value(db, "lien_test_mode", default=False)
+
+        doc_type_name = "Patient Demographic Document"
+
+        # TEST MODE - Save to local directory
+        if test_mode_enabled:
+            logger.info(f"🧪 TEST MODE ENABLED: Saving {doc_type_name} ({filename}) to local directory instead of uploading to RadFlow")
+
+            if conversation_id:
+                test_dir = Path(LIEN_TEST_UPLOAD_DIR) / conversation_id
+            else:
+                test_dir = Path(LIEN_TEST_UPLOAD_DIR) / "unknown_conversation"
+
+            test_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create filename with patient ID and doc type
+            test_filename = f"{patient_id}_Patient_Demo_{filename}"
+            test_filepath = test_dir / test_filename
+
+            with open(test_filepath, 'wb') as f:
+                f.write(pdf_bytes)
+
+            logger.info(f"✅ TEST MODE: Saved patient demo to {test_filepath}")
+            return True
+
+        # PRODUCTION MODE - Upload via MCP server
+        logger.info(f"📤 Uploading {doc_type_name} ({filename}) to patient {patient_id} via RadFlow API")
+
+        # Convert PDF bytes to base64
+        base64_string = base64.b64encode(pdf_bytes).decode('utf-8')
+        logger.debug(f"Converted {len(pdf_bytes)} bytes to base64 ({len(base64_string)} chars)")
+
+        # Use the constant DocTypeId for patient demo
+        radflow_doc_type_id = PATIENT_DEMO_DOC_TYPE_ID
+        logger.info(f"Uploading patient demo via MCP: DocTypeName='{doc_type_name}', DocTypeId={radflow_doc_type_id}, Patient={patient_id}")
+
+        upload_result = await call_mcp_tool(
+            tool_name="upload_patient_document",
+            arguments={
+                "patient_id": patient_id,
+                "doc_type_name": doc_type_name,
+                "doc_type_id": radflow_doc_type_id,
+                "base64_string": base64_string
+            }
+        )
+
+        if upload_result and isinstance(upload_result, dict):
+            if upload_result.get("success"):
+                logger.info(f"✅ Successfully uploaded {doc_type_name} for patient {patient_id} via MCP")
+                return True
+            else:
+                logger.error(f"❌ MCP upload failed: {upload_result.get('error', 'Unknown error')}")
+                return False
+        else:
+            logger.error(f"❌ MCP upload returned unexpected result: {upload_result}")
+            return False
+
+    except httpx.TimeoutException:
+        logger.error(f"⏱️ Timeout uploading patient demo to patient {patient_id}")
+        return False
+    except httpx.HTTPError as e:
+        logger.error(f"HTTP error uploading patient demo: {e}", exc_info=True)
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error uploading patient demo PDF to patient file: {e}", exc_info=True)
         return False

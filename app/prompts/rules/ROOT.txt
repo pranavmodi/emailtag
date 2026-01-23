@@ -24,6 +24,9 @@ If the email has a PASSWORD-PROTECTED or ENCRYPTED attachment AND the recipient 
 1b. **PASSWORD MENTIONED IN EMAIL CONTENT:**
 If the email content includes a password (e.g., "the password is...", "password: xyz", "here is the password", "pw:", "passcode:", or similar password-sharing language), classify as 'Scheduling'. Emails that share passwords are typically providing access to password-protected referral documents or appointment-related attachments.
 
+1c. **ATTACHMENT-BASED CLASSIFICATION (Patient Demo Documents):**
+If there is ANY attachment with document type "patient_demo" (patient demographic/information forms identified by barcodes containing numeric DocTypeID like "019", or documents containing "PATIENT INFORMATION" headers with demographic fields), classify as 'Medical Records & Images'. NOTE: Patient demo documents often accompany lien documents - when BOTH are present, the email should be classified as 'Medical Records & Images' for the patient demo component AND 'Accounts Receivable' for the lien component. The system handles multi-tagging automatically.
+
 2. **SCHEDULING PRIORITY (HIGHEST):**
 If the email's PRIMARY PURPOSE is an ACTIVE scheduling request (e.g., "schedule appointment", "reschedule", "cancel appointment", "did patient attend", "patient no-show", "check appointment status"), classify as 'Scheduling' EVEN IF the email also requests medical records, reports, or billing information.
 
@@ -214,5 +217,6 @@ If there is ANY patient-related content, scheduling information, records request
 - Patient profile updates or corrections → Medical Records & Images
 - Insurance card submissions → Medical Records & Images
 - Patient information mismatches → Medical Records & Images
+- Patient demographic forms/intake documents (Patient Demo) → Medical Records & Images
 
 --- END NO TAG RULES ---

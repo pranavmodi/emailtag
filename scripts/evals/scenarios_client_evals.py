@@ -1171,5 +1171,242 @@ Test ID: {UNIQUE_TEST_ID}"""
         "subject": "Exam Status Inquiry",
         "body_html": "<p>What is the exam status for PRE1164231?</p>",
         "expected_tags": ["Apt status req"]
+    },
+    "64": {
+        "description": "Patient Demo - Standalone - Monica Sanchez patient demographic document submission",
+        "subject": "Patient Information Form - Monica Sanchez",
+        "body_html": (
+            "<p>Hello Precise Imaging,</p>"
+            "<p>Please find attached the patient demographic information form for Monica Sanchez.</p>"
+            "<p>Kindly upload to the patient file.</p>"
+            "<p>Thank you.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "MONICA SANCHEZ.pdf",
+                "filepath": "data/documents/patient-demo/MONICA SANCHEZ.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Patient Demo"]
+    },
+    "65": {
+        "description": "Patient Demo - Standalone - Martin Rivera patient demographic document submission",
+        "subject": "Patient Demographics - Martin Rivera",
+        "body_html": (
+            "<p>Dear Billing Team,</p>"
+            "<p>Attached is the patient information form for Martin Rivera.</p>"
+            "<p>Please process and upload accordingly.</p>"
+            "<p>Best regards.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "MARTIN RIVERA.pdf",
+                "filepath": "data/documents/patient-demo/MARTIN RIVERA.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Patient Demo"]
+    },
+    "66": {
+        "description": "Patient Demo - Standalone - Carlos Penilla patient demographic document submission",
+        "subject": "Patient Information - Carlos Penilla",
+        "body_html": (
+            "<p>Hello,</p>"
+            "<p>Please see attached patient demographic form for Carlos Penilla.</p>"
+            "<p>Thank you for your assistance.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "CARLOS PENILLA.pdf",
+                "filepath": "data/documents/patient-demo/CARLOS PENILLA.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Patient Demo"]
+    },
+    "67": {
+        "description": "Patient Demo - Multiple patients - Two patient demographic documents in single email (Carina Gonzalez and Elizabeth Montano)",
+        "subject": "Patient Information Forms - Multiple Clients",
+        "body_html": (
+            "<p>Good afternoon Precise Imaging,</p>"
+            "<p>Please find attached the patient demographic information forms for the following clients:</p>"
+            "<p>1. Carina Gonzalez<br>"
+            "2. Elizabeth Montano</p>"
+            "<p>Kindly upload to each respective patient file.</p>"
+            "<p>Thank you for your prompt attention.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "CARINA GONZALEZ.pdf",
+                "filepath": "data/documents/patient-demo/CARINA GONZALEZ.pdf",
+                "content_type": "application/pdf"
+            },
+            {
+                "filename": "ELIZABETH MONTANO.pdf",
+                "filepath": "data/documents/patient-demo/ELIZABETH MONTANO.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Patient Demo"]
+    },
+    "68": {
+        "description": "Patient Demo - Standalone - Stephanie Lynne Roddy patient demographic document",
+        "subject": "Patient Demographic Form Submission - Roddy, Stephanie Lynne",
+        "body_html": (
+            "<p>Hi team,</p>"
+            "<p>Attached is the completed patient information form for Stephanie Lynne Roddy.</p>"
+            "<p>Please upload to the patient record.</p>"
+            "<p>Thanks!</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "STEPHANIE LYNNE RODDY.pdf",
+                "filepath": "data/documents/patient-demo/STEPHANIE LYNNE RODDY.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Patient Demo"]
+    },
+    "69": {
+        "description": "Patient Demo + Lien Combined - Document containing both lien and patient demo pages (should split and tag both)",
+        "subject": "Lien and Patient Information - Combined Submission",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>Please find attached the combined lien and patient demographic documents.</p>"
+            "<p>The attachment contains both the signed lien and patient information form.</p>"
+            "<p>Please process both documents accordingly.</p>"
+            "<p>Thank you.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "lien-demo.pdf",
+                "filepath": "data/documents/patient-demo/lien-demo.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Rad Lien", "Patient Demo"]
+    },
+    "70": {
+        "description": "Patient Demo - Standalone - Jadari Jerrell Washington patient demographic submission",
+        "subject": "Patient Info Form - Jadari Jerrell Washington",
+        "body_html": (
+            "<p>Hello,</p>"
+            "<p>Attached is the patient information form for Jadari Jerrell Washington.</p>"
+            "<p>Please upload to the patient file and confirm receipt.</p>"
+            "<p>Thank you.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "JADARI JERRELL WASHINGTON.pdf",
+                "filepath": "data/documents/patient-demo/JADARI JERRELL WASHINGTON.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Patient Demo"]
+    },
+    "71": {
+        "description": "Patient Demo - Standalone - Dalton Charles Vega patient demographic form",
+        "subject": "Patient Demographics - Dalton Charles Vega",
+        "body_html": (
+            "<p>Good morning,</p>"
+            "<p>Please find attached the patient demographic form for Dalton Charles Vega.</p>"
+            "<p>Kindly process and upload to the patient record.</p>"
+            "<p>Best regards.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "DALTON CHARLES VEGA.pdf",
+                "filepath": "data/documents/patient-demo/DALTON CHARLES VEGA.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Patient Demo"]
+    },
+    "72": {
+        "description": "Patient Demo - Multiple submissions - Meriam Rodriguez Escobar with two demographic forms",
+        "subject": "Patient Information Forms - Meriam Rodriguez Escobar (Updated)",
+        "body_html": (
+            "<p>Hello Precise Imaging,</p>"
+            "<p>Please find attached the patient demographic forms for Meriam Rodriguez Escobar.</p>"
+            "<p>We are submitting both the original and updated information forms.</p>"
+            "<p>Please ensure both are uploaded to the patient file.</p>"
+            "<p>Thank you for your assistance.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "MERIAM RODRIGUEZ ESCOBAR.pdf",
+                "filepath": "data/documents/patient-demo/MERIAM RODRIGUEZ ESCOBAR.pdf",
+                "content_type": "application/pdf"
+            },
+            {
+                "filename": "MERIAM RODRIGUEZ ESCOBAR 2.pdf",
+                "filepath": "data/documents/patient-demo/MERIAM RODRIGUEZ ESCOBAR 2.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Patient Demo"]
+    },
+    "73": {
+        "description": "Patient Demo - Three patients - Lindy Kay Marmolejo, Jocelyn Manzano Villanueva, and Arlene Daniela Obando",
+        "subject": "Patient Information Forms - Multiple Clients Batch Submission",
+        "body_html": (
+            "<p>Dear Billing Department,</p>"
+            "<p>Please find attached the patient demographic information forms for the following clients:</p>"
+            "<p>1. Lindy Kay Marmolejo<br>"
+            "2. Jocelyn Manzano Villanueva<br>"
+            "3. Arlene Daniela Obando</p>"
+            "<p>Kindly upload each form to the respective patient files.</p>"
+            "<p>Thank you for your prompt processing.</p>"
+            "<p>Best regards,<br>"
+            "Legal Services</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "LINDY KAY MARMOLEJO.pdf",
+                "filepath": "data/documents/patient-demo/LINDY KAY MARMOLEJO.pdf",
+                "content_type": "application/pdf"
+            },
+            {
+                "filename": "JOCELYN MANZANO VILLANUEVA.pdf",
+                "filepath": "data/documents/patient-demo/JOCELYN MANZANO VILLANUEVA.pdf",
+                "content_type": "application/pdf"
+            },
+            {
+                "filename": "ARLENE DANIELA OBANDO.pdf",
+                "filepath": "data/documents/patient-demo/ARLENE DANIELA OBANDO.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Patient Demo"]
+    },
+    "74": {
+        "description": "Patient Demo - Standalone - Anthony Saravia patient demographic document",
+        "subject": "Patient Information - Anthony Saravia",
+        "body_html": (
+            "<p>Hi,</p>"
+            "<p>Please see attached patient demographic form for Anthony Saravia.</p>"
+            "<p>Please upload to the patient file.</p>"
+            "<p>Thanks!</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "ANTHONY SARAVIA.pdf",
+                "filepath": "data/documents/patient-demo/ANTHONY SARAVIA.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Patient Demo"]
     }
 }

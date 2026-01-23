@@ -107,11 +107,11 @@ class EnhancedLienService:
     def _consolidate_page_results(self, page_results: List[Dict], filename: str) -> Dict[str, Any]:
         """
         Consolidate results from multiple pages into final lien analysis.
-        
+
         Args:
             page_results: List of results from each page
             filename: Original filename
-            
+
         Returns:
             Consolidated lien processing result
         """
@@ -119,15 +119,18 @@ class EnhancedLienService:
             # Collect barcode results from ALL pages and combine lien types and patient IDs
             all_lien_types = set()
             all_patient_ids = set()
+            lien_patient_ids = set()  # Patient IDs from lien barcodes
+            patient_demo_patient_ids = set()  # Patient IDs from patient demo barcodes
+            all_doc_type_ids = set()  # Numeric doc type IDs for patient demo
             combined_barcode_data = None
             barcode_found_anywhere = False
-            
+
             for page in page_results:
-                if (page.get("success") and 
+                if (page.get("success") and
                     page.get("barcode_detection", {}).get("barcode_found")):
                     barcode_found_anywhere = True
                     barcode_detection = page["barcode_detection"]
-                    
+
                     # Handle new format with combined_data
                     if "combined_data" in barcode_detection:
                         combined_data = barcode_detection["combined_data"]
@@ -135,48 +138,71 @@ class EnhancedLienService:
                         for lien_type in lien_types:
                             if self.barcode_detector._is_valid_lien_type(lien_type):
                                 all_lien_types.add(lien_type.upper())
-                        
+
                         # Collect all patient IDs from this page
                         patient_ids = combined_data.get("PatientIDs", [])
                         for patient_id in patient_ids:
                             if patient_id and patient_id.startswith("PRE"):
                                 all_patient_ids.add(patient_id)
-                        
+
                         # Also check legacy single PatientID field
                         single_patient_id = combined_data.get("PatientID", "")
                         if single_patient_id and single_patient_id.startswith("PRE"):
                             all_patient_ids.add(single_patient_id)
-                        
+
+                        # Collect patient demo and lien-specific patient IDs
+                        page_lien_patient_ids = combined_data.get("lien_patient_ids", [])
+                        for patient_id in page_lien_patient_ids:
+                            if patient_id and patient_id.startswith("PRE"):
+                                lien_patient_ids.add(patient_id)
+
+                        page_patient_demo_ids = combined_data.get("patient_demo_patient_ids", [])
+                        for patient_id in page_patient_demo_ids:
+                            if patient_id and patient_id.startswith("PRE"):
+                                patient_demo_patient_ids.add(patient_id)
+
+                        # Collect doc type IDs (for patient demo)
+                        page_doc_type_ids = combined_data.get("doc_type_ids", [])
+                        for doc_type_id in page_doc_type_ids:
+                            all_doc_type_ids.add(doc_type_id)
+
                         # Use first page's patient and referrer ID as primary
                         if combined_barcode_data is None:
                             combined_barcode_data = {
                                 "PatientID": combined_data.get("PatientID", ""),
                                 "ReferrerID": combined_data.get("ReferrerID", "")
                             }
-                    
+
                     # Handle legacy format for backward compatibility
                     elif "parsed_data" in barcode_detection:
                         legacy_data = barcode_detection["parsed_data"]
                         lien_type = legacy_data.get("LienType", "")
                         if lien_type and self.barcode_detector._is_valid_lien_type(lien_type):
                             all_lien_types.add(lien_type.upper())
-                        
+
                         # Collect patient ID from legacy format
                         patient_id = legacy_data.get("PatientID", "")
                         if patient_id and patient_id.startswith("PRE"):
                             all_patient_ids.add(patient_id)
-                        
+
                         if combined_barcode_data is None:
                             combined_barcode_data = legacy_data
-            
+
             # Final combined barcode data with all lien types and patient IDs
             if barcode_found_anywhere and combined_barcode_data:
                 combined_barcode_data["LienTypes"] = list(all_lien_types)
                 combined_barcode_data["PatientIDs"] = list(all_patient_ids)
+                combined_barcode_data["lien_patient_ids"] = list(lien_patient_ids)
+                combined_barcode_data["patient_demo_patient_ids"] = list(patient_demo_patient_ids)
+                combined_barcode_data["doc_type_ids"] = list(all_doc_type_ids)
                 if all_lien_types:
                     logger.info(f"📄 FINAL: Lien types {list(all_lien_types)}")
                 if all_patient_ids:
                     logger.info(f"📄 FINAL: Patient IDs {list(all_patient_ids)}")
+                if patient_demo_patient_ids:
+                    logger.info(f"📄 FINAL: Patient demo patient IDs {list(patient_demo_patient_ids)}")
+                if lien_patient_ids:
+                    logger.info(f"📄 FINAL: Lien patient IDs {list(lien_patient_ids)}")
             
             barcode_data = combined_barcode_data
             
@@ -275,6 +301,9 @@ class EnhancedLienService:
                 logger.warning(f"   Pages with conditions: {cover_letter_pages}")
                 logger.warning(f"   All conditional phrases: {all_conditional_phrases}")
 
+            # Determine if patient demo documents are present
+            has_patient_demo = len(patient_demo_patient_ids) > 0
+
             result = {
                 "filename": filename,
                 "processing_type": "enhanced_lien_processing",
@@ -292,6 +321,11 @@ class EnhancedLienService:
                 "has_cover_letter_with_conditions": has_cover_letter_with_conditions,
                 "conditional_phrases_found": all_conditional_phrases,
                 "cover_letter_pages": cover_letter_pages,
+                # Patient demo fields
+                "has_patient_demo": has_patient_demo,
+                "patient_demo_patient_ids": list(patient_demo_patient_ids),
+                "lien_patient_ids": list(lien_patient_ids),
+                "doc_type_ids": list(all_doc_type_ids),
                 "raw_page_results": page_results  # Include for debugging
             }
             
@@ -303,18 +337,24 @@ class EnhancedLienService:
     
     def _generate_page_groupings(self, page_results: List[Dict]) -> List[Dict[str, Any]]:
         """
-        Generate page groupings based on unique patient ID + lien type combinations.
+        Generate page groupings based on unique patient ID + lien type OR patient ID + page type combinations.
+
+        Supports both lien documents (grouped by patient_id + lien_type) and patient demo documents
+        (grouped by patient_id + page_type="patient_demo").
 
         Args:
             page_results: List of results from each page
 
         Returns:
-            List of page groupings with structure:
+            Tuple of (page_groupings, has_duplicate_barcodes)
+            page_groupings structure:
                 [
                     {
                         "pages": [0, 1],  # Zero-indexed page numbers
                         "patient_id": "PRE123456",
-                        "lien_type": "RAD",
+                        "lien_type": "RAD",  # Empty for patient_demo
+                        "page_type": "lien",  # "lien" or "patient_demo"
+                        "doc_type_id": "",  # Numeric doc type for patient_demo (e.g., "019")
                         "signature_type": "ASL"
                     },
                     ...
@@ -325,7 +365,7 @@ class EnhancedLienService:
         # Track barcodes per page for duplicate detection
         page_barcodes = {}  # {page_idx: barcode_string}
 
-        # Build a mapping of (patient_id, lien_type) -> list of page indices
+        # Build a mapping of (patient_id, lien_type or page_type) -> list of page indices
         groupings_map = {}
 
         for page_idx, page in enumerate(page_results):
@@ -339,58 +379,106 @@ class EnhancedLienService:
                 logger.warning(f"📄 GROUPING: Page {page_idx} has no barcode, skipping")
                 continue
 
-            # Get patient IDs and lien types from this page
+            # Get combined data from barcode detection
             combined_data = barcode_detection.get("combined_data", {})
-            patient_ids = combined_data.get("PatientIDs", [])
+
+            # Check for patient demo pages
+            patient_demo_patient_ids = combined_data.get("patient_demo_patient_ids", [])
+            doc_type_ids = combined_data.get("doc_type_ids", [])
+
+            # Check for lien pages
+            lien_patient_ids = combined_data.get("lien_patient_ids", [])
             lien_types = combined_data.get("LienTypes", [])
 
-            # Fallback to legacy format
-            if not patient_ids and combined_data.get("PatientID"):
-                patient_ids = [combined_data["PatientID"]]
+            # Fallback to legacy format for lien types
             if not lien_types and combined_data.get("LienType"):
                 lien_types = [combined_data["LienType"]]
+
+            # Fallback: if no categorization, use legacy PatientIDs for lien
+            patient_ids = combined_data.get("PatientIDs", [])
+            if not patient_ids and combined_data.get("PatientID"):
+                patient_ids = [combined_data["PatientID"]]
+
+            # If no specific categorization exists, assume all are lien patient IDs
+            if not lien_patient_ids and not patient_demo_patient_ids and patient_ids:
+                lien_patient_ids = patient_ids
 
             # Get signature type from this page
             signature_detection = page.get("signature_detection", {})
             signature_data = signature_detection.get("signature_data", {})
             signature_type = signature_data.get("lien_signature_type", "UNKNOWN")
 
-            # Track barcode for duplicate detection
-            # Construct barcode string from patient ID and lien type
-            if patient_ids and lien_types:
-                barcode_string = f"{patient_ids[0]}^{lien_types[0]}"
-                page_barcodes[page_idx] = barcode_string
+            # Process patient demo pages
+            for patient_id in patient_demo_patient_ids:
+                doc_type_id = doc_type_ids[0] if doc_type_ids else "019"  # Default to 019
 
-            # For each patient ID + lien type combination, add this page to the group
-            for patient_id in patient_ids:
+                # Track barcode for duplicate detection
+                barcode_string = f"{patient_id}^{doc_type_id}"
+                if page_idx not in page_barcodes:
+                    page_barcodes[page_idx] = barcode_string
+
+                # Create grouping key for patient demo
+                group_key = (patient_id, "patient_demo", doc_type_id)
+
+                if group_key not in groupings_map:
+                    groupings_map[group_key] = {
+                        "pages": [],
+                        "patient_id": patient_id,
+                        "lien_type": "",  # Empty for patient demo
+                        "page_type": "patient_demo",
+                        "doc_type_id": doc_type_id,
+                        "signature_type": "",  # No signature needed for patient demo
+                        "signature_data": {}
+                    }
+
+                groupings_map[group_key]["pages"].append(page_idx)
+                logger.info(f"📄 GROUPING: Page {page_idx} → Patient {patient_id}, PageType=patient_demo, DocTypeID={doc_type_id}")
+
+            # Process lien pages
+            for patient_id in lien_patient_ids:
                 for lien_type in lien_types:
-                    # Create grouping key
-                    group_key = (patient_id, lien_type.upper())
+                    # Track barcode for duplicate detection
+                    barcode_string = f"{patient_id}^{lien_type}"
+                    if page_idx not in page_barcodes:
+                        page_barcodes[page_idx] = barcode_string
+
+                    # Create grouping key for lien
+                    group_key = (patient_id, "lien", lien_type.upper())
 
                     if group_key not in groupings_map:
                         groupings_map[group_key] = {
                             "pages": [],
                             "patient_id": patient_id,
                             "lien_type": lien_type.upper(),
+                            "page_type": "lien",
+                            "doc_type_id": "",  # Empty for liens (determined by upload service)
                             "signature_type": signature_type,
-                            "signature_data": signature_data  # Include full signature data with placement info
+                            "signature_data": signature_data
                         }
 
-                    # Add this page to the group
                     groupings_map[group_key]["pages"].append(page_idx)
-                    logger.info(f"📄 GROUPING: Page {page_idx} → Patient {patient_id}, Lien {lien_type.upper()}")
+                    logger.info(f"📄 GROUPING: Page {page_idx} → Patient {patient_id}, PageType=lien, LienType={lien_type.upper()}")
 
         # Convert map to list
         page_groupings = list(groupings_map.values())
 
         logger.info(f"📄 GROUPING: Generated {len(page_groupings)} unique page groups")
         for i, group in enumerate(page_groupings):
-            logger.info(
-                f"📄 GROUP {i+1}: Patient={group['patient_id']}, "
-                f"LienType={group['lien_type']}, "
-                f"Pages={group['pages']}, "
-                f"Signature={group['signature_type']}"
-            )
+            if group['page_type'] == 'patient_demo':
+                logger.info(
+                    f"📄 GROUP {i+1}: Patient={group['patient_id']}, "
+                    f"PageType={group['page_type']}, "
+                    f"DocTypeID={group['doc_type_id']}, "
+                    f"Pages={group['pages']}"
+                )
+            else:
+                logger.info(
+                    f"📄 GROUP {i+1}: Patient={group['patient_id']}, "
+                    f"PageType={group['page_type']}, "
+                    f"LienType={group['lien_type']}, "
+                    f"Pages={group['pages']}, "
+                    f"Signature={group['signature_type']}"
+                )
 
         # Check for duplicate barcodes across pages
         barcode_to_pages = {}

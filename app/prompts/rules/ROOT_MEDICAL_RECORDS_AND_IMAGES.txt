@@ -1,12 +1,14 @@
 Sub-Classification Rules for Medical Records & Images Category
 ============================================================
-**Sub-Categories:** Release of Records, Image Request, CD Requests, Reports Request, US Tech Sheet, Portal Requests, Referral pad request, Incorrect patient info, Incorrect study info.
+**Sub-Categories:** Release of Records, Image Request, CD Requests, Reports Request, US Tech Sheet, Portal Requests, Referral pad request, Incorrect patient info, Incorrect study info, Patient Demo.
 
 Please use the following rules to sub-classify the provided email content, already identified as 'Medical Records & Images', into one of the above sub-categories.
 
 --- START Medical Records & Images Sub-Classification RULES ---
 
 1. **Specific Action or Item**: Based on the email content, determine the specific action being requested or the item being discussed related to medical records and images, and classify as follows:
+
+   **PRIORITY RULE - Patient Demo Attachments:** If the email has an attachment classified as document type "patient_demo" (patient demographic/information forms with barcodes containing numeric DocTypeID like "019"), classify as 'Patient Demo'. These are typically patient information forms, demographic documents, or intake forms submitted alongside or separately from lien documents. NOTE: Emails with BOTH patient demo AND lien attachments should be tagged with BOTH 'Patient Demo' AND the appropriate lien tag - this is handled automatically by the system.
 
    **PRIORITY RULE - Mixed Requests:** If the email requests BOTH medical records/reports AND billing information (e.g., "bills & MRI records", "send bills and medical records", "bills & reports"), ALWAYS classify as 'Release of Records' regardless of other content patterns.
 
@@ -21,5 +23,6 @@ Please use the following rules to sub-classify the provided email content, alrea
    - If the email is a request from a doctor's office or facility for **physical referral pads**, classify as 'Referral pad request'.
    - If the email highlights **errors in patient demographic information or identification details** (e.g., misspelled name, wrong DOB), classify as 'Incorrect patient info'.
    - If the email points out **discrepancies, errors, or issues with the medical study performed or documented** (e.g., wrong body part imaged, incorrect study type listed), classify as 'Incorrect study info'.
+   - If the email has an **attachment that is a patient demographic form, patient information form, or intake document** (typically identified by barcodes with numeric DocTypeID like "019", or document content showing "PATIENT INFORMATION", demographic fields, emergency contacts), classify as 'Patient Demo'. NOTE: This is distinct from 'Incorrect patient info' which is for ERRORS in existing patient data. 'Patient Demo' is for SUBMITTED demographic documents/forms.
 
 --- END Medical Records & Images Sub-Classification RULES --- 

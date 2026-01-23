@@ -9,6 +9,7 @@ Please use the following rules to sub-classify the provided email content, alrea
 1. **Document Analysis Priority**: FIRST check if there are any attached documents analyzed in the "ATTACHED DOCUMENTS ANALYSIS" section:
    - If there are lien documents attached (document type = "lien"), this is a SUBMISSION of liens, not a request for missing liens
    - If there are NO lien documents attached, then consider if this is a request for missing liens
+   - **NOTE on Patient Demo Documents**: If attachments include patient demographic forms (document type = "patient_demo"), these are handled separately under the 'Medical Records & Images > Patient Demo' category. The system will automatically tag both the lien tag AND 'Patient Demo' when both document types are present in the same email.
 
 2. **Lien Type or Status**: Based on the email content and attached documents, classify as follows:
    

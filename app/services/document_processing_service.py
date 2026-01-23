@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class DocumentAnalysisResult(BaseModel):
     """Pydantic model for structured document analysis output."""
-    document_type: str  # "lien", "lien_reduction", "esign_request", "rx", "medical_record", "hipaa", "case_update", "bill", "other"
+    document_type: str  # "lien", "lien_reduction", "esign_request", "rx", "medical_record", "hipaa", "case_update", "bill", "patient_demo", "other"
     description: str    # One-line description of the document content
     patient_id: Optional[str] = None  # Patient ID if found
     confidence: float   # Confidence score 0.0-1.0 for document type classification
@@ -199,7 +199,7 @@ class DocumentProcessingService:
                 "properties": {
                     "document_type": {
                         "type": "string",
-                        "enum": ["lien", "lien_reduction", "esign_request", "rx", "medical_record", "hipaa", "case_update", "bill", "other"],
+                        "enum": ["lien", "lien_reduction", "esign_request", "rx", "medical_record", "hipaa", "case_update", "bill", "patient_demo", "other"],
                         "description": "Type of medical document"
                     },
                     "description": {
@@ -240,7 +240,8 @@ DOCUMENT TYPE CLASSIFICATION:
 - hipaa: HIPAA authorization forms, HIPAA releases, privacy notices, medical records release authorizations. These are forms that authorize the release or use of protected health information (PHI) under HIPAA regulations. Look for terms like "HIPAA", "Health Insurance Portability", "Protected Health Information", "PHI", "Authorization for Release", "Medical Records Release".
 - case_update: Legal case status updates, attorney communications, and case progression documents. These include: new attorney notifications, drop letters, case drop pending notices, payment promises, liability clearance updates, settlement check status, payment received confirmations, refund requests, and payment dispatch notifications. Look for terms like "New Attorney", "Drop Letter", "Drop Pending", "Promise to send payment", "Waiting to clear liability", "Waiting on settlement check", "Sent payment but not received", "Refund Request", "Payment on way", "case status", "attorney change", "settlement update", "payment status".
 - bill: Invoices, statements, bills, or billing documents showing amounts owed for services already rendered. These are NOT liens. Bills show itemized charges, total balances due, payment amounts, or copies of bills being sent to attorneys/patients. Look for terms like "bill", "invoice", "statement", "balance due", "amount owed", "charges", "copy of our bill", "total due", "payment due". Bills may include offers or final amounts like "$X,XXX FINAL" but they are statements of amounts, not legal agreements.
-- other: Any document that doesn't fit the above categories, including insurance cards, authorization forms, insurance verification documents, coverage letters, intake forms, patient information forms
+- patient_demo: Patient demographic/information forms containing patient personal data. These forms typically have "PATIENT INFORMATION" headers and contain fields for patient name, date of birth, address, phone number, social security number, insurance information, emergency contacts, and employer information. They are demographic data collection forms, NOT lien agreements or medical records. Look for terms like "Patient Information", "Patient Demographics", "Personal Information", "Contact Information", "Emergency Contact", "Insurance Information". These often have a barcode with format "PatientID^019" where 019 is the doc type ID.
+- other: Any document that doesn't fit the above categories, including insurance cards, authorization forms, insurance verification documents, coverage letters, intake forms
 
 CRITICAL DISTINCTIONS:
 LIEN vs HIPAA:
@@ -278,6 +279,14 @@ LIEN vs BILL:
 - Bills often accompany negotiations/offers (e.g., "best we can do is $4,720 FINAL") but are NOT liens
 - A bill being sent to an attorney is still a BILL, not a LIEN - it's an invoice, not a legal agreement
 - IMPORTANT: If a PDF contains BOTH a bill AND a lien attachment/notice, classify as BILL if the FIRST pages show billing/invoice content. The primary document type is determined by what appears FIRST in the PDF, not by attachments or subsequent pages.
+
+PATIENT_DEMO vs OTHER:
+- PATIENT_DEMO documents are specifically patient demographic/information collection forms
+- These have clear "PATIENT INFORMATION" or "PATIENT DEMOGRAPHICS" headers
+- They contain structured fields for personal data: name, DOB, SSN, address, phone, insurance, emergency contact
+- If document collects patient personal/demographic data in a structured form → classify as PATIENT_DEMO
+- General intake forms without demographic fields should be classified as OTHER
+- PATIENT_DEMO forms often have barcodes with numeric doc type IDs (e.g., "PRE123456^019")
 
 PATIENT ID EXTRACTION:
 Precise Imaging patient IDs follow this format: PRE followed by 6-8 digits (e.g., PRE123456, PRE1234567, PRE12345678)
@@ -530,11 +539,32 @@ ANALYSIS REQUIREMENTS:
             result = await self._process_unknown_document(file_content, filename)
         
         # Check if this is a lien document and apply enhanced processing
-        logger.info(f"🔍 CHECKING LIEN STATUS for {filename}: success={result.get('document_analysis', {}).get('success')}, doc_type={result.get('document_analysis', {}).get('data', {}).get('document_type')}")
-        
-        if (result.get("document_analysis", {}).get("success") and 
-            result["document_analysis"]["data"].get("document_type") == "lien"):
-            logger.info(f"🔍 LIEN DETECTED: Applying enhanced lien processing to {filename}")
+        doc_type = result.get('document_analysis', {}).get('data', {}).get('document_type', '')
+        description = result.get('document_analysis', {}).get('data', {}).get('description', '').lower()
+
+        logger.info(f"🔍 CHECKING LIEN STATUS for {filename}: success={result.get('document_analysis', {}).get('success')}, doc_type={doc_type}")
+
+        # Check if enhanced lien processing should be applied:
+        # 1. Document type is explicitly "lien"
+        # 2. Description mentions lien-related keywords (for mixed documents)
+        # 3. Description mentions patient information/demographics (may contain patient demo barcodes)
+        should_apply_enhanced_processing = False
+
+        if result.get("document_analysis", {}).get("success"):
+            if doc_type == "lien":
+                should_apply_enhanced_processing = True
+                logger.info(f"🔍 LIEN DETECTED (by type): Applying enhanced lien processing to {filename}")
+            elif doc_type == "patient_demo":
+                should_apply_enhanced_processing = True
+                logger.info(f"🔍 PATIENT DEMO DETECTED (by type): Applying enhanced lien processing to {filename}")
+            elif any(keyword in description for keyword in ['lien agreement', 'lien document', 'personal injury lien', 'radiologist lien', 'technologist lien', 'tech lien', 'rad lien']):
+                should_apply_enhanced_processing = True
+                logger.info(f"🔍 LIEN DETECTED (in description): Mixed document with liens, applying enhanced lien processing to {filename}")
+            elif any(keyword in description for keyword in ['patient information form', 'patient info form', 'patient demographic', 'patient information']):
+                should_apply_enhanced_processing = True
+                logger.info(f"🔍 PATIENT INFO DETECTED (in description): May contain patient demo, applying enhanced lien processing to {filename}")
+
+        if should_apply_enhanced_processing:
             try:
                 enhanced_result = await self._apply_enhanced_lien_processing(file_content, filename, result)
                 result = enhanced_result

@@ -27,6 +27,7 @@ logger = get_task_logger(__name__)
 # --- BEGIN: Tag Constants ---
 TAG_AI_HUMAN_REVIEW_REQUIRED = "AI: Human review required"
 TAG_LIEN_MODIFIED = "Lien Modified"
+TAG_PATIENT_DEMO = "Patient Demo"  # Tag for patient demographic documents
 RAD_LIEN_TAG = "Rad Lien"
 TECH_LIEN_TAG = "Tech Lien"
 # --- END: Tag Constants ---
@@ -1171,53 +1172,109 @@ async def handle_lien_request(
 
         # Process all split documents (from all attachments)
         upload_results = []
+        has_patient_demo = False
+        has_liens = False
+        all_unique_patient_ids = set()
 
         if all_split_documents:
             logger.info(f"📄 {signature_type} AGENT: Processing {len(all_split_documents)} total split documents across all attachments")
 
-            # Import upload service for split documents
-            from app.services.lien_upload_service import upload_lien_pdf_bytes_to_radflow
+            # Import upload services for split documents
+            from app.services.lien_upload_service import upload_lien_pdf_bytes_to_radflow, upload_patient_demo_to_radflow
 
             # Process each split document
             for i, split_doc in enumerate(all_split_documents):
                 split_patient_id = split_doc.get("patient_id", "")
                 split_lien_type = split_doc.get("lien_type", "")
+                split_page_type = split_doc.get("page_type", "lien")  # "lien" or "patient_demo"
+                split_doc_type_id = split_doc.get("doc_type_id", "")
                 split_pdf_bytes = split_doc.get("pdf_bytes", b"")
                 page_count = split_doc.get("page_count", 0)
 
-                logger.info(
-                    f"📄 {signature_type} AGENT: Processing split {i+1}/{len(all_split_documents)}: "
-                    f"Patient={split_patient_id}, LienType={split_lien_type}, Pages={page_count}"
-                )
+                # Track unique patient IDs for consolidated response
+                if split_patient_id and split_patient_id.startswith("PRE"):
+                    all_unique_patient_ids.add(split_patient_id)
 
-                # Upload this split to patient file
-                upload_success = await upload_lien_pdf_bytes_to_radflow(
-                    patient_id=split_patient_id,
-                    lien_type=split_lien_type,
-                    pdf_bytes=split_pdf_bytes,
-                    filename=f"split_{i+1}.pdf",
-                    signature_type=signature_type,  # Pass ASL or PSL
-                    conversation_id=front_conversation_id  # For test mode file organization
-                )
+                if split_page_type == "patient_demo":
+                    # Handle patient demo document
+                    has_patient_demo = True
+                    logger.info(
+                        f"📄 {signature_type} AGENT: Processing patient demo {i+1}/{len(all_split_documents)}: "
+                        f"Patient={split_patient_id}, DocTypeID={split_doc_type_id}, Pages={page_count}"
+                    )
 
-                upload_results.append({
-                    "patient_id": split_patient_id,
-                    "lien_type": split_lien_type,
-                    "success": upload_success,
-                    "page_count": page_count
-                })
+                    # Upload patient demo document
+                    upload_success = await upload_patient_demo_to_radflow(
+                        patient_id=split_patient_id,
+                        pdf_bytes=split_pdf_bytes,
+                        filename=f"patient_demo_{i+1}.pdf",
+                        doc_type_id=split_doc_type_id,
+                        conversation_id=front_conversation_id
+                    )
 
-                if not upload_success:
-                    logger.warning(f"📄 {signature_type} AGENT: Upload failed for split {i+1}")
+                    upload_results.append({
+                        "patient_id": split_patient_id,
+                        "page_type": "patient_demo",
+                        "doc_type_id": split_doc_type_id,
+                        "lien_type": "",
+                        "success": upload_success,
+                        "page_count": page_count
+                    })
+
+                    if not upload_success:
+                        logger.warning(f"📄 {signature_type} AGENT: Upload failed for patient demo {i+1}")
+                else:
+                    # Handle lien document
+                    has_liens = True
+                    logger.info(
+                        f"📄 {signature_type} AGENT: Processing lien split {i+1}/{len(all_split_documents)}: "
+                        f"Patient={split_patient_id}, LienType={split_lien_type}, Pages={page_count}"
+                    )
+
+                    # Upload this split to patient file
+                    upload_success = await upload_lien_pdf_bytes_to_radflow(
+                        patient_id=split_patient_id,
+                        lien_type=split_lien_type,
+                        pdf_bytes=split_pdf_bytes,
+                        filename=f"split_{i+1}.pdf",
+                        signature_type=signature_type,  # Pass ASL or PSL
+                        conversation_id=front_conversation_id  # For test mode file organization
+                    )
+
+                    upload_results.append({
+                        "patient_id": split_patient_id,
+                        "page_type": "lien",
+                        "lien_type": split_lien_type,
+                        "success": upload_success,
+                        "page_count": page_count
+                    })
+
+                    if not upload_success:
+                        logger.warning(f"📄 {signature_type} AGENT: Upload failed for split {i+1}")
 
             # Check if all uploads succeeded
             all_uploads_success = all(result["success"] for result in upload_results)
             upload_success = all_uploads_success
 
+            # Add Patient Demo tag if patient demo documents were detected
+            if has_patient_demo:
+                logger.info(f"📄 {signature_type} AGENT: Patient demo documents detected, adding 'Patient Demo' tag")
+                try:
+                    frontapp_service.add_conversation_tags(front_conversation_id, [TAG_PATIENT_DEMO])
+                except Exception as tag_error:
+                    logger.warning(f"Failed to add Patient Demo tag: {tag_error}")
+
         else:
             # Fallback: No split documents, upload original attachments directly
             # This handles cases where documents don't need splitting (e.g., single-page liens)
             logger.info(f"📄 {signature_type} AGENT: No split documents found, uploading original attachments")
+
+            # Initialize tracking variables for fallback case
+            has_patient_demo = False
+            has_liens = True  # Assume liens for fallback (original behavior)
+            all_unique_patient_ids = set()
+            if patient_id:
+                all_unique_patient_ids.add(patient_id)
 
             # Get all attachments from email
             attachments = []
@@ -1271,6 +1328,7 @@ async def handle_lien_request(
 
                     upload_results.append({
                         "patient_id": patient_id,
+                        "page_type": "lien",
                         "lien_type": att_lien_type_short,  # Store short code for table generation
                         "success": attachment_upload_success
                     })
@@ -1314,7 +1372,150 @@ async def handle_lien_request(
                 return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Upload failed and couldn't tag for review: {tag_error}"}}
 
         # Upload succeeded - proceed with success response
+        # Check for standalone patient demo (no liens)
+        if has_patient_demo and not has_liens:
+            logger.info(f"📄 {signature_type} AGENT: Standalone patient demo detected - sending acknowledgment")
+
+            # For standalone patient demo, send a simple acknowledgment
+            # No need to generate lien status table
+            patient_demo_response = "Thank you for submitting the patient demographic document(s). The document(s) have been uploaded to the patient file."
+
+            # Add patient IDs to the response
+            if all_unique_patient_ids:
+                patient_demo_response += f"\n\nPatient ID(s): {', '.join(sorted(all_unique_patient_ids))}"
+
+            await send_or_save_response(
+                conversation_id=front_conversation_id,
+                response_text=patient_demo_response,
+                tags_to_add=None,
+                test_mode=test_mode,
+                lien_type="Patient Demo",
+                signature_type=""
+            )
+
+            logger.info(f"Successfully processed standalone patient demo for conversation {front_conversation_id}")
+            return {
+                "agent_handled": True,
+                "processed_flag": True,
+                "details": {
+                    "action": "patient_demo_processed_successfully",
+                    "patient_ids": list(all_unique_patient_ids),
+                    "has_patient_demo": True,
+                    "has_liens": False,
+                    "upload_success": upload_success,
+                    "total_splits": len(all_split_documents) if all_split_documents else 0,
+                    "upload_results": upload_results
+                }
+            }
+
         # Process patient information for response
+        # For multiple patients, we need to handle them in a consolidated response
+        unique_patient_ids = list(all_unique_patient_ids) if all_unique_patient_ids else ([patient_id] if patient_id else [])
+
+        # Wait for RadFlow to update signature status after document upload
+        # RadFlow needs approximately 5 minutes to process uploaded documents and update signature status
+        if unique_patient_ids:
+            logger.info(f"⏳ Waiting 5 minutes for RadFlow to update signature status for {len(unique_patient_ids)} patient(s)...")
+            await asyncio.sleep(300)  # 5 minutes = 300 seconds
+            logger.info(f"✅ Wait complete. Proceeding to generate response for {len(unique_patient_ids)} patient(s)")
+
+        # Generate consolidated response for multiple patients
+        if len(unique_patient_ids) > 1:
+            logger.info(f"📄 {signature_type} AGENT: Generating consolidated response for {len(unique_patient_ids)} patients")
+
+            response_sections = []
+
+            for pid in sorted(unique_patient_ids):
+                # Fetch patient info for each patient
+                pid_info_response = await call_mcp_tool(
+                    tool_name="fetch_patient_info",
+                    arguments={"patient_id": pid}
+                )
+
+                pid_patient_name = "Unknown"
+                pid_dob = "Unknown"
+                pid_doi = "Unknown"
+
+                if pid_info_response and isinstance(pid_info_response, dict):
+                    data_section = pid_info_response.get('data', {})
+                    if data_section and isinstance(data_section, dict):
+                        patients_list = data_section.get('patients', [])
+                        if patients_list and len(patients_list) > 0:
+                            patient = patients_list[0]
+                            first_name = patient.get('first_name', '').strip()
+                            last_name = patient.get('last_name', '').strip()
+                            if first_name and last_name:
+                                pid_patient_name = f"{first_name} {last_name}"
+                            elif first_name:
+                                pid_patient_name = first_name
+                            elif last_name:
+                                pid_patient_name = last_name
+
+                            raw_dob = patient.get('birth_date')
+                            if raw_dob:
+                                try:
+                                    date_obj = datetime.strptime(raw_dob, '%Y-%m-%d')
+                                    pid_dob = date_obj.strftime('%m/%d/%Y')
+                                except:
+                                    pid_dob = raw_dob
+
+                            raw_doi = patient.get('doi')
+                            if raw_doi:
+                                try:
+                                    date_obj = datetime.strptime(raw_doi, '%Y-%m-%d')
+                                    pid_doi = date_obj.strftime('%m/%d/%Y')
+                                except:
+                                    pid_doi = raw_doi
+
+                # Filter upload results for this patient
+                pid_upload_results = [r for r in upload_results if r.get("patient_id") == pid]
+
+                # Generate lien status table for this patient
+                pid_lien_status_table = await _generate_lien_status_table(pid, pid_upload_results, signature_type)
+
+                # Build section for this patient
+                section = f"""<h3>Patient: {pid_patient_name} ({pid})</h3>
+<p><strong>DOB:</strong> {pid_dob} | <strong>DOI:</strong> {pid_doi}</p>
+{pid_lien_status_table}"""
+                response_sections.append(section)
+
+            # Combine all patient sections
+            consolidated_body = "<hr>".join(response_sections)
+
+            # Add header message
+            header = f"<p>Thank you for your submission. We have processed documents for {len(unique_patient_ids)} patients.</p>"
+            if has_patient_demo:
+                header += "<p><em>Note: Patient demographic documents have also been uploaded.</em></p>"
+
+            reply_body = header + "<hr>" + consolidated_body
+
+            # Send the consolidated response
+            await send_or_save_response(
+                conversation_id=front_conversation_id,
+                response_text=reply_body,
+                tags_to_add=None,
+                test_mode=test_mode,
+                lien_type=lien_type,
+                signature_type=signature_type
+            )
+
+            logger.info(f"Successfully processed {lien_type} for {len(unique_patient_ids)} patients in conversation {front_conversation_id}")
+            return {
+                "agent_handled": True,
+                "processed_flag": True,
+                "details": {
+                    "action": "lien_processed_successfully_multi_patient",
+                    "patient_ids": unique_patient_ids,
+                    "lien_type": lien_type,
+                    "signature_type": signature_type,
+                    "has_patient_demo": has_patient_demo,
+                    "upload_success": upload_success,
+                    "total_splits": len(all_split_documents) if all_split_documents else 0,
+                    "upload_results": upload_results
+                }
+            }
+
+        # Single patient response (original logic)
         patient_name = "Unknown"
         dob = "Unknown"
         doi = "Unknown"
@@ -1360,12 +1561,6 @@ async def handle_lien_request(
             else:
                 logger.warning(f"Invalid data structure in patient info response for {patient_id}")
 
-        # Wait for RadFlow to update signature status after document upload
-        # RadFlow needs approximately 5 minutes to process uploaded documents and update signature status
-        logger.info(f"⏳ Waiting 5 minutes for RadFlow to update signature status for patient {patient_id}...")
-        await asyncio.sleep(300)  # 5 minutes = 300 seconds
-        logger.info(f"✅ Wait complete. Proceeding to generate lien status table for patient {patient_id}")
-
         # Generate lien status table
         lien_status_table = await _generate_lien_status_table(patient_id, upload_results, signature_type)
 
@@ -1392,6 +1587,10 @@ async def handle_lien_request(
         # Generate success response with all placeholders
         reply_body = templates["success"].format(**placeholder_values)
 
+        # Add note about patient demo if present
+        if has_patient_demo:
+            reply_body += "<br/><p><em>Note: Patient demographic documents have also been uploaded.</em></p>"
+
         # Send the response
         await send_or_save_response(
             conversation_id=front_conversation_id,
@@ -1411,6 +1610,7 @@ async def handle_lien_request(
                 "patient_id": patient_id,
                 "lien_type": lien_type,
                 "signature_type": signature_type,
+                "has_patient_demo": has_patient_demo,
                 "upload_success": upload_success,
                 "total_splits": len(all_split_documents) if all_split_documents else 0,
                 "upload_results": upload_results

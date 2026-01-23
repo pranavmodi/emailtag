@@ -28,6 +28,8 @@ class PDFSplitter:
         """
         Split a PDF into multiple PDFs based on page groupings.
 
+        Supports both lien documents and patient demo documents.
+
         Args:
             pdf_content: Original PDF file as bytes
             page_groups: List of groupings with structure:
@@ -35,7 +37,9 @@ class PDFSplitter:
                     {
                         "pages": [0, 1, 2],  # Zero-indexed page numbers
                         "patient_id": "PRE123456",
-                        "lien_type": "RAD",
+                        "lien_type": "RAD",  # Empty for patient_demo
+                        "page_type": "lien",  # "lien" or "patient_demo"
+                        "doc_type_id": "",  # Numeric doc type for patient_demo (e.g., "019")
                         "signature_type": "ASL"
                     },
                     ...
@@ -48,6 +52,8 @@ class PDFSplitter:
                         "pdf_bytes": b"...",
                         "patient_id": "PRE123456",
                         "lien_type": "RAD",
+                        "page_type": "lien",
+                        "doc_type_id": "",
                         "signature_type": "ASL",
                         "page_count": 3,
                         "original_pages": [0, 1, 2]
@@ -68,6 +74,8 @@ class PDFSplitter:
                     pages_to_extract = group.get("pages", [])
                     patient_id = group.get("patient_id", "")
                     lien_type = group.get("lien_type", "")
+                    page_type = group.get("page_type", "lien")  # Default to "lien" for backward compatibility
+                    doc_type_id = group.get("doc_type_id", "")
                     signature_type = group.get("signature_type", "")
                     signature_data = group.get("signature_data", {})
 
@@ -95,16 +103,25 @@ class PDFSplitter:
                     pdf_bytes = output_buffer.getvalue()
                     output_buffer.close()
 
-                    logger.info(
-                        f"📄 PDF SPLIT: Created split {group_idx + 1}: "
-                        f"Patient={patient_id}, LienType={lien_type}, Pages={valid_pages}, "
-                        f"Size={len(pdf_bytes)} bytes"
-                    )
+                    if page_type == "patient_demo":
+                        logger.info(
+                            f"📄 PDF SPLIT: Created split {group_idx + 1}: "
+                            f"Patient={patient_id}, PageType=patient_demo, DocTypeID={doc_type_id}, "
+                            f"Pages={valid_pages}, Size={len(pdf_bytes)} bytes"
+                        )
+                    else:
+                        logger.info(
+                            f"📄 PDF SPLIT: Created split {group_idx + 1}: "
+                            f"Patient={patient_id}, PageType=lien, LienType={lien_type}, "
+                            f"Pages={valid_pages}, Size={len(pdf_bytes)} bytes"
+                        )
 
                     split_documents.append({
                         "pdf_bytes": pdf_bytes,
                         "patient_id": patient_id,
                         "lien_type": lien_type,
+                        "page_type": page_type,
+                        "doc_type_id": doc_type_id,
                         "signature_type": signature_type,
                         "signature_data": signature_data,  # Include signature placement data
                         "page_count": len(valid_pages),
