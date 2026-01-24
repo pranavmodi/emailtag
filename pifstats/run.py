@@ -1,21 +1,20 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
-Convenience script to run PIF Stats extraction.
-Run from the emailtag project root using: emailtag/bin/python pifstats/run.py
+Run script for PIF Stats module.
+
+Usage:
+    emailtag/bin/python pifstats/run.py <conversation_id>
+    emailtag/bin/python pifstats/run.py <conversation_id> --json
+    emailtag/bin/python pifstats/run.py <conversation_id> --debug
 """
+
 import sys
 import os
 
-# Add project root to path
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, project_root)
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Load environment variables from .env if available
-from dotenv import load_dotenv
-load_dotenv(os.path.join(project_root, '.env'))
-
-import asyncio
 from pifstats.src.main import main
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

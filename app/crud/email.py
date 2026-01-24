@@ -135,6 +135,42 @@ class CRUDEmail(CRUDBase[Email, EmailCreate, EmailUpdate]):
         result = await db.execute(query)
         return result.scalars().all()
 
+    async def get_emails_by_date(
+        self, db: AsyncSession, target_date: date
+    ) -> List[Email]:
+        """
+        Get all emails for a specific date, deduplicated by conversation ID.
+
+        Args:
+            db: Database session
+            target_date: Date to filter by (uses created_at field)
+
+        Returns:
+            List of Email objects, one per unique conversation
+        """
+        # Build query with DISTINCT ON to get one email per conversation
+        query = (
+            select(self.model)
+            .distinct(self.model.front_conversation_id)
+        )
+
+        # Filter by entire day
+        start_datetime = datetime.combine(target_date, datetime.min.time())
+        end_datetime = start_datetime + timedelta(days=1)
+        query = query.filter(
+            self.model.created_at >= start_datetime,
+            self.model.created_at < end_datetime
+        )
+
+        # Order by conversation ID first (required for DISTINCT ON), then by created_at
+        query = query.order_by(
+            self.model.front_conversation_id,
+            self.model.created_at.desc()
+        )
+
+        result = await db.execute(query)
+        return result.scalars().all()
+
 
 # Create an instance of the CRUD
 email = CRUDEmail(Email) 

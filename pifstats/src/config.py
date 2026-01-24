@@ -1,30 +1,33 @@
-"""
-Configuration for PIF Stats extraction system.
-Loads environment variables and provides settings for the extraction pipeline.
-"""
+"""Configuration settings for PIF Stats module."""
+
 import os
 from pathlib import Path
+from typing import Optional
 
-# Base paths
-PIFSTATS_ROOT = Path(__file__).parent.parent
-OUTPUTS_DIR = PIFSTATS_ROOT / "outputs"
+from pydantic_settings import BaseSettings
 
-# Front API Configuration
-FRONT_AUTH_TOKEN = os.getenv("FRONT_AUTH_TOKEN")
-FRONT_API_BASE_URL = os.getenv("FRONT_API_BASE_URL", "https://api2.frontapp.com")
 
-# OpenAI Configuration (NEVER use gpt-4, always use gpt-4o per CLAUDE.md)
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL = "gpt-4o"
+class PifStatsSettings(BaseSettings):
+    """Settings for PIF Stats module."""
 
-# Extraction settings
-MAX_CONVERSATIONS_PER_BATCH = 100
-REQUEST_DELAY_SECONDS = 0.5  # Rate limiting delay between API calls
+    # Front API
+    FRONT_API_BASE_URL: str = "https://api2.frontapp.com"
+    FRONT_AUTH_TOKEN: str
 
-# Output files
-FIRMS_OUTPUT_FILE = OUTPUTS_DIR / "firms.json"
-CONTACTS_OUTPUT_FILE = OUTPUTS_DIR / "contacts.json"
-EXTRACTION_LOG_FILE = OUTPUTS_DIR / "extraction_log.json"
+    # OpenAI
+    OPENAI_API_KEY: str
+    OPENAI_MODEL: str = "gpt-4o"  # Default model for entity extraction
 
-# Ensure outputs directory exists
-OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+    # Logging
+    LOG_LEVEL: str = "INFO"
+    DEBUG: bool = False
+
+    class Config:
+        """Pydantic settings config."""
+        env_file = ".env"
+        case_sensitive = True
+        extra = "ignore"
+
+
+# Create settings instance
+settings = PifStatsSettings()

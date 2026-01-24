@@ -11,3 +11,4 @@ from .tag_settings import TagSettings  # noqa
 from .user import User  # noqa
 from .session import Session  # noqa
 from .template_attachment import TemplateAttachment  # noqa
+from .pif_info import PifInfo  # noqa

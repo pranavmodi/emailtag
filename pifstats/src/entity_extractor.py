@@ -1,288 +1,337 @@
-"""
-AI-based entity extractor for extracting firm and contact information from emails.
-Uses OpenAI to perform structured extraction with higher accuracy than regex alone.
-"""
-import json
-import logging
-from typing import Dict, List, Optional, Any
-from openai import OpenAI
+"""Entity extraction for personal injury law firm information using OpenAI structured outputs."""
 
-from .config import OPENAI_API_KEY, OPENAI_MODEL
-from .email_parser import ExtractedContact, ParsedEmail
+import logging
+from typing import List, Optional
+
+import httpx
+from pydantic import BaseModel, Field
+
+from .config import settings
 
 logger = logging.getLogger(__name__)
 
-# Initialize OpenAI client
-client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+# OpenAI API endpoint
+OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
-# JSON schema for structured extraction
-FIRM_EXTRACTION_SCHEMA = {
+
+class ContactPerson(BaseModel):
+    """Contact person at the law firm."""
+
+    name: str = Field(default="", description="Full name of the contact person")
+    title: str = Field(default="", description="Job title or role (e.g., Paralegal, Attorney, Case Manager)")
+    email: str = Field(default="", description="Email address")
+    phone: str = Field(default="", description="Phone number")
+    extension: str = Field(default="", description="Phone extension if any")
+
+
+class FirmInfo(BaseModel):
+    """Extracted personal injury law firm information."""
+
+    firm_name: str = Field(default="", description="Name of the law firm")
+    firm_emails: List[str] = Field(default_factory=list, description="All email addresses associated with the firm")
+    firm_phones: List[str] = Field(default_factory=list, description="All phone numbers for the firm")
+    firm_fax: str = Field(default="", description="Fax number if available")
+    firm_website: str = Field(default="", description="Website URL")
+    firm_address: str = Field(default="", description="Physical address of the firm")
+    contacts: List[ContactPerson] = Field(default_factory=list, description="Individual contacts at the firm")
+    case_reference: str = Field(default="", description="Any case/claim reference number mentioned")
+    patient_name: str = Field(default="", description="Patient name if mentioned in the conversation")
+    extraction_notes: str = Field(default="", description="Any notes about the extraction or ambiguities")
+
+
+# JSON Schema for OpenAI structured output
+FIRM_INFO_SCHEMA = {
     "type": "object",
     "properties": {
-        "is_law_firm": {
-            "type": "boolean",
-            "description": "Whether this email appears to be from a law firm"
-        },
-        "is_personal_injury": {
-            "type": "boolean",
-            "description": "Whether this appears to be a personal injury law firm"
-        },
         "firm_name": {
             "type": "string",
-            "description": "Full legal name of the law firm"
+            "description": "Name of the law firm"
         },
-        "firm_phone": {
-            "type": "string",
-            "description": "Main phone number for the firm"
+        "firm_emails": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "All email addresses associated with the firm"
+        },
+        "firm_phones": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "All phone numbers for the firm"
         },
         "firm_fax": {
             "type": "string",
-            "description": "Fax number for the firm"
-        },
-        "firm_address": {
-            "type": "string",
-            "description": "Full street address of the firm"
+            "description": "Fax number if available"
         },
         "firm_website": {
             "type": "string",
-            "description": "Website URL for the firm"
+            "description": "Website URL"
+        },
+        "firm_address": {
+            "type": "string",
+            "description": "Physical address of the firm"
         },
         "contacts": {
             "type": "array",
-            "description": "List of individual contacts extracted from the email",
             "items": {
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "Full name of the contact"},
-                    "email": {"type": "string", "description": "Email address"},
-                    "phone": {"type": "string", "description": "Direct phone number"},
+                    "name": {"type": "string", "description": "Full name of the contact person"},
                     "title": {"type": "string", "description": "Job title or role"},
-                    "is_attorney": {"type": "boolean", "description": "Whether this person is an attorney"}
+                    "email": {"type": "string", "description": "Email address"},
+                    "phone": {"type": "string", "description": "Phone number"},
+                    "extension": {"type": "string", "description": "Phone extension if any"}
                 },
-                "required": ["name"]
-            }
+                "required": ["name", "title", "email", "phone", "extension"],
+                "additionalProperties": False
+            },
+            "description": "Individual contacts at the firm"
         },
-        "practice_areas": {
-            "type": "array",
-            "description": "Areas of law practice mentioned",
-            "items": {"type": "string"}
+        "case_reference": {
+            "type": "string",
+            "description": "Any case/claim reference number mentioned"
         },
-        "confidence_score": {
-            "type": "number",
-            "description": "Confidence in the extraction (0-1)"
+        "patient_name": {
+            "type": "string",
+            "description": "Patient name if mentioned in the conversation"
+        },
+        "extraction_notes": {
+            "type": "string",
+            "description": "Any notes about the extraction or ambiguities"
         }
     },
-    "required": ["is_law_firm", "is_personal_injury", "confidence_score"]
+    "required": [
+        "firm_name", "firm_emails", "firm_phones", "firm_fax",
+        "firm_website", "firm_address", "contacts", "case_reference",
+        "patient_name", "extraction_notes"
+    ],
+    "additionalProperties": False
 }
 
 
-class EntityExtractor:
-    """AI-powered entity extractor for firm and contact information."""
+EXTRACTION_PROMPT = """You are an expert at extracting contact information for personal injury law firms from email conversations.
 
-    def __init__(self):
-        if not client:
-            logger.warning("OpenAI client not initialized - AI extraction disabled")
+Analyze the following email conversation and extract all available information about the personal injury law firm(s) involved.
 
-    async def extract_firm_info(
-        self,
-        email_content: str,
-        signature_block: Optional[str] = None,
-        sender_email: Optional[str] = None,
-        sender_name: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Extract firm and contact information using AI.
+Focus on:
+1. Law firm name - Look for signatures, letterheads, or mentions
+2. Email addresses - All email addresses from the firm domain
+3. Phone numbers - Main lines, direct lines, cell phones
+4. Fax numbers
+5. Website URLs
+6. Physical addresses
+7. Individual contacts - Names, titles (Attorney, Paralegal, Case Manager, etc.), their direct contact info
+8. Case/claim reference numbers
+9. Patient names mentioned
 
-        Args:
-            email_content: Full email text content
-            signature_block: Extracted signature block if available
-            sender_email: Sender's email address
-            sender_name: Sender's name if known
+Important guidelines:
+- Only extract information that is explicitly present in the conversation
+- Do not make up or infer information that isn't clearly stated
+- If multiple firms are mentioned, focus on the primary personal injury law firm in the correspondence
+- Look carefully at email signatures as they often contain comprehensive contact info
+- Phone extensions should be extracted separately
+- Format phone numbers as they appear in the source
 
-        Returns:
-            Dictionary with extracted firm information
-        """
-        if not client:
-            logger.warning("OpenAI client not available")
-            return None
+Email Conversation:
+---
+{conversation_text}
+---
 
-        # Build context for extraction
-        context_parts = []
+Extract the law firm information from this conversation."""
 
-        if sender_email:
-            context_parts.append(f"Sender email: {sender_email}")
-        if sender_name:
-            context_parts.append(f"Sender name: {sender_name}")
 
-        context_parts.append(f"\nEmail content:\n{email_content[:3000]}")
+def extract_firm_info(conversation_text: str) -> Optional[FirmInfo]:
+    """
+    Extract personal injury law firm information from conversation text.
 
-        if signature_block:
-            context_parts.append(f"\nSignature block:\n{signature_block}")
+    Uses OpenAI's Responses API with structured outputs for reliable extraction.
 
-        context = "\n".join(context_parts)
+    Args:
+        conversation_text: The full text of the email conversation
 
-        prompt = f"""Analyze this email and extract information about the law firm and contacts.
-Focus on identifying:
-1. Whether this is from a law firm (especially personal injury)
-2. The firm's name, phone, fax, address, and website
-3. Individual contacts with their names, emails, titles, and direct phone numbers
-4. Practice areas mentioned
+    Returns:
+        FirmInfo object with extracted data, or None if extraction fails
+    """
+    if not conversation_text or not conversation_text.strip():
+        logger.warning("Empty conversation text provided for extraction")
+        return None
 
-{context}
+    headers = {
+        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
 
-Return the extracted information as structured JSON."""
+    prompt = EXTRACTION_PROMPT.format(conversation_text=conversation_text)
 
-        try:
-            response = client.chat.completions.create(
-                model=OPENAI_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert at extracting structured business information from emails. "
-                                   "Focus on accuracy and only include information that is clearly present in the text."
-                    },
-                    {"role": "user", "content": prompt}
-                ],
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "firm_extraction",
-                        "strict": True,
-                        "schema": FIRM_EXTRACTION_SCHEMA
-                    }
-                },
-                temperature=0.1,
-                max_tokens=1500
+    payload = {
+        "model": settings.OPENAI_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are an expert at extracting structured contact information from email conversations. Always respond with accurate, extracted information only."
+            },
+            {"role": "user", "content": prompt}
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "firm_info_extraction",
+                "strict": True,
+                "schema": FIRM_INFO_SCHEMA
+            }
+        },
+        "temperature": 0.0,
+        "max_tokens": 4000
+    }
+
+    try:
+        with httpx.Client(timeout=60.0, verify=False) as client:
+            logger.info(f"Sending extraction request to OpenAI using model {settings.OPENAI_MODEL}")
+            response = client.post(OPENAI_API_URL, headers=headers, json=payload)
+            response.raise_for_status()
+
+            result = response.json()
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+            if not content:
+                logger.error("Empty response from OpenAI")
+                return None
+
+            # Parse the JSON response into our Pydantic model
+            import json
+            extracted_data = json.loads(content)
+
+            # Convert contacts to ContactPerson objects
+            contacts = [
+                ContactPerson(**contact)
+                for contact in extracted_data.get("contacts", [])
+            ]
+
+            firm_info = FirmInfo(
+                firm_name=extracted_data.get("firm_name", ""),
+                firm_emails=extracted_data.get("firm_emails", []),
+                firm_phones=extracted_data.get("firm_phones", []),
+                firm_fax=extracted_data.get("firm_fax", ""),
+                firm_website=extracted_data.get("firm_website", ""),
+                firm_address=extracted_data.get("firm_address", ""),
+                contacts=contacts,
+                case_reference=extracted_data.get("case_reference", ""),
+                patient_name=extracted_data.get("patient_name", ""),
+                extraction_notes=extracted_data.get("extraction_notes", "")
             )
 
-            result = response.choices[0].message.content
-            return json.loads(result)
+            # Log token usage if available
+            usage = result.get("usage", {})
+            if usage:
+                logger.info(
+                    f"Token usage - Prompt: {usage.get('prompt_tokens', 0)}, "
+                    f"Completion: {usage.get('completion_tokens', 0)}, "
+                    f"Total: {usage.get('total_tokens', 0)}"
+                )
 
-        except Exception as e:
-            logger.error(f"AI extraction failed: {e}")
-            return None
+            return firm_info
 
-    async def extract_from_parsed_email(
-        self,
-        parsed_email: ParsedEmail
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Extract firm info from a ParsedEmail object.
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error during extraction: {e.response.status_code} - {e.response.text}")
+        return None
+    except httpx.RequestError as e:
+        logger.error(f"Request error during extraction: {str(e)}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error during extraction: {str(e)}")
+        return None
 
-        Args:
-            parsed_email: ParsedEmail object from EmailParser
 
-        Returns:
-            Dictionary with extracted firm information
-        """
-        return await self.extract_firm_info(
-            email_content=parsed_email.body_text or "",
-            signature_block=parsed_email.signature_block,
-            sender_email=parsed_email.sender_email,
-            sender_name=parsed_email.sender_name
-        )
+async def extract_firm_info_async(conversation_text: str) -> Optional[FirmInfo]:
+    """
+    Async version of extract_firm_info.
 
-    async def batch_extract(
-        self,
-        parsed_emails: List[ParsedEmail],
-        skip_non_firms: bool = True
-    ) -> List[Dict[str, Any]]:
-        """
-        Extract firm info from multiple emails.
+    Args:
+        conversation_text: The full text of the email conversation
 
-        Args:
-            parsed_emails: List of ParsedEmail objects
-            skip_non_firms: Whether to skip emails that don't appear to be from firms
+    Returns:
+        FirmInfo object with extracted data, or None if extraction fails
+    """
+    if not conversation_text or not conversation_text.strip():
+        logger.warning("Empty conversation text provided for extraction")
+        return None
 
-        Returns:
-            List of extraction results
-        """
-        results = []
+    headers = {
+        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
 
-        for email in parsed_emails:
-            try:
-                extraction = await self.extract_from_parsed_email(email)
+    prompt = EXTRACTION_PROMPT.format(conversation_text=conversation_text)
 
-                if extraction:
-                    # Add email metadata
-                    extraction["source_email_id"] = email.message_id
-                    extraction["source_email"] = email.sender_email
-                    extraction["source_domain"] = email.domain
+    payload = {
+        "model": settings.OPENAI_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are an expert at extracting structured contact information from email conversations. Always respond with accurate, extracted information only."
+            },
+            {"role": "user", "content": prompt}
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "firm_info_extraction",
+                "strict": True,
+                "schema": FIRM_INFO_SCHEMA
+            }
+        },
+        "temperature": 0.0,
+        "max_tokens": 4000
+    }
 
-                    if skip_non_firms and not extraction.get("is_law_firm"):
-                        continue
+    try:
+        async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
+            logger.info(f"Sending async extraction request to OpenAI using model {settings.OPENAI_MODEL}")
+            response = await client.post(OPENAI_API_URL, headers=headers, json=payload)
+            response.raise_for_status()
 
-                    results.append(extraction)
+            result = response.json()
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
 
-            except Exception as e:
-                logger.error(f"Failed to extract from email {email.message_id}: {e}")
+            if not content:
+                logger.error("Empty response from OpenAI")
+                return None
 
-        return results
+            import json
+            extracted_data = json.loads(content)
 
-    def merge_extractions(
-        self,
-        extractions: List[Dict[str, Any]]
-    ) -> Dict[str, Dict[str, Any]]:
-        """
-        Merge multiple extractions for the same firm (by domain).
+            contacts = [
+                ContactPerson(**contact)
+                for contact in extracted_data.get("contacts", [])
+            ]
 
-        Args:
-            extractions: List of extraction results
+            firm_info = FirmInfo(
+                firm_name=extracted_data.get("firm_name", ""),
+                firm_emails=extracted_data.get("firm_emails", []),
+                firm_phones=extracted_data.get("firm_phones", []),
+                firm_fax=extracted_data.get("firm_fax", ""),
+                firm_website=extracted_data.get("firm_website", ""),
+                firm_address=extracted_data.get("firm_address", ""),
+                contacts=contacts,
+                case_reference=extracted_data.get("case_reference", ""),
+                patient_name=extracted_data.get("patient_name", ""),
+                extraction_notes=extracted_data.get("extraction_notes", "")
+            )
 
-        Returns:
-            Dictionary keyed by domain with merged firm data
-        """
-        firms_by_domain = {}
+            usage = result.get("usage", {})
+            if usage:
+                logger.info(
+                    f"Token usage - Prompt: {usage.get('prompt_tokens', 0)}, "
+                    f"Completion: {usage.get('completion_tokens', 0)}, "
+                    f"Total: {usage.get('total_tokens', 0)}"
+                )
 
-        for extraction in extractions:
-            domain = extraction.get("source_domain")
-            if not domain:
-                continue
+            return firm_info
 
-            if domain not in firms_by_domain:
-                firms_by_domain[domain] = {
-                    "domain": domain,
-                    "firm_name": extraction.get("firm_name"),
-                    "firm_phone": extraction.get("firm_phone"),
-                    "firm_fax": extraction.get("firm_fax"),
-                    "firm_address": extraction.get("firm_address"),
-                    "firm_website": extraction.get("firm_website"),
-                    "is_personal_injury": extraction.get("is_personal_injury", False),
-                    "practice_areas": set(),
-                    "contacts": {},
-                    "email_count": 0,
-                    "source_emails": []
-                }
-
-            firm = firms_by_domain[domain]
-            firm["email_count"] += 1
-            firm["source_emails"].append(extraction.get("source_email_id"))
-
-            # Update fields if better data found
-            if not firm["firm_name"] and extraction.get("firm_name"):
-                firm["firm_name"] = extraction["firm_name"]
-            if not firm["firm_phone"] and extraction.get("firm_phone"):
-                firm["firm_phone"] = extraction["firm_phone"]
-            if not firm["firm_fax"] and extraction.get("firm_fax"):
-                firm["firm_fax"] = extraction["firm_fax"]
-            if not firm["firm_address"] and extraction.get("firm_address"):
-                firm["firm_address"] = extraction["firm_address"]
-            if not firm["firm_website"] and extraction.get("firm_website"):
-                firm["firm_website"] = extraction["firm_website"]
-
-            # Merge practice areas
-            if extraction.get("practice_areas"):
-                firm["practice_areas"].update(extraction["practice_areas"])
-
-            # Merge contacts by email
-            for contact in extraction.get("contacts", []):
-                email = contact.get("email")
-                if email and email not in firm["contacts"]:
-                    firm["contacts"][email] = contact
-
-        # Convert sets to lists for JSON serialization
-        for firm in firms_by_domain.values():
-            firm["practice_areas"] = list(firm["practice_areas"])
-            firm["contacts"] = list(firm["contacts"].values())
-
-        return firms_by_domain
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error during async extraction: {e.response.status_code} - {e.response.text}")
+        return None
+    except httpx.RequestError as e:
+        logger.error(f"Request error during async extraction: {str(e)}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error during async extraction: {str(e)}")
+        return None
