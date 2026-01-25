@@ -576,32 +576,51 @@ export default function PifListPage() {
               </CardHeader>
               <CardContent>
                 {/* Time range selector */}
-              <div className="mb-6 flex items-center gap-4">
-                <label className="text-sm font-medium text-slate-700">Time Range:</label>
-                <select
-                  value={usageStatsDays}
-                  onChange={(e) => setUsageStatsDays(Number(e.target.value))}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                >
-                  <option value={7}>Last 7 days</option>
-                  <option value={14}>Last 14 days</option>
-                  <option value={30}>Last 30 days</option>
-                  <option value={60}>Last 60 days</option>
-                  <option value={90}>Last 90 days</option>
-                </select>
-                <Button
-                  variant="ghost"
-                  onClick={fetchUsageStats}
-                  disabled={usageStatsLoading}
-                  className="text-sm"
-                >
-                  {usageStatsLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Refresh"
-                  )}
-                </Button>
-              </div>
+                <div className="mb-6 flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => setUsageStatsDays(1)}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                      usageStatsDays === 1
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    24h
+                  </button>
+                  <button
+                    onClick={() => setUsageStatsDays(7)}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                      usageStatsDays === 7
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    7d
+                  </button>
+                  <button
+                    onClick={() => setUsageStatsDays(30)}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                      usageStatsDays === 30
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    30d
+                  </button>
+                  <button
+                    onClick={() => setUsageStatsDays(90)}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                      usageStatsDays === 90
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    90d
+                  </button>
+                  <div className="ml-2 flex items-center">
+                    {usageStatsLoading && <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />}
+                  </div>
+                </div>
 
               {usageStatsError && (
                 <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
