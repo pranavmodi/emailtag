@@ -22,6 +22,7 @@ from app.db.session import get_db
 from app.schemas.email import EmailCreate, FrontAppWebhook, PreprocessingWebhook, EmailUpdate, Email, FrontOutboundMessageWebhook
 from app.schemas.patient_conversation_data import PatientConversationDataCreate
 from app.tasks.email import process_email
+from app.tasks.pif_extraction import extract_pif_from_conversation
 from app.services.patient import fetch_patient_by_id
 from app.helpers.patient_extraction import extract_and_log_patient_info
 from app.services.trace_service import create_tracer, TraceLogger
@@ -383,7 +384,19 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
             process_email.apply_async(args=[str(db_email.id)], queue='emails')
             output_data["queued_successfully"] = True
             output_data["queue_name"] = "emails"
-        
+
+        # Queue PIF (Personal Injury Firm) extraction task
+        # This runs in parallel with email processing to extract firm contact info
+        try:
+            extract_pif_from_conversation.apply_async(
+                args=[conversation_id],
+                queue='processing'
+            )
+            logger.info(f"Queued PIF extraction for conversation {conversation_id}")
+        except Exception as pif_error:
+            # Don't fail the webhook if PIF extraction queueing fails
+            logger.warning(f"Failed to queue PIF extraction for {conversation_id}: {pif_error}")
+
     except Exception as e:
         logger.exception(f"Error processing inbound message: {str(e)}")
 

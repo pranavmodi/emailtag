@@ -181,7 +181,7 @@ export default function PifListPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
-      <Header user={user} currentPage={{ label: "PIF List", icon: "🏢" }} />
+      <Header user={user} currentPage={{ label: "PIF Stats", icon: "🏢" }} />
 
       <main className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-10">
         {/* Process Day Card */}
