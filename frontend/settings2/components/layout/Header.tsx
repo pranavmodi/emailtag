@@ -85,9 +85,10 @@ interface HeaderProps {
     label: string;
     icon: string;
   };
+  extraAction?: React.ReactNode;
 }
 
-export function Header({ user, currentPage }: HeaderProps) {
+export function Header({ user, currentPage, extraAction }: HeaderProps) {
   const pathname = usePathname();
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
@@ -222,10 +223,16 @@ export function Header({ user, currentPage }: HeaderProps) {
         </div>
 
         {/* User info - pushed to the right */}
-        <div className="ml-auto flex items-center gap-3 text-sm text-slate-500">
+        <div className="ml-auto flex items-center gap-2 text-sm text-slate-500">
           <span>
             Logged in as <strong className="text-slate-700">{user}</strong>
           </span>
+          {extraAction && (
+            <>
+              <span className="text-slate-300">|</span>
+              {extraAction}
+            </>
+          )}
         </div>
       </nav>
     </header>

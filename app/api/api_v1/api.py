@@ -13,6 +13,7 @@ from app.api.api_v1.endpoints import (
     email_analysis,
     conversation_replay,
     pif_info,
+    usage,
 )
 
 api_router = APIRouter()
@@ -30,3 +31,4 @@ api_router.include_router(
     tags=["conversation-replay"],
 )
 api_router.include_router(pif_info.router, prefix="/pif-info", tags=["pif-info"])
+api_router.include_router(usage.router, prefix="/usage", tags=["usage"])

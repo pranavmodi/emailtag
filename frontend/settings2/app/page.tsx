@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { ApiError, SettingsApi } from "@/lib/api";
+import { useTracking } from "@/lib/useTracking";
 import { cn } from "@/lib/utils";
 import type {
   AutorespondSettingsResponse,
@@ -133,6 +134,9 @@ export default function Settings2Page() {
   const [newNoActionItem, setNewNoActionItem] = useState<string>("");
   const [busy, setBusy] = useState<Record<string, boolean>>({});
 
+  // Usage tracking
+  const { trackAction, trackToggle, trackError } = useTracking("/", "System Settings");
+
   useEffect(() => {
     let mounted = true;
 
@@ -225,6 +229,7 @@ export default function Settings2Page() {
       const payload = await SettingsApi.toggleProcessing(enabled);
       setStatus(payload);
       setStatusError(null);
+      trackToggle("email_processing", enabled);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
@@ -233,6 +238,7 @@ export default function Settings2Page() {
       const message =
         error instanceof Error ? error.message : "Failed to update setting";
       setStatusError(message);
+      trackError(message, "email_processing_toggle");
     } finally {
       setBusyFlag("processing", false);
     }
@@ -251,6 +257,7 @@ export default function Settings2Page() {
           : prev
       );
       setAutorespondError(null);
+      trackToggle("global_autorespond", enabled);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
@@ -259,6 +266,7 @@ export default function Settings2Page() {
       const message =
         error instanceof Error ? error.message : "Failed to update global toggle";
       setAutorespondError(message);
+      trackError(message, "global_autorespond_toggle");
     } finally {
       setBusyFlag("global", false);
     }
@@ -270,6 +278,7 @@ export default function Settings2Page() {
       await SettingsApi.toggleSenderVerification(enabled);
       setSenderVerificationEnabled(enabled);
       setWorkspaceError(null);
+      trackToggle("sender_verification", enabled);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
@@ -280,6 +289,7 @@ export default function Settings2Page() {
           ? error.message
           : "Failed to update sender verification";
       setWorkspaceError(message);
+      trackError(message, "sender_verification_toggle");
     } finally {
       setBusyFlag("sender_verification", false);
     }
@@ -291,6 +301,7 @@ export default function Settings2Page() {
       await SettingsApi.toggleSkipInternalDomains(enabled);
       setSkipInternalDomains(enabled);
       setInternalDomainsError(null);
+      trackToggle("skip_internal_domains", enabled);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
@@ -301,6 +312,7 @@ export default function Settings2Page() {
           ? error.message
           : "Failed to update internal domain filtering";
       setInternalDomainsError(message);
+      trackError(message, "skip_internal_domains_toggle");
     } finally {
       setBusyFlag("skip_internal_domains", false);
     }
@@ -330,6 +342,7 @@ export default function Settings2Page() {
           : prev
       );
       setLienModeError(null);
+      trackAction("lien_mode_change", "LienModeToggle", { new_mode: mode });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
@@ -340,6 +353,7 @@ export default function Settings2Page() {
           ? error.message
           : "Failed to update lien mode";
       setLienModeError(message);
+      trackError(message, "lien_mode_change");
     } finally {
       setBusyFlag("lien_mode", false);
     }
@@ -371,6 +385,7 @@ export default function Settings2Page() {
           : prev
       );
       setBillBalanceModeError(null);
+      trackAction("bill_balance_mode_change", "BillBalanceModeToggle", { new_mode: mode });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
@@ -381,6 +396,7 @@ export default function Settings2Page() {
           ? error.message
           : "Failed to update bill balance mode";
       setBillBalanceModeError(message);
+      trackError(message, "bill_balance_mode_change");
     } finally {
       setBusyFlag("bill_balance_mode", false);
     }
@@ -399,6 +415,7 @@ export default function Settings2Page() {
           : prev
       );
       setAutorespondError(null);
+      trackToggle(type, enabled, { autorespond_type: type });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
@@ -409,6 +426,7 @@ export default function Settings2Page() {
           ? error.message
           : "Failed to update autorespond";
       setAutorespondError(message);
+      trackError(message, `autorespond_toggle_${type}`);
     } finally {
       setBusyFlag(type, false);
     }
@@ -424,6 +442,7 @@ export default function Settings2Page() {
       setNoActionList(result.no_action_list);
       setNewNoActionItem("");
       setNoActionError(null);
+      trackAction("add_no_action_item", "NoActionList", { item });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
@@ -432,6 +451,7 @@ export default function Settings2Page() {
       const message =
         error instanceof Error ? error.message : "Failed to add item";
       setNoActionError(message);
+      trackError(message, "add_no_action_item");
     } finally {
       setBusyFlag("no_action_add", false);
     }
@@ -443,6 +463,7 @@ export default function Settings2Page() {
       const result = await SettingsApi.removeNoActionItem(item);
       setNoActionList(result.no_action_list);
       setNoActionError(null);
+      trackAction("remove_no_action_item", "NoActionList", { item });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
@@ -451,6 +472,7 @@ export default function Settings2Page() {
       const message =
         error instanceof Error ? error.message : "Failed to remove item";
       setNoActionError(message);
+      trackError(message, "remove_no_action_item");
     } finally {
       setBusyFlag(`no_action_remove_${item}`, false);
     }
@@ -483,7 +505,14 @@ export default function Settings2Page() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
-      <Header user={user} currentPage={{ label: "System Settings", icon: "⚙️" }} />
+      <Header user={user} currentPage={{ label: "System Settings", icon: "⚙️" }} extraAction={
+        <button
+          onClick={logout}
+          className="text-xs text-slate-400 hover:text-slate-600 hover:underline"
+        >
+          Logout
+        </button>
+      } />
 
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
       <motion.div

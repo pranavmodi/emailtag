@@ -17,9 +17,16 @@ import {
   ChevronUp,
   ExternalLink,
   Trash2,
+  LogOut,
+  Activity,
+  Clock,
+  MousePointer,
+  Eye,
+  BarChart3,
+  TrendingUp,
 } from "lucide-react";
 
-import { ApiError, SettingsApi, PifApi } from "@/lib/api";
+import { ApiError, PifApi, UsageApi, UsageStatsResponse } from "@/lib/api";
 import type { PifInfoResponse, PifInfoListResponse, ProcessDayResponse } from "@/lib/types";
 import {
   Card,
@@ -34,8 +41,19 @@ import { Header } from "@/components/layout/Header";
 
 const easing = { duration: 0.45, ease: [0.16, 1, 0.3, 1] };
 
+// Simple auth for pifstats page only
+const PIFSTATS_AUTH_KEY = "pifstats_authenticated";
+const VALID_USERNAME = "user";
+const VALID_PASSWORD = "user123";
+
 export default function PifListPage() {
-  const [user, setUser] = useState<string>("Admin");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  const [user, setUser] = useState<string>("user");
   const [data, setData] = useState<PifInfoListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,6 +70,55 @@ export default function PifListPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processResult, setProcessResult] = useState<ProcessDayResponse | null>(null);
 
+  // Usage stats state
+  const [usageStats, setUsageStats] = useState<UsageStatsResponse | null>(null);
+  const [usageStatsLoading, setUsageStatsLoading] = useState(false);
+  const [usageStatsError, setUsageStatsError] = useState<string | null>(null);
+  const [usageStatsDays, setUsageStatsDays] = useState(30);
+
+  // Check if already authenticated on mount
+  useEffect(() => {
+    const authStatus = localStorage.getItem(PIFSTATS_AUTH_KEY);
+    if (authStatus === "true") {
+      setIsAuthenticated(true);
+    }
+    setAuthChecked(true);
+  }, []);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+
+    if (loginUsername === VALID_USERNAME && loginPassword === VALID_PASSWORD) {
+      localStorage.setItem(PIFSTATS_AUTH_KEY, "true");
+      setIsAuthenticated(true);
+      setUser(loginUsername);
+    } else {
+      setLoginError("Invalid username or password");
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem(PIFSTATS_AUTH_KEY);
+    setIsAuthenticated(false);
+    setLoginUsername("");
+    setLoginPassword("");
+  };
+
+  const fetchUsageStats = useCallback(async () => {
+    setUsageStatsLoading(true);
+    setUsageStatsError(null);
+    try {
+      const stats = await UsageApi.getStats("admin", usageStatsDays);
+      setUsageStats(stats);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load usage stats";
+      setUsageStatsError(message);
+    } finally {
+      setUsageStatsLoading(false);
+    }
+  }, [usageStatsDays]);
+
   const fetchData = useCallback(async () => {
     try {
       const payload = await PifApi.list({
@@ -63,7 +130,9 @@ export default function PifListPage() {
       setError(null);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        window.location.href = "/login";
+        // API needs auth - but we handle separately for this page
+        const message = err instanceof Error ? err.message : "API authentication required";
+        setError(message);
         return;
       }
       const message = err instanceof Error ? err.message : "Failed to load PIF data";
@@ -75,22 +144,15 @@ export default function PifListPage() {
     let mounted = true;
 
     const bootstrap = async () => {
-      try {
-        const auth = await SettingsApi.getAuthStatus();
-        if (!auth.authenticated) {
-          window.location.href = "/login";
-          return;
-        }
-        if (!mounted) return;
-        setUser(auth.username ?? "Admin");
+      if (!isAuthenticated) {
+        setIsLoading(false);
+        return;
+      }
 
-        await fetchData();
+      try {
+        await Promise.all([fetchData(), fetchUsageStats()]);
       } catch (err) {
         if (!mounted) return;
-        if (err instanceof ApiError && err.status === 401) {
-          window.location.href = "/login";
-          return;
-        }
         const message = err instanceof Error ? err.message : "Unexpected error occurred";
         setError(message);
       } finally {
@@ -98,12 +160,14 @@ export default function PifListPage() {
       }
     };
 
-    bootstrap();
+    if (authChecked) {
+      bootstrap();
+    }
     return () => {
       mounted = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isAuthenticated, authChecked]);
 
   // Re-fetch when page changes
   useEffect(() => {
@@ -112,6 +176,14 @@ export default function PifListPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);
+
+  // Re-fetch usage stats when days filter changes
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      fetchUsageStats();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usageStatsDays]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,9 +235,85 @@ export default function PifListPage() {
     setExpandedId(expandedId === id ? null : id);
   };
 
+  // Show loading while checking auth
+  if (!authChecked) {
+    return (
+      <section className="flex min-h-screen items-center justify-center px-6 py-16 bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={easing}
+          className="rounded-3xl border border-slate-200/80 bg-white/80 px-10 py-12 text-center shadow-2xl"
+        >
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-indigo-600" />
+          <p className="mt-4 text-base font-medium text-slate-500">Loading...</p>
+        </motion.div>
+      </section>
+    );
+  }
+
+  // Show login form if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <section className="flex min-h-screen items-center justify-center px-6 py-16 bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={easing}
+          className="w-full max-w-md"
+        >
+          <Card className="rounded-2xl border border-slate-200/70 bg-white/90 shadow-xl">
+            <CardContent className="pt-6">
+              <form onSubmit={handleLogin} className="space-y-4">
+                {loginError && (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                    {loginError}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <label htmlFor="username" className="text-sm font-medium text-slate-700">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    id="username"
+                    value={loginUsername}
+                    onChange={(e) => setLoginUsername(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    placeholder="Enter username"
+                    autoComplete="username"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="password" className="text-sm font-medium text-slate-700">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    id="password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    placeholder="Enter password"
+                    autoComplete="current-password"
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full">
+                  Sign In
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </section>
+    );
+  }
+
   if (isLoading) {
     return (
-      <section className="flex min-h-screen items-center justify-center px-6 py-16">
+      <section className="flex min-h-screen items-center justify-center px-6 py-16 bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -181,7 +329,16 @@ export default function PifListPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
-      <Header user={user} currentPage={{ label: "PIF Stats", icon: "🏢" }} />
+      <Header user={user} currentPage={{ label: "PIF Stats", icon: "🏢" }} extraAction={
+        <Button
+          variant="ghost"
+          onClick={handleLogout}
+          className="text-slate-600 hover:text-slate-800 px-3 py-1.5 text-sm"
+        >
+          <LogOut className="h-4 w-4 mr-1" />
+          Logout
+        </Button>
+      } />
 
       <main className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-10">
         {/* Process Day Card */}
@@ -272,6 +429,316 @@ export default function PifListPage() {
                       )}
                     </div>
                   )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.section>
+
+        {/* Admin Usage Stats Card */}
+        <motion.section
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...easing, delay: 0.05 }}
+        >
+          <Card className="rounded-2xl border border-slate-200/70 bg-white/90">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-3 text-xl">
+                <Activity className="h-5 w-5 text-indigo-600" />
+                Admin Usage Statistics
+              </CardTitle>
+              <CardDescription>
+                Track how the admin user interacts with the /settings page
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* Time range selector */}
+              <div className="mb-6 flex items-center gap-4">
+                <label className="text-sm font-medium text-slate-700">Time Range:</label>
+                <select
+                  value={usageStatsDays}
+                  onChange={(e) => setUsageStatsDays(Number(e.target.value))}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+                  <option value={7}>Last 7 days</option>
+                  <option value={14}>Last 14 days</option>
+                  <option value={30}>Last 30 days</option>
+                  <option value={60}>Last 60 days</option>
+                  <option value={90}>Last 90 days</option>
+                </select>
+                <Button
+                  variant="ghost"
+                  onClick={fetchUsageStats}
+                  disabled={usageStatsLoading}
+                  className="text-sm"
+                >
+                  {usageStatsLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Refresh"
+                  )}
+                </Button>
+              </div>
+
+              {usageStatsError && (
+                <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                  {usageStatsError}
+                </div>
+              )}
+
+              {usageStatsLoading && !usageStats ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+                </div>
+              ) : usageStats ? (
+                <div className="space-y-6">
+                  {/* Overview Stats */}
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-6">
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                        <BarChart3 className="h-3.5 w-3.5" />
+                        Total Events
+                      </div>
+                      <div className="mt-1 text-2xl font-bold text-slate-800">
+                        {usageStats.total_events.toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                        <Eye className="h-3.5 w-3.5" />
+                        Page Views
+                      </div>
+                      <div className="mt-1 text-2xl font-bold text-slate-800">
+                        {usageStats.total_page_views.toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                        <MousePointer className="h-3.5 w-3.5" />
+                        Actions
+                      </div>
+                      <div className="mt-1 text-2xl font-bold text-slate-800">
+                        {usageStats.total_actions.toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                        <Users className="h-3.5 w-3.5" />
+                        Sessions
+                      </div>
+                      <div className="mt-1 text-2xl font-bold text-slate-800">
+                        {usageStats.total_sessions.toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                        <Globe className="h-3.5 w-3.5" />
+                        Unique Pages
+                      </div>
+                      <div className="mt-1 text-2xl font-bold text-slate-800">
+                        {usageStats.unique_pages_visited}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                        <Clock className="h-3.5 w-3.5" />
+                        Avg Session
+                      </div>
+                      <div className="mt-1 text-2xl font-bold text-slate-800">
+                        {Math.round(usageStats.average_session_duration_ms / 1000 / 60)}m
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Recent Activity */}
+                  <div className="grid gap-6 md:grid-cols-2">
+                    {/* Time-based activity */}
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-700">
+                        <TrendingUp className="h-4 w-4 text-indigo-500" />
+                        Activity Summary
+                      </h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Today</span>
+                          <span className="font-medium text-slate-800">{usageStats.events_today} events</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">This Week</span>
+                          <span className="font-medium text-slate-800">{usageStats.events_this_week} events</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">This Month</span>
+                          <span className="font-medium text-slate-800">{usageStats.events_this_month} events</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Total Time</span>
+                          <span className="font-medium text-slate-800">
+                            {Math.round(usageStats.total_time_spent_ms / 1000 / 60)} minutes
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Most visited pages */}
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-700">
+                        <Eye className="h-4 w-4 text-indigo-500" />
+                        Most Visited Pages
+                      </h4>
+                      <div className="space-y-2 text-sm">
+                        {usageStats.most_visited_pages.slice(0, 5).map((page, i) => (
+                          <div key={i} className="flex justify-between">
+                            <span className="text-slate-600 truncate max-w-[150px]" title={page.page}>
+                              {page.page || "/"}
+                            </span>
+                            <span className="font-medium text-slate-800">{page.count} views</span>
+                          </div>
+                        ))}
+                        {usageStats.most_visited_pages.length === 0 && (
+                          <div className="text-slate-400">No page visits recorded</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Most common actions */}
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-700">
+                        <MousePointer className="h-4 w-4 text-indigo-500" />
+                        Most Common Actions
+                      </h4>
+                      <div className="space-y-2 text-sm">
+                        {usageStats.most_common_actions.slice(0, 5).map((action, i) => (
+                          <div key={i} className="flex justify-between">
+                            <span className="text-slate-600 truncate max-w-[150px]" title={action.action}>
+                              {action.action.replace(/_/g, " ")}
+                            </span>
+                            <span className="font-medium text-slate-800">{action.count}x</span>
+                          </div>
+                        ))}
+                        {usageStats.most_common_actions.length === 0 && (
+                          <div className="text-slate-400">No actions recorded</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Hourly activity */}
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-700">
+                        <Clock className="h-4 w-4 text-indigo-500" />
+                        Activity by Hour
+                      </h4>
+                      <div className="flex h-16 items-end gap-0.5">
+                        {Array.from({ length: 24 }, (_, hour) => {
+                          const count = usageStats.hourly_activity[String(hour)] || 0;
+                          const maxCount = Math.max(...Object.values(usageStats.hourly_activity), 1);
+                          const height = Math.max((count / maxCount) * 100, 2);
+                          return (
+                            <div
+                              key={hour}
+                              className="flex-1 bg-indigo-400 rounded-t transition-all hover:bg-indigo-600"
+                              style={{ height: `${height}%` }}
+                              title={`${hour}:00 - ${count} events`}
+                            />
+                          );
+                        })}
+                      </div>
+                      <div className="mt-1 flex justify-between text-xs text-slate-400">
+                        <span>0h</span>
+                        <span>12h</span>
+                        <span>24h</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Recent Sessions */}
+                  {usageStats.sessions.length > 0 && (
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-700">
+                        <Activity className="h-4 w-4 text-indigo-500" />
+                        Recent Sessions
+                      </h4>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-xs text-slate-500">
+                              <th className="pb-2 pr-4">Session ID</th>
+                              <th className="pb-2 pr-4">Start</th>
+                              <th className="pb-2 pr-4">End</th>
+                              <th className="pb-2 pr-4">Events</th>
+                              <th className="pb-2">Pages</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {usageStats.sessions.slice(0, 5).map((session, i) => (
+                              <tr key={i} className="border-t border-slate-100">
+                                <td className="py-2 pr-4 font-mono text-xs text-slate-600">
+                                  {session.session_id?.slice(0, 12)}...
+                                </td>
+                                <td className="py-2 pr-4 text-slate-600">
+                                  {session.start ? new Date(session.start).toLocaleString() : "-"}
+                                </td>
+                                <td className="py-2 pr-4 text-slate-600">
+                                  {session.end ? new Date(session.end).toLocaleString() : "-"}
+                                </td>
+                                <td className="py-2 pr-4 font-medium text-slate-800">
+                                  {session.events_count}
+                                </td>
+                                <td className="py-2 font-medium text-slate-800">
+                                  {session.pages_visited}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recent Events */}
+                  {usageStats.recent_events.length > 0 && (
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-700">
+                        <MessageSquare className="h-4 w-4 text-indigo-500" />
+                        Recent Events
+                      </h4>
+                      <div className="max-h-64 overflow-y-auto space-y-2">
+                        {usageStats.recent_events.slice(0, 20).map((event, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm border border-slate-100"
+                          >
+                            <div className="flex items-center gap-3">
+                              <Badge className={
+                                event.event_type === "page_view"
+                                  ? "bg-blue-100 text-blue-700"
+                                  : event.event_type === "action"
+                                  ? "bg-green-100 text-green-700"
+                                  : event.event_type === "click"
+                                  ? "bg-amber-100 text-amber-700"
+                                  : event.event_type === "error"
+                                  ? "bg-rose-100 text-rose-700"
+                                  : "bg-slate-100 text-slate-700"
+                              }>
+                                {event.event_type}
+                              </Badge>
+                              <span className="text-slate-700">{event.event_name.replace(/_/g, " ")}</span>
+                              {event.page_path && (
+                                <span className="text-slate-400 text-xs">{event.page_path}</span>
+                              )}
+                            </div>
+                            <span className="text-xs text-slate-400">
+                              {new Date(event.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="py-12 text-center text-slate-500">
+                  No usage data available yet
                 </div>
               )}
             </CardContent>
