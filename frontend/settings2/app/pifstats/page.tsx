@@ -76,6 +76,9 @@ export default function PifListPage() {
   const [usageStatsError, setUsageStatsError] = useState<string | null>(null);
   const [usageStatsDays, setUsageStatsDays] = useState(30);
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState<"pif" | "usage">("pif");
+
   // Check if already authenticated on mount
   useEffect(() => {
     const authStatus = localStorage.getItem(PIFSTATS_AUTH_KEY);
@@ -341,22 +344,50 @@ export default function PifListPage() {
       } />
 
       <main className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-10">
-        {/* Process Day Card */}
-        <motion.section
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={easing}
-        >
-          <Card className="rounded-2xl border border-slate-200/70 bg-white/90">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl">
-                <Calendar className="h-5 w-5 text-indigo-600" />
-                Process Day&apos;s Conversations
-              </CardTitle>
-              <CardDescription>
-                Extract firm information from all conversations on a specific date
-              </CardDescription>
-            </CardHeader>
+        {/* Tab Navigation */}
+        <div className="flex gap-1 rounded-lg bg-slate-100 p-1 w-fit">
+          <button
+            onClick={() => setActiveTab("pif")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "pif"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Building2 className="h-4 w-4 inline-block mr-1.5 -mt-0.5" />
+            PIF Data
+          </button>
+          <button
+            onClick={() => setActiveTab("usage")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "usage"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Activity className="h-4 w-4 inline-block mr-1.5 -mt-0.5" />
+            Usage Stats
+          </button>
+        </div>
+
+        {activeTab === "pif" && (
+          <>
+            {/* Process Day Card */}
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={easing}
+            >
+              <Card className="rounded-2xl border border-slate-200/70 bg-white/90">
+                <CardHeader className="pb-4">
+                  <CardTitle className="flex items-center gap-3 text-xl">
+                    <Calendar className="h-5 w-5 text-indigo-600" />
+                    Process Day&apos;s Conversations
+                  </CardTitle>
+                  <CardDescription>
+                    Extract firm information from all conversations on a specific date
+                  </CardDescription>
+                </CardHeader>
             <CardContent>
               <div className="flex flex-wrap items-end gap-4">
                 <div className="flex flex-col gap-1.5">
@@ -435,24 +466,116 @@ export default function PifListPage() {
           </Card>
         </motion.section>
 
-        {/* Admin Usage Stats Card */}
-        <motion.section
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ ...easing, delay: 0.05 }}
-        >
-          <Card className="rounded-2xl border border-slate-200/70 bg-white/90">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl">
-                <Activity className="h-5 w-5 text-indigo-600" />
-                Admin Usage Statistics
-              </CardTitle>
-              <CardDescription>
-                Track how the admin user interacts with the /settings page
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {/* Time range selector */}
+          {/* Search and List Card */}
+          <motion.section
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...easing, delay: 0.1 }}
+          >
+            <Card className="rounded-2xl border border-slate-200/70 bg-white/90">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <Building2 className="h-5 w-5 text-indigo-600" />
+                  Personal Injury Firms
+                  {data && (
+                    <Badge className="ml-2 bg-slate-100 text-slate-600">
+                      {data.total} firms
+                    </Badge>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  View and search extracted firm information from email conversations
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {error && (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                    {error}
+                  </div>
+                )}
+
+                {/* Search Form */}
+                <form onSubmit={handleSearch} className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by firm name, email, or website..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 py-2 pl-10 pr-4 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <Button type="submit">Search</Button>
+                </form>
+
+                {/* Firms List */}
+                {data && data.items.length > 0 ? (
+                  <div className="space-y-3">
+                    {data.items.map((firm) => (
+                      <FirmCard
+                        key={firm.id}
+                        firm={firm}
+                        isExpanded={expandedId === firm.id}
+                        onToggle={() => toggleExpand(firm.id)}
+                        onDelete={() => handleDelete(firm.id, firm.firm_name)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-12 text-center text-slate-500">
+                    {searchTerm ? "No firms found matching your search" : "No firms extracted yet"}
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {data && data.total_pages > 1 && (
+                  <div className="flex items-center justify-between border-t border-slate-100 pt-4">
+                    <div className="text-sm text-slate-500">
+                      Page {data.page} of {data.total_pages}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => setCurrentPage((p) => Math.min(data.total_pages, p + 1))}
+                        disabled={currentPage === data.total_pages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.section>
+        </>
+        )}
+
+        {activeTab === "usage" && (
+          <motion.section
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={easing}
+          >
+            <Card className="rounded-2xl border border-slate-200/70 bg-white/90">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <Activity className="h-5 w-5 text-indigo-600" />
+                  Admin Usage Statistics
+                </CardTitle>
+                <CardDescription>
+                  Track how the admin user interacts with the /settings page
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* Time range selector */}
               <div className="mb-6 flex items-center gap-4">
                 <label className="text-sm font-medium text-slate-700">Time Range:</label>
                 <select
@@ -744,96 +867,7 @@ export default function PifListPage() {
             </CardContent>
           </Card>
         </motion.section>
-
-        {/* Search and List Card */}
-        <motion.section
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ ...easing, delay: 0.1 }}
-        >
-          <Card className="rounded-2xl border border-slate-200/70 bg-white/90">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl">
-                <Building2 className="h-5 w-5 text-indigo-600" />
-                Personal Injury Firms
-                {data && (
-                  <Badge className="ml-2 bg-slate-100 text-slate-600">
-                    {data.total} firms
-                  </Badge>
-                )}
-              </CardTitle>
-              <CardDescription>
-                View and search extracted firm information from email conversations
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {error && (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
-                  {error}
-                </div>
-              )}
-
-              {/* Search Form */}
-              <form onSubmit={handleSearch} className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search by firm name, email, or website..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 py-2 pl-10 pr-4 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                </div>
-                <Button type="submit">Search</Button>
-              </form>
-
-              {/* Firms List */}
-              {data && data.items.length > 0 ? (
-                <div className="space-y-3">
-                  {data.items.map((firm) => (
-                    <FirmCard
-                      key={firm.id}
-                      firm={firm}
-                      isExpanded={expandedId === firm.id}
-                      onToggle={() => toggleExpand(firm.id)}
-                      onDelete={() => handleDelete(firm.id, firm.firm_name)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="py-12 text-center text-slate-500">
-                  {searchTerm ? "No firms found matching your search" : "No firms extracted yet"}
-                </div>
-              )}
-
-              {/* Pagination */}
-              {data && data.total_pages > 1 && (
-                <div className="flex items-center justify-between border-t border-slate-100 pt-4">
-                  <div className="text-sm text-slate-500">
-                    Page {data.page} of {data.total_pages}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={() => setCurrentPage((p) => Math.min(data.total_pages, p + 1))}
-                      disabled={currentPage === data.total_pages}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.section>
+        )}
       </main>
     </div>
   );
