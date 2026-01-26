@@ -30,7 +30,7 @@ export const getDummyPlaceholders = (): Record<string, string> => {
 <th style="border: 1px solid black; padding: 8px; text-align: left;">Study ID</th>
 <th style="border: 1px solid black; padding: 8px; text-align: left;">Exam Description</th>
 <th style="border: 1px solid black; padding: 8px; text-align: left;">Status</th>
-<th style="border: 1px solid black; padding: 8px; text-align: left;">Study Date/Time</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Exam Date/Time</th>
 <th style="border: 1px solid black; padding: 8px; text-align: left;">Location</th>
 <th style="border: 1px solid black; padding: 8px; text-align: left;">MRI Type</th>
 <th style="border: 1px solid black; padding: 8px; text-align: left;">Images Available</th>

@@ -2,6 +2,7 @@ import asyncio
 import os
 import json
 import ast # Import ast for literal_eval
+import re
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta # Added for time manipulation
 
@@ -249,7 +250,7 @@ def _generate_appointment_table_html(studies: List[Dict[str, Any]]) -> str:
 <th style="border: 1px solid black; padding: 8px; text-align: left;">Study ID</th>
 <th style="border: 1px solid black; padding: 8px; text-align: left;">Exam Description</th>
 <th style="border: 1px solid black; padding: 8px; text-align: left;">Status</th>
-<th style="border: 1px solid black; padding: 8px; text-align: left;">Study Date/Time</th>
+<th style="border: 1px solid black; padding: 8px; text-align: left;">Exam Date/Time</th>
 <th style="border: 1px solid black; padding: 8px; text-align: left;">Location</th>
 <th style="border: 1px solid black; padding: 8px; text-align: left;">MRI Type</th>
 <th style="border: 1px solid black; padding: 8px; text-align: left;">Images Available</th>
@@ -528,7 +529,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                             day_num = parsed_dt.day
                             year = parsed_dt.year
                             day_suffix = get_day_suffix(day_num)
-                            appointment_datetime_str = f"{day_name} {month_name} {day_num}{day_suffix}, {year}<br/><br/>N/A"
+                            appointment_datetime_str = f"{day_name}, {month_name} {day_num}{day_suffix}, {year}<br/><br/>N/A"
                             arrival_time_str = "N/A"
                         else:
                             # This has both date and time - format as requested
@@ -539,7 +540,7 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                             day_suffix = get_day_suffix(day_num)
                             time_str = parsed_dt.strftime('%I:%M %p').lstrip('0')  # Remove leading zero from hour
 
-                            appointment_datetime_str = f"{day_name} {month_name} {day_num}{day_suffix}, {year}<br/><br/>{time_str}"
+                            appointment_datetime_str = f"{day_name}, {month_name} {day_num}{day_suffix}, {year}<br/><br/>{time_str}"
 
                             pre_arrival_min = study.get("pre_arrival_minutes", 30)
                             arrival_dt = parsed_dt - timedelta(minutes=pre_arrival_min)
@@ -554,10 +555,23 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
             facility_address = facility_info.get('address', '').strip()
 
             # Show only facility address (not facility name)
+            # Format: split address so city/state/zip is on second line
             if not facility_address or facility_address in ['N/A', 'Not Available', 'Not Available in Database']:
                 location_display = "N/A"
             else:
-                location_display = facility_address
+                # Try to split address into street and city/state/zip
+                # Pattern: look for City + 2-letter state + 5-digit zip at the end
+                # Match pattern like "Los Gatos CA 95032" or "Beverly Hills CA 90210" at end
+                match = re.search(r'^(.*?)\s+([A-Za-z][A-Za-z\s]+?)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$', facility_address)
+                if match:
+                    street = match.group(1).strip()
+                    city = match.group(2).strip()
+                    state = match.group(3)
+                    zip_code = match.group(4)
+                    location_display = f"{street}<br/>{city}, {state} {zip_code}"
+                else:
+                    # Couldn't parse, use as-is
+                    location_display = facility_address
 
             # Note: study_date_time is now used for the main Study Date/Time column (appointment_datetime_str)
 
@@ -587,13 +601,19 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                 "location_name": location_display,
                 "mri_type": mri_type,
                 "images_available": images_available,
-                "report_available": "No"   # Default, not in service output
+                "report_available": "No",   # Default, not in service output
+                "_sort_datetime": parsed_dt  # For sorting (not displayed)
             }
             
             transformed_studies_for_template.append(transformed_study)
 
         if not transformed_studies_for_template:
             return {"status": "not_found", "message": f"Patient ID {patient_id} found, studies retrieved, but failed to transform any for display.", "patient_id": patient_id}
+
+        # Sort studies chronologically: earliest first, N/A times at the bottom
+        transformed_studies_for_template.sort(
+            key=lambda x: (x.get("_sort_datetime") is None, x.get("_sort_datetime") or datetime.max)
+        )
 
         # Log summary of study_date_time processing
         studies_with_date_time = sum(1 for study in transformed_studies_for_template if study.get('appointment_datetime_str') != 'N/A')
