@@ -16,6 +16,17 @@ class ContactPerson(BaseModel):
     extension: str = Field(default="", description="Phone extension if any")
 
 
+class LeadershipMember(BaseModel):
+    """Leadership team member from research."""
+    name: str = Field(default="", description="Full name")
+    title: str = Field(default="", description="Title/position at the firm")
+    email: Optional[str] = Field(None, description="Email address")
+    phone: Optional[str] = Field(None, description="Phone number")
+    linkedin: Optional[str] = Field(None, description="LinkedIn profile URL")
+    bio: Optional[str] = Field(None, description="Brief bio or description")
+    image_url: Optional[str] = Field(None, description="Profile image URL")
+
+
 class PifInfoBase(BaseModel):
     """Base schema for PIF info."""
     firm_name: str = Field(..., description="Name of the personal injury law firm")
@@ -50,11 +61,45 @@ class PifInfoResponse(PifInfoBase):
     """Schema for PIF info response."""
     id: UUID
     conversation_ids: List[str] = Field(default_factory=list)
+    leadership: Optional[List[LeadershipMember]] = Field(None, description="Leadership team")
+    research_data: Optional[Dict[str, Any]] = Field(None, description="Additional research findings")
+    research_status: Optional[str] = Field(None, description="Research status")
+    last_researched_at: Optional[datetime] = Field(None, description="Last research timestamp")
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class ResearchResponse(BaseModel):
+    """Schema for research response."""
+    pif_id: UUID
+    firm_name: str
+    status: str
+    leadership: List[LeadershipMember] = Field(default_factory=list)
+    research_data: Optional[Dict[str, Any]] = None
+    message: str
+
+
+class ResearchStartResponse(BaseModel):
+    """Schema for async research start response."""
+    pif_id: UUID
+    firm_name: str
+    task_id: str
+    status: str = "queued"
+    message: str
+
+
+class ResearchStatusResponse(BaseModel):
+    """Schema for research status polling response."""
+    pif_id: UUID
+    firm_name: str
+    task_id: str
+    status: str  # queued, in_progress, completed, failed
+    leadership: Optional[List[LeadershipMember]] = None
+    research_data: Optional[Dict[str, Any]] = None
+    message: str
 
 
 class PifInfoListResponse(BaseModel):

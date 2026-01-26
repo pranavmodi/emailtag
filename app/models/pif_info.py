@@ -65,6 +65,27 @@ class PifInfo(Base):
         comment="Notes from extraction process"
     )
 
+    # Research fields
+    leadership: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(
+        JSONB, nullable=True,
+        comment="Leadership team info: name, title, email, linkedin, phone, bio"
+    )
+
+    research_data: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True,
+        comment="Additional research findings: practice areas, notable cases, etc."
+    )
+
+    research_status: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True,
+        comment="Research status: pending, in_progress, completed, failed"
+    )
+
+    last_researched_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True,
+        comment="Timestamp of last research"
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False,
         comment="Timestamp when firm was first seen"

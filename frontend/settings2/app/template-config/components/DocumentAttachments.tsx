@@ -64,6 +64,11 @@ export function DocumentAttachments({
     }
   }, [tagName, templateKey]);
 
+  // Load attachments on mount to show correct count, and reload when expanded
+  useEffect(() => {
+    loadAttachments();
+  }, [loadAttachments]);
+
   useEffect(() => {
     if (isExpanded) {
       loadAttachments();

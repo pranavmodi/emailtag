@@ -17,6 +17,10 @@ from app.schemas.pif_info import (
     PifInfoListResponse,
     ProcessDayRequest,
     ProcessDayResponse,
+    ResearchResponse,
+    ResearchStartResponse,
+    ResearchStatusResponse,
+    LeadershipMember,
 )
 
 logger = logging.getLogger(__name__)
@@ -370,3 +374,142 @@ async def get_conversations_for_date(
 
     emails = await email_crud.get_emails_by_date(db, target_date)
     return [e.front_conversation_id for e in emails if e.front_conversation_id]
+
+
+@router.post("/{pif_id}/research", response_model=ResearchStartResponse)
+async def research_firm(
+    pif_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> ResearchStartResponse:
+    """
+    Start async deep research for a PIF using OpenAI web search.
+
+    This endpoint:
+    1. Looks up the firm by ID
+    2. Queues a Celery task for research
+    3. Returns immediately with a task_id for polling
+
+    The research includes:
+    - Initial firm research (leadership, practice areas, etc.)
+    - Deep LinkedIn research on each leadership member
+
+    Args:
+        pif_id: PIF info ID
+        db: Database session
+
+    Returns:
+        Task ID and status for polling
+    """
+    # Get the PIF record
+    pif = await pif_info_crud.get(db, id=pif_id)
+    if not pif:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PIF info not found",
+        )
+
+    # Update status to queued
+    await pif_info_crud.update(
+        db,
+        db_obj=pif,
+        obj_in={"research_status": "queued"}
+    )
+
+    # Start the Celery task
+    from app.tasks.firm_research import research_firm_task
+
+    task = research_firm_task.delay(str(pif_id))
+
+    logger.info(f"Research task queued for firm: {pif.firm_name}, task_id: {task.id}")
+
+    return ResearchStartResponse(
+        pif_id=pif_id,
+        firm_name=pif.firm_name,
+        task_id=task.id,
+        status="queued",
+        message="Research task queued. Poll /research-status/{task_id} for progress."
+    )
+
+
+@router.get("/research-status/{task_id}", response_model=ResearchStatusResponse)
+async def get_research_status(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> ResearchStatusResponse:
+    """
+    Poll for research task status.
+
+    Args:
+        task_id: Celery task ID
+        db: Database session
+
+    Returns:
+        Current status of the research task
+    """
+    from celery.result import AsyncResult
+    from app.tasks.worker import celery_app
+
+    result = AsyncResult(task_id, app=celery_app)
+
+    # Get task state
+    if result.state == "PENDING":
+        return ResearchStatusResponse(
+            pif_id=UUID("00000000-0000-0000-0000-000000000000"),
+            firm_name="",
+            task_id=task_id,
+            status="queued",
+            message="Research task is queued"
+        )
+    elif result.state == "STARTED" or result.state == "RETRY":
+        return ResearchStatusResponse(
+            pif_id=UUID("00000000-0000-0000-0000-000000000000"),
+            firm_name="",
+            task_id=task_id,
+            status="in_progress",
+            message="Research is in progress"
+        )
+    elif result.state == "SUCCESS":
+        task_result = result.result or {}
+        pif_id_str = task_result.get("pif_id", "00000000-0000-0000-0000-000000000000")
+
+        # Get the updated PIF record
+        pif = await pif_info_crud.get(db, id=UUID(pif_id_str))
+
+        if pif and pif.research_status == "completed":
+            leadership = [
+                LeadershipMember(**member)
+                for member in (pif.leadership or [])
+            ]
+            return ResearchStatusResponse(
+                pif_id=pif.id,
+                firm_name=pif.firm_name,
+                task_id=task_id,
+                status="completed",
+                leadership=leadership,
+                research_data=pif.research_data,
+                message=task_result.get("message", "Research completed")
+            )
+
+        return ResearchStatusResponse(
+            pif_id=UUID(pif_id_str),
+            firm_name=task_result.get("firm_name", ""),
+            task_id=task_id,
+            status=task_result.get("status", "completed"),
+            message=task_result.get("message", "Research completed")
+        )
+    elif result.state == "FAILURE":
+        return ResearchStatusResponse(
+            pif_id=UUID("00000000-0000-0000-0000-000000000000"),
+            firm_name="",
+            task_id=task_id,
+            status="failed",
+            message=f"Research failed: {str(result.result)}"
+        )
+    else:
+        return ResearchStatusResponse(
+            pif_id=UUID("00000000-0000-0000-0000-000000000000"),
+            firm_name="",
+            task_id=task_id,
+            status=result.state.lower(),
+            message=f"Research status: {result.state}"
+        )

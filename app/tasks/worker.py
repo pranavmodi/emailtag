@@ -30,6 +30,7 @@ celery_app.conf.task_routes = {
     "app.tasks.email.perform_tagging_task": {"queue": "tagging"},
     "app.tasks.email.perform_autorespond_task": {"queue": "processing"},
     "app.tasks.pif_extraction.extract_pif_from_conversation": {"queue": "processing"},
+    "app.tasks.firm_research.research_firm_task": {"queue": "processing"},
     "tasks.send_attachment_to_ocr": {"queue": "ocr"},
     "app.tasks.worker.test_task": {"queue": "emails"},
 }

@@ -17,5 +17,6 @@ tag = sync_module.tag
 
 # Import from this package
 from .processing_trace import processing_trace
+from .pif_info import pif_info
 
-__all__ = ["email", "tag", "processing_trace"]
+__all__ = ["email", "tag", "processing_trace", "pif_info"]

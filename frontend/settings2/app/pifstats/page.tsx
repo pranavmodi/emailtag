@@ -24,10 +24,14 @@ import {
   Eye,
   BarChart3,
   TrendingUp,
+  Sparkles,
+  Linkedin,
+  Award,
+  Briefcase,
 } from "lucide-react";
 
 import { ApiError, PifApi, UsageApi, UsageStatsResponse } from "@/lib/api";
-import type { PifInfoResponse, PifInfoListResponse, ProcessDayResponse } from "@/lib/types";
+import type { PifInfoResponse, PifInfoListResponse, ProcessDayResponse, ResearchStatusResponse } from "@/lib/types";
 import {
   Card,
   CardContent,
@@ -519,6 +523,26 @@ export default function PifListPage() {
                         isExpanded={expandedId === firm.id}
                         onToggle={() => toggleExpand(firm.id)}
                         onDelete={() => handleDelete(firm.id, firm.firm_name)}
+                        onResearchComplete={(result) => {
+                          // Update the firm in the list with research data
+                          setData((prev) => {
+                            if (!prev) return prev;
+                            return {
+                              ...prev,
+                              items: prev.items.map((f) =>
+                                f.id === result.pif_id
+                                  ? {
+                                      ...f,
+                                      leadership: result.leadership || null,
+                                      research_data: result.research_data || null,
+                                      research_status: result.status,
+                                      last_researched_at: new Date().toISOString(),
+                                    }
+                                  : f
+                              ),
+                            };
+                          });
+                        }}
                       />
                     ))}
                   </div>
@@ -897,12 +921,69 @@ function FirmCard({
   isExpanded,
   onToggle,
   onDelete,
+  onResearchComplete,
 }: {
   firm: PifInfoResponse;
   isExpanded: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  onResearchComplete: (result: ResearchStatusResponse) => void;
 }) {
+  const [isResearching, setIsResearching] = useState(false);
+  const [researchError, setResearchError] = useState<string | null>(null);
+  const [researchStatus, setResearchStatus] = useState<string | null>(null);
+
+  const pollResearchStatus = async (taskId: string) => {
+    const maxAttempts = 120; // 10 minutes max (5 second intervals)
+    let attempts = 0;
+
+    const poll = async (): Promise<void> => {
+      attempts++;
+      try {
+        const status = await PifApi.getResearchStatus(taskId);
+        setResearchStatus(status.status);
+
+        if (status.status === "completed") {
+          setIsResearching(false);
+          onResearchComplete(status);
+        } else if (status.status === "failed") {
+          setIsResearching(false);
+          setResearchError(status.message || "Research failed");
+        } else if (attempts < maxAttempts) {
+          // Continue polling
+          setTimeout(poll, 5000);
+        } else {
+          setIsResearching(false);
+          setResearchError("Research timed out");
+        }
+      } catch (err) {
+        setIsResearching(false);
+        const message = err instanceof Error ? err.message : "Failed to check research status";
+        setResearchError(message);
+      }
+    };
+
+    await poll();
+  };
+
+  const handleResearch = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsResearching(true);
+    setResearchError(null);
+    setResearchStatus("starting");
+
+    try {
+      const result = await PifApi.startResearch(firm.id);
+      setResearchStatus("queued");
+      // Start polling for status
+      await pollResearchStatus(result.task_id);
+    } catch (err) {
+      setIsResearching(false);
+      const message = err instanceof Error ? err.message : "Failed to start research";
+      setResearchError(message);
+    }
+  };
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white transition-shadow hover:shadow-md">
       {/* Header - Always visible */}
@@ -927,6 +1008,12 @@ function FirmCard({
                 <MessageSquare className="h-3 w-3" />
                 {firm.conversation_ids.length} conversations
               </span>
+              {firm.research_status === "completed" && (
+                <span className="flex items-center gap-1 text-emerald-600">
+                  <Sparkles className="h-3 w-3" />
+                  Researched
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -937,6 +1024,11 @@ function FirmCard({
           <Badge className="bg-slate-100 text-slate-600">
             {firm.phones.length} phones
           </Badge>
+          {firm.leadership && firm.leadership.length > 0 && (
+            <Badge className="bg-emerald-100 text-emerald-700">
+              {firm.leadership.length} leaders
+            </Badge>
+          )}
           {isExpanded ? (
             <ChevronUp className="h-5 w-5 text-slate-400" />
           ) : (
@@ -1102,10 +1194,241 @@ function FirmCard({
                 <div className="text-sm text-slate-600">{firm.extraction_notes}</div>
               </div>
             )}
+
+            {/* Leadership (from research) */}
+            {firm.leadership && firm.leadership.length > 0 && (
+              <div className="md:col-span-2">
+                <h4 className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <Sparkles className="h-4 w-4 text-amber-500" />
+                  Leadership Team ({firm.leadership.length})
+                </h4>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {firm.leadership.map((leader, i) => (
+                    <div
+                      key={i}
+                      className="rounded-lg border border-amber-100 bg-amber-50/50 p-3 text-sm"
+                    >
+                      <div className="font-medium text-slate-800">
+                        {leader.name}
+                      </div>
+                      {leader.title && (
+                        <div className="text-xs text-slate-600">{leader.title}</div>
+                      )}
+                      <div className="mt-2 space-y-1">
+                        {leader.email && (
+                          <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                            <Mail className="h-3 w-3 text-indigo-400" />
+                            <a href={`mailto:${leader.email}`} className="hover:text-indigo-600 hover:underline">
+                              {leader.email}
+                            </a>
+                          </div>
+                        )}
+                        {leader.phone && (
+                          <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                            <Phone className="h-3 w-3 text-indigo-400" />
+                            {leader.phone}
+                          </div>
+                        )}
+                        {leader.linkedin && (
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <Linkedin className="h-3 w-3 text-blue-600" />
+                            <a
+                              href={leader.linkedin}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline"
+                            >
+                              LinkedIn Profile
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                      {leader.bio && (
+                        <div className="mt-2 text-xs text-slate-500 line-clamp-3">
+                          {leader.bio}
+                        </div>
+                      )}
+                      {/* Enriched data from LinkedIn */}
+                      {leader.bar_admissions && leader.bar_admissions.length > 0 && (
+                        <div className="mt-2">
+                          <div className="text-xs font-medium text-slate-500">Bar Admissions</div>
+                          <div className="text-xs text-slate-600">{leader.bar_admissions.join(", ")}</div>
+                        </div>
+                      )}
+                      {leader.education && leader.education.length > 0 && (
+                        <div className="mt-2">
+                          <div className="text-xs font-medium text-slate-500">Education</div>
+                          <div className="text-xs text-slate-600">
+                            {leader.education.slice(0, 2).map((edu, j) => (
+                              <div key={j}>{edu}</div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {leader.skills && leader.skills.length > 0 && (
+                        <div className="mt-2">
+                          <div className="flex flex-wrap gap-1">
+                            {leader.skills.slice(0, 4).map((skill, j) => (
+                              <Badge key={j} className="bg-slate-100 text-slate-600 text-xs py-0">
+                                {skill}
+                              </Badge>
+                            ))}
+                            {leader.skills.length > 4 && (
+                              <span className="text-xs text-slate-400">+{leader.skills.length - 4}</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Research Data */}
+            {firm.research_data && (
+              <>
+                {/* Practice Areas */}
+                {firm.research_data.practice_areas && firm.research_data.practice_areas.length > 0 && (
+                  <div className="md:col-span-2">
+                    <h4 className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+                      <Briefcase className="h-4 w-4 text-indigo-500" />
+                      Practice Areas
+                    </h4>
+                    <div className="flex flex-wrap gap-1.5">
+                      {firm.research_data.practice_areas.map((area, i) => (
+                        <Badge key={i} className="bg-indigo-50 text-indigo-700">
+                          {area}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Firm Info */}
+                <div className="grid gap-4 md:col-span-2 md:grid-cols-3">
+                  {firm.research_data.founded_year && (
+                    <div>
+                      <h4 className="text-xs font-medium text-slate-500">Founded</h4>
+                      <div className="text-sm font-medium text-slate-700">{firm.research_data.founded_year}</div>
+                    </div>
+                  )}
+                  {firm.research_data.firm_size && (
+                    <div>
+                      <h4 className="text-xs font-medium text-slate-500">Firm Size</h4>
+                      <div className="text-sm font-medium text-slate-700">{firm.research_data.firm_size}</div>
+                    </div>
+                  )}
+                  {firm.research_data.office_locations && firm.research_data.office_locations.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-medium text-slate-500">Office Locations</h4>
+                      <div className="text-sm text-slate-700">{firm.research_data.office_locations.join(", ")}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Awards */}
+                {firm.research_data.awards_recognition && firm.research_data.awards_recognition.length > 0 && (
+                  <div className="md:col-span-2">
+                    <h4 className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+                      <Award className="h-4 w-4 text-amber-500" />
+                      Awards & Recognition
+                    </h4>
+                    <div className="space-y-1">
+                      {firm.research_data.awards_recognition.slice(0, 5).map((award, i) => (
+                        <div key={i} className="text-sm text-slate-600">• {award}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Notable Cases */}
+                {firm.research_data.notable_cases && firm.research_data.notable_cases.length > 0 && (
+                  <div className="md:col-span-2">
+                    <h4 className="mb-2 text-sm font-medium text-slate-700">Notable Cases</h4>
+                    <div className="space-y-1">
+                      {firm.research_data.notable_cases.slice(0, 5).map((caseItem, i) => (
+                        <div key={i} className="text-sm text-slate-600">• {caseItem}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Social Media */}
+                {firm.research_data.social_media && Object.keys(firm.research_data.social_media).length > 0 && (
+                  <div>
+                    <h4 className="mb-2 text-sm font-medium text-slate-700">Social Media</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(firm.research_data.social_media).map(([platform, url]) => (
+                        <a
+                          key={platform}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-indigo-100 hover:text-indigo-700"
+                        >
+                          {platform}
+                          <ExternalLink className="h-2.5 w-2.5" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sources */}
+                {firm.research_data.sources && firm.research_data.sources.length > 0 && (
+                  <div className="md:col-span-2">
+                    <h4 className="mb-2 text-sm font-medium text-slate-500">Research Sources</h4>
+                    <div className="flex flex-wrap gap-1">
+                      {firm.research_data.sources.slice(0, 5).map((source, i) => (
+                        <a
+                          key={i}
+                          href={source}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded bg-slate-50 px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                        >
+                          Source {i + 1}
+                          <ExternalLink className="h-2.5 w-2.5" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
+          {/* Research Error */}
+          {researchError && (
+            <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-600">
+              {researchError}
+            </div>
+          )}
+
           {/* Actions */}
-          <div className="mt-4 flex justify-end border-t border-slate-100 pt-4">
+          <div className="mt-4 flex justify-between border-t border-slate-100 pt-4">
+            <Button
+              variant="ghost"
+              onClick={handleResearch}
+              disabled={isResearching}
+              className="text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+            >
+              {isResearching ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {researchStatus === "queued" && "Queued..."}
+                  {researchStatus === "in_progress" && "Researching..."}
+                  {researchStatus === "starting" && "Starting..."}
+                  {!researchStatus && "Researching..."}
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  {firm.research_status === "completed" ? "Re-Research" : "Research Firm"}
+                </>
+              )}
+            </Button>
             <Button
               variant="ghost"
               onClick={(e) => {
