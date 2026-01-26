@@ -573,6 +573,8 @@ async def fetch_appointment_details_by_patient_id(patient_id: str, settings_obj:
                     mri_type = "Stand Up"
                 elif "OPEN" in resources_upper:
                     mri_type = "Open"
+                elif "WIDE BORE" in resources_upper:
+                    mri_type = "Wide Bore"
                 elif "CLOSED" in resources_upper:
                     mri_type = "Closed"
             
