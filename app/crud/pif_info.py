@@ -38,10 +38,19 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
         *,
         search: Optional[str] = None,
         skip: int = 0,
-        limit: int = 20
+        limit: int = 20,
+        sort_by: Optional[str] = None
     ) -> tuple[List[PifInfo], int]:
         """
-        Search PIF info with optional text search.
+        Search PIF info with optional text search and sorting.
+
+        Args:
+            db: Database session
+            search: Optional search term
+            skip: Number of records to skip (for pagination)
+            limit: Maximum number of records to return
+            sort_by: Sort order - 'conversation_count' (desc), 'firm_name' (asc),
+                     or 'updated_at' (desc, default)
 
         Returns a tuple of (items, total_count).
         """
@@ -63,8 +72,21 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
 
+        # Apply sorting
+        if sort_by == "conversation_count":
+            # Sort by array length (number of conversations) - descending
+            query = query.order_by(
+                func.cardinality(PifInfo.conversation_ids).desc(),
+                PifInfo.firm_name.asc()  # Secondary sort by name
+            )
+        elif sort_by == "firm_name":
+            query = query.order_by(PifInfo.firm_name.asc())
+        else:
+            # Default: sort by updated_at descending
+            query = query.order_by(PifInfo.updated_at.desc())
+
         # Get paginated results
-        query = query.order_by(PifInfo.updated_at.desc()).offset(skip).limit(limit)
+        query = query.offset(skip).limit(limit)
         result = await db.execute(query)
         items = result.scalars().all()
 

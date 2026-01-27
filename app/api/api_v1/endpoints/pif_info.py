@@ -33,22 +33,27 @@ async def list_pif_info(
     search: str = Query(None, description="Search term for firm name, email, or website"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    sort_by: str = Query(
+        None,
+        description="Sort order: 'conversation_count' (most conversations first), 'firm_name' (alphabetical), or 'updated_at' (most recent first, default)"
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> PifInfoListResponse:
     """
-    List all PIF info with optional search and pagination.
+    List all PIF info with optional search, sorting, and pagination.
 
     Args:
         search: Optional search term
         page: Page number (1-indexed)
         page_size: Number of items per page
+        sort_by: Sort order (conversation_count, firm_name, updated_at)
         db: Database session
 
     Returns:
         Paginated list of PIF info
     """
     skip = (page - 1) * page_size
-    items, total = await pif_info_crud.search(db, search=search, skip=skip, limit=page_size)
+    items, total = await pif_info_crud.search(db, search=search, skip=skip, limit=page_size, sort_by=sort_by)
 
     total_pages = (total + page_size - 1) // page_size if total > 0 else 0
 

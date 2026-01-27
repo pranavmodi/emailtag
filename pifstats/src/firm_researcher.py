@@ -72,7 +72,7 @@ RESEARCH_RESULT_SCHEMA = {
                     "title": {"type": "string", "description": "Title or position"},
                     "email": {"type": ["string", "null"], "description": "Email address if found"},
                     "phone": {"type": ["string", "null"], "description": "Phone number if found"},
-                    "linkedin": {"type": ["string", "null"], "description": "LinkedIn profile URL"},
+                    "linkedin": {"type": ["string", "null"], "description": "LinkedIn profile URL starting with https://www.linkedin.com/in/. Must be an actual URL or null - never explanatory text."},
                     "bio": {"type": ["string", "null"], "description": "Brief bio or description"},
                     "image_url": {"type": ["string", "null"], "description": "Profile image URL"}
                 },
@@ -185,8 +185,12 @@ Search strategies to use:
 - Search "[Firm Name] contact"
 - Check their website directly if provided
 
-Be thorough but only include information you actually find. Do not make up any information.
-Include the URLs of sources where you found the information."""
+IMPORTANT FORMATTING RULES:
+- For LinkedIn URLs: Only include actual LinkedIn profile URLs (e.g., https://www.linkedin.com/in/john-smith). If you cannot find a valid LinkedIn profile URL, return null - never return explanatory text like "not found" or "no profile located".
+- For all URL fields: Return the actual URL or null. Never return descriptions or explanations.
+- For email/phone: Return the actual value or null if not found.
+- Be thorough but only include information you actually find. Do not make up any information.
+- Include the URLs of sources where you found the information."""
 
 
 def research_firm(
@@ -465,7 +469,7 @@ LEADERSHIP_MEMBER_SCHEMA = {
         "title": {"type": "string", "description": "Current title/position"},
         "email": {"type": ["string", "null"], "description": "Email address if found"},
         "phone": {"type": ["string", "null"], "description": "Phone number if found"},
-        "linkedin": {"type": ["string", "null"], "description": "LinkedIn profile URL"},
+        "linkedin": {"type": ["string", "null"], "description": "LinkedIn profile URL starting with https://www.linkedin.com/in/. Must be an actual URL or null - never explanatory text."},
         "bio": {"type": ["string", "null"], "description": "Bio or summary from LinkedIn"},
         "education": {
             "type": "array",
@@ -551,7 +555,10 @@ Search strategies to use:
 - Check the firm's website team page
 - Search for any news articles mentioning them
 
-Be thorough but only include information you actually find. Do not make up any information."""
+IMPORTANT FORMATTING RULES:
+- For LinkedIn URLs: Only include actual LinkedIn profile URLs (e.g., https://www.linkedin.com/in/john-smith). If you cannot find a valid LinkedIn profile URL, return null - never return explanatory text like "not found" or "no profile located".
+- For email/phone: Return the actual value or null if not found.
+- Be thorough but only include information you actually find. Do not make up any information."""
 
 
 def research_leadership_member(
@@ -606,7 +613,7 @@ def research_leadership_member(
         "tools": [
             {
                 "type": "web_search_preview",
-                "search_context_size": "medium"
+                "search_context_size": "low"
             }
         ],
         "text": {

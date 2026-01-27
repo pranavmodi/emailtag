@@ -28,10 +28,12 @@ import {
   Linkedin,
   Award,
   Briefcase,
+  ArrowUpDown,
 } from "lucide-react";
 
 import { ApiError, PifApi, UsageApi, UsageStatsResponse } from "@/lib/api";
 import type { PifInfoResponse, PifInfoListResponse, ProcessDayResponse, ResearchStatusResponse } from "@/lib/types";
+import { ResearchModal } from "./ResearchModal";
 import {
   Card,
   CardContent,
@@ -44,6 +46,18 @@ import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/Header";
 
 const easing = { duration: 0.45, ease: [0.16, 1, 0.3, 1] };
+
+// Helper to check if a string is a valid LinkedIn URL
+const isValidLinkedInUrl = (url: string | null | undefined): boolean => {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  return lower.startsWith("https://linkedin.com") ||
+         lower.startsWith("https://www.linkedin.com") ||
+         lower.startsWith("http://linkedin.com") ||
+         lower.startsWith("http://www.linkedin.com") ||
+         lower.startsWith("linkedin.com") ||
+         lower.startsWith("www.linkedin.com");
+};
 
 // Simple auth for pifstats page only
 const PIFSTATS_AUTH_KEY = "pifstats_authenticated";
@@ -65,6 +79,8 @@ export default function PifListPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(20);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<string>("updated_at");
+  const [researchModalFirm, setResearchModalFirm] = useState<PifInfoResponse | null>(null);
 
   // Process day state
   const [processDate, setProcessDate] = useState(() => {
@@ -132,6 +148,7 @@ export default function PifListPage() {
         search: searchTerm || undefined,
         page: currentPage,
         pageSize,
+        sortBy: sortBy || undefined,
       });
       setData(payload);
       setError(null);
@@ -145,7 +162,7 @@ export default function PifListPage() {
       const message = err instanceof Error ? err.message : "Failed to load PIF data";
       setError(message);
     }
-  }, [searchTerm, currentPage, pageSize]);
+  }, [searchTerm, currentPage, pageSize, sortBy]);
 
   useEffect(() => {
     let mounted = true;
@@ -176,13 +193,13 @@ export default function PifListPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, authChecked]);
 
-  // Re-fetch when page changes
+  // Re-fetch when page or sort changes
   useEffect(() => {
     if (!isLoading) {
       fetchData();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage]);
+  }, [currentPage, sortBy]);
 
   // Re-fetch usage stats when days filter changes
   useEffect(() => {
@@ -498,20 +515,39 @@ export default function PifListPage() {
                   </div>
                 )}
 
-                {/* Search Form */}
-                <form onSubmit={handleSearch} className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Search by firm name, email, or website..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full rounded-lg border border-slate-200 py-2 pl-10 pr-4 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
+                {/* Search Form and Sort */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <form onSubmit={handleSearch} className="flex gap-2 flex-1">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Search by firm name, email, or website..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 py-2 pl-10 pr-4 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <Button type="submit">Search</Button>
+                  </form>
+
+                  {/* Sort Selector */}
+                  <div className="flex items-center gap-2">
+                    <ArrowUpDown className="h-4 w-4 text-slate-400" />
+                    <select
+                      value={sortBy}
+                      onChange={(e) => {
+                        setSortBy(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="updated_at">Recently Updated</option>
+                      <option value="conversation_count">Most Conversations</option>
+                      <option value="firm_name">Firm Name (A-Z)</option>
+                    </select>
                   </div>
-                  <Button type="submit">Search</Button>
-                </form>
+                </div>
 
                 {/* Firms List */}
                 {data && data.items.length > 0 ? (
@@ -523,6 +559,7 @@ export default function PifListPage() {
                         isExpanded={expandedId === firm.id}
                         onToggle={() => toggleExpand(firm.id)}
                         onDelete={() => handleDelete(firm.id, firm.firm_name)}
+                        onViewResearch={() => setResearchModalFirm(firm)}
                         onResearchComplete={(result) => {
                           // Update the firm in the list with research data
                           setData((prev) => {
@@ -912,6 +949,15 @@ export default function PifListPage() {
         </motion.section>
         )}
       </main>
+
+      {/* Research Modal */}
+      {researchModalFirm && (
+        <ResearchModal
+          firm={researchModalFirm}
+          isOpen={!!researchModalFirm}
+          onClose={() => setResearchModalFirm(null)}
+        />
+      )}
     </div>
   );
 }
@@ -921,12 +967,14 @@ function FirmCard({
   isExpanded,
   onToggle,
   onDelete,
+  onViewResearch,
   onResearchComplete,
 }: {
   firm: PifInfoResponse;
   isExpanded: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  onViewResearch: () => void;
   onResearchComplete: (result: ResearchStatusResponse) => void;
 }) {
   const [isResearching, setIsResearching] = useState(false);
@@ -1028,6 +1076,19 @@ function FirmCard({
             <Badge className="bg-emerald-100 text-emerald-700">
               {firm.leadership.length} leaders
             </Badge>
+          )}
+          {firm.research_status === "completed" && (
+            <Button
+              variant="ghost"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewResearch();
+              }}
+              className="h-8 px-2 text-sm text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
+            >
+              <Eye className="h-4 w-4 mr-1" />
+              View
+            </Button>
           )}
           {isExpanded ? (
             <ChevronUp className="h-5 w-5 text-slate-400" />
@@ -1229,17 +1290,22 @@ function FirmCard({
                             {leader.phone}
                           </div>
                         )}
-                        {leader.linkedin && (
+                        {isValidLinkedInUrl(leader.linkedin) ? (
                           <div className="flex items-center gap-1.5 text-xs">
                             <Linkedin className="h-3 w-3 text-blue-600" />
                             <a
-                              href={leader.linkedin}
+                              href={leader.linkedin?.startsWith("http") ? leader.linkedin : `https://${leader.linkedin}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-blue-600 hover:underline"
                             >
                               LinkedIn Profile
                             </a>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                            <Linkedin className="h-3 w-3" />
+                            <span>LinkedIn not found</span>
                           </div>
                         )}
                       </div>

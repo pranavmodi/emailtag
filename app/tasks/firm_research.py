@@ -15,6 +15,31 @@ from app.db.session import SessionLocal
 logger = get_task_logger(__name__)
 
 
+def is_valid_linkedin_url(url: str | None) -> bool:
+    """Check if a string is a valid LinkedIn profile URL."""
+    if not url:
+        return False
+    lower = url.lower().strip()
+    return (
+        lower.startswith("https://linkedin.com") or
+        lower.startswith("https://www.linkedin.com") or
+        lower.startswith("http://linkedin.com") or
+        lower.startswith("http://www.linkedin.com") or
+        lower.startswith("linkedin.com/in/") or
+        lower.startswith("www.linkedin.com/in/")
+    )
+
+
+def sanitize_linkedin_url(url: str | None) -> str | None:
+    """Return the URL if valid, otherwise return None."""
+    if is_valid_linkedin_url(url):
+        # Ensure it has https://
+        if url and not url.lower().startswith("http"):
+            return f"https://{url}"
+        return url
+    return None
+
+
 class ResearchTask(Task):
     """Base task class for research tasks with error handling."""
 
@@ -42,7 +67,11 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
     """
     import sys
     import os
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+    # Add project root to path so pifstats module can be found
+    # __file__ is app/tasks/firm_research.py, go up 2 levels to get to project root
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
 
     from pifstats.src.firm_researcher import research_firm, research_leadership_member
     from app.crud.sync.pif_info import pif_info as pif_info_crud_sync
@@ -93,8 +122,13 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
                 "message": "Initial research failed - no results returned"
             }
 
-        # Convert leadership to dicts
-        leadership_dicts = [member.model_dump() for member in result.leadership]
+        # Convert leadership to dicts and sanitize LinkedIn URLs
+        leadership_dicts = []
+        for member in result.leadership:
+            member_dict = member.model_dump()
+            # Sanitize LinkedIn URL - set to None if not a valid URL
+            member_dict["linkedin"] = sanitize_linkedin_url(member_dict.get("linkedin"))
+            leadership_dicts.append(member_dict)
 
         # Step 2: Deep research on each leadership member with LinkedIn
         logger.info(f"Step 2: Deep research on {len(leadership_dicts)} leadership members")
@@ -112,11 +146,13 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
                         firm_website=pif.website
                     )
                     if enriched:
-                        # Merge enriched data with original
+                        # Merge enriched data with original, sanitizing LinkedIn URL
+                        enriched_linkedin = sanitize_linkedin_url(enriched.linkedin)
+                        existing_linkedin = sanitize_linkedin_url(leader.get("linkedin"))
                         leader.update({
                             "email": enriched.email or leader.get("email"),
                             "phone": enriched.phone or leader.get("phone"),
-                            "linkedin": enriched.linkedin or leader.get("linkedin"),
+                            "linkedin": enriched_linkedin or existing_linkedin,
                             "bio": enriched.bio or leader.get("bio"),
                             "education": enriched.education,
                             "experience": enriched.experience,
