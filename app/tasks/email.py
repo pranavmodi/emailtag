@@ -663,203 +663,265 @@ def perform_tagging_task(self, email_id: str) -> Dict:
         # Classify using the hierarchical service (Adapted from tag_email)
         # Include document processing results if available
         document_results = email_obj.ocr_results if hasattr(email_obj, 'ocr_results') and email_obj.ocr_results else None
-        new_tags = classify_email_tags_hierarchical(
-            front_conversation_id=front_conversation_id,
-            conversation_text=conversation_text,
-            sender_info=sender_info,
-            message_times=message_times,
-            document_analysis_results=document_results,
-            recipients_to_info=recipients_to_info,
-            recipients_cc_info=recipients_cc_info,
-            structured_messages=structured_messages
-        )
 
-        # --- MISSING LIEN ATTACHMENT CHECK ---
-        # Check if email is classified as lien-related but missing proper lien attachments
-        lien_related_tags = ['PSL', 'ASL', 'Rad Lien', 'Tech Lien', 'Lien Modified']
-        is_lien_related = any(any(lien_tag.lower() in tag.lower() for lien_tag in lien_related_tags) for tag in new_tags)
-        
-        if is_lien_related and not any("Missing Lien Request" in str(tag) for tag in new_tags):
-            logger.info(f"Email {email_id} is classified as lien-related. Checking attachment status.")
-            
-            # Check if email has attachments and if they contain lien documents
-            has_lien_attachment = False
-            
-            if email_obj.has_attachments and email_obj.ocr_results:
-                for ocr_result in email_obj.ocr_results:
-                    if isinstance(ocr_result, dict):
-                        # Check if document analysis succeeded and is a lien document
-                        doc_analysis = ocr_result.get('document_analysis', {})
-                        if (doc_analysis.get('success') and 
-                            doc_analysis.get('data', {}).get('document_type') == 'lien'):
-                            has_lien_attachment = True
-                            logger.info(f"🔍 LIEN ATTACHMENT FOUND for email {email_id}")
-                            break
-            
-            if not has_lien_attachment:
-                logger.info(f"🔍 MISSING LIEN ATTACHMENT: Email {email_id} is lien-related but has no proper lien attachments. Classifying as 'Missing Lien Request'")
-                new_tags = ["Missing Lien Request"]
-        
-        # Store original tags before OCR override for lien modification detection
-        original_classification_tags = new_tags.copy() if new_tags else []
-        
-        # --- OCR-BASED LIEN CLASSIFICATION OVERRIDE ---
-        # Check if email has OCR results and is classified under Accounts Receivable -> Liens
-        # Only process if we haven't already classified as Missing Lien Request
-        if (email_obj.ocr_results and 
-            new_tags and 
-            is_lien_related and
-            not any("Missing Lien Request" in str(tag) for tag in new_tags)):
-            
-            logger.info(f"Email {email_id} has OCR results and is classified under Liens. Checking for OCR-based override.")
-            
+        # --- OTHER COMPANY LIEN SHORT-CIRCUIT ---
+        other_company_name = None
+        if document_results:
+            for ocr_result in document_results:
+                if isinstance(ocr_result, dict):
+                    enhanced_lien = ocr_result.get('enhanced_lien_processing') or ocr_result.get('enhanced_lien_processing_split', {})
+                    if enhanced_lien.get('other_company_detected'):
+                        other_company_name = enhanced_lien.get('detected_company_name', 'Unknown')
+                        break
+
+        if other_company_name:
+            logger.info(f"⚠️ OTHER COMPANY LIEN DETECTED for email {email_id}: {other_company_name}. Skipping classification.")
+            new_tags = ["AI: Human review required"]
+            # Add comment to conversation
             try:
-                # Check ALL OCR results for enhanced lien processing data and combine them
-                all_enhanced_lien_data = []
-                combined_lien_types = set()
-                combined_signature_types = set()
-                primary_patient_id = None
-                
+                from app.services.frontapp_service import add_conversation_comment
+                add_conversation_comment(
+                    front_conversation_id,
+                    f"This lien appears to belong to another company: {other_company_name}. Please review manually."
+                )
+            except Exception as e:
+                logger.error(f"Failed to add other-company comment for {front_conversation_id}: {e}")
+        else:
+            # Normal classification flow
+            new_tags = classify_email_tags_hierarchical(
+                front_conversation_id=front_conversation_id,
+                conversation_text=conversation_text,
+                sender_info=sender_info,
+                message_times=message_times,
+                document_analysis_results=document_results,
+                recipients_to_info=recipients_to_info,
+                recipients_cc_info=recipients_cc_info,
+                structured_messages=structured_messages
+            )
+
+            # --- MISSING LIEN ATTACHMENT CHECK ---
+            # Check if email is classified as lien-related but missing proper lien attachments
+            lien_related_tags = ['PSL', 'ASL', 'Rad Lien', 'Tech Lien', 'Lien Modified']
+            is_lien_related = any(any(lien_tag.lower() in tag.lower() for lien_tag in lien_related_tags) for tag in new_tags)
+
+            # --- PATIENT DEMO + LIEN MIXED PACKET DETECTION ---
+            # If LLM classified as non-lien (e.g. Patient Demo) but OCR found actual lien data,
+            # force lien processing so OCR-based override can apply lien tags
+            has_patient_demo_in_ocr = False
+            if not is_lien_related and email_obj.ocr_results:
                 for ocr_result in email_obj.ocr_results:
                     if isinstance(ocr_result, dict):
-                        # Check for enhanced lien processing results
-                        if ocr_result.get('document_analysis', {}).get('data', {}).get('enhanced_lien_analysis'):
-                            enhanced_data = ocr_result['document_analysis']['data']['enhanced_lien_analysis']
-                            all_enhanced_lien_data.append(enhanced_data)
-                            logger.info(f"🔍 ENHANCED LIEN DATA FOUND for email {email_id}: {enhanced_data}")
-                            
-                            # Collect lien types from this document
-                            if "LienTypes" in enhanced_data:
-                                # New format with multiple lien types
-                                for lien_type in enhanced_data["LienTypes"]:
-                                    combined_lien_types.add(lien_type.upper())
-                            elif enhanced_data.get("LienType"):
-                                # Legacy format compatibility
-                                combined_lien_types.add(enhanced_data["LienType"].upper())
-                            
-                            # Collect signature types from this document
-                            signature_type = enhanced_data.get("LienSignatureType", "")
-                            if signature_type in ["PSL", "ASL"]:
-                                combined_signature_types.add(signature_type)
-                            
-                            # Use first document's patient ID as primary
-                            if not primary_patient_id and enhanced_data.get("PatientID"):
-                                primary_patient_id = enhanced_data["PatientID"]
-                
-                if all_enhanced_lien_data:
-                    # Use combined enhanced lien processing data for classification
-                    logger.info(f"🔍 COMBINING DATA: Found {len(all_enhanced_lien_data)} enhanced lien documents")
-                    logger.info(f"🔍 Combined lien types: {list(combined_lien_types)}")
-                    logger.info(f"🔍 Combined signature types: {list(combined_signature_types)}")
-                    
-                    determined_tags = []
-                    
-                    # Add signature type (PSL/ASL) - prefer ASL if both found
-                    if "ASL" in combined_signature_types:
-                        determined_tags.append("ASL")
-                        logger.info(f"🔍 SIGNATURE TYPE DETECTED: ASL (attorney signature found)")
-                    elif "PSL" in combined_signature_types:
-                        determined_tags.append("PSL")
-                        logger.info(f"🔍 SIGNATURE TYPE DETECTED: PSL (patient signature found)")
-                    
-                    # Add ALL lien types found across all documents
-                    for lien_type in combined_lien_types:
-                        if lien_type in ['RAD', 'RADIOLOGY']:
-                            determined_tags.append('Rad Lien')
-                            logger.info(f"🔍 LIEN TYPE DETECTED: Rad Lien")
-                        elif lien_type in ['TECH', 'TC', 'TECHNOLOGIST']:
-                            determined_tags.append('Tech Lien')
-                            logger.info(f"🔍 LIEN TYPE DETECTED: Tech Lien")
-                    
-                    if determined_tags:
-                        new_tags = determined_tags
-                        logger.info(f"🔍 ENHANCED LIEN CLASSIFICATION for email {email_id}: {new_tags}")
-                        logger.info(f"Applied enhanced lien tags from {len(all_enhanced_lien_data)} documents: lien_types={list(combined_lien_types)}, signature_types={list(combined_signature_types)}")
-                    else:
-                        logger.warning(f"🔍 ENHANCED LIEN PROCESSING completed but produced no classifiable results. Combined types: lien={list(combined_lien_types)}, signature={list(combined_signature_types)}. Keeping LLM tags: {new_tags}")
-                else:
-                    logger.warning(f"🔍 NO ENHANCED LIEN DATA: Email {email_id} is lien-related but enhanced processing data not found in OCR results. This should not happen if document was classified as lien. Keeping LLM tags: {new_tags}")
-                    
-            except Exception as e:
-                logger.error(f"Error during enhanced lien type check for email {email_id}: {e}", exc_info=True)
-                logger.info(f"Continuing with LLM tags due to lien analysis error: {new_tags}")
-        # --- END OCR-BASED LIEN CLASSIFICATION OVERRIDE ---
+                        enhanced_lien = ocr_result.get('document_analysis', {}).get('data', {}).get('enhanced_lien_analysis', {})
+                        if enhanced_lien.get('LienTypes'):
+                            logger.info(f"🔍 MIXED PACKET DETECTED for email {email_id}: LLM classified as {new_tags} "
+                                        f"but OCR found lien types {enhanced_lien['LienTypes']}. Forcing lien processing.")
+                            is_lien_related = True
+                            # Check if patient_demo pages are present
+                            if enhanced_lien.get('has_patient_demo') or any(
+                                sd.get('page_type') == 'patient_demo'
+                                for sd in (ocr_result.get('enhanced_lien_processing', {}).get('split_documents', []) or
+                                           ocr_result.get('enhanced_lien_processing_split', {}).get('split_documents', []))
+                            ):
+                                has_patient_demo_in_ocr = True
+                                logger.info(f"🔍 PATIENT DEMO also found in packet for email {email_id}. Will add Patient Demo tag after lien override.")
+                            break
 
-        # --- LIEN MODIFICATION DETECTION ---
-        # Check for lien modifications in attachments after initial classification
-        lien_modifications_detected = False
-        lien_modification_results = []
-        
-        if email_obj.has_attachments and new_tags:
-            from app.services.lien_modification_service import should_check_lien_modifications, check_lien_modifications
-            
-            if should_check_lien_modifications(new_tags):
-                logger.info(f"Email {email_id} has lien-related tags and attachments. Checking for modifications.")
-                
+            if is_lien_related and not any("Missing Lien Request" in str(tag) for tag in new_tags):
+                logger.info(f"Email {email_id} is classified as lien-related. Checking attachment status.")
+
+                # Check if email has attachments and if they contain lien documents
+                has_lien_attachment = False
+
+                if email_obj.has_attachments and email_obj.ocr_results:
+                    for ocr_result in email_obj.ocr_results:
+                        if isinstance(ocr_result, dict):
+                            # Check if document analysis succeeded and is a lien document
+                            doc_analysis = ocr_result.get('document_analysis', {})
+                            if (doc_analysis.get('success') and
+                                doc_analysis.get('data', {}).get('document_type') == 'lien'):
+                                has_lien_attachment = True
+                                logger.info(f"🔍 LIEN ATTACHMENT FOUND for email {email_id}")
+                                break
+                            # Also check if enhanced lien analysis found lien types (mixed packets)
+                            enhanced_lien = doc_analysis.get('data', {}).get('enhanced_lien_analysis', {})
+                            if enhanced_lien.get('LienTypes'):
+                                has_lien_attachment = True
+                                logger.info(f"🔍 LIEN ATTACHMENT FOUND (via enhanced analysis) for email {email_id}")
+                                break
+
+                if not has_lien_attachment:
+                    logger.info(f"🔍 MISSING LIEN ATTACHMENT: Email {email_id} is lien-related but has no proper lien attachments. Classifying as 'Missing Lien Request'")
+                    new_tags = ["Missing Lien Request"]
+
+            # Store original tags before OCR override for lien modification detection
+            original_classification_tags = new_tags.copy() if new_tags else []
+
+            # --- OCR-BASED LIEN CLASSIFICATION OVERRIDE ---
+            # Check if email has OCR results and is classified under Accounts Receivable -> Liens
+            # Only process if we haven't already classified as Missing Lien Request
+            if (email_obj.ocr_results and
+                new_tags and
+                is_lien_related and
+                not any("Missing Lien Request" in str(tag) for tag in new_tags)):
+
+                logger.info(f"Email {email_id} has OCR results and is classified under Liens. Checking for OCR-based override.")
+
                 try:
-                    # Extract attachments data from raw_data
-                    attachments_data = []
-                    if email_obj.raw_data and isinstance(email_obj.raw_data, dict):
-                        target_data = email_obj.raw_data.get('target', {}).get('data', {})
-                        attachments_data = target_data.get('attachments', [])
-                    
-                    if attachments_data:
-                        async def _run_lien_modification_check_async():
-                            nonlocal lien_modifications_detected, lien_modification_results
-                            lien_modifications_detected, lien_modification_results = await check_lien_modifications(
-                                email_tags=new_tags,
-                                attachments_data=attachments_data
-                            )
-                        
-                        asyncio.run(_run_lien_modification_check_async())
-                        
-                        # Update database with lien modification detection results
-                        lien_update_payload = EmailUpdate(
-                            lien_modification_checked=True,
-                            lien_modifications_detected=lien_modifications_detected,
-                            lien_modification_results=lien_modification_results
-                        )
-                        email_crud_sync.update(db, db_obj=email_obj, obj_in=lien_update_payload)
-                        logger.info(f"Updated email {email_id} with lien modification detection results")
-                        
-                        if lien_modifications_detected:
-                            logger.info(f"🔍 LIEN MODIFICATIONS DETECTED for email {email_id}! Adding 'Lien Modified' while preserving existing lien tags.")
+                    # Check ALL OCR results for enhanced lien processing data and combine them
+                    all_enhanced_lien_data = []
+                    combined_lien_types = set()
+                    combined_signature_types = set()
+                    primary_patient_id = None
 
-                            # Preserve lien signature (PSL/ASL) and lien type (Rad/Tech) from
-                            # either the OCR-override tags (current new_tags) OR the original
-                            # classification, then add "Lien Modified".
-                            lien_modified_tags = []
+                    for ocr_result in email_obj.ocr_results:
+                        if isinstance(ocr_result, dict):
+                            # Check for enhanced lien processing results
+                            if ocr_result.get('document_analysis', {}).get('data', {}).get('enhanced_lien_analysis'):
+                                enhanced_data = ocr_result['document_analysis']['data']['enhanced_lien_analysis']
+                                all_enhanced_lien_data.append(enhanced_data)
+                                logger.info(f"🔍 ENHANCED LIEN DATA FOUND for email {email_id}: {enhanced_data}")
 
-                            signature_candidates = new_tags + original_classification_tags
-                            if any(tag == "PSL" for tag in signature_candidates):
-                                lien_modified_tags.append("PSL")
-                            elif any(tag == "ASL" for tag in signature_candidates):
-                                lien_modified_tags.append("ASL")
+                                # Collect lien types from this document
+                                if "LienTypes" in enhanced_data:
+                                    # New format with multiple lien types
+                                    for lien_type in enhanced_data["LienTypes"]:
+                                        combined_lien_types.add(lien_type.upper())
+                                elif enhanced_data.get("LienType"):
+                                    # Legacy format compatibility
+                                    combined_lien_types.add(enhanced_data["LienType"].upper())
 
-                            lien_type_candidates = new_tags + original_classification_tags
-                            # Support both Tech and Rad lien types (remove elif to allow both)
-                            if any(tag == "Rad Lien" for tag in lien_type_candidates):
-                                lien_modified_tags.append("Rad Lien")
-                            if any(tag == "Tech Lien" for tag in lien_type_candidates):
-                                lien_modified_tags.append("Tech Lien")
+                                # Collect signature types from this document
+                                signature_type = enhanced_data.get("LienSignatureType", "")
+                                if signature_type in ["PSL", "ASL"]:
+                                    combined_signature_types.add(signature_type)
 
-                            # Always add Lien Modified
-                            lien_modified_tags.append("Lien Modified")
+                                # Use first document's patient ID as primary
+                                if not primary_patient_id and enhanced_data.get("PatientID"):
+                                    primary_patient_id = enhanced_data["PatientID"]
 
-                            # Remove duplicates while preserving order
-                            new_tags = list(dict.fromkeys(lien_modified_tags))
-                            logger.info(f"Applied comprehensive lien modification tags for email {email_id}: {new_tags}")
-                            logger.info(f"Original classification: {original_classification_tags}, OCR/current preserved types: {[t for t in new_tags if t in ['Rad Lien', 'Tech Lien']]}, Final: {new_tags}")
+                    if all_enhanced_lien_data:
+                        # Use combined enhanced lien processing data for classification
+                        logger.info(f"🔍 COMBINING DATA: Found {len(all_enhanced_lien_data)} enhanced lien documents")
+                        logger.info(f"🔍 Combined lien types: {list(combined_lien_types)}")
+                        logger.info(f"🔍 Combined signature types: {list(combined_signature_types)}")
+
+                        determined_tags = []
+
+                        # Add signature type (PSL/ASL) - prefer ASL if both found
+                        if "ASL" in combined_signature_types:
+                            determined_tags.append("ASL")
+                            logger.info(f"🔍 SIGNATURE TYPE DETECTED: ASL (attorney signature found)")
+                        elif "PSL" in combined_signature_types:
+                            determined_tags.append("PSL")
+                            logger.info(f"🔍 SIGNATURE TYPE DETECTED: PSL (patient signature found)")
+
+                        # Add ALL lien types found across all documents
+                        for lien_type in combined_lien_types:
+                            if lien_type in ['RAD', 'RADIOLOGY']:
+                                determined_tags.append('Rad Lien')
+                                logger.info(f"🔍 LIEN TYPE DETECTED: Rad Lien")
+                            elif lien_type in ['TECH', 'TC', 'TECHNOLOGIST']:
+                                determined_tags.append('Tech Lien')
+                                logger.info(f"🔍 LIEN TYPE DETECTED: Tech Lien")
+
+                        if determined_tags:
+                            new_tags = determined_tags
+                            # Add Patient Demo tag if mixed packet (patient demo + lien pages)
+                            if has_patient_demo_in_ocr and "Patient Demo" not in new_tags:
+                                new_tags.append("Patient Demo")
+                                logger.info(f"🔍 MIXED PACKET: Added 'Patient Demo' tag alongside lien tags for email {email_id}")
+                            logger.info(f"🔍 ENHANCED LIEN CLASSIFICATION for email {email_id}: {new_tags}")
+                            logger.info(f"Applied enhanced lien tags from {len(all_enhanced_lien_data)} documents: lien_types={list(combined_lien_types)}, signature_types={list(combined_signature_types)}")
                         else:
-                            logger.info(f"No lien modifications detected for email {email_id}. Keeping original tags: {new_tags}")
+                            logger.warning(f"🔍 ENHANCED LIEN PROCESSING completed but produced no classifiable lien/signature types. "
+                                           f"Combined types: lien={list(combined_lien_types)}, signature={list(combined_signature_types)}. "
+                                           f"Tagging for human review instead of using LLM tags: {new_tags}")
+                            new_tags = ["AI: Human review required"]
                     else:
-                        logger.warning(f"Email {email_id} marked as having attachments but no attachment data found for lien modification check.")
-                
+                        logger.warning(f"🔍 NO ENHANCED LIEN DATA: Email {email_id} is lien-related but enhanced processing data not found in OCR results. "
+                                       f"This should not happen if document was classified as lien. Tagging for human review.")
+                        new_tags = ["AI: Human review required"]
+
                 except Exception as e:
-                    logger.error(f"Error during lien modification detection for email {email_id}: {e}", exc_info=True)
-                    # Continue with original tags if modification detection fails
-                    logger.info(f"Continuing with original tags due to modification detection error: {new_tags}")
-        # --- END LIEN MODIFICATION DETECTION ---
+                    logger.error(f"Error during enhanced lien type check for email {email_id}: {e}", exc_info=True)
+                    logger.info(f"Continuing with LLM tags due to lien analysis error: {new_tags}")
+            # --- END OCR-BASED LIEN CLASSIFICATION OVERRIDE ---
+
+            # --- LIEN MODIFICATION DETECTION ---
+            # Check for lien modifications in attachments after initial classification
+            lien_modifications_detected = False
+            lien_modification_results = []
+
+            if email_obj.has_attachments and new_tags:
+                from app.services.lien_modification_service import should_check_lien_modifications, check_lien_modifications
+
+                if should_check_lien_modifications(new_tags):
+                    logger.info(f"Email {email_id} has lien-related tags and attachments. Checking for modifications.")
+
+                    try:
+                        # Extract attachments data from raw_data
+                        attachments_data = []
+                        if email_obj.raw_data and isinstance(email_obj.raw_data, dict):
+                            target_data = email_obj.raw_data.get('target', {}).get('data', {})
+                            attachments_data = target_data.get('attachments', [])
+
+                        if attachments_data:
+                            async def _run_lien_modification_check_async():
+                                nonlocal lien_modifications_detected, lien_modification_results
+                                lien_modifications_detected, lien_modification_results = await check_lien_modifications(
+                                    email_tags=new_tags,
+                                    attachments_data=attachments_data
+                                )
+
+                            asyncio.run(_run_lien_modification_check_async())
+
+                            # Update database with lien modification detection results
+                            lien_update_payload = EmailUpdate(
+                                lien_modification_checked=True,
+                                lien_modifications_detected=lien_modifications_detected,
+                                lien_modification_results=lien_modification_results
+                            )
+                            email_crud_sync.update(db, db_obj=email_obj, obj_in=lien_update_payload)
+                            logger.info(f"Updated email {email_id} with lien modification detection results")
+
+                            if lien_modifications_detected:
+                                logger.info(f"🔍 LIEN MODIFICATIONS DETECTED for email {email_id}! Adding 'Lien Modified' while preserving existing lien tags.")
+
+                                # Preserve lien signature (PSL/ASL) and lien type (Rad/Tech) from
+                                # either the OCR-override tags (current new_tags) OR the original
+                                # classification, then add "Lien Modified".
+                                lien_modified_tags = []
+
+                                signature_candidates = new_tags + original_classification_tags
+                                if any(tag == "PSL" for tag in signature_candidates):
+                                    lien_modified_tags.append("PSL")
+                                elif any(tag == "ASL" for tag in signature_candidates):
+                                    lien_modified_tags.append("ASL")
+
+                                lien_type_candidates = new_tags + original_classification_tags
+                                # Support both Tech and Rad lien types (remove elif to allow both)
+                                if any(tag == "Rad Lien" for tag in lien_type_candidates):
+                                    lien_modified_tags.append("Rad Lien")
+                                if any(tag == "Tech Lien" for tag in lien_type_candidates):
+                                    lien_modified_tags.append("Tech Lien")
+
+                                # Always add Lien Modified
+                                lien_modified_tags.append("Lien Modified")
+
+                                # Remove duplicates while preserving order
+                                new_tags = list(dict.fromkeys(lien_modified_tags))
+                                logger.info(f"Applied comprehensive lien modification tags for email {email_id}: {new_tags}")
+                                logger.info(f"Original classification: {original_classification_tags}, OCR/current preserved types: {[t for t in new_tags if t in ['Rad Lien', 'Tech Lien']]}, Final: {new_tags}")
+                            else:
+                                logger.info(f"No lien modifications detected for email {email_id}. Keeping original tags: {new_tags}")
+                        else:
+                            logger.warning(f"Email {email_id} marked as having attachments but no attachment data found for lien modification check.")
+
+                    except Exception as e:
+                        logger.error(f"Error during lien modification detection for email {email_id}: {e}", exc_info=True)
+                        # Continue with original tags if modification detection fails
+                        logger.info(f"Continuing with original tags due to modification detection error: {new_tags}")
+            # --- END LIEN MODIFICATION DETECTION ---
 
         applied_tags_to_front = False
         final_tagging_status = "tagging_error_unknown" # Default status for logging if something unexpected happens
