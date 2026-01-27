@@ -126,8 +126,10 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
         leadership_dicts = []
         for member in result.leadership:
             member_dict = member.model_dump()
-            # Sanitize LinkedIn URL - set to None if not a valid URL
-            member_dict["linkedin"] = sanitize_linkedin_url(member_dict.get("linkedin"))
+            raw_linkedin = member_dict.get("linkedin")
+            sanitized_linkedin = sanitize_linkedin_url(raw_linkedin)
+            logger.info(f"[Step1] {member_dict.get('name')}: raw LinkedIn from firm research = '{raw_linkedin}' -> sanitized = '{sanitized_linkedin}'")
+            member_dict["linkedin"] = sanitized_linkedin
             leadership_dicts.append(member_dict)
 
         # Step 2: Deep research on each leadership member with LinkedIn
@@ -136,7 +138,7 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
         enriched_leadership = []
         for i, leader in enumerate(leadership_dicts):
             if leader.get("name"):
-                logger.info(f"Researching leader {i+1}/{len(leadership_dicts)}: {leader.get('name')}")
+                logger.info(f"Researching leader {i+1}/{len(leadership_dicts)}: {leader.get('name')} (existing linkedin={leader.get('linkedin')})")
                 try:
                     enriched = research_leadership_member(
                         name=leader.get("name", ""),
@@ -147,8 +149,14 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
                     )
                     if enriched:
                         # Merge enriched data with original, sanitizing LinkedIn URL
+                        enriched_linkedin_raw = enriched.linkedin
                         enriched_linkedin = sanitize_linkedin_url(enriched.linkedin)
                         existing_linkedin = sanitize_linkedin_url(leader.get("linkedin"))
+                        logger.info(
+                            f"[Step2] {leader.get('name')}: enriched LinkedIn raw = '{enriched_linkedin_raw}' "
+                            f"-> sanitized = '{enriched_linkedin}', existing sanitized = '{existing_linkedin}', "
+                            f"final = '{enriched_linkedin or existing_linkedin}'"
+                        )
                         leader.update({
                             "email": enriched.email or leader.get("email"),
                             "phone": enriched.phone or leader.get("phone"),
@@ -162,8 +170,10 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
                             "cases_handled": enriched.cases_handled,
                             "bar_admissions": enriched.bar_admissions,
                         })
+                    else:
+                        logger.warning(f"[Step2] {leader.get('name')}: research_leadership_member returned None")
                 except Exception as e:
-                    logger.warning(f"Failed to research leader {leader.get('name')}: {str(e)}")
+                    logger.warning(f"Failed to research leader {leader.get('name')}: {str(e)}", exc_info=True)
 
                 enriched_leadership.append(leader)
 

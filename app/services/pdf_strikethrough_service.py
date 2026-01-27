@@ -119,6 +119,11 @@ DO NOT report as strikethrough:
 - Any marks inside designated signature areas (e.g., "Signature", "Attorney's Signature", "Patient Signature" boxes)
 - Cursive or scribbled writing that is clearly a signature
 
+IMPORTANT: For each strikethrough instance you DO report, also indicate whether it is located inside
+or overlapping a designated signature area (signature box, signature line, or labeled signature field).
+Set "is_in_signature_area" to true ONLY if the strikethrough mark itself is inside such a designated
+signature area — NOT merely because the surrounding paragraph mentions signing or attorneys.
+
 PART 2: DOCUMENT QUALITY ASSESSMENT
 
 - GOOD: Text is sharp, clear, easily readable
@@ -133,7 +138,8 @@ Response format:
             "struck_through_text": "text you can read (or 'text obscured by heavy marking' if unreadable)",
             "confidence": 0.0 to 1.0,
             "location": "where on page (e.g., 'middle section', 'paragraph 3')",
-            "visual_description": "what the marking looks like (e.g., 'thick black horizontal line', 'heavy black marker')"
+            "visual_description": "what the marking looks like (e.g., 'thick black horizontal line', 'heavy black marker')",
+            "is_in_signature_area": false
         }
     ],
     "document_quality": "GOOD" | "BLURRY" | "UNREADABLE",
@@ -168,9 +174,10 @@ Report strikethrough_detected: true if you see ANY lines crossing through text, 
                                 "struck_through_text": {"type": "string"},
                                 "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
                                 "location": {"type": "string"},
-                                "visual_description": {"type": "string"}
+                                "visual_description": {"type": "string"},
+                                "is_in_signature_area": {"type": "boolean"}
                             },
-                            "required": ["struck_through_text", "confidence", "location", "visual_description"],
+                            "required": ["struck_through_text", "confidence", "location", "visual_description", "is_in_signature_area"],
                             "additionalProperties": False
                         }
                     },
@@ -265,14 +272,9 @@ Report strikethrough_detected: true if you see ANY lines crossing through text, 
                         location = instance.get("location", "").lower()
                         visual_desc = instance.get("visual_description", "").lower()
 
-                        # Filter out signature-related false positives
-                        signature_keywords = ["signature", "firma", "sign here", "signed", "signing"]
-                        is_signature_area = any(kw in location for kw in signature_keywords) or \
-                                          any(kw in visual_desc for kw in signature_keywords) or \
-                                          any(kw in struck_text.lower() for kw in signature_keywords)
-
-                        if is_signature_area:
-                            logger.info(f"✗ Rejected strikethrough - signature area detected: '{struck_text[:50]}...' at '{location}'")
+                        # Filter out signature-area false positives using structured LLM output
+                        if instance.get("is_in_signature_area", False):
+                            logger.info(f"✗ Rejected strikethrough - LLM identified signature area: '{struck_text[:50]}...' at '{location}'")
                             continue
 
                         # Only require that we have some text/description and reasonable confidence

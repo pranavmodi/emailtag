@@ -602,7 +602,7 @@ def research_leadership_member(
     )
 
     payload = {
-        "model": "gpt-5-nano",
+        "model": "gpt-4o",
         "input": [
             {
                 "role": "system",
@@ -612,8 +612,8 @@ def research_leadership_member(
         ],
         "tools": [
             {
-                "type": "web_search_preview",
-                "search_context_size": "low"
+                "type": "web_search",
+                "search_context_size": "high"
             }
         ],
         "text": {
@@ -628,12 +628,28 @@ def research_leadership_member(
 
     try:
         with httpx.Client(timeout=300.0, verify=False) as client:
-            logger.info(f"Starting leadership research for: {name}")
+            logger.info(f"Starting leadership research for: {name} (title={title}, firm={firm_name}, linkedin_url={linkedin_url}, firm_website={firm_website})")
             response = client.post(OPENAI_API_URL, headers=headers, json=payload)
+            logger.info(f"[{name}] OpenAI response status: {response.status_code}")
             response.raise_for_status()
 
             result = response.json()
+            logger.info(f"[{name}] Response top-level keys: {list(result.keys())}")
+
+            # Log all output items to understand what the model did
             output = result.get("output", [])
+            logger.info(f"[{name}] Output items count: {len(output)}")
+            for idx, item in enumerate(output):
+                item_type = item.get("type", "unknown")
+                logger.info(f"[{name}] Output item {idx}: type={item_type}")
+                if item_type == "web_search_call":
+                    search_query = item.get("query", item.get("action", {}).get("query", "N/A"))
+                    logger.info(f"[{name}] Web search query: {search_query}")
+                elif item_type == "message":
+                    for ci, content_item in enumerate(item.get("content", [])):
+                        ci_type = content_item.get("type", "unknown")
+                        logger.info(f"[{name}] Message content {ci}: type={ci_type}")
+
             content = ""
             for item in output:
                 if item.get("type") == "message":
@@ -642,10 +658,18 @@ def research_leadership_member(
                             content = content_item.get("text", "")
 
             if not content:
-                logger.error(f"Empty response from leadership research for {name}")
+                logger.error(f"[{name}] Empty response from leadership research. Full output: {json.dumps(output, indent=2)[:2000]}")
                 return None
 
             research_data = json.loads(content)
+
+            # Log the raw linkedin value before any processing
+            raw_linkedin = research_data.get("linkedin")
+            logger.info(f"[{name}] Raw LinkedIn value from API: '{raw_linkedin}' (type={type(raw_linkedin).__name__})")
+            logger.info(f"[{name}] Raw email: '{research_data.get('email')}', Raw phone: '{research_data.get('phone')}'")
+            logger.info(f"[{name}] Education items: {len(research_data.get('education', []))}, Experience items: {len(research_data.get('experience', []))}")
+            logger.info(f"[{name}] Bar admissions: {research_data.get('bar_admissions', [])}")
+            logger.info(f"[{name}] Full parsed research data: {json.dumps(research_data, indent=2)[:3000]}")
 
             enriched = LeadershipMemberEnriched(
                 name=research_data.get("name", name),
@@ -666,22 +690,22 @@ def research_leadership_member(
             usage = result.get("usage", {})
             if usage:
                 logger.info(
-                    f"Leadership research usage - Input: {usage.get('input_tokens', 0)}, "
+                    f"[{name}] Leadership research usage - Input: {usage.get('input_tokens', 0)}, "
                     f"Output: {usage.get('output_tokens', 0)}"
                 )
 
-            logger.info(f"Leadership research complete for {name}")
+            logger.info(f"[{name}] Leadership research complete. LinkedIn result: '{enriched.linkedin}'")
             return enriched
 
     except httpx.HTTPStatusError as e:
-        logger.error(f"HTTP error during leadership research: {e.response.status_code} - {e.response.text}")
+        logger.error(f"[{name}] HTTP error during leadership research: {e.response.status_code} - {e.response.text[:1000]}")
         return None
     except httpx.RequestError as e:
-        logger.error(f"Request error during leadership research: {str(e)}")
+        logger.error(f"[{name}] Request error during leadership research: {str(e)}")
         return None
     except json.JSONDecodeError as e:
-        logger.error(f"JSON decode error: {str(e)}")
+        logger.error(f"[{name}] JSON decode error: {str(e)}. Raw content: {content[:500] if content else 'empty'}")
         return None
     except Exception as e:
-        logger.error(f"Unexpected error during leadership research: {str(e)}")
+        logger.error(f"[{name}] Unexpected error during leadership research: {str(e)}", exc_info=True)
         return None
