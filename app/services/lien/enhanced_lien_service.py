@@ -13,6 +13,7 @@ from .signature_detector import SignatureDetector
 from .document_converter import DocumentConverter
 from .pdf_splitter import PDFSplitter
 from .cover_letter_detector import CoverLetterDetector
+from .company_detector import CompanyDetector
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,77 @@ class EnhancedLienService:
         self.document_converter = DocumentConverter()
         self.pdf_splitter = PDFSplitter()
         self.cover_letter_detector = CoverLetterDetector()
-    
+        self.company_detector = CompanyDetector()
+
+    async def _run_holistic_company_detection(
+        self, page_results: List[Dict], images: List[bytes], filename: str
+    ) -> Dict[str, Any]:
+        """
+        Run holistic company detection across all lien pages.
+
+        Logic:
+        1. If ANY page has a PRE barcode (Precise Imaging patient ID), skip detection
+           - a PRE barcode confirms the lien belongs to Precise Imaging
+        2. Otherwise, collect all LIEN_CORE page images and send them together
+           in a single API call for holistic company classification
+
+        Args:
+            page_results: List of per-page processing results
+            images: List of raw page image data (same order as page_results)
+            filename: Document filename for logging
+
+        Returns:
+            Company detection result dict
+        """
+        # Check if any page has a PRE barcode - if so, this is our lien
+        for page in page_results:
+            if not page.get("success"):
+                continue
+            barcode_detection = page.get("barcode_detection", {})
+            if barcode_detection.get("barcode_found"):
+                combined_data = barcode_detection.get("combined_data", barcode_detection.get("parsed_data", {}))
+                # Check for PRE patient IDs in various fields
+                patient_ids = combined_data.get("PatientIDs", [])
+                if not patient_ids:
+                    single_id = combined_data.get("PatientID", "")
+                    if single_id:
+                        patient_ids = [single_id]
+                for pid in patient_ids:
+                    if pid and pid.startswith("PRE"):
+                        logger.info(f"COMPANY DETECTION: Skipping for {filename} - PRE barcode found ({pid}), lien is ours")
+                        return {
+                            "company_detected": None,
+                            "is_our_company": True,
+                            "confidence": 1.0,
+                            "explanation": f"PRE barcode {pid} confirms this is a Precise Imaging lien",
+                            "success": True
+                        }
+
+        # No PRE barcode found - collect LIEN_CORE page images for holistic analysis
+        lien_page_images = []
+        for i, page in enumerate(page_results):
+            if not page.get("success") or i >= len(images):
+                continue
+            cover_analysis = page.get("cover_letter_analysis", {})
+            page_classification = cover_analysis.get("page_classification", "OTHER")
+            has_barcode = page.get("barcode_detection", {}).get("barcode_found", False)
+
+            if page_classification == "LIEN_CORE" or has_barcode:
+                lien_page_images.append(images[i])
+
+        if not lien_page_images:
+            logger.info(f"COMPANY DETECTION: No LIEN_CORE pages found for {filename}, skipping")
+            return {
+                "company_detected": None,
+                "is_our_company": True,
+                "confidence": 0.0,
+                "explanation": "No lien core pages to analyze",
+                "success": False
+            }
+
+        # Run holistic detection with all lien page images in a single API call
+        return await self.company_detector.detect_company_holistic(lien_page_images, filename)
+
     async def process_lien_document(self, file_content: bytes, filename: str) -> Dict[str, Any]:
         """
         Process a lien document with enhanced barcode and signature detection.
@@ -48,18 +119,42 @@ class EnhancedLienService:
                 return self._error_response("Failed to convert document to images")
             
             logger.info(f"📄 ENHANCED LIEN: Converted PDF to {len(images)} pages")
-            
-            # Process each page/image
+
+            # Process each page/image for barcode, signature, and cover letter detection
             results = []
             for i, image_data in enumerate(images):
                 logger.info(f"📄 PAGE {i+1}/{len(images)}: Processing...")
-                
+
                 page_result = await self._process_single_page(
-                    image_data, 
+                    image_data,
                     f"{filename}_page_{i+1}"
                 )
                 results.append(page_result)
-            
+
+            # Holistic company detection after all pages are processed
+            # Skipped automatically if a PRE barcode is found on any page
+            company_result = await self._run_holistic_company_detection(results, images, filename)
+
+            if (company_result.get("company_detected") and
+                    not company_result.get("is_our_company", True) and
+                    company_result.get("confidence", 0) > 0.5):
+                logger.warning(f"⚠️ DOCUMENT REJECTION: Lien belongs to another company: {company_result['company_detected']}")
+                return {
+                    "filename": filename,
+                    "processing_type": "enhanced_lien_processing",
+                    "processing_status": "rejected_other_company",
+                    "pages_processed": len(results),
+                    "other_company_detected": True,
+                    "detected_company_name": company_result["company_detected"],
+                    "company_detection_confidence": company_result.get("confidence", 0.0),
+                    "PatientID": "",
+                    "PatientIDs": [],
+                    "LienType": "",
+                    "LienTypes": [],
+                    "LienSignatureType": "UNKNOWN",
+                    "barcode_found": False
+                }
+
             # Consolidate results from all pages
             final_result = self._consolidate_page_results(results, filename)
             
@@ -87,6 +182,10 @@ class EnhancedLienService:
                 page_name,
                 has_barcode=has_barcode
             )
+
+            # Note: Company detection is NOT done per-page.
+            # It runs holistically after ALL pages are processed, and only when
+            # no PRE barcode is found (a PRE barcode confirms the lien is ours).
 
             return {
                 "page_name": page_name,
@@ -301,6 +400,9 @@ class EnhancedLienService:
                 logger.warning(f"   Pages with conditions: {cover_letter_pages}")
                 logger.warning(f"   All conditional phrases: {all_conditional_phrases}")
 
+            # Note: Company detection is done holistically before consolidation.
+            # If we reach this point, the lien has already been confirmed as ours.
+
             # Determine if patient demo documents are present
             has_patient_demo = len(patient_demo_patient_ids) > 0
 
@@ -326,6 +428,10 @@ class EnhancedLienService:
                 "patient_demo_patient_ids": list(patient_demo_patient_ids),
                 "lien_patient_ids": list(lien_patient_ids),
                 "doc_type_ids": list(all_doc_type_ids),
+                # Company detection already passed at this point (lien is ours)
+                "other_company_detected": False,
+                "detected_company_name": None,
+                "company_detection_confidence": 0.0,
                 "raw_page_results": page_results  # Include for debugging
             }
             
@@ -541,12 +647,38 @@ class EnhancedLienService:
 
             logger.info(f"📄 ENHANCED LIEN SPLIT: Converted PDF to {len(images)} pages")
 
-            # Process each page for barcode and signature detection
+            # Process each page for barcode, signature, and cover letter detection
             page_results = []
             for i, image_data in enumerate(images):
                 logger.info(f"📄 PAGE {i+1}/{len(images)}: Processing...")
                 page_result = await self._process_single_page(image_data, f"{filename}_page_{i+1}")
                 page_results.append(page_result)
+
+            # Holistic company detection after all pages are processed
+            # Skipped automatically if a PRE barcode is found on any page
+            company_result = await self._run_holistic_company_detection(page_results, images, filename)
+
+            if (company_result.get("company_detected") and
+                    not company_result.get("is_our_company", True) and
+                    company_result.get("confidence", 0) > 0.5):
+                detected_company_name = company_result["company_detected"]
+                logger.warning(f"⚠️ DOCUMENT REJECTION: Lien belongs to another company: {detected_company_name}")
+                # Return immediately - no need for further processing
+                return {
+                    "filename": filename,
+                    "processing_type": "enhanced_lien_processing_split",
+                    "split_documents": [],
+                    "total_splits": 0,
+                    "processing_status": "rejected_other_company",
+                    "pages_processed": len(page_results),
+                    "other_company_detected": True,
+                    "detected_company_name": detected_company_name,
+                    "company_detection_confidence": company_result.get("confidence", 0.0),
+                    "has_duplicate_barcodes": False,
+                    "has_cover_letter_with_conditions": False,
+                    "conditional_phrases_found": [],
+                    "cover_letter_pages": []
+                }
 
             # Generate page groupings based on patient ID + lien type
             page_groupings, has_duplicate_barcodes = self._generate_page_groupings(page_results)
@@ -560,7 +692,11 @@ class EnhancedLienService:
                     "total_splits": 0,
                     "processing_status": "no_valid_groupings",
                     "has_duplicate_barcodes": has_duplicate_barcodes,
-                    "error": "No valid barcode data found to create splits"
+                    "error": "No valid barcode data found to create splits",
+                    # Company detection already passed at this point (lien is ours)
+                    "other_company_detected": False,
+                    "detected_company_name": None,
+                    "company_detection_confidence": 0.0
                 }
 
             # Check for cover letters with conditional language across all pages
@@ -602,7 +738,11 @@ class EnhancedLienService:
                 "has_duplicate_barcodes": has_duplicate_barcodes,
                 "has_cover_letter_with_conditions": has_cover_letter_with_conditions,
                 "conditional_phrases_found": all_conditional_phrases,
-                "cover_letter_pages": cover_letter_pages
+                "cover_letter_pages": cover_letter_pages,
+                # Company detection already passed at this point (lien is ours)
+                "other_company_detected": False,
+                "detected_company_name": None,
+                "company_detection_confidence": 0.0
             }
 
         except Exception as e:

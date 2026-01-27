@@ -878,6 +878,44 @@ async def handle_lien_request(
             logger.error(f"Failed to handle cover letter conditional language: {e}")
             return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to handle cover letter conditional language: {e}"}}
 
+    # Step 4: Check if lien belongs to another company (not Precise Imaging)
+    other_company_detected = False
+    detected_company_name = None
+
+    if document_analysis_results:
+        for doc_result in document_analysis_results:
+            # Check both enhanced_lien_processing and enhanced_lien_processing_split
+            enhanced_data = doc_result.get("enhanced_lien_processing_split", doc_result.get("enhanced_lien_processing", {}))
+            if enhanced_data.get("other_company_detected"):
+                other_company_detected = True
+                detected_company_name = enhanced_data.get("detected_company_name", "Unknown")
+                break
+
+    if other_company_detected:
+        logger.warning(f"⚠️ OTHER COMPANY LIEN: Detected lien from '{detected_company_name}' for conversation {front_conversation_id}")
+
+        try:
+            # Add human review tag
+            frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
+
+            # Add comment explaining the issue with the other company name
+            comment_text = f"This lien appears to belong to another company: {detected_company_name}. Please review manually."
+            frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
+
+            return {
+                "agent_handled": True,
+                "processed_flag": True,
+                "details": {
+                    "action": "tagged_for_human_review_other_company",
+                    "detected_company": detected_company_name,
+                    "lien_type": lien_type,
+                    "signature_type": signature_type
+                }
+            }
+        except Exception as e:
+            logger.error(f"Failed to handle other company lien: {e}")
+            return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to handle other company lien: {e}"}}
+
     # Check for lien modifications (strikethrough)
     has_modifications = _check_lien_modifications(email_obj) or _has_lien_modified_tag(applied_tags)
 
