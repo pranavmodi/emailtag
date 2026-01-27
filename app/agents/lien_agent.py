@@ -1263,6 +1263,16 @@ async def handle_lien_request(
                         logger.warning(f"📄 {signature_type} AGENT: Upload failed for patient demo {i+1}")
                 else:
                     # Handle lien document
+                    # Skip splits with empty lien_type — these are mis-classified pages
+                    # (e.g. patient_demo pages marked as page_type=lien in mixed packets)
+                    if not split_lien_type:
+                        logger.warning(
+                            f"📄 {signature_type} AGENT: Skipping split {i+1}/{len(all_split_documents)} — "
+                            f"page_type is 'lien' but lien_type is empty (Patient={split_patient_id}). "
+                            f"This may be a mis-classified page in a mixed packet."
+                        )
+                        continue
+
                     has_liens = True
                     logger.info(
                         f"📄 {signature_type} AGENT: Processing lien split {i+1}/{len(all_split_documents)}: "
