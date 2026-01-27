@@ -460,6 +460,51 @@ def move_conversation_to_inbox(conversation_id: str, target_inbox_id: str) -> bo
             return False
 
 
+def assign_conversation(conversation_id: str, assignee_id: str) -> bool:
+    """
+    Assigns a conversation to a teammate in Front.
+
+    Args:
+        conversation_id: The ID of the conversation to assign.
+        assignee_id: The ID of the teammate to assign the conversation to.
+
+    Returns:
+        bool: True if assignment was successful, False otherwise.
+    """
+    if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
+        logger.error("Missing required Front configuration for assigning conversation.")
+        return False
+
+    auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
+    url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}"
+    headers = {
+        "Authorization": auth_header,
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    payload = {"assignee_id": assignee_id}
+
+    # TODO: Configure SSL verification properly
+    with httpx.Client(verify=False) as client:
+        try:
+            logger.info(f"Assigning conversation {conversation_id} to teammate {assignee_id} in Front via API: {url}")
+            response = client.patch(url, headers=headers, json=payload)
+
+            if response.status_code == 204:
+                logger.info(f"Successfully assigned conversation {conversation_id} to teammate {assignee_id}. Status: {response.status_code}")
+                return True
+            else:
+                try:
+                    error_details = response.json()
+                except json.JSONDecodeError:
+                    error_details = response.text
+                logger.error(f"Failed to assign conversation {conversation_id} to teammate {assignee_id}. Status: {response.status_code}, Details: {error_details}")
+                return False
+        except Exception as e:
+            logger.error(f"Exception while assigning conversation {conversation_id} to teammate {assignee_id}: {e}", exc_info=True)
+            return False
+
+
 def archive_conversation_in_front(conversation_id: str) -> bool:
     """
     Archives a conversation in Front.

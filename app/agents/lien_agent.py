@@ -1463,6 +1463,13 @@ async def handle_lien_request(
         # Wait for RadFlow to update signature status after document upload
         # RadFlow needs approximately 5 minutes to process uploaded documents and update signature status
         if unique_patient_ids:
+            # Assign conversation to AI bot during the wait so human agents don't pick it up
+            from app.core.config import settings as app_settings
+            if app_settings.FRONT_BOT_TEAMMATE_ID:
+                frontapp_service.assign_conversation(front_conversation_id, app_settings.FRONT_BOT_TEAMMATE_ID)
+            else:
+                logger.warning(f"FRONT_BOT_TEAMMATE_ID not configured — cannot assign conversation {front_conversation_id} during RadFlow wait")
+
             logger.info(f"⏳ Waiting 5 minutes for RadFlow to update signature status for {len(unique_patient_ids)} patient(s)...")
             await asyncio.sleep(300)  # 5 minutes = 300 seconds
             logger.info(f"✅ Wait complete. Proceeding to generate response for {len(unique_patient_ids)} patient(s)")
