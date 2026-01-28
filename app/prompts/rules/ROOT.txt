@@ -214,6 +214,7 @@ If there is ANY patient-related content, scheduling information, records request
 
 **EXAMPLES OF PATIENT DOCUMENTATION (NOT "No Tag"):**
 - Photo ID uploads or verification notifications → Medical Records & Images
+- Photo ID mismatch with patient profile → Medical Records & Images (sub-tagged as ID Mismatch)
 - Patient profile updates or corrections → Medical Records & Images
 - Insurance card submissions → Medical Records & Images
 - Patient information mismatches → Medical Records & Images
