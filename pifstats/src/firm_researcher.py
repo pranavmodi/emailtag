@@ -516,6 +516,161 @@ LEADERSHIP_MEMBER_SCHEMA = {
 }
 
 
+OUTREACH_SYSTEM_PROMPT = """You are an expert at writing warm, conversational LinkedIn outreach messages for a B2B AI company called Possible Minds.
+
+You need to generate 4 messages for each contact:
+1. Short message from Pranav Modi (founder) - MUST be under 200 characters
+2. Short message from Neha Pipada (engineer) - MUST be under 200 characters
+3. Long LinkedIn message from Pranav Modi - 3-4 paragraphs, warm and personalized
+4. Long LinkedIn message from Neha Pipada - 3-4 paragraphs, slightly more technical perspective
+
+Guidelines:
+- Be warm and conversational, not salesy
+- Reference that their firm may have worked with/interacted with a client of ours
+- Personalize based on the contact's bio, title, awards, or background when available
+- Include the case study URL in each message
+- Pranav's tone: Founder perspective, business-focused, mentions running the company
+- Neha's tone: Engineer perspective, mentions building/engineering, slightly more technical
+- Short messages should hook interest and include the URL
+- Long messages should have a personalized opening based on their bio, then mention the client connection, and end with an invitation to chat
+
+Return your response as a JSON object with these exact keys:
+{
+  "shortPranav": "message under 200 chars",
+  "shortNeha": "message under 200 chars",
+  "longPranav": "full LinkedIn message",
+  "longNeha": "full LinkedIn message"
+}"""
+
+
+OUTREACH_USER_PROMPT = """Generate LinkedIn outreach messages for this contact:
+
+Name: {name}
+Title: {title}
+Firm/Company: {firm}
+Bio: {bio}
+
+Context:
+- Case Study URL: {case_study_url}
+- Client Description: {client_description}
+- The contact's firm may have interacted with or worked with this client
+
+Personalization notes:
+- Use details from their bio to personalize: {bio}
+- Reference their role: {title}
+
+Remember:
+- Short messages MUST be under 200 characters including the URL
+- Address them by first name: {first_name}
+- Make it feel like a genuine connection, not a cold pitch
+
+Return ONLY valid JSON with keys: shortPranav, shortNeha, longPranav, longNeha"""
+
+
+# OpenAI Chat Completions API endpoint (for outreach generation - no web search needed)
+OPENAI_CHAT_API_URL = "https://api.openai.com/v1/chat/completions"
+
+
+def generate_outreach_messages(
+    leaders: List[Dict[str, Any]],
+    case_study_url: str,
+    client_description: str,
+) -> tuple[List[Dict[str, Any]], List[str]]:
+    """
+    Generate personalized LinkedIn outreach messages for each leadership member.
+
+    Uses OpenAI gpt-4o via Chat Completions API to generate 4 message variants
+    per leader (short/long x Pranav/Neha).
+
+    Args:
+        leaders: List of leadership member dicts with name, title, bio, etc.
+        case_study_url: URL of the case study to reference
+        client_description: Description of the client for context
+
+    Returns:
+        Tuple of (list of message result dicts, list of error strings)
+    """
+    headers = {
+        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    results = []
+    errors = []
+
+    for leader in leaders:
+        name = leader.get("name", "Unknown")
+        title = leader.get("title", "Not specified")
+        bio = leader.get("bio") or "No bio available"
+        first_name = name.split()[0] if name else "there"
+
+        user_prompt = OUTREACH_USER_PROMPT.format(
+            name=name,
+            title=title,
+            firm=leader.get("firm", "Not specified"),
+            bio=bio,
+            case_study_url=case_study_url,
+            client_description=client_description,
+            first_name=first_name,
+        )
+
+        payload = {
+            "model": "gpt-4o",
+            "messages": [
+                {"role": "system", "content": OUTREACH_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            "response_format": {"type": "json_object"},
+            "temperature": 0.8,
+        }
+
+        try:
+            with httpx.Client(timeout=60.0, verify=False) as client:
+                logger.info(f"Generating outreach messages for: {name}")
+                response = client.post(OPENAI_CHAT_API_URL, headers=headers, json=payload)
+                response.raise_for_status()
+
+                result = response.json()
+                content = result["choices"][0]["message"]["content"]
+                parsed = json.loads(content)
+
+                # Truncate short messages to 200 chars as safety net
+                short_pranav = parsed.get("shortPranav", "")[:200]
+                short_neha = parsed.get("shortNeha", "")[:200]
+
+                results.append({
+                    "name": name,
+                    "title": title,
+                    "shortPranav": short_pranav,
+                    "shortNeha": short_neha,
+                    "longPranav": parsed.get("longPranav", ""),
+                    "longNeha": parsed.get("longNeha", ""),
+                })
+
+                usage = result.get("usage", {})
+                if usage:
+                    logger.info(
+                        f"[{name}] Outreach generation usage - "
+                        f"Prompt: {usage.get('prompt_tokens', 0)}, "
+                        f"Completion: {usage.get('completion_tokens', 0)}"
+                    )
+
+        except httpx.HTTPStatusError as e:
+            err_msg = f"{name}: HTTP error {e.response.status_code}"
+            logger.error(f"Outreach generation failed for {name}: {e.response.status_code} - {e.response.text[:500]}")
+            errors.append(err_msg)
+        except json.JSONDecodeError as e:
+            err_msg = f"{name}: Failed to parse response JSON"
+            logger.error(f"Outreach JSON parse error for {name}: {str(e)}")
+            errors.append(err_msg)
+        except Exception as e:
+            err_msg = f"{name}: {str(e)}"
+            logger.error(f"Outreach generation error for {name}: {str(e)}")
+            errors.append(err_msg)
+
+    return results, errors
+
+
 LEADERSHIP_RESEARCH_PROMPT = """You are an expert legal industry researcher. Research the following attorney/legal professional thoroughly using web searches.
 
 Person: {name}

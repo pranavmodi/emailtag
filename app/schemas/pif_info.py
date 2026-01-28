@@ -132,3 +132,27 @@ class ProcessDayResponse(BaseModel):
     firms_updated: int
     firms_created: int
     errors: List[str] = Field(default_factory=list)
+
+
+class OutreachRequest(BaseModel):
+    """Schema for outreach message generation request."""
+    case_study_url: str
+    client_description: str
+
+
+class OutreachMessageResult(BaseModel):
+    """Schema for outreach messages generated for a single leader."""
+    name: str
+    title: str
+    shortPranav: str
+    shortNeha: str
+    longPranav: str
+    longNeha: str
+
+
+class OutreachResponse(BaseModel):
+    """Schema for outreach generation response."""
+    pif_id: UUID
+    firm_name: str
+    messages: List[OutreachMessageResult]
+    errors: List[str] = Field(default_factory=list)

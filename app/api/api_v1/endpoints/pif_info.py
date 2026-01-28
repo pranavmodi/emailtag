@@ -21,6 +21,9 @@ from app.schemas.pif_info import (
     ResearchStartResponse,
     ResearchStatusResponse,
     LeadershipMember,
+    OutreachRequest,
+    OutreachResponse,
+    OutreachMessageResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -518,3 +521,66 @@ async def get_research_status(
             status=result.state.lower(),
             message=f"Research status: {result.state}"
         )
+
+
+@router.post("/{pif_id}/generate-outreach", response_model=OutreachResponse)
+async def generate_outreach(
+    pif_id: UUID,
+    request: OutreachRequest,
+    db: AsyncSession = Depends(get_db),
+) -> OutreachResponse:
+    """
+    Generate personalized LinkedIn outreach messages for a firm's leadership.
+
+    Takes a case study URL and client description, generates 4 message variants
+    (short/long x Pranav/Neha) for each leadership member using OpenAI.
+
+    Args:
+        pif_id: PIF info ID
+        request: OutreachRequest with case_study_url and client_description
+        db: Database session
+
+    Returns:
+        OutreachResponse with generated messages for all leaders
+    """
+    pif = await pif_info_crud.get(db, id=pif_id)
+    if not pif:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PIF info not found",
+        )
+
+    if not pif.leadership or len(pif.leadership) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This firm has no leadership data. Please research the firm first.",
+        )
+
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
+
+    from pifstats.src.firm_researcher import generate_outreach_messages
+
+    # Add firm name to each leader dict for context
+    leaders = []
+    for member in pif.leadership:
+        leader_dict = dict(member) if isinstance(member, dict) else member
+        if isinstance(leader_dict, dict):
+            leader_dict["firm"] = pif.firm_name
+        leaders.append(leader_dict)
+
+    logger.info(f"Generating outreach messages for {len(leaders)} leaders at {pif.firm_name}")
+
+    messages, errors = generate_outreach_messages(
+        leaders=leaders,
+        case_study_url=request.case_study_url,
+        client_description=request.client_description,
+    )
+
+    return OutreachResponse(
+        pif_id=pif_id,
+        firm_name=pif.firm_name,
+        messages=[OutreachMessageResult(**msg) for msg in messages],
+        errors=errors,
+    )

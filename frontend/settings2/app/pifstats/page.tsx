@@ -29,10 +29,12 @@ import {
   Award,
   Briefcase,
   ArrowUpDown,
+  Copy,
+  Check,
 } from "lucide-react";
 
 import { ApiError, PifApi, UsageApi, UsageStatsResponse } from "@/lib/api";
-import type { PifInfoResponse, PifInfoListResponse, ProcessDayResponse, ResearchStatusResponse } from "@/lib/types";
+import type { PifInfoResponse, PifInfoListResponse, ProcessDayResponse, ResearchStatusResponse, OutreachMessageResult } from "@/lib/types";
 import { ResearchModal } from "./ResearchModal";
 import {
   Card,
@@ -97,7 +99,15 @@ export default function PifListPage() {
   const [usageStatsDays, setUsageStatsDays] = useState(30);
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<"pif" | "usage">("pif");
+  const [activeTab, setActiveTab] = useState<"pif" | "usage" | "outreach">("pif");
+
+  // Outreach state
+  const [outreachFirmId, setOutreachFirmId] = useState<string>("");
+  const [caseStudyUrl, setCaseStudyUrl] = useState("");
+  const [clientDescription, setClientDescription] = useState("");
+  const [outreachMessages, setOutreachMessages] = useState<OutreachMessageResult[] | null>(null);
+  const [isGeneratingOutreach, setIsGeneratingOutreach] = useState(false);
+  const [outreachError, setOutreachError] = useState<string | null>(null);
 
   // Check if already authenticated on mount
   useEffect(() => {
@@ -389,6 +399,17 @@ export default function PifListPage() {
             <Activity className="h-4 w-4 inline-block mr-1.5 -mt-0.5" />
             Usage Stats
           </button>
+          <button
+            onClick={() => setActiveTab("outreach")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "outreach"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <MessageSquare className="h-4 w-4 inline-block mr-1.5 -mt-0.5" />
+            Outreach
+          </button>
         </div>
 
         {activeTab === "pif" && (
@@ -617,6 +638,24 @@ export default function PifListPage() {
             </Card>
           </motion.section>
         </>
+        )}
+
+        {activeTab === "outreach" && (
+          <OutreachTab
+            data={data}
+            outreachFirmId={outreachFirmId}
+            setOutreachFirmId={setOutreachFirmId}
+            caseStudyUrl={caseStudyUrl}
+            setCaseStudyUrl={setCaseStudyUrl}
+            clientDescription={clientDescription}
+            setClientDescription={setClientDescription}
+            outreachMessages={outreachMessages}
+            setOutreachMessages={setOutreachMessages}
+            isGeneratingOutreach={isGeneratingOutreach}
+            setIsGeneratingOutreach={setIsGeneratingOutreach}
+            outreachError={outreachError}
+            setOutreachError={setOutreachError}
+          />
         )}
 
         {activeTab === "usage" && (
@@ -1516,5 +1555,282 @@ function FirmCard({
         </div>
       )}
     </div>
+  );
+}
+
+function CopyButton({ text, label }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 transition-colors"
+      title={label || "Copy to clipboard"}
+    >
+      {copied ? (
+        <>
+          <Check className="h-3 w-3 text-emerald-500" />
+          Copied
+        </>
+      ) : (
+        <>
+          <Copy className="h-3 w-3" />
+          {label || "Copy"}
+        </>
+      )}
+    </button>
+  );
+}
+
+function OutreachTab({
+  data,
+  outreachFirmId,
+  setOutreachFirmId,
+  caseStudyUrl,
+  setCaseStudyUrl,
+  clientDescription,
+  setClientDescription,
+  outreachMessages,
+  setOutreachMessages,
+  isGeneratingOutreach,
+  setIsGeneratingOutreach,
+  outreachError,
+  setOutreachError,
+}: {
+  data: PifInfoListResponse | null;
+  outreachFirmId: string;
+  setOutreachFirmId: (v: string) => void;
+  caseStudyUrl: string;
+  setCaseStudyUrl: (v: string) => void;
+  clientDescription: string;
+  setClientDescription: (v: string) => void;
+  outreachMessages: OutreachMessageResult[] | null;
+  setOutreachMessages: (v: OutreachMessageResult[] | null) => void;
+  isGeneratingOutreach: boolean;
+  setIsGeneratingOutreach: (v: boolean) => void;
+  outreachError: string | null;
+  setOutreachError: (v: string | null) => void;
+}) {
+  const researchedFirms = data?.items.filter((f) => f.research_status === "completed") || [];
+
+  const handleGenerate = async () => {
+    if (!outreachFirmId || !caseStudyUrl || !clientDescription) return;
+
+    setIsGeneratingOutreach(true);
+    setOutreachError(null);
+    setOutreachMessages(null);
+
+    try {
+      const result = await PifApi.generateOutreach(outreachFirmId, caseStudyUrl, clientDescription);
+      setOutreachMessages(result.messages);
+      if (result.errors.length > 0) {
+        setOutreachError(`Generated with ${result.errors.length} error(s): ${result.errors.join("; ")}`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to generate outreach messages";
+      setOutreachError(message);
+    } finally {
+      setIsGeneratingOutreach(false);
+    }
+  };
+
+  const formatAllMessages = (msg: OutreachMessageResult) => {
+    return `=== ${msg.name} (${msg.title}) ===
+
+--- Short Pranav (${msg.shortPranav.length} chars) ---
+${msg.shortPranav}
+
+--- Short Neha (${msg.shortNeha.length} chars) ---
+${msg.shortNeha}
+
+--- Long Pranav ---
+${msg.longPranav}
+
+--- Long Neha ---
+${msg.longNeha}`;
+  };
+
+  const canGenerate = outreachFirmId && caseStudyUrl.trim() && clientDescription.trim() && !isGeneratingOutreach;
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={easing}
+      className="space-y-6"
+    >
+      {/* Configuration Card */}
+      <Card className="rounded-2xl border border-slate-200/70 bg-white/90">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-3 text-xl">
+            <MessageSquare className="h-5 w-5 text-indigo-600" />
+            Generate Outreach Messages
+          </CardTitle>
+          <CardDescription>
+            Generate personalized LinkedIn outreach messages for a firm&apos;s leadership team
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Firm Selector */}
+          <div className="space-y-1.5">
+            <label htmlFor="outreach-firm" className="text-sm font-medium text-slate-700">
+              Select Firm
+            </label>
+            <select
+              id="outreach-firm"
+              value={outreachFirmId}
+              onChange={(e) => setOutreachFirmId(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="">Choose a researched firm...</option>
+              {researchedFirms.map((firm) => (
+                <option key={firm.id} value={firm.id}>
+                  {firm.firm_name} ({firm.leadership?.length || 0} leaders)
+                </option>
+              ))}
+            </select>
+            {researchedFirms.length === 0 && (
+              <p className="text-xs text-slate-400">
+                No researched firms available. Research a firm first from the PIF Data tab.
+              </p>
+            )}
+          </div>
+
+          {/* Case Study URL */}
+          <div className="space-y-1.5">
+            <label htmlFor="case-study-url" className="text-sm font-medium text-slate-700">
+              Case Study URL
+            </label>
+            <input
+              type="url"
+              id="case-study-url"
+              value={caseStudyUrl}
+              onChange={(e) => setCaseStudyUrl(e.target.value)}
+              placeholder="https://example.com/case-study"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+
+          {/* Client Description */}
+          <div className="space-y-1.5">
+            <label htmlFor="client-description" className="text-sm font-medium text-slate-700">
+              Client Description
+            </label>
+            <textarea
+              id="client-description"
+              value={clientDescription}
+              onChange={(e) => setClientDescription(e.target.value)}
+              placeholder="Describe the client and the connection to the firm..."
+              rows={3}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y"
+            />
+          </div>
+
+          {/* Generate Button */}
+          <Button
+            onClick={handleGenerate}
+            disabled={!canGenerate}
+            className="flex items-center gap-2"
+          >
+            {isGeneratingOutreach ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Generate Messages
+              </>
+            )}
+          </Button>
+
+          {/* Error */}
+          {outreachError && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+              {outreachError}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Results */}
+      {outreachMessages && outreachMessages.length > 0 && (
+        <div className="space-y-4">
+          {outreachMessages.map((msg, idx) => (
+            <Card key={idx} className="rounded-2xl border border-slate-200/70 bg-white/90">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">
+                    {msg.name}
+                    <span className="ml-2 text-sm font-normal text-slate-500">{msg.title}</span>
+                  </CardTitle>
+                  <CopyButton text={formatAllMessages(msg)} label="Copy All" />
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Short Pranav */}
+                <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-700">Short Pranav</span>
+                      <Badge className={`text-xs ${msg.shortPranav.length <= 200 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                        {msg.shortPranav.length} chars
+                      </Badge>
+                    </div>
+                    <CopyButton text={msg.shortPranav} />
+                  </div>
+                  <p className="text-sm text-slate-600 whitespace-pre-wrap">{msg.shortPranav}</p>
+                </div>
+
+                {/* Short Neha */}
+                <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-700">Short Neha</span>
+                      <Badge className={`text-xs ${msg.shortNeha.length <= 200 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                        {msg.shortNeha.length} chars
+                      </Badge>
+                    </div>
+                    <CopyButton text={msg.shortNeha} />
+                  </div>
+                  <p className="text-sm text-slate-600 whitespace-pre-wrap">{msg.shortNeha}</p>
+                </div>
+
+                {/* Long Pranav */}
+                <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-700">Long Pranav</span>
+                    <CopyButton text={msg.longPranav} />
+                  </div>
+                  <p className="text-sm text-slate-600 whitespace-pre-wrap">{msg.longPranav}</p>
+                </div>
+
+                {/* Long Neha */}
+                <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-700">Long Neha</span>
+                    <CopyButton text={msg.longNeha} />
+                  </div>
+                  <p className="text-sm text-slate-600 whitespace-pre-wrap">{msg.longNeha}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {outreachMessages && outreachMessages.length === 0 && !outreachError && (
+        <div className="py-12 text-center text-slate-500">
+          No messages were generated. The firm may not have leadership data.
+        </div>
+      )}
+    </motion.section>
   );
 }
