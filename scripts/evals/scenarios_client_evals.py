@@ -1409,6 +1409,76 @@ Test ID: {UNIQUE_TEST_ID}"""
         ],
         "expected_tags": ["Patient Demo"]
     },
+    "76": {
+        "description": "Pedro Salcedo - Multi-email lien conversation - 4 separate lien PDFs sent across 4 emails",
+        "is_multi_step": True,
+        "expected_tags": ["Rad Lien"],
+        "steps": [
+            {
+                "subject": "RE: Pedro Salcedo - Lien Documents",
+                "body_html": (
+                    "<p>Hi,</p>"
+                    "<p>Please find attached the signed lien for Pedro Salcedo.</p>"
+                    "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+                ),
+                "attachments": [
+                    {
+                        "filename": "SIGNED_LIEN_SALCEDO_PEDRO.pdf",
+                        "filepath": "data/documents/lientest/SIGNED_LIEN_SALCEDO_PEDRO.pdf",
+                        "content_type": "application/pdf"
+                    }
+                ]
+            },
+            {
+                "subject": "RE: Pedro Salcedo - Lien Documents",
+                "body_html": (
+                    "<p>Hi,</p>"
+                    "<p>Here is the second lien document for Pedro Salcedo.</p>"
+                    "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+                ),
+                "attachments": [
+                    {
+                        "filename": "SIGNED_LIEN_SALCEDO_PEDRO-2.pdf",
+                        "filepath": "data/documents/lientest/SIGNED_LIEN_SALCEDO_PEDRO-2.pdf",
+                        "content_type": "application/pdf"
+                    }
+                ],
+                "wait_for_user_input": True
+            },
+            {
+                "subject": "RE: Pedro Salcedo - Lien Documents",
+                "body_html": (
+                    "<p>Hi,</p>"
+                    "<p>Attaching the additional lien for Pedro Salcedo Torres.</p>"
+                    "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+                ),
+                "attachments": [
+                    {
+                        "filename": "SIGNED_LIEN_SALCEDO_TORRES_PEDRO.pdf",
+                        "filepath": "data/documents/lientest/SIGNED_LIEN_SALCEDO_TORRES_PEDRO.pdf",
+                        "content_type": "application/pdf"
+                    }
+                ],
+                "wait_for_user_input": True
+            },
+            {
+                "subject": "RE: Pedro Salcedo - Lien Documents",
+                "body_html": (
+                    "<p>Hi,</p>"
+                    "<p>Final lien document for Pedro Salcedo Torres attached.</p>"
+                    "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+                ),
+                "attachments": [
+                    {
+                        "filename": "SIGNED_LIEN_SALCEDO_TORRES_PEDRO-2.pdf",
+                        "filepath": "data/documents/lientest/SIGNED_LIEN_SALCEDO_TORRES_PEDRO-2.pdf",
+                        "content_type": "application/pdf"
+                    }
+                ],
+                "wait_for_user_input": True
+            }
+        ]
+    },
     "75": {
         "description": "PRE1171578 - Apt status req - Client inquiry about appointment/imaging status using patient ID",
         "subject": "Status Update Request - PRE1171578",

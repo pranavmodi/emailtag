@@ -632,16 +632,54 @@ def run_single_scenario(scenario_key: str, scenario_details: Dict[str, Any], ver
     """Run a single test scenario and return results."""
     print(f"\n--- Testing Client Scenario {scenario_key}: {scenario_details['description']} ---")
 
-    # Handle single-step scenarios (client evals are currently single-step)
-    email_details = scenario_details.copy()
-    patient_id = email_details.get("patient_id")
-    if patient_id:
-        if "{PATIENT_ID}" in email_details.get("subject", ""):
-            email_details["subject"] = email_details["subject"].replace("{PATIENT_ID}", patient_id)
-        if "{PATIENT_ID}" in email_details.get("body_html", ""):
-            email_details["body_html"] = email_details["body_html"].replace("{PATIENT_ID}", patient_id)
+    success = False
 
-    success = send_smtp_email(email_details, scenario_key)
+    # Handle multi-step scenarios
+    if scenario_details.get("is_multi_step"):
+        patient_id = scenario_details.get("patient_id")
+        first_message_id = None
+        for i, step in enumerate(scenario_details["steps"]):
+            print(f"Executing step {i+1}/{len(scenario_details['steps'])} for scenario {scenario_key}...")
+
+            if step.get("wait_for_user_input"):
+                input("Press Enter to send the next email...")
+            elif "delay_before_sending" in step:
+                delay = step["delay_before_sending"]
+                print(f"Waiting for {delay} seconds before next step...")
+                time.sleep(delay)
+
+            subject = step["subject"]
+            body_html = step["body_html"]
+
+            if patient_id:
+                subject = subject.replace("{PATIENT_ID}", patient_id)
+                body_html = body_html.replace("{PATIENT_ID}", patient_id)
+
+            email_details = {
+                "subject": subject,
+                "body_html": body_html
+            }
+            # Include attachments from the step if present
+            if "attachments" in step:
+                email_details["attachments"] = step["attachments"]
+            if "recipient_email" in scenario_details:
+                email_details["recipient_email"] = scenario_details["recipient_email"]
+            # Thread follow-up emails into the same conversation using In-Reply-To header
+            result = send_smtp_email(email_details, scenario_key, in_reply_to=first_message_id)
+            if i == 0 and result and result is not True:
+                first_message_id = result
+            success = bool(result)
+    else:
+        # Handle single-step scenarios
+        email_details = scenario_details.copy()
+        patient_id = email_details.get("patient_id")
+        if patient_id:
+            if "{PATIENT_ID}" in email_details.get("subject", ""):
+                email_details["subject"] = email_details["subject"].replace("{PATIENT_ID}", patient_id)
+            if "{PATIENT_ID}" in email_details.get("body_html", ""):
+                email_details["body_html"] = email_details["body_html"].replace("{PATIENT_ID}", patient_id)
+
+        success = send_smtp_email(email_details, scenario_key)
 
     if not success:
         return {

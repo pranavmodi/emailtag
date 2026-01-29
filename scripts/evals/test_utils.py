@@ -6,6 +6,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
+from email.utils import make_msgid
 import random
 from typing import Optional, List
 from dotenv import load_dotenv
@@ -39,7 +40,7 @@ def set_verbose_mode(verbose: bool):
     VERBOSE_MODE = verbose
 
 
-def send_smtp_email(scenario_details, choice_key, unique_id=None):
+def send_smtp_email(scenario_details, choice_key, unique_id=None, in_reply_to=None):
     """
     Sends an email via SMTP based on the provided scenario details.
     """
@@ -86,9 +87,16 @@ def send_smtp_email(scenario_details, choice_key, unique_id=None):
     body_html_with_id = body_html_with_id.replace("{SENDER_EMAIL_PLACEHOLDER}", SENDER_EMAIL)
 
     msg = MIMEMultipart()
+    # Generate a Message-ID so we can reference it for threading follow-up emails
+    msg_id = make_msgid(domain=SENDER_EMAIL.split('@')[1] if SENDER_EMAIL else 'localhost')
+    msg['Message-ID'] = msg_id
     msg['Subject'] = subject_with_id
     msg['From'] = SENDER_EMAIL
     msg['To'] = recipient_email
+    # Set threading headers so Front groups follow-up emails into the same conversation
+    if in_reply_to:
+        msg['In-Reply-To'] = in_reply_to
+        msg['References'] = in_reply_to
     msg.attach(MIMEText(body_html_with_id, 'html'))
     
     # Handle attachments if present
@@ -183,7 +191,8 @@ def send_smtp_email(scenario_details, choice_key, unique_id=None):
                 server.sendmail(SENDER_EMAIL, recipient_email, msg.as_string())
         
         print(f"Email successfully sent via SMTP to {recipient_email}.")
-        return True
+        # Return the Message-ID so multi-step scenarios can thread follow-up emails
+        return msg_id
         
     except smtplib.SMTPNotSupportedError as e:
         print(f"SMTP Not Supported Error: {e}. This might indicate an issue with STARTTLS or another feature.")

@@ -1470,9 +1470,10 @@ async def handle_lien_request(
             else:
                 logger.warning(f"FRONT_BOT_TEAMMATE_ID not configured — cannot assign conversation {front_conversation_id} during RadFlow wait")
 
-            logger.info(f"⏳ Waiting 5 minutes for RadFlow to update signature status for {len(unique_patient_ids)} patient(s)...")
-            await asyncio.sleep(300)  # 5 minutes = 300 seconds
-            logger.info(f"✅ Wait complete. Proceeding to generate response for {len(unique_patient_ids)} patient(s)")
+            # TEMPORARILY DISABLED: 5-minute wait for RadFlow to update signature status
+            # logger.info(f"⏳ Waiting 5 minutes for RadFlow to update signature status for {len(unique_patient_ids)} patient(s)...")
+            # await asyncio.sleep(300)  # 5 minutes = 300 seconds
+            logger.info(f"⏩ Skipping 5-minute RadFlow wait (temporarily disabled). Proceeding for {len(unique_patient_ids)} patient(s)")
 
         # Generate consolidated response for multiple patients
         if len(unique_patient_ids) > 1:

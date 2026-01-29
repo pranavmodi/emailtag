@@ -91,9 +91,10 @@ def run_single_scenario(scenario_key: str, scenario_details: Dict[str, Any], ver
     # Handle multi-step scenarios
     if scenario_details.get("is_multi_step"):
         patient_id = scenario_details.get("patient_id")
+        first_message_id = None
         for i, step in enumerate(scenario_details["steps"]):
             print(f"Executing step {i+1}/{len(scenario_details['steps'])} for scenario {scenario_key}...")
-            
+
             if step.get("wait_for_user_input"):
                 input("Press Enter to send the next email...")
             elif "delay_before_sending" in step:
@@ -112,10 +113,17 @@ def run_single_scenario(scenario_key: str, scenario_details: Dict[str, Any], ver
                 "subject": subject,
                 "body_html": body_html
             }
+            # Include attachments from the step if present
+            if "attachments" in step:
+                email_details["attachments"] = step["attachments"]
             # Include recipient email only if it exists in the scenario (allows global override via DEFAULT_RECIPIENT_EMAIL)
             if "recipient_email" in scenario_details:
                 email_details["recipient_email"] = scenario_details["recipient_email"]
-            success = send_smtp_email(email_details, scenario_key, test_unique_id)
+            # Thread follow-up emails into the same conversation using In-Reply-To header
+            result = send_smtp_email(email_details, scenario_key, test_unique_id, in_reply_to=first_message_id)
+            if i == 0 and result and result is not True:
+                first_message_id = result
+            success = bool(result)
     else:
         # Handle single-step scenarios
         email_details = scenario_details.copy()
