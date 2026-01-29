@@ -103,6 +103,7 @@ export default function PifListPage() {
   const [outgenFirmId, setOutgenFirmId] = useState<string>("");
   const [outgenCaseStudyUrl, setOutgenCaseStudyUrl] = useState("https://getpossibleminds.com/healthcare-case-study");
   const [outgenInstructions, setOutgenInstructions] = useState("");
+  const [outgenMutualApproved, setOutgenMutualApproved] = useState(false);
 
   // All researched firms (for dropdowns, not paginated)
   const [allResearchedFirms, setAllResearchedFirms] = useState<PifInfoResponse[]>([]);
@@ -662,6 +663,8 @@ export default function PifListPage() {
             setOutgenCaseStudyUrl={setOutgenCaseStudyUrl}
             outgenInstructions={outgenInstructions}
             setOutgenInstructions={setOutgenInstructions}
+            outgenMutualApproved={outgenMutualApproved}
+            setOutgenMutualApproved={setOutgenMutualApproved}
           />
         )}
 
@@ -1559,6 +1562,8 @@ function OutgenTab({
   setOutgenCaseStudyUrl,
   outgenInstructions,
   setOutgenInstructions,
+  outgenMutualApproved,
+  setOutgenMutualApproved,
 }: {
   researchedFirms: PifInfoResponse[];
   outgenFirmId: string;
@@ -1567,6 +1572,8 @@ function OutgenTab({
   setOutgenCaseStudyUrl: (v: string) => void;
   outgenInstructions: string;
   setOutgenInstructions: (v: string) => void;
+  outgenMutualApproved: boolean;
+  setOutgenMutualApproved: (v: boolean) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const selectedFirm = researchedFirms.find((f) => f.id === outgenFirmId);
@@ -1606,6 +1613,12 @@ function OutgenTab({
       researchData?.awards_recognition?.length ? `Awards & Recognition: ${researchData.awards_recognition.join("; ")}` : null,
     ].filter(Boolean).join("\n");
 
+    const mutualClientSection = `
+- Mutual client: Precise Imaging
+- Mutual client relationship: PI firms send their clients to Precise Imaging, and Precise works on a lien basis, so they send back signed liens
+- Did mutual client approve outreach reference? ${outgenMutualApproved ? "YES" : "NO"}
+- Specific results mutual client experienced that benefit prospect: Faster records responses, automated lien handling, cleaner documentation back to attorneys`;
+
     return `Generate LinkedIn outreach messages for the leadership team at the following firm.
 
 ### For each leader, create 8 outputs (a unique subject line for each message):
@@ -1629,39 +1642,83 @@ function OutgenTab({
 - Identify which of our solutions is MOST relevant to this firm's likely pain points
 
 **Personalization requirements:**
-- Reference something specific from their bio (not just "20 years of experience" — dig deeper)
+- Reference something specific from their bio (not just "20 years of experience"; dig deeper)
 - For solo practitioners: focus on time savings, missed opportunities, after-hours coverage
 - For larger firms: focus on staff efficiency, cost savings, scalability
-- Avoid generic claims like "your clients may have visited" — find a stronger connection or don't force one
+- Avoid generic claims like "your clients may have visited"; find a stronger connection or don't force one
+- Reference specific details from their operation (office locations by name, team size, practice areas)
 
-**Value proposition:**
-- Lead with THEIR problem, not our solution
-- Connect our results to outcomes THEY would care about (e.g., "never miss a potential client call" vs. "saved 670 staff hours")
-- If no direct connection exists, use a "firms like yours" angle instead of fabricating a mutual client
+**Mutual client connections (HIGHEST PRIORITY):**
+If a mutual client relationship exists:
+- Lead with the connection in subject lines and opening sentences
+- Name the mutual client explicitly (if approved)
+- Explain the business relationship between prospect and mutual client
+- Connect case study results to how it benefits the prospect's workflow
+- Use subject lines like "[Client Name] asked me to reach out" or "From the team behind [Client Name]'s system" (only if client approved the outreach)
+- If client didn't explicitly approve, use softer framing: "We work with [Client Name]" or "Your [partner/vendor]'s AI system"
+
+**Message structure (IMPORTANT):**
+- Lead with THEIR pain or situation, not our solution
+- Structure: Pain point > Validation > Proof > Soft CTA
+- Bad: "We helped an imaging center save 670 hours..."
+- Good: "With 7 offices across California, I'm curious how you handle intake when your team's offline. We helped..."
+
+**Case study bridging:**
+- If case study is from a different industry, explicitly bridge the relevance
+- Bad: Showing healthcare results to a law firm without explanation
+- Good: "Different industry, same problem: high volume, multiple locations, leads slipping through"
+- Better: If mutual client exists, no bridge needed; the connection speaks for itself
+- For PI firms specifically: highlight lien document handling, records requests, attorney communication speed
+
+**Subject line rules:**
+- Keep under 6 words when possible
+- Be specific to the prospect (use their name, company, or location)
+- Create curiosity or imply existing relationship
+- Bad: "How we automated 24/7 intake without losing the human touch" (too long, generic)
+- Good: "After-hours leads at [Firm Name]"
+- Good: "[Mutual Client] asked me to reach out"
+- Good: "Intake across 7 locations"
 
 **Tone & Differentiation:**
-- Pranav: Founder, empathetic, business-outcome focused, peer-to-peer. Focus on ROI, growth, client acquisition, business impact.
+- Pranav: Founder, empathetic, business-outcome focused, peer-to-peer. Focus on ROI, growth, client acquisition, business impact, scaling challenges.
 - Neha: Engineer, curious, technically credible, problem-solver. Focus on how it works, implementation ease, technical innovation.
-- IMPORTANT: Pranav and Neha's messages must take DIFFERENT angles — don't just rephrase the same message. Pranav should highlight business outcomes while Neha should highlight technical approach or problem-solving methodology.
+- IMPORTANT: Pranav and Neha's messages must take DIFFERENT angles; don't just rephrase the same message. Pranav should highlight business outcomes while Neha should highlight technical approach or problem-solving methodology.
+- Neha's messages MUST include specific technical details:
+  - Response latency (e.g., "sub-3-second voice latency")
+  - Specific technologies (e.g., "real-time speech recognition", "OCR for document extraction")
+  - Architecture details (e.g., "location-aware responses", "warm handoffs with full context")
+  - Feature specifics (e.g., "signature detection", "fraud flagging for altered documents")
 - Both: Warm, not salesy. End with low-pressure CTA ("happy to share what we learned" not "let's book a call")
 
 **Case study link requirement:**
-- ✅ EVERY message (short and long) MUST include the case study URL — no exceptions
+- EVERY message (short and long) MUST include the case study URL; no exceptions
 - The URL should be woven naturally into the message (e.g., "here's what we found: [URL]" or "we documented the results here: [URL]")
 
+**CTA variations (rotate across messages):**
+- "Happy to share what transferred"
+- "Curious if you've explored this"
+- "Worth a look if this resonates"
+- "Happy to walk through the architecture"
+- "Let me know if you want the technical specs"
+- Avoid using the same CTA for all 4 messages
+
 **What to avoid:**
-- ❌ Generic subject lines that could apply to anyone or reusing the same subject line across messages
-- ❌ Forcing a "mutual connection" that doesn't really exist
-- ❌ Metrics that don't resonate with their firm size
-- ❌ Focusing on what WE did vs. what THEY struggle with
-- ❌ Using healthcare case studies for law firms without bridging relevance
-- ❌ Omitting the case study URL from any message
-- ❌ Using em dashes (—) anywhere. Use commas, periods, or semicolons instead
+- Generic subject lines that could apply to anyone or reusing the same subject line across messages
+- Forcing a "mutual connection" that doesn't really exist
+- Metrics that don't resonate with their firm size
+- Focusing on what WE did vs. what THEY struggle with
+- Using healthcare case studies for law firms without bridging relevance (unless mutual client)
+- Omitting the case study URL from any message
+- Using em dashes anywhere. Use commas, periods, or semicolons instead
+- Leading with "We helped..." instead of their situation
+- Vague technical claims for Neha (e.g., "smart AI" without specifics)
+- Subject lines over 6 words
+- Abrupt transitions from personalization to pitch
 
 ---
 
 ### Context:
-- Case study URL (primary): ${outgenCaseStudyUrl}
+- Case study URL (primary): ${outgenCaseStudyUrl}${mutualClientSection}
 ${outgenInstructions ? `\n### Additional Instructions:\n${outgenInstructions}\n` : ""}
 ---
 
@@ -1759,6 +1816,25 @@ ${leadersInfo || "No leadership data available."}`;
               rows={3}
               className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y"
             />
+          </div>
+
+          {/* Mutual Client Section */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+            <p className="text-sm font-medium text-slate-700">Mutual Client: Precise Imaging</p>
+            <p className="text-xs text-slate-500">PI firms send their clients to Precise Imaging, and Precise works on a lien basis, so they send back signed liens.</p>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="outgen-mutual-approved"
+                checked={outgenMutualApproved}
+                onChange={(e) => setOutgenMutualApproved(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <label htmlFor="outgen-mutual-approved" className="text-xs font-medium text-slate-600">
+                Precise Imaging approved outreach reference
+              </label>
+            </div>
           </div>
 
           {/* Copy Button */}
