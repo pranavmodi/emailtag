@@ -144,6 +144,10 @@ class OutreachMessageResult(BaseModel):
     """Schema for outreach messages generated for a single leader."""
     name: str
     title: str
+    subjectShortPranav: str
+    subjectShortNeha: str
+    subjectLongPranav: str
+    subjectLongNeha: str
     shortPranav: str
     shortNeha: str
     longPranav: str

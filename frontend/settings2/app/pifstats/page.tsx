@@ -1320,19 +1320,20 @@ function OutreachTab({
   const formatAllMessages = (msg: OutreachMessageResult) => {
     return `=== ${msg.name} (${msg.title}) ===
 
---- Subject Line ---
-${msg.subjectLine}
-
 --- Short Pranav (${msg.shortPranav.length} chars) ---
+Subject: ${msg.subjectShortPranav}
 ${msg.shortPranav}
 
 --- Short Neha (${msg.shortNeha.length} chars) ---
+Subject: ${msg.subjectShortNeha}
 ${msg.shortNeha}
 
 --- Long Pranav ---
+Subject: ${msg.subjectLongPranav}
 ${msg.longPranav}
 
 --- Long Neha ---
+Subject: ${msg.subjectLongNeha}
 ${msg.longNeha}`;
   };
 
@@ -1460,15 +1461,6 @@ ${msg.longNeha}`;
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Subject Line */}
-                <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-sm font-medium text-indigo-700">Subject Line</span>
-                    <CopyButton text={msg.subjectLine} />
-                  </div>
-                  <p className="text-sm text-indigo-900 font-medium">{msg.subjectLine}</p>
-                </div>
-
                 {/* Short Pranav */}
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                   <div className="mb-2 flex items-center justify-between">
@@ -1479,6 +1471,11 @@ ${msg.longNeha}`;
                       </Badge>
                     </div>
                     <CopyButton text={msg.shortPranav} />
+                  </div>
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-xs font-medium text-indigo-700">Subject:</span>
+                    <span className="text-xs text-indigo-900">{msg.subjectShortPranav}</span>
+                    <CopyButton text={msg.subjectShortPranav} />
                   </div>
                   <p className="text-sm text-slate-600 whitespace-pre-wrap">{msg.shortPranav}</p>
                 </div>
@@ -1494,6 +1491,11 @@ ${msg.longNeha}`;
                     </div>
                     <CopyButton text={msg.shortNeha} />
                   </div>
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-xs font-medium text-indigo-700">Subject:</span>
+                    <span className="text-xs text-indigo-900">{msg.subjectShortNeha}</span>
+                    <CopyButton text={msg.subjectShortNeha} />
+                  </div>
                   <p className="text-sm text-slate-600 whitespace-pre-wrap">{msg.shortNeha}</p>
                 </div>
 
@@ -1508,6 +1510,11 @@ ${msg.longNeha}`;
                     </div>
                     <CopyButton text={msg.longPranav} />
                   </div>
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-xs font-medium text-indigo-700">Subject:</span>
+                    <span className="text-xs text-indigo-900">{msg.subjectLongPranav}</span>
+                    <CopyButton text={msg.subjectLongPranav} />
+                  </div>
                   <p className="text-sm text-slate-600 whitespace-pre-wrap">{msg.longPranav}</p>
                 </div>
 
@@ -1521,6 +1528,11 @@ ${msg.longNeha}`;
                       </Badge>
                     </div>
                     <CopyButton text={msg.longNeha} />
+                  </div>
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-xs font-medium text-indigo-700">Subject:</span>
+                    <span className="text-xs text-indigo-900">{msg.subjectLongNeha}</span>
+                    <CopyButton text={msg.subjectLongNeha} />
                   </div>
                   <p className="text-sm text-slate-600 whitespace-pre-wrap">{msg.longNeha}</p>
                 </div>
@@ -1596,12 +1608,15 @@ function OutgenTab({
 
     return `Generate LinkedIn outreach messages for the leadership team at the following firm.
 
-### For each leader, create 5 outputs:
-1. **Subject line** - Personalized, hints at mutual connection OR a specific pain point relevant to their role/firm size
+### For each leader, create 8 outputs (a unique subject line for each message):
+1. **Subject line for short Pranav message** - Personalized, business-outcome angle
 2. **Short message from Pranav Modi (founder)** - Under 300 characters, hooks interest with a relevant problem/result
-3. **Short message from Neha Pipada (engineer)** - Under 300 characters, slightly more technical angle
-4. **Long message from Pranav Modi** - Under 450 characters, warm, personalized opening → relevant connection → soft CTA
-5. **Long message from Neha Pipada** - Under 450 characters, technical credibility → relevant proof point → soft CTA
+3. **Subject line for short Neha message** - Personalized, technical angle
+4. **Short message from Neha Pipada (engineer)** - Under 300 characters, slightly more technical angle
+5. **Subject line for long Pranav message** - Personalized, hints at mutual connection or business pain point
+6. **Long message from Pranav Modi** - Under 450 characters, warm, personalized opening, relevant connection, soft CTA
+7. **Subject line for long Neha message** - Personalized, hints at technical relevance or problem-solving
+8. **Long message from Neha Pipada** - Under 450 characters, technical credibility, relevant proof point, soft CTA
 
 ---
 
@@ -1630,12 +1645,18 @@ function OutgenTab({
 - IMPORTANT: Pranav and Neha's messages must take DIFFERENT angles — don't just rephrase the same message. Pranav should highlight business outcomes while Neha should highlight technical approach or problem-solving methodology.
 - Both: Warm, not salesy. End with low-pressure CTA ("happy to share what we learned" not "let's book a call")
 
+**Case study link requirement:**
+- ✅ EVERY message (short and long) MUST include the case study URL — no exceptions
+- The URL should be woven naturally into the message (e.g., "here's what we found: [URL]" or "we documented the results here: [URL]")
+
 **What to avoid:**
-- ❌ Generic subject lines that could apply to anyone
+- ❌ Generic subject lines that could apply to anyone or reusing the same subject line across messages
 - ❌ Forcing a "mutual connection" that doesn't really exist
 - ❌ Metrics that don't resonate with their firm size
 - ❌ Focusing on what WE did vs. what THEY struggle with
 - ❌ Using healthcare case studies for law firms without bridging relevance
+- ❌ Omitting the case study URL from any message
+- ❌ Using em dashes (—) anywhere. Use commas, periods, or semicolons instead
 
 ---
 

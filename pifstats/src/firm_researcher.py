@@ -518,31 +518,39 @@ LEADERSHIP_MEMBER_SCHEMA = {
 
 OUTREACH_SYSTEM_PROMPT = """You are an expert at writing warm, conversational LinkedIn outreach messages for a B2B AI company called Possible Minds.
 
-You need to generate 5 outputs for each contact:
-1. Subject line - A compelling, personalized subject line (similar to "We helped a CA imaging center you may know")
+You need to generate 8 outputs for each contact:
+1. Subject line for short Pranav message - A compelling, personalized subject line tailored to Pranav's message
 2. Short message from Pranav Modi (founder) - MUST be under 300 characters
-3. Short message from Neha Pipada (engineer) - MUST be under 300 characters
-4. Long LinkedIn message from Pranav Modi - MUST be under 450 characters, warm and personalized
-5. Long LinkedIn message from Neha Pipada - MUST be under 450 characters, slightly more technical perspective
+3. Subject line for short Neha message - A compelling, personalized subject line tailored to Neha's message
+4. Short message from Neha Pipada (engineer) - MUST be under 300 characters
+5. Subject line for long Pranav message - A compelling, personalized subject line tailored to Pranav's message
+6. Long LinkedIn message from Pranav Modi - MUST be under 450 characters, warm and personalized
+7. Subject line for long Neha message - A compelling, personalized subject line tailored to Neha's message
+8. Long LinkedIn message from Neha Pipada - MUST be under 450 characters, slightly more technical perspective
 
 Guidelines:
 - IMPORTANT: First read and understand the case study at the provided URL to reference specific details
 - Be warm and conversational, not salesy
+- NEVER use em dashes (—) in any output. Use commas, periods, or semicolons instead
 - Reference that their firm may have worked with/interacted with a client of ours
 - Personalize based on the contact's bio, title, awards, or background when available
-- Include the case study URL in each message
+- IMPORTANT: Every message (short and long) MUST include the case study URL. No exceptions — the URL must appear in all 4 messages (shortPranav, shortNeha, longPranav, longNeha)
 - Pranav's tone: Founder perspective, business-focused, mentions running the company
 - Neha's tone: Engineer perspective, mentions building/engineering, slightly more technical
-- Short messages should hook interest and include the URL
-- Long messages should have a personalized opening based on their bio, then mention the client connection, and end with an invitation to chat
-- Subject line should be intriguing and hint at a mutual connection or relevant value
+- Short messages should hook interest and MUST include the case study URL
+- Long messages should have a personalized opening based on their bio, then mention the client connection, include the case study URL, and end with an invitation to chat
+- Each message MUST have its own unique subject line that matches the tone and angle of that specific message
+- Subject lines should be intriguing and hint at a mutual connection or relevant value
 
 Return your response as a JSON object with these exact keys:
 {
-  "subjectLine": "compelling subject line",
+  "subjectShortPranav": "subject line for short Pranav message",
   "shortPranav": "message under 300 chars",
+  "subjectShortNeha": "subject line for short Neha message",
   "shortNeha": "message under 300 chars",
+  "subjectLongPranav": "subject line for long Pranav message",
   "longPranav": "full LinkedIn message",
+  "subjectLongNeha": "subject line for long Neha message",
   "longNeha": "full LinkedIn message"
 }"""
 
@@ -563,13 +571,16 @@ Generation Instructions (follow these closely):
 
 
 Remember:
+- EVERY message (short and long) MUST include the case study URL: {case_study_url}
 - Short messages MUST be under 300 characters including the URL
-- Long messages MUST be under 450 characters
+- Long messages MUST be under 450 characters including the URL
 - Address them by first name: {first_name}
 - Make it feel like a genuine connection, not a cold pitch
-- Subject line should be intriguing and personalized
+- Each message must have its own unique, appropriate subject line
+- Subject lines should be intriguing and personalized to match the tone of the corresponding message
+- NEVER use em dashes (—) anywhere in the output. Use commas, periods, or semicolons instead
 
-Return ONLY valid JSON with keys: subjectLine, shortPranav, shortNeha, longPranav, longNeha"""
+Return ONLY valid JSON with keys: subjectShortPranav, shortPranav, subjectShortNeha, shortNeha, subjectLongPranav, longPranav, subjectLongNeha, longNeha"""
 
 
 # OpenAI Chat Completions API endpoint (for outreach generation - no web search needed)
@@ -646,7 +657,10 @@ def generate_outreach_messages(
                 results.append({
                     "name": name,
                     "title": title,
-                    "subjectLine": parsed.get("subjectLine", ""),
+                    "subjectShortPranav": parsed.get("subjectShortPranav", ""),
+                    "subjectShortNeha": parsed.get("subjectShortNeha", ""),
+                    "subjectLongPranav": parsed.get("subjectLongPranav", ""),
+                    "subjectLongNeha": parsed.get("subjectLongNeha", ""),
                     "shortPranav": short_pranav,
                     "shortNeha": short_neha,
                     "longPranav": parsed.get("longPranav", ""),
