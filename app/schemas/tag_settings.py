@@ -6,6 +6,8 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+
+
 class TagSettingsBase(BaseModel):
     """Base schema for tag settings."""
     tag_name: str = Field(..., description="Tag name these settings apply to")
@@ -21,6 +23,7 @@ class TagSettingsUpdate(BaseModel):
     """Schema for updating tag settings."""
     settings: dict = Field(..., description="Settings dictionary")
     updated_by: Optional[str] = Field(None, description="User who updated the settings")
+    expected_updated_at: Optional[datetime] = Field(None, description="Expected updated_at timestamp for optimistic concurrency control")
 
 
 class TagSettingsResponse(TagSettingsBase):

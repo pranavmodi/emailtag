@@ -4,6 +4,8 @@ from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.tag_settings import TagSettings
+from app.core.exceptions import StaleUpdateError
+from datetime import datetime
 
 
 class TagSettingsCRUD:
@@ -24,6 +26,17 @@ class TagSettingsCRUD:
         """
         result = await db.execute(
             select(TagSettings).where(TagSettings.tag_name == tag_name)
+        )
+        return result.scalar_one_or_none()
+
+    async def _get_by_tag_name_for_update(
+        self, db: AsyncSession, tag_name: str
+    ) -> Optional[TagSettings]:
+        """Get settings with a row-level lock (SELECT FOR UPDATE)."""
+        result = await db.execute(
+            select(TagSettings)
+            .where(TagSettings.tag_name == tag_name)
+            .with_for_update()
         )
         return result.scalar_one_or_none()
 
@@ -93,26 +106,47 @@ class TagSettingsCRUD:
         db: AsyncSession,
         tag_name: str,
         settings: dict,
-        updated_by: Optional[str] = None
+        updated_by: Optional[str] = None,
+        expected_updated_at: Optional[datetime] = None
     ) -> Optional[TagSettings]:
         """
         Update existing tag settings or create if doesn't exist.
+        Uses optimistic concurrency control when expected_updated_at is provided.
 
         Args:
             db: Database session
             tag_name: The tag name
             settings: Settings dictionary
             updated_by: Optional user identifier
+            expected_updated_at: If provided, rejects the update if the record
+                has been modified since this timestamp.
 
         Returns:
             Updated TagSettings object
+
+        Raises:
+            StaleUpdateError: If expected_updated_at doesn't match
         """
-        tag_settings = await self.get_by_tag_name(db, tag_name)
+        # Use FOR UPDATE lock
+        tag_settings = await self._get_by_tag_name_for_update(db, tag_name)
 
         if tag_settings:
+            # Check optimistic concurrency
+            if expected_updated_at is not None and tag_settings.updated_at is not None:
+                if tag_settings.updated_at != expected_updated_at:
+                    raise StaleUpdateError(
+                        setting_key=tag_name,
+                        current_updated_at=tag_settings.updated_at,
+                        expected_updated_at=expected_updated_at,
+                        updated_by=tag_settings.updated_by,
+                    )
+
             # Update existing
             tag_settings.settings = settings
             tag_settings.updated_by = updated_by
+            # Ensure SQLAlchemy detects JSONB dict changes even if same object reference
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(tag_settings, "settings")
             await db.commit()
             await db.refresh(tag_settings)
             return tag_settings

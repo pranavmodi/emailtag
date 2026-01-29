@@ -24,6 +24,7 @@ class MessageTemplateUpdate(BaseModel):
     template_name: Optional[str] = Field(None, description="Optional new name")
     description: Optional[str] = Field(None, description="Optional new description")
     updated_by: Optional[str] = Field(None, description="Identifier of who updated the template")
+    expected_updated_at: Optional[datetime] = Field(None, description="Expected updated_at timestamp for optimistic concurrency control")
 
 
 class MessageTemplateResponse(MessageTemplateBase):

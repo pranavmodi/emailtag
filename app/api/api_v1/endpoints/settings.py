@@ -7,6 +7,7 @@ import os
 import json
 from app.db.session import get_db
 from app.crud.system_settings import system_settings_crud
+from app.core.exceptions import StaleUpdateError
 from app.schemas.system_settings import (
     EmailProcessingStatusResponse,
     SystemSettingUpdate,
@@ -93,7 +94,8 @@ async def toggle_email_processing(
         setting = await system_settings_crud.toggle_email_processing(
             db,
             enable=update.setting_value,
-            updated_by=update.updated_by
+            updated_by=update.updated_by,
+            expected_updated_at=update.expected_updated_at
         )
 
         # Log the change prominently
@@ -107,6 +109,11 @@ async def toggle_email_processing(
             description=setting.description or "Master switch for email processing",
             last_updated=setting.updated_at,
             updated_by=setting.updated_by
+        )
+    except StaleUpdateError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This setting was modified by {e.updated_by or 'another user'} at {e.current_updated_at}. Please refresh and try again."
         )
     except Exception as e:
         logger.error(f"Error toggling email processing: {e}")
@@ -178,7 +185,8 @@ async def toggle_skip_internal_domains(
             db,
             "skip_internal_domains",
             update.setting_value,
-            updated_by=update.updated_by
+            updated_by=update.updated_by,
+            expected_updated_at=update.expected_updated_at
         )
 
         # Log the change prominently
@@ -193,6 +201,11 @@ async def toggle_skip_internal_domains(
             "last_updated": setting.updated_at,
             "updated_by": setting.updated_by
         }
+    except StaleUpdateError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This setting was modified by {e.updated_by or 'another user'} at {e.current_updated_at}. Please refresh and try again."
+        )
     except Exception as e:
         logger.error(f"Error toggling skip internal domains: {e}")
         raise HTTPException(
@@ -239,7 +252,8 @@ async def toggle_lien_test_mode(
             db,
             "lien_test_mode",
             update.setting_value,
-            updated_by=update.updated_by
+            updated_by=update.updated_by,
+            expected_updated_at=update.expected_updated_at
         )
 
         return {
@@ -248,6 +262,11 @@ async def toggle_lien_test_mode(
             "last_updated": setting.updated_at,
             "updated_by": setting.updated_by
         }
+    except StaleUpdateError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This setting was modified by {e.updated_by or 'another user'} at {e.current_updated_at}. Please refresh and try again."
+        )
     except Exception as e:
         logger.error(f"Error toggling lien test mode: {e}")
         raise HTTPException(
@@ -294,7 +313,8 @@ async def toggle_bill_balance_test_mode(
             db,
             "bill_balance_test_mode",
             update.setting_value,
-            updated_by=update.updated_by
+            updated_by=update.updated_by,
+            expected_updated_at=update.expected_updated_at
         )
 
         return {
@@ -303,6 +323,11 @@ async def toggle_bill_balance_test_mode(
             "last_updated": setting.updated_at,
             "updated_by": setting.updated_by
         }
+    except StaleUpdateError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This setting was modified by {e.updated_by or 'another user'} at {e.current_updated_at}. Please refresh and try again."
+        )
     except Exception as e:
         logger.error(f"Error toggling bill balance test mode: {e}")
         raise HTTPException(
@@ -894,7 +919,8 @@ async def toggle_autorespond_setting(
             db,
             autorespond_type=request.autorespond_type,
             enable=request.setting_value,
-            updated_by=request.updated_by
+            updated_by=request.updated_by,
+            expected_updated_at=request.expected_updated_at
         )
 
         # Log the change prominently
@@ -910,6 +936,11 @@ async def toggle_autorespond_setting(
             "updated_by": setting.updated_by,
             "updated_at": setting.updated_at
         }
+    except StaleUpdateError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This setting was modified by {e.updated_by or 'another user'} at {e.current_updated_at}. Please refresh and try again."
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -943,7 +974,8 @@ async def toggle_global_autorespond(
             db,
             "global_autorespond_enabled",
             request.setting_value,
-            request.updated_by
+            request.updated_by,
+            expected_updated_at=request.expected_updated_at
         )
 
         # Log the change prominently
@@ -958,6 +990,11 @@ async def toggle_global_autorespond(
             "updated_by": setting.updated_by,
             "updated_at": setting.updated_at
         }
+    except StaleUpdateError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This setting was modified by {e.updated_by or 'another user'} at {e.current_updated_at}. Please refresh and try again."
+        )
     except Exception as e:
         logger.error(f"Error toggling global autorespond: {e}")
         raise HTTPException(
@@ -1015,14 +1052,24 @@ async def update_sender_verification(
     try:
         from app.crud.tag_settings import tag_settings_crud
 
-        # Get current WORKSPACE settings
-        workspace_settings = await tag_settings_crud.get_settings_dict(db, "WORKSPACE")
+        # Get current WORKSPACE settings with row lock
+        workspace_row = await tag_settings_crud._get_by_tag_name_for_update(db, "WORKSPACE")
+        workspace_settings = workspace_row.settings if workspace_row else {}
 
         # Update the sender verification flag
         workspace_settings["enable_sender_verification"] = enabled
 
-        # Save back to database (use 'update' method, not 'update_settings')
-        await tag_settings_crud.update(db, "WORKSPACE", workspace_settings, updated_by)
+        # Save back to database (row is already locked)
+        if workspace_row:
+            workspace_row.settings = workspace_settings
+            workspace_row.updated_by = updated_by
+            # JSONB columns need flag_modified to ensure SQLAlchemy detects in-place dict changes
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(workspace_row, "settings")
+            await db.commit()
+            await db.refresh(workspace_row)
+        else:
+            await tag_settings_crud.create(db, "WORKSPACE", workspace_settings, updated_by)
 
         logger.info(f"Sender verification {'enabled' if enabled else 'disabled'} by {updated_by}")
 
@@ -1108,8 +1155,9 @@ async def add_no_action_item(
                 detail="Item must be an email address (user@domain.com) or domain pattern (@domain.com)"
             )
 
-        # Get current workspace settings
-        workspace_settings = await tag_settings_crud.get_settings_dict(db, "WORKSPACE")
+        # Get current workspace settings with row lock to prevent concurrent modifications
+        workspace_row = await tag_settings_crud._get_by_tag_name_for_update(db, "WORKSPACE")
+        workspace_settings = workspace_row.settings if workspace_row else {}
         no_action_list = workspace_settings.get("no_action_list", [])
 
         # Check for duplicates
@@ -1123,8 +1171,17 @@ async def add_no_action_item(
         no_action_list.append(normalized_item)
         workspace_settings["no_action_list"] = no_action_list
 
-        # Save back to database
-        await tag_settings_crud.update(db, "WORKSPACE", workspace_settings, updated_by)
+        # Save back to database (row is already locked)
+        if workspace_row:
+            workspace_row.settings = workspace_settings
+            workspace_row.updated_by = updated_by
+            # JSONB columns need flag_modified to ensure SQLAlchemy detects in-place dict changes
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(workspace_row, "settings")
+            await db.commit()
+            await db.refresh(workspace_row)
+        else:
+            await tag_settings_crud.create(db, "WORKSPACE", workspace_settings, updated_by)
 
         logger.info(f"Added '{normalized_item}' to no-action list by {updated_by}")
 
@@ -1169,8 +1226,9 @@ async def remove_no_action_item(
         decoded_item = unquote(item)
         normalized_item = decoded_item.strip().lower()
 
-        # Get current workspace settings
-        workspace_settings = await tag_settings_crud.get_settings_dict(db, "WORKSPACE")
+        # Get current workspace settings with row lock to prevent concurrent modifications
+        workspace_row = await tag_settings_crud._get_by_tag_name_for_update(db, "WORKSPACE")
+        workspace_settings = workspace_row.settings if workspace_row else {}
         no_action_list = workspace_settings.get("no_action_list", [])
 
         # Check if item exists
@@ -1184,8 +1242,17 @@ async def remove_no_action_item(
         no_action_list.remove(normalized_item)
         workspace_settings["no_action_list"] = no_action_list
 
-        # Save back to database
-        await tag_settings_crud.update(db, "WORKSPACE", workspace_settings, updated_by)
+        # Save back to database (row is already locked)
+        if workspace_row:
+            workspace_row.settings = workspace_settings
+            workspace_row.updated_by = updated_by
+            # JSONB columns need flag_modified to ensure SQLAlchemy detects in-place dict changes
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(workspace_row, "settings")
+            await db.commit()
+            await db.refresh(workspace_row)
+        else:
+            await tag_settings_crud.create(db, "WORKSPACE", workspace_settings, updated_by)
 
         logger.info(f"Removed '{normalized_item}' from no-action list by {updated_by}")
 

@@ -6,6 +6,7 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from app.db.session import get_db
+from app.core.exceptions import StaleUpdateError
 from app.crud.message_template import message_template_crud
 from app.crud.tag_settings import tag_settings_crud
 from app.crud.template_attachment import template_attachment_crud
@@ -153,7 +154,8 @@ async def update_template(
             template_body=template.template_body,
             template_name=template.template_name,
             description=template.description,
-            updated_by=template.updated_by
+            updated_by=template.updated_by,
+            expected_updated_at=template.expected_updated_at
         )
 
         if not updated_template:
@@ -164,6 +166,11 @@ async def update_template(
 
         logger.warning(f"📝 Template '{template_key}' UPDATED by {template.updated_by or 'unknown user'}")
         return updated_template
+    except StaleUpdateError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This template was modified by {e.updated_by or 'another user'} at {e.current_updated_at}. Please refresh and try again."
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -296,11 +303,17 @@ async def update_tag_settings(
             db,
             tag_name=tag_name,
             settings=tag_settings.settings,
-            updated_by=tag_settings.updated_by
+            updated_by=tag_settings.updated_by,
+            expected_updated_at=tag_settings.expected_updated_at
         )
 
         logger.warning(f"⚙️ Tag settings for '{tag_name}' UPDATED by {tag_settings.updated_by or 'unknown user'}")
         return updated_settings
+    except StaleUpdateError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=f"These settings were modified by {e.updated_by or 'another user'} at {e.current_updated_at}. Please refresh and try again."
+        )
     except Exception as e:
         logger.error(f"Error updating tag settings for '{tag_name}': {e}")
         raise HTTPException(

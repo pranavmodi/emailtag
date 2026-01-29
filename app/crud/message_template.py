@@ -3,6 +3,7 @@ from typing import Optional, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.message_template import MessageTemplate
+from app.core.exceptions import StaleUpdateError
 from datetime import datetime
 import logging
 
@@ -29,6 +30,19 @@ class CRUDMessageTemplate:
         """
         result = await db.execute(
             select(MessageTemplate).filter(MessageTemplate.template_key == template_key)
+        )
+        return result.scalars().first()
+
+    async def _get_by_key_for_update(
+        self,
+        db: AsyncSession,
+        template_key: str
+    ) -> Optional[MessageTemplate]:
+        """Get a template by its key with a row-level lock (SELECT FOR UPDATE)."""
+        result = await db.execute(
+            select(MessageTemplate)
+            .filter(MessageTemplate.template_key == template_key)
+            .with_for_update()
         )
         return result.scalars().first()
 
@@ -110,10 +124,11 @@ class CRUDMessageTemplate:
         template_body: str,
         template_name: Optional[str] = None,
         description: Optional[str] = None,
-        updated_by: Optional[str] = None
+        updated_by: Optional[str] = None,
+        expected_updated_at: Optional[datetime] = None
     ) -> Optional[MessageTemplate]:
         """
-        Update an existing template.
+        Update an existing template with optimistic concurrency control.
 
         Args:
             db: Database session
@@ -122,14 +137,30 @@ class CRUDMessageTemplate:
             template_name: Optional new name
             description: Optional new description
             updated_by: Who updated the template
+            expected_updated_at: If provided, rejects the update if the record
+                has been modified since this timestamp.
 
         Returns:
             Updated MessageTemplate object or None if not found
+
+        Raises:
+            StaleUpdateError: If expected_updated_at doesn't match
         """
-        template = await self.get_by_key(db, template_key)
+        # Use FOR UPDATE lock
+        template = await self._get_by_key_for_update(db, template_key)
         if not template:
             logger.warning(f"Template '{template_key}' not found for update")
             return None
+
+        # Check optimistic concurrency
+        if expected_updated_at is not None and template.updated_at is not None:
+            if template.updated_at != expected_updated_at:
+                raise StaleUpdateError(
+                    setting_key=template_key,
+                    current_updated_at=template.updated_at,
+                    expected_updated_at=expected_updated_at,
+                    updated_by=template.updated_by,
+                )
 
         template.template_body = template_body
         if template_name:

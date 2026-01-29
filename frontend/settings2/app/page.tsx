@@ -1,7 +1,7 @@
 "use client";
 
 import type { ComponentType, SVGProps } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   BadgeCheck,
@@ -133,6 +133,9 @@ export default function Settings2Page() {
   const [noActionError, setNoActionError] = useState<string | null>(null);
   const [newNoActionItem, setNewNoActionItem] = useState<string>("");
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  // Track last_updated timestamps for optimistic concurrency control
+  const [settingTimestamps, setSettingTimestamps] = useState<Record<string, string | null>>({});
+  const [conflictMessage, setConflictMessage] = useState<string | null>(null);
 
   // Usage tracking
   const { trackAction, trackToggle, trackError } = useTracking("/", "System Settings");
@@ -186,6 +189,13 @@ export default function Settings2Page() {
         }
         // Set no-action list
         setNoActionList(noActionPayload.no_action_list || []);
+        // Store timestamps for optimistic concurrency
+        setSettingTimestamps({
+          email_processing: processingPayload.last_updated,
+          skip_internal_domains: internalDomainsPayload.last_updated,
+          lien_test_mode: lienTestModePayload.last_updated,
+          bill_balance_test_mode: billBalanceTestModePayload.last_updated,
+        });
         setStatusError(null);
         setAutorespondError(null);
         setWorkspaceError(null);
@@ -193,6 +203,7 @@ export default function Settings2Page() {
         setLienModeError(null);
         setBillBalanceModeError(null);
         setNoActionError(null);
+        setConflictMessage(null);
       } catch (error) {
         if (!mounted) return;
         if (error instanceof ApiError && error.status === 401) {
@@ -214,6 +225,51 @@ export default function Settings2Page() {
     };
   }, []);
 
+  // Re-fetch all settings when the tab becomes visible again (handles stale state)
+  const refreshSettings = useCallback(async () => {
+    try {
+      const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, lienTestModePayload, billBalanceTestModePayload, noActionPayload] = await Promise.all([
+        SettingsApi.getProcessingStatus(),
+        SettingsApi.getAutorespondSettings(),
+        SettingsApi.getWorkspaceSettings(),
+        SettingsApi.getSkipInternalDomainsStatus(),
+        SettingsApi.getLienTestModeStatus(),
+        SettingsApi.getBillBalanceTestModeStatus(),
+        SettingsApi.getNoActionList(),
+      ]);
+      setStatus(processingPayload);
+      setAutorespond(autorespondPayload);
+      setSenderVerificationEnabled(workspacePayload.enable_sender_verification);
+      setSkipInternalDomains(internalDomainsPayload.skip_internal_domains);
+      const liensEnabled = autorespondPayload.liens?.enabled ?? false;
+      const lienTestMode = lienTestModePayload.lien_test_mode ?? false;
+      setLienMode(!liensEnabled ? "off" : lienTestMode ? "sandbox" : "production");
+      const billBalanceEnabled = autorespondPayload.bill_balance_request?.enabled ?? false;
+      const billBalanceTestMode = billBalanceTestModePayload.bill_balance_test_mode ?? false;
+      setBillBalanceMode(!billBalanceEnabled ? "off" : billBalanceTestMode ? "sandbox" : "production");
+      setNoActionList(noActionPayload.no_action_list || []);
+      setSettingTimestamps({
+        email_processing: processingPayload.last_updated,
+        skip_internal_domains: internalDomainsPayload.last_updated,
+        lien_test_mode: lienTestModePayload.last_updated,
+        bill_balance_test_mode: billBalanceTestModePayload.last_updated,
+      });
+      setConflictMessage(null);
+    } catch (err) {
+      console.error("Failed to refresh settings:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && !isLoading) {
+        refreshSettings();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [isLoading, refreshSettings]);
+
   const setBusyFlag = (key: string, value: boolean) =>
     setBusy((prev) => ({ ...prev, [key]: value }));
 
@@ -226,13 +282,20 @@ export default function Settings2Page() {
   const handleProcessingToggle = async (enabled: boolean) => {
     setBusyFlag("processing", true);
     try {
-      const payload = await SettingsApi.toggleProcessing(enabled);
+      const payload = await SettingsApi.toggleProcessing(enabled, settingTimestamps.email_processing);
       setStatus(payload);
+      setSettingTimestamps((prev) => ({ ...prev, email_processing: payload.last_updated }));
       setStatusError(null);
+      setConflictMessage(null);
       trackToggle("email_processing", enabled);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
+        return;
+      }
+      if (error instanceof ApiError && error.status === 409) {
+        setConflictMessage(error.message);
+        await refreshSettings();
         return;
       }
       const message =
@@ -247,7 +310,7 @@ export default function Settings2Page() {
   const handleGlobalAutorespondToggle = async (enabled: boolean) => {
     setBusyFlag("global", true);
     try {
-      const payload = await SettingsApi.toggleGlobalAutorespond(enabled);
+      const payload = await SettingsApi.toggleGlobalAutorespond(enabled, settingTimestamps.global_autorespond);
       setAutorespond((prev) =>
         prev
           ? {
@@ -256,11 +319,18 @@ export default function Settings2Page() {
             }
           : prev
       );
+      setSettingTimestamps((prev) => ({ ...prev, global_autorespond: payload.updated_at ?? null }));
       setAutorespondError(null);
+      setConflictMessage(null);
       trackToggle("global_autorespond", enabled);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
+        return;
+      }
+      if (error instanceof ApiError && error.status === 409) {
+        setConflictMessage(error.message);
+        await refreshSettings();
         return;
       }
       const message =
@@ -278,10 +348,16 @@ export default function Settings2Page() {
       await SettingsApi.toggleSenderVerification(enabled);
       setSenderVerificationEnabled(enabled);
       setWorkspaceError(null);
+      setConflictMessage(null);
       trackToggle("sender_verification", enabled);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
+        return;
+      }
+      if (error instanceof ApiError && error.status === 409) {
+        setConflictMessage(error.message);
+        await refreshSettings();
         return;
       }
       const message =
@@ -298,13 +374,20 @@ export default function Settings2Page() {
   const handleSkipInternalDomainsToggle = async (enabled: boolean) => {
     setBusyFlag("skip_internal_domains", true);
     try {
-      await SettingsApi.toggleSkipInternalDomains(enabled);
-      setSkipInternalDomains(enabled);
+      const payload = await SettingsApi.toggleSkipInternalDomains(enabled, settingTimestamps.skip_internal_domains);
+      setSkipInternalDomains(payload.skip_internal_domains);
+      setSettingTimestamps((prev) => ({ ...prev, skip_internal_domains: payload.last_updated }));
       setInternalDomainsError(null);
+      setConflictMessage(null);
       trackToggle("skip_internal_domains", enabled);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
+        return;
+      }
+      if (error instanceof ApiError && error.status === 409) {
+        setConflictMessage(error.message);
+        await refreshSettings();
         return;
       }
       const message =
@@ -325,10 +408,10 @@ export default function Settings2Page() {
       const liensEnabled = mode !== "off";
       const testMode = mode === "sandbox";
 
-      // Update both settings
-      await Promise.all([
-        SettingsApi.toggleAutorespond("autorespond_liens", liensEnabled),
-        SettingsApi.toggleLienTestMode(testMode),
+      // Update both settings with concurrency tokens
+      const [autorespondResult, testModeResult] = await Promise.all([
+        SettingsApi.toggleAutorespond("autorespond_liens", liensEnabled, settingTimestamps.autorespond_liens),
+        SettingsApi.toggleLienTestMode(testMode, settingTimestamps.lien_test_mode),
       ]);
 
       // Update local state
@@ -341,11 +424,22 @@ export default function Settings2Page() {
             }
           : prev
       );
+      setSettingTimestamps((prev) => ({
+        ...prev,
+        autorespond_liens: autorespondResult.updated_at ?? null,
+        lien_test_mode: testModeResult.last_updated,
+      }));
       setLienModeError(null);
+      setConflictMessage(null);
       trackAction("lien_mode_change", "LienModeToggle", { new_mode: mode });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
+        return;
+      }
+      if (error instanceof ApiError && error.status === 409) {
+        setConflictMessage(error.message);
+        await refreshSettings();
         return;
       }
       const message =
@@ -366,10 +460,10 @@ export default function Settings2Page() {
       const billBalanceEnabled = mode !== "off";
       const testMode = mode === "sandbox";
 
-      // Update both settings
-      await Promise.all([
-        SettingsApi.toggleAutorespond("autorespond_bill_balance_request", billBalanceEnabled),
-        SettingsApi.toggleBillBalanceTestMode(testMode),
+      // Update both settings with concurrency tokens
+      const [autorespondResult, testModeResult] = await Promise.all([
+        SettingsApi.toggleAutorespond("autorespond_bill_balance_request", billBalanceEnabled, settingTimestamps.autorespond_bill_balance_request),
+        SettingsApi.toggleBillBalanceTestMode(testMode, settingTimestamps.bill_balance_test_mode),
       ]);
 
       // Update local state
@@ -384,11 +478,22 @@ export default function Settings2Page() {
             }
           : prev
       );
+      setSettingTimestamps((prev) => ({
+        ...prev,
+        autorespond_bill_balance_request: autorespondResult.updated_at ?? null,
+        bill_balance_test_mode: testModeResult.last_updated,
+      }));
       setBillBalanceModeError(null);
+      setConflictMessage(null);
       trackAction("bill_balance_mode_change", "BillBalanceModeToggle", { new_mode: mode });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
+        return;
+      }
+      if (error instanceof ApiError && error.status === 409) {
+        setConflictMessage(error.message);
+        await refreshSettings();
         return;
       }
       const message =
@@ -405,7 +510,7 @@ export default function Settings2Page() {
   const handleAutorespondToggle = async (type: string, enabled: boolean) => {
     setBusyFlag(type, true);
     try {
-      await SettingsApi.toggleAutorespond(type, enabled);
+      const result = await SettingsApi.toggleAutorespond(type, enabled, settingTimestamps[type]);
       setAutorespond((prev) =>
         prev
           ? {
@@ -414,11 +519,18 @@ export default function Settings2Page() {
             }
           : prev
       );
+      setSettingTimestamps((prev) => ({ ...prev, [type]: result.updated_at ?? null }));
       setAutorespondError(null);
+      setConflictMessage(null);
       trackToggle(type, enabled, { autorespond_type: type });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         window.location.href = "/login";
+        return;
+      }
+      if (error instanceof ApiError && error.status === 409) {
+        setConflictMessage(error.message);
+        await refreshSettings();
         return;
       }
       const message =
@@ -515,6 +627,22 @@ export default function Settings2Page() {
       } />
 
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
+      {/* Conflict warning banner */}
+      {conflictMessage && (
+        <motion.div
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800 flex items-center justify-between"
+        >
+          <span>{conflictMessage} Settings have been refreshed.</span>
+          <button
+            onClick={() => setConflictMessage(null)}
+            className="ml-4 text-amber-600 hover:text-amber-800 font-medium"
+          >
+            Dismiss
+          </button>
+        </motion.div>
+      )}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

@@ -15,6 +15,7 @@ class SystemSettingUpdate(BaseModel):
     """Schema for updating a system setting."""
     setting_value: bool = Field(..., description="New boolean value for the setting")
     updated_by: Optional[str] = Field(None, description="Identifier of who made the change")
+    expected_updated_at: Optional[datetime] = Field(None, description="Expected updated_at timestamp for optimistic concurrency control. If provided and doesn't match the current value, the update will be rejected with 409 Conflict.")
 
 
 class SystemSettingResponse(BaseModel):
@@ -60,3 +61,4 @@ class AutorespondToggleRequest(BaseModel):
     autorespond_type: str = Field(..., description="The autorespond type key (e.g., 'autorespond_apt_status_req')")
     setting_value: bool = Field(..., description="New enabled/disabled state")
     updated_by: Optional[str] = Field(None, description="Identifier of who made the change")
+    expected_updated_at: Optional[datetime] = Field(None, description="Expected updated_at timestamp for optimistic concurrency control")

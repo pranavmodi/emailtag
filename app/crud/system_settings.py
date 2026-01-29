@@ -3,6 +3,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.system_settings import SystemSetting
+from app.core.exceptions import StaleUpdateError
 from datetime import datetime
 import logging
 
@@ -29,6 +30,19 @@ class CRUDSystemSettings:
         """
         result = await db.execute(
             select(SystemSetting).filter(SystemSetting.setting_key == setting_key)
+        )
+        return result.scalars().first()
+
+    async def _get_by_key_for_update(
+        self,
+        db: AsyncSession,
+        setting_key: str
+    ) -> Optional[SystemSetting]:
+        """Get a setting by its key with a row-level lock (SELECT FOR UPDATE)."""
+        result = await db.execute(
+            select(SystemSetting)
+            .filter(SystemSetting.setting_key == setting_key)
+            .with_for_update()
         )
         return result.scalars().first()
 
@@ -78,23 +92,40 @@ class CRUDSystemSettings:
         db: AsyncSession,
         setting_key: str,
         value: bool,
-        updated_by: Optional[str] = None
+        updated_by: Optional[str] = None,
+        expected_updated_at: Optional[datetime] = None
     ) -> SystemSetting:
         """
-        Update or create a setting.
+        Update or create a setting with optimistic concurrency control.
 
         Args:
             db: Database session
             setting_key: The setting key to update
             value: The new boolean value
             updated_by: Optional identifier of who made the change
+            expected_updated_at: If provided, the update will only proceed if the
+                current updated_at matches this value. Raises StaleUpdateError on mismatch.
 
         Returns:
             The updated or created SystemSetting object
+
+        Raises:
+            StaleUpdateError: If expected_updated_at doesn't match the current value
         """
-        setting = await self.get_by_key(db, setting_key)
+        # Use FOR UPDATE lock to prevent concurrent modifications
+        setting = await self._get_by_key_for_update(db, setting_key)
 
         if setting:
+            # Check optimistic concurrency if client provided expected timestamp
+            if expected_updated_at is not None and setting.updated_at is not None:
+                if setting.updated_at != expected_updated_at:
+                    raise StaleUpdateError(
+                        setting_key=setting_key,
+                        current_updated_at=setting.updated_at,
+                        expected_updated_at=expected_updated_at,
+                        updated_by=setting.updated_by,
+                    )
+
             # Update existing setting
             setting.setting_value = value
             setting.updated_at = datetime.utcnow()
@@ -104,7 +135,7 @@ class CRUDSystemSettings:
                 f"(by: {updated_by or 'unknown'})"
             )
         else:
-            # Create new setting
+            # Create new setting — no conflict possible
             description = None
             if setting_key == "email_processing_enabled":
                 description = (
@@ -150,7 +181,8 @@ class CRUDSystemSettings:
         self,
         db: AsyncSession,
         enable: bool,
-        updated_by: Optional[str] = None
+        updated_by: Optional[str] = None,
+        expected_updated_at: Optional[datetime] = None
     ) -> SystemSetting:
         """
         Toggle the email processing master switch.
@@ -159,6 +191,7 @@ class CRUDSystemSettings:
             db: Database session
             enable: True to enable processing, False to disable
             updated_by: Optional identifier of who made the change
+            expected_updated_at: Optional timestamp for optimistic concurrency control
 
         Returns:
             The updated SystemSetting object
@@ -167,7 +200,8 @@ class CRUDSystemSettings:
             db,
             "email_processing_enabled",
             enable,
-            updated_by
+            updated_by,
+            expected_updated_at=expected_updated_at
         )
 
     async def get_autorespond_settings(self, db: AsyncSession) -> dict:
@@ -226,7 +260,8 @@ class CRUDSystemSettings:
         db: AsyncSession,
         autorespond_type: str,
         enable: bool,
-        updated_by: Optional[str] = None
+        updated_by: Optional[str] = None,
+        expected_updated_at: Optional[datetime] = None
     ) -> SystemSetting:
         """
         Toggle a specific autorespond type.
@@ -236,6 +271,7 @@ class CRUDSystemSettings:
             autorespond_type: The autorespond type key
             enable: True to enable, False to disable
             updated_by: Optional identifier of who made the change
+            expected_updated_at: Optional timestamp for optimistic concurrency control
 
         Returns:
             The updated SystemSetting object
@@ -254,9 +290,20 @@ class CRUDSystemSettings:
 
         description = descriptions.get(autorespond_type, f"Enable/disable {autorespond_type}")
 
-        setting = await self.get_by_key(db, autorespond_type)
+        # Use FOR UPDATE lock
+        setting = await self._get_by_key_for_update(db, autorespond_type)
 
         if setting:
+            # Check optimistic concurrency
+            if expected_updated_at is not None and setting.updated_at is not None:
+                if setting.updated_at != expected_updated_at:
+                    raise StaleUpdateError(
+                        setting_key=autorespond_type,
+                        current_updated_at=setting.updated_at,
+                        expected_updated_at=expected_updated_at,
+                        updated_by=setting.updated_by,
+                    )
+
             # Update existing setting
             setting.setting_value = enable
             setting.updated_at = datetime.utcnow()
