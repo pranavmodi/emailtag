@@ -1076,8 +1076,8 @@ function AllTagsResult({ result }: { result: AllTagsStatisticsResponse }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
-              {result.tag_statistics.map((tagStat) => (
-                <tr key={tagStat.tag_name}>
+              {result.tag_statistics.map((tagStat, idx) => (
+                <tr key={`${tagStat.tag_name}-${idx}`}>
                   <td className="px-4 py-3 font-semibold text-slate-900">{tagStat.tag_name}</td>
                   <td className="px-4 py-3">{tagStat.total_conversations}</td>
                   <td className="px-4 py-3">{tagStat.still_tagged}</td>
