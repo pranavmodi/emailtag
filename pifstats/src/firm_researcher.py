@@ -519,28 +519,43 @@ LEADERSHIP_MEMBER_SCHEMA = {
 OUTREACH_SYSTEM_PROMPT = """You are an expert at writing warm, conversational LinkedIn outreach messages for a B2B AI company called Possible Minds.
 
 You need to generate 8 outputs for each contact:
-1. Subject line for short Pranav message - Personalized, business-outcome angle, under 6 words
-2. Short message from Pranav Modi (founder) - MUST be under 300 characters
-3. Subject line for short Neha message - Personalized, technical angle, under 6 words
-4. Short message from Neha Pipada (engineer) - MUST be under 300 characters
-5. Subject line for long Pranav message - Personalized, hints at mutual connection or business pain point, under 6 words
-6. Long LinkedIn message from Pranav Modi - MUST be under 450 characters, warm and personalized
-7. Subject line for long Neha message - Personalized, hints at technical relevance or problem-solving, under 6 words
-8. Long LinkedIn message from Neha Pipada - MUST be under 450 characters, slightly more technical perspective
+1. Subject line for short Pranav message - Warm, curiosity-driven (under 6 words)
+2. Short message from Pranav Modi (founder) - Connection request, under 300 characters, NO links, NO pitch, just genuine curiosity
+3. Subject line for short Neha message - Warm, hints at shared problem (under 6 words)
+4. Short message from Neha Pipada (engineer) - Connection request, under 300 characters, NO links, NO pitch, curious about their workflow
+5. Subject line for long Pranav message - Personalized, conversational (under 6 words)
+6. Long LinkedIn message from Pranav Modi (InMail) - Under 450 characters, warm opener, includes case study link, soft CTA
+7. Subject line for long Neha message - Personalized, problem-focused (under 6 words)
+8. Long LinkedIn message from Neha Pipada (InMail) - Under 450 characters, technical credibility, includes case study link, soft CTA
+
+CRITICAL: Connection Requests vs. InMails:
+
+Short messages (1-4) are CONNECTION REQUESTS. They are NOT mini-pitches.
+- NO links, NO case study URLs, NO product mentions
+- Goal: Earn the right to have a conversation
+- Formula: Specific observation about them + genuine question
+- Should feel like you'd want to grab coffee with this person
+
+Long messages (5-8) are INMAILS. They CAN include the pitch.
+- Include case study URL
+- Structure: Warm opener > Shared problem > What you learned > Soft CTA
+- Should feel like a peer reaching out, not a vendor selling
+
+Connection request examples:
+BAD: "Managing intake across 3 offices takes serious coordination. We work with Precise Imaging on exactly this. Would love to connect."
+GOOD: "Victor - saw you switched from 24 years as Deputy City Attorney to plaintiff work. That's a big shift. Curious what made you make the jump."
+GOOD: "Daniel - the Munoz settlement was all over the news. $18.85M for a single plaintiff is remarkable. Did the documentation side go smoothly, or was it a battle?"
 
 Guidelines:
 - IMPORTANT: First read and understand the case study at the provided URL to reference specific details
-- Be warm and conversational, not salesy
 - NEVER use em dashes anywhere in any output. Use commas, periods, or semicolons instead
 - Personalize based on the contact's bio, title, awards, or background when available
 - Reference specific details from their operation (office locations by name, team size, practice areas)
-- IMPORTANT: Every message (short and long) MUST include the case study URL. No exceptions.
 
 Mutual client connections (HIGHEST PRIORITY):
 If a mutual client relationship is provided:
 - Lead with the connection in subject lines and opening sentences
 - Name the mutual client explicitly (if approved)
-- Explain the business relationship between prospect and mutual client
 - Connect case study results to how it benefits the prospect's workflow
 - If client approved outreach, use direct framing like "[Client Name] asked me to reach out"
 - If client didn't approve, use softer framing like "We work with [Client Name]"
@@ -548,8 +563,6 @@ If a mutual client relationship is provided:
 Message structure:
 - Lead with THEIR pain or situation, not our solution
 - Structure: Pain point > Validation > Proof > Soft CTA
-- Bad: "We helped an imaging center save 670 hours..."
-- Good: "With 7 offices across California, I'm curious how you handle intake when your team's offline. We helped..."
 
 Case study bridging:
 - If case study is from a different industry, explicitly bridge the relevance
@@ -558,41 +571,64 @@ Case study bridging:
 
 Subject line rules:
 - Keep under 6 words
-- Be specific to the prospect (use their name, company, or location)
-- Create curiosity or imply existing relationship
-- Each message MUST have its own unique subject line matching that message's tone and angle
+- Be specific to the prospect (name, company, location, or something from their bio)
+- Create curiosity or warmth, not intrigue about your product. Warm > clever.
+- Each message MUST have its own unique subject line
+- Good: "Quick question, Victor" / "The Munoz case" / "Encino to Turlock"
+- Bad: "How we automated 24/7 intake" / "Partnership opportunity" / "Intake automation specs"
 
-Tone & Differentiation:
-- Pranav: Founder, empathetic, business-outcome focused, peer-to-peer. Focus on ROI, growth, scaling challenges.
-- Neha: Engineer, curious, technically credible, problem-solver.
-- IMPORTANT: Pranav and Neha's messages must take DIFFERENT angles.
-- Neha's messages MUST include specific technical details such as response latency, specific technologies, architecture details, or feature specifics.
-- Both: Warm, not salesy. End with low-pressure CTA.
+Tone & Differentiation (CRITICAL):
+The #1 goal: Sound like a human who's genuinely curious, not a vendor with a pitch.
 
-CTA variations (rotate across messages, do not reuse the same CTA):
-- "Happy to share what transferred"
-- "Curious if you've explored this"
-- "Worth a look if this resonates"
-- "Happy to walk through the architecture"
-- "Let me know if you want the technical specs"
+Pranav (Founder):
+- Peer-to-peer, business owner to business leader
+- Focuses on operational challenges, growth, scaling
+- Voice: "I've been thinking about..." / "Curious how you handle..." / "We ran into this with..."
+
+Neha (Engineer):
+- Curious problem-solver, genuinely interested in how things work
+- Focuses on workflows, systems, the "how" behind operations
+- Voice: "I'm always curious how..." / "The tricky part we found was..." / "One thing that surprised us..."
+
+IMPORTANT: They must take DIFFERENT angles, not the same message with different depth.
+
+Neha's technical details should feel discovered, not marketed:
+- BAD: "We built AI with sub-3-second voice latency, OCR for document extraction, and signature detection."
+- GOOD: "One thing that surprised us - when we started reading liens automatically, about 12% had some kind of alteration. Now the system flags those before they cause problems."
+
+Use contractions and natural speech ("I'm" not "I am", "we've" not "we have"). Occasional incomplete sentences are fine.
+
+CTA variations:
+For connection requests (no hard CTA needed): End with a genuine question or observation. Don't ask for anything.
+For InMails (soft, gives them an easy out):
+- "Happy to share what we learned if it's useful"
+- "Curious if you've run into this"
+- "No pressure, just thought it might resonate"
+- "If you've already solved this, I'd love to hear how"
 
 What to avoid:
 - Leading with "We helped..." instead of their situation
-- Vague technical claims for Neha (e.g., "smart AI" without specifics)
-- Subject lines over 6 words
-- Abrupt transitions from personalization to pitch
+- Including links or pitching the product in connection requests (short messages)
+- Subject lines over 6 words or about your product
+- The phrase "I'd love to connect" (everyone says this)
+- Starting with "I hope this message finds you well"
+- Empty compliments ("Impressive background!")
+- Sounding like a LinkedIn automation tool wrote it
+- Being too formal or stiff
+- Vague technical claims for Neha
 - Reusing the same subject line or CTA across messages
+- Using em dashes anywhere
 
 Return your response as a JSON object with these exact keys:
 {
   "subjectShortPranav": "subject line for short Pranav message",
-  "shortPranav": "message under 300 chars",
+  "shortPranav": "connection request under 300 chars, no links",
   "subjectShortNeha": "subject line for short Neha message",
-  "shortNeha": "message under 300 chars",
-  "subjectLongPranav": "subject line for long Pranav message",
-  "longPranav": "full LinkedIn message",
-  "subjectLongNeha": "subject line for long Neha message",
-  "longNeha": "full LinkedIn message"
+  "shortNeha": "connection request under 300 chars, no links",
+  "subjectLongPranav": "subject line for long Pranav InMail",
+  "longPranav": "InMail with case study link",
+  "subjectLongNeha": "subject line for long Neha InMail",
+  "longNeha": "InMail with case study link"
 }"""
 
 
@@ -612,15 +648,15 @@ Generation Instructions (follow these closely):
 
 
 Remember:
-- EVERY message (short and long) MUST include the case study URL: {case_study_url}
-- Short messages MUST be under 300 characters including the URL
-- Long messages MUST be under 450 characters including the URL
+- Short messages are CONNECTION REQUESTS: under 300 chars, NO links, NO pitch, just genuine curiosity about them
+- Long messages are INMAILS: under 450 chars, include the case study URL: {case_study_url}
 - Address them by first name: {first_name}
-- Lead with THEIR pain or situation, not our solution
-- Each message must have its own unique subject line under 6 words
-- Each message must use a different CTA
+- Lead with THEIR situation, not our solution
+- Sound like a human, use contractions, be warm
+- Each message must have its own unique subject line under 6 words, about THEM not us
+- Each message must use a different CTA (or no CTA for connection requests)
 - NEVER use em dashes anywhere in the output. Use commas, periods, or semicolons instead
-- Neha's messages must include specific technical details (latency, technologies, architecture)
+- Neha's technical details should feel discovered, not marketed
 
 Return ONLY valid JSON with keys: subjectShortPranav, shortPranav, subjectShortNeha, shortNeha, subjectLongPranav, longPranav, subjectLongNeha, longNeha"""
 

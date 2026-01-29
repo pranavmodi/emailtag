@@ -1622,18 +1622,42 @@ function OutgenTab({
     return `Generate LinkedIn outreach messages for the leadership team at the following firm.
 
 ### For each leader, create 8 outputs (a unique subject line for each message):
-1. **Subject line for short Pranav message** - Personalized, business-outcome angle
-2. **Short message from Pranav Modi (founder)** - Under 300 characters, hooks interest with a relevant problem/result
-3. **Subject line for short Neha message** - Personalized, technical angle
-4. **Short message from Neha Pipada (engineer)** - Under 300 characters, slightly more technical angle
-5. **Subject line for long Pranav message** - Personalized, hints at mutual connection or business pain point
-6. **Long message from Pranav Modi** - Under 450 characters, warm, personalized opening, relevant connection, soft CTA
-7. **Subject line for long Neha message** - Personalized, hints at technical relevance or problem-solving
-8. **Long message from Neha Pipada** - Under 450 characters, technical credibility, relevant proof point, soft CTA
+1. **Subject line for short Pranav message** - Warm, curiosity-driven (under 6 words)
+2. **Short message from Pranav Modi (founder)** - Connection request, under 300 characters, NO links, NO pitch, just genuine curiosity
+3. **Subject line for short Neha message** - Warm, hints at shared problem (under 6 words)
+4. **Short message from Neha Pipada (engineer)** - Connection request, under 300 characters, NO links, NO pitch, curious about their workflow
+5. **Subject line for long Pranav message** - Personalized, conversational (under 6 words)
+6. **Long message from Pranav Modi** - InMail, under 450 characters, warm opener, includes case study link, soft CTA
+7. **Subject line for long Neha message** - Personalized, problem-focused (under 6 words)
+8. **Long message from Neha Pipada** - InMail, under 450 characters, technical credibility, includes case study link, soft CTA
 
 ---
 
 ### Guidelines:
+
+**CRITICAL: Connection Requests vs. InMails**
+
+Short messages (1-4) are CONNECTION REQUESTS. They are NOT mini-pitches.
+- NO links, NO case study URLs, NO product mentions
+- Goal: Earn the right to have a conversation
+- Formula: Specific observation about them + genuine question
+- Should feel like you'd want to grab coffee with this person
+
+Long messages (5-8) are INMAILS. They CAN include the pitch.
+- Include case study URL
+- Structure: Warm opener > Shared problem > What you learned > Soft CTA
+- Should feel like a peer reaching out, not a vendor selling
+
+**Connection request examples:**
+
+BAD (too salesy):
+"Managing intake across 3 offices takes serious coordination. We work with Precise Imaging on exactly this. Would love to connect."
+
+GOOD (warm, curious):
+"Victor - saw you switched from 24 years as Deputy City Attorney to plaintiff work. That's a big shift. Curious what made you make the jump."
+
+GOOD (specific, human):
+"Daniel - the Munoz settlement was all over the news. $18.85M for a single plaintiff is remarkable. Did the documentation side go smoothly, or was it a battle?"
 
 **Research first:**
 - Read the case study URL provided
@@ -1671,36 +1695,77 @@ If a mutual client relationship exists:
 - For PI firms specifically: highlight lien document handling, records requests, attorney communication speed
 
 **Subject line rules:**
-- Keep under 6 words when possible
-- Be specific to the prospect (use their name, company, or location)
-- Create curiosity or imply existing relationship
-- Bad: "How we automated 24/7 intake without losing the human touch" (too long, generic)
-- Good: "After-hours leads at [Firm Name]"
-- Good: "[Mutual Client] asked me to reach out"
-- Good: "Intake across 7 locations"
+- Keep under 6 words
+- Be specific to the prospect (name, company, location, or something from their bio)
+- Create curiosity or warmth, not intrigue about your product
+- Warm > clever
 
-**Tone & Differentiation:**
-- Pranav: Founder, empathetic, business-outcome focused, peer-to-peer. Focus on ROI, growth, client acquisition, business impact, scaling challenges.
-- Neha: Engineer, curious, technically credible, problem-solver. Focus on how it works, implementation ease, technical innovation.
-- IMPORTANT: Pranav and Neha's messages must take DIFFERENT angles; don't just rephrase the same message. Pranav should highlight business outcomes while Neha should highlight technical approach or problem-solving methodology.
-- Neha's messages MUST include specific technical details:
-  - Response latency (e.g., "sub-3-second voice latency")
-  - Specific technologies (e.g., "real-time speech recognition", "OCR for document extraction")
-  - Architecture details (e.g., "location-aware responses", "warm handoffs with full context")
-  - Feature specifics (e.g., "signature detection", "fraud flagging for altered documents")
-- Both: Warm, not salesy. End with low-pressure CTA ("happy to share what we learned" not "let's book a call")
+Good subject lines:
+- "Quick question, Victor"
+- "The Munoz case"
+- "Encino to Turlock"
+- "Thunderhead Ranch"
+- "Fellow motorcycle person"
+
+Bad subject lines:
+- "How we automated 24/7 intake" (about you, not them)
+- "Lien processing at ALG" (boring, sounds like spam)
+- "Partnership opportunity" (spam trigger)
+- "Intake automation specs" (sounds like a brochure)
+
+**Tone & Differentiation (CRITICAL):**
+
+The #1 goal: Sound like a human who's genuinely curious, not a vendor with a pitch.
+
+**Pranav (Founder):**
+- Peer-to-peer, business owner to business leader
+- Focuses on operational challenges, growth, scaling
+- Voice: "I've been thinking about..." / "Curious how you handle..." / "We ran into this with..."
+- Empathetic, shares what he's learned
+
+**Neha (Engineer):**
+- Curious problem-solver, genuinely interested in how things work
+- Focuses on workflows, systems, the "how" behind operations
+- Voice: "I'm always curious how..." / "The tricky part we found was..." / "One thing that surprised us..."
+- Asks questions about their current process
+
+**IMPORTANT: They must take DIFFERENT angles, not the same message with different depth.**
+
+Example for someone who switched from defense to plaintiff:
+- Pranav angle: Using insider knowledge to win, what adjusters look for
+- Neha angle: Documentation standards on defense side vs. what plaintiff firms actually produce
+
+**Neha's technical details should feel discovered, not marketed:**
+
+BAD: "We built AI with sub-3-second voice latency, OCR for document extraction, and signature detection."
+
+GOOD: "One thing that surprised us - when we started reading liens automatically, about 12% had some kind of alteration. Strikethroughs, whiteout, weird formatting. Now the system flags those before they cause problems."
+
+**Use contractions and natural speech:**
+- "I'm" not "I am"
+- "we've" not "we have"
+- "you're" not "you are"
+- Occasional incomplete sentences are fine
 
 **Case study link requirement:**
-- EVERY message (short and long) MUST include the case study URL; no exceptions
-- The URL should be woven naturally into the message (e.g., "here's what we found: [URL]" or "we documented the results here: [URL]")
+- ONLY long messages (InMails) include the case study URL
+- Connection requests (short messages) must NOT include any links
+- In InMails, weave the URL naturally: "documented what we learned here: [URL]" or "wrote up the results: [URL]"
 
-**CTA variations (rotate across messages):**
-- "Happy to share what transferred"
-- "Curious if you've explored this"
-- "Worth a look if this resonates"
-- "Happy to walk through the architecture"
-- "Let me know if you want the technical specs"
-- Avoid using the same CTA for all 4 messages
+**CTA variations:**
+
+For connection requests (no hard CTA needed):
+- End with a genuine question
+- Or just end with an observation
+- Don't ask for anything
+
+For InMails (soft, gives them an easy out):
+- "Happy to share what we learned if it's useful"
+- "Curious if you've run into this"
+- "No pressure, just thought it might resonate"
+- "Let me know if this lands"
+- "If you've already solved this, I'd love to hear how"
+- "Either way, good to connect"
 
 **What to avoid:**
 - Generic subject lines that could apply to anyone or reusing the same subject line across messages
@@ -1708,12 +1773,20 @@ If a mutual client relationship exists:
 - Metrics that don't resonate with their firm size
 - Focusing on what WE did vs. what THEY struggle with
 - Using healthcare case studies for law firms without bridging relevance (unless mutual client)
-- Omitting the case study URL from any message
+- Omitting the case study URL from InMail messages
 - Using em dashes anywhere. Use commas, periods, or semicolons instead
 - Leading with "We helped..." instead of their situation
 - Vague technical claims for Neha (e.g., "smart AI" without specifics)
 - Subject lines over 6 words
 - Abrupt transitions from personalization to pitch
+- Including links in connection requests (short messages)
+- Pitching the product in connection requests
+- The phrase "I'd love to connect" (everyone says this)
+- Starting with "I hope this message finds you well"
+- Ending with "Looking forward to hearing from you"
+- Empty compliments ("Impressive background!")
+- Sounding like a LinkedIn automation tool wrote it
+- Being too formal or stiff
 
 ---
 
