@@ -518,13 +518,15 @@ LEADERSHIP_MEMBER_SCHEMA = {
 
 OUTREACH_SYSTEM_PROMPT = """You are an expert at writing warm, conversational LinkedIn outreach messages for a B2B AI company called Possible Minds.
 
-You need to generate 4 messages for each contact:
-1. Short message from Pranav Modi (founder) - MUST be under 200 characters
-2. Short message from Neha Pipada (engineer) - MUST be under 200 characters
-3. Long LinkedIn message from Pranav Modi - 3-4 paragraphs, warm and personalized
-4. Long LinkedIn message from Neha Pipada - 3-4 paragraphs, slightly more technical perspective
+You need to generate 5 outputs for each contact:
+1. Subject line - A compelling, personalized subject line (similar to "We helped a CA imaging center you may know")
+2. Short message from Pranav Modi (founder) - MUST be under 300 characters
+3. Short message from Neha Pipada (engineer) - MUST be under 300 characters
+4. Long LinkedIn message from Pranav Modi - MUST be under 450 characters, warm and personalized
+5. Long LinkedIn message from Neha Pipada - MUST be under 450 characters, slightly more technical perspective
 
 Guidelines:
+- IMPORTANT: First read and understand the case study at the provided URL to reference specific details
 - Be warm and conversational, not salesy
 - Reference that their firm may have worked with/interacted with a client of ours
 - Personalize based on the contact's bio, title, awards, or background when available
@@ -533,11 +535,13 @@ Guidelines:
 - Neha's tone: Engineer perspective, mentions building/engineering, slightly more technical
 - Short messages should hook interest and include the URL
 - Long messages should have a personalized opening based on their bio, then mention the client connection, and end with an invitation to chat
+- Subject line should be intriguing and hint at a mutual connection or relevant value
 
 Return your response as a JSON object with these exact keys:
 {
-  "shortPranav": "message under 200 chars",
-  "shortNeha": "message under 200 chars",
+  "subjectLine": "compelling subject line",
+  "shortPranav": "message under 300 chars",
+  "shortNeha": "message under 300 chars",
   "longPranav": "full LinkedIn message",
   "longNeha": "full LinkedIn message"
 }"""
@@ -551,20 +555,21 @@ Firm/Company: {firm}
 Bio: {bio}
 
 Context:
-- Case Study URL: {case_study_url}
-- Client Description: {client_description}
+- Case Study URL: {case_study_url} (READ THIS FIRST to understand the client and use specific details)
 - The contact's firm may have interacted with or worked with this client
 
-Personalization notes:
-- Use details from their bio to personalize: {bio}
-- Reference their role: {title}
+Generation Instructions (follow these closely):
+{client_description}
+
 
 Remember:
-- Short messages MUST be under 200 characters including the URL
+- Short messages MUST be under 300 characters including the URL
+- Long messages MUST be under 450 characters
 - Address them by first name: {first_name}
 - Make it feel like a genuine connection, not a cold pitch
+- Subject line should be intriguing and personalized
 
-Return ONLY valid JSON with keys: shortPranav, shortNeha, longPranav, longNeha"""
+Return ONLY valid JSON with keys: subjectLine, shortPranav, shortNeha, longPranav, longNeha"""
 
 
 # OpenAI Chat Completions API endpoint (for outreach generation - no web search needed)
@@ -634,13 +639,14 @@ def generate_outreach_messages(
                 content = result["choices"][0]["message"]["content"]
                 parsed = json.loads(content)
 
-                # Truncate short messages to 200 chars as safety net
-                short_pranav = parsed.get("shortPranav", "")[:200]
-                short_neha = parsed.get("shortNeha", "")[:200]
+                # Truncate short messages to 300 chars as safety net
+                short_pranav = parsed.get("shortPranav", "")[:300]
+                short_neha = parsed.get("shortNeha", "")[:300]
 
                 results.append({
                     "name": name,
                     "title": title,
+                    "subjectLine": parsed.get("subjectLine", ""),
                     "shortPranav": short_pranav,
                     "shortNeha": short_neha,
                     "longPranav": parsed.get("longPranav", ""),

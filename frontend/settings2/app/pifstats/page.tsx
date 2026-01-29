@@ -18,12 +18,7 @@ import {
   ExternalLink,
   Trash2,
   LogOut,
-  Activity,
-  Clock,
-  MousePointer,
   Eye,
-  BarChart3,
-  TrendingUp,
   Sparkles,
   Linkedin,
   Award,
@@ -33,7 +28,7 @@ import {
   Check,
 } from "lucide-react";
 
-import { ApiError, PifApi, UsageApi, UsageStatsResponse } from "@/lib/api";
+import { ApiError, PifApi } from "@/lib/api";
 import type { PifInfoResponse, PifInfoListResponse, ProcessDayResponse, ResearchStatusResponse, OutreachMessageResult } from "@/lib/types";
 import { ResearchModal } from "./ResearchModal";
 import {
@@ -92,22 +87,25 @@ export default function PifListPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processResult, setProcessResult] = useState<ProcessDayResponse | null>(null);
 
-  // Usage stats state
-  const [usageStats, setUsageStats] = useState<UsageStatsResponse | null>(null);
-  const [usageStatsLoading, setUsageStatsLoading] = useState(false);
-  const [usageStatsError, setUsageStatsError] = useState<string | null>(null);
-  const [usageStatsDays, setUsageStatsDays] = useState(30);
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<"pif" | "usage" | "outreach">("pif");
+  const [activeTab, setActiveTab] = useState<"pif" | "outreach" | "outgen">("pif");
 
   // Outreach state
   const [outreachFirmId, setOutreachFirmId] = useState<string>("");
-  const [caseStudyUrl, setCaseStudyUrl] = useState("");
+  const [caseStudyUrl, setCaseStudyUrl] = useState("https://getpossibleminds.com/healthcare-case-study");
   const [clientDescription, setClientDescription] = useState("");
   const [outreachMessages, setOutreachMessages] = useState<OutreachMessageResult[] | null>(null);
   const [isGeneratingOutreach, setIsGeneratingOutreach] = useState(false);
   const [outreachError, setOutreachError] = useState<string | null>(null);
+
+  // Outgen state
+  const [outgenFirmId, setOutgenFirmId] = useState<string>("");
+  const [outgenCaseStudyUrl, setOutgenCaseStudyUrl] = useState("https://getpossibleminds.com/healthcare-case-study");
+  const [outgenInstructions, setOutgenInstructions] = useState("");
+
+  // All researched firms (for dropdowns, not paginated)
+  const [allResearchedFirms, setAllResearchedFirms] = useState<PifInfoResponse[]>([]);
 
   // Check if already authenticated on mount
   useEffect(() => {
@@ -138,20 +136,6 @@ export default function PifListPage() {
     setLoginPassword("");
   };
 
-  const fetchUsageStats = useCallback(async () => {
-    setUsageStatsLoading(true);
-    setUsageStatsError(null);
-    try {
-      const stats = await UsageApi.getStats("admin", usageStatsDays);
-      setUsageStats(stats);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load usage stats";
-      setUsageStatsError(message);
-    } finally {
-      setUsageStatsLoading(false);
-    }
-  }, [usageStatsDays]);
-
   const fetchData = useCallback(async () => {
     try {
       const payload = await PifApi.list({
@@ -174,6 +158,23 @@ export default function PifListPage() {
     }
   }, [searchTerm, currentPage, pageSize, sortBy]);
 
+  const fetchResearchedFirms = useCallback(async () => {
+    try {
+      // Fetch firms with max page size (100 is the backend limit)
+      const payload = await PifApi.list({ pageSize: 100 });
+      const researched = payload.items
+        .filter((f) => f.research_status === "completed")
+        .sort((a, b) => {
+          const dateA = a.last_researched_at ? new Date(a.last_researched_at).getTime() : 0;
+          const dateB = b.last_researched_at ? new Date(b.last_researched_at).getTime() : 0;
+          return dateB - dateA;
+        });
+      setAllResearchedFirms(researched);
+    } catch (err) {
+      console.error("Failed to fetch researched firms:", err);
+    }
+  }, []);
+
   useEffect(() => {
     let mounted = true;
 
@@ -184,7 +185,7 @@ export default function PifListPage() {
       }
 
       try {
-        await Promise.all([fetchData(), fetchUsageStats()]);
+        await Promise.all([fetchData(), fetchResearchedFirms()]);
       } catch (err) {
         if (!mounted) return;
         const message = err instanceof Error ? err.message : "Unexpected error occurred";
@@ -210,14 +211,6 @@ export default function PifListPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, sortBy]);
-
-  // Re-fetch usage stats when days filter changes
-  useEffect(() => {
-    if (isAuthenticated && !isLoading) {
-      fetchUsageStats();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usageStatsDays]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -389,17 +382,6 @@ export default function PifListPage() {
             PIF Data
           </button>
           <button
-            onClick={() => setActiveTab("usage")}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              activeTab === "usage"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Activity className="h-4 w-4 inline-block mr-1.5 -mt-0.5" />
-            Usage Stats
-          </button>
-          <button
             onClick={() => setActiveTab("outreach")}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
               activeTab === "outreach"
@@ -409,6 +391,17 @@ export default function PifListPage() {
           >
             <MessageSquare className="h-4 w-4 inline-block mr-1.5 -mt-0.5" />
             Outreach
+          </button>
+          <button
+            onClick={() => setActiveTab("outgen")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "outgen"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Copy className="h-4 w-4 inline-block mr-1.5 -mt-0.5" />
+            OutGen
           </button>
         </div>
 
@@ -600,6 +593,8 @@ export default function PifListPage() {
                               ),
                             };
                           });
+                          // Refresh the researched firms list for dropdowns
+                          fetchResearchedFirms();
                         }}
                       />
                     ))}
@@ -642,7 +637,7 @@ export default function PifListPage() {
 
         {activeTab === "outreach" && (
           <OutreachTab
-            data={data}
+            researchedFirms={allResearchedFirms}
             outreachFirmId={outreachFirmId}
             setOutreachFirmId={setOutreachFirmId}
             caseStudyUrl={caseStudyUrl}
@@ -658,335 +653,18 @@ export default function PifListPage() {
           />
         )}
 
-        {activeTab === "usage" && (
-          <motion.section
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={easing}
-          >
-            <Card className="rounded-2xl border border-slate-200/70 bg-white/90">
-              <CardHeader className="pb-4">
-                <CardTitle className="flex items-center gap-3 text-xl">
-                  <Activity className="h-5 w-5 text-indigo-600" />
-                  Admin Usage Statistics
-                </CardTitle>
-                <CardDescription>
-                  Track how the admin user interacts with the /settings page
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {/* Time range selector */}
-                <div className="mb-6 flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => setUsageStatsDays(1)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                      usageStatsDays === 1
-                        ? "bg-indigo-600 text-white"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    24h
-                  </button>
-                  <button
-                    onClick={() => setUsageStatsDays(7)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                      usageStatsDays === 7
-                        ? "bg-indigo-600 text-white"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    7d
-                  </button>
-                  <button
-                    onClick={() => setUsageStatsDays(30)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                      usageStatsDays === 30
-                        ? "bg-indigo-600 text-white"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    30d
-                  </button>
-                  <button
-                    onClick={() => setUsageStatsDays(90)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                      usageStatsDays === 90
-                        ? "bg-indigo-600 text-white"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    90d
-                  </button>
-                  <div className="ml-2 flex items-center">
-                    {usageStatsLoading && <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />}
-                  </div>
-                </div>
-
-              {usageStatsError && (
-                <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
-                  {usageStatsError}
-                </div>
-              )}
-
-              {usageStatsLoading && !usageStats ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-                </div>
-              ) : usageStats ? (
-                <div className="space-y-6">
-                  {/* Overview Stats */}
-                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-6">
-                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                        <BarChart3 className="h-3.5 w-3.5" />
-                        Total Events
-                      </div>
-                      <div className="mt-1 text-2xl font-bold text-slate-800">
-                        {usageStats.total_events.toLocaleString()}
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                        <Eye className="h-3.5 w-3.5" />
-                        Page Views
-                      </div>
-                      <div className="mt-1 text-2xl font-bold text-slate-800">
-                        {usageStats.total_page_views.toLocaleString()}
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                        <MousePointer className="h-3.5 w-3.5" />
-                        Actions
-                      </div>
-                      <div className="mt-1 text-2xl font-bold text-slate-800">
-                        {usageStats.total_actions.toLocaleString()}
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                        <Users className="h-3.5 w-3.5" />
-                        Sessions
-                      </div>
-                      <div className="mt-1 text-2xl font-bold text-slate-800">
-                        {usageStats.total_sessions.toLocaleString()}
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                        <Globe className="h-3.5 w-3.5" />
-                        Unique Pages
-                      </div>
-                      <div className="mt-1 text-2xl font-bold text-slate-800">
-                        {usageStats.unique_pages_visited}
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                        <Clock className="h-3.5 w-3.5" />
-                        Avg Session
-                      </div>
-                      <div className="mt-1 text-2xl font-bold text-slate-800">
-                        {Math.round(usageStats.average_session_duration_ms / 1000 / 60)}m
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Recent Activity */}
-                  <div className="grid gap-6 md:grid-cols-2">
-                    {/* Time-based activity */}
-                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                      <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-700">
-                        <TrendingUp className="h-4 w-4 text-indigo-500" />
-                        Activity Summary
-                      </h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-slate-600">Today</span>
-                          <span className="font-medium text-slate-800">{usageStats.events_today} events</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-600">This Week</span>
-                          <span className="font-medium text-slate-800">{usageStats.events_this_week} events</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-600">This Month</span>
-                          <span className="font-medium text-slate-800">{usageStats.events_this_month} events</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-600">Total Time</span>
-                          <span className="font-medium text-slate-800">
-                            {Math.round(usageStats.total_time_spent_ms / 1000 / 60)} minutes
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Most visited pages */}
-                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                      <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-700">
-                        <Eye className="h-4 w-4 text-indigo-500" />
-                        Most Visited Pages
-                      </h4>
-                      <div className="space-y-2 text-sm">
-                        {usageStats.most_visited_pages.slice(0, 5).map((page, i) => (
-                          <div key={i} className="flex justify-between">
-                            <span className="text-slate-600 truncate max-w-[150px]" title={page.page}>
-                              {page.page || "/"}
-                            </span>
-                            <span className="font-medium text-slate-800">{page.count} views</span>
-                          </div>
-                        ))}
-                        {usageStats.most_visited_pages.length === 0 && (
-                          <div className="text-slate-400">No page visits recorded</div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Most common actions */}
-                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                      <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-700">
-                        <MousePointer className="h-4 w-4 text-indigo-500" />
-                        Most Common Actions
-                      </h4>
-                      <div className="space-y-2 text-sm">
-                        {usageStats.most_common_actions.slice(0, 5).map((action, i) => (
-                          <div key={i} className="flex justify-between">
-                            <span className="text-slate-600 truncate max-w-[150px]" title={action.action}>
-                              {action.action.replace(/_/g, " ")}
-                            </span>
-                            <span className="font-medium text-slate-800">{action.count}x</span>
-                          </div>
-                        ))}
-                        {usageStats.most_common_actions.length === 0 && (
-                          <div className="text-slate-400">No actions recorded</div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Hourly activity */}
-                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                      <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-700">
-                        <Clock className="h-4 w-4 text-indigo-500" />
-                        Activity by Hour
-                      </h4>
-                      <div className="flex h-16 items-end gap-0.5">
-                        {Array.from({ length: 24 }, (_, hour) => {
-                          const count = usageStats.hourly_activity[String(hour)] || 0;
-                          const maxCount = Math.max(...Object.values(usageStats.hourly_activity), 1);
-                          const height = Math.max((count / maxCount) * 100, 2);
-                          return (
-                            <div
-                              key={hour}
-                              className="flex-1 bg-indigo-400 rounded-t transition-all hover:bg-indigo-600"
-                              style={{ height: `${height}%` }}
-                              title={`${hour}:00 - ${count} events`}
-                            />
-                          );
-                        })}
-                      </div>
-                      <div className="mt-1 flex justify-between text-xs text-slate-400">
-                        <span>0h</span>
-                        <span>12h</span>
-                        <span>24h</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Recent Sessions */}
-                  {usageStats.sessions.length > 0 && (
-                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                      <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-700">
-                        <Activity className="h-4 w-4 text-indigo-500" />
-                        Recent Sessions
-                      </h4>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-left text-xs text-slate-500">
-                              <th className="pb-2 pr-4">Session ID</th>
-                              <th className="pb-2 pr-4">Start</th>
-                              <th className="pb-2 pr-4">End</th>
-                              <th className="pb-2 pr-4">Events</th>
-                              <th className="pb-2">Pages</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {usageStats.sessions.slice(0, 5).map((session, i) => (
-                              <tr key={i} className="border-t border-slate-100">
-                                <td className="py-2 pr-4 font-mono text-xs text-slate-600">
-                                  {session.session_id?.slice(0, 12)}...
-                                </td>
-                                <td className="py-2 pr-4 text-slate-600">
-                                  {session.start ? new Date(session.start).toLocaleString() : "-"}
-                                </td>
-                                <td className="py-2 pr-4 text-slate-600">
-                                  {session.end ? new Date(session.end).toLocaleString() : "-"}
-                                </td>
-                                <td className="py-2 pr-4 font-medium text-slate-800">
-                                  {session.events_count}
-                                </td>
-                                <td className="py-2 font-medium text-slate-800">
-                                  {session.pages_visited}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Recent Events */}
-                  {usageStats.recent_events.length > 0 && (
-                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                      <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-700">
-                        <MessageSquare className="h-4 w-4 text-indigo-500" />
-                        Recent Events
-                      </h4>
-                      <div className="max-h-64 overflow-y-auto space-y-2">
-                        {usageStats.recent_events.slice(0, 20).map((event, i) => (
-                          <div
-                            key={i}
-                            className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm border border-slate-100"
-                          >
-                            <div className="flex items-center gap-3">
-                              <Badge className={
-                                event.event_type === "page_view"
-                                  ? "bg-blue-100 text-blue-700"
-                                  : event.event_type === "action"
-                                  ? "bg-green-100 text-green-700"
-                                  : event.event_type === "click"
-                                  ? "bg-amber-100 text-amber-700"
-                                  : event.event_type === "error"
-                                  ? "bg-rose-100 text-rose-700"
-                                  : "bg-slate-100 text-slate-700"
-                              }>
-                                {event.event_type}
-                              </Badge>
-                              <span className="text-slate-700">{event.event_name.replace(/_/g, " ")}</span>
-                              {event.page_path && (
-                                <span className="text-slate-400 text-xs">{event.page_path}</span>
-                              )}
-                            </div>
-                            <span className="text-xs text-slate-400">
-                              {new Date(event.created_at).toLocaleString()}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="py-12 text-center text-slate-500">
-                  No usage data available yet
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.section>
+        {activeTab === "outgen" && (
+          <OutgenTab
+            researchedFirms={allResearchedFirms}
+            outgenFirmId={outgenFirmId}
+            setOutgenFirmId={setOutgenFirmId}
+            outgenCaseStudyUrl={outgenCaseStudyUrl}
+            setOutgenCaseStudyUrl={setOutgenCaseStudyUrl}
+            outgenInstructions={outgenInstructions}
+            setOutgenInstructions={setOutgenInstructions}
+          />
         )}
+
       </main>
 
       {/* Research Modal */}
@@ -1589,7 +1267,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 }
 
 function OutreachTab({
-  data,
+  researchedFirms,
   outreachFirmId,
   setOutreachFirmId,
   caseStudyUrl,
@@ -1603,7 +1281,7 @@ function OutreachTab({
   outreachError,
   setOutreachError,
 }: {
-  data: PifInfoListResponse | null;
+  researchedFirms: PifInfoResponse[];
   outreachFirmId: string;
   setOutreachFirmId: (v: string) => void;
   caseStudyUrl: string;
@@ -1617,7 +1295,6 @@ function OutreachTab({
   outreachError: string | null;
   setOutreachError: (v: string | null) => void;
 }) {
-  const researchedFirms = data?.items.filter((f) => f.research_status === "completed") || [];
 
   const handleGenerate = async () => {
     if (!outreachFirmId || !caseStudyUrl || !clientDescription) return;
@@ -1642,6 +1319,9 @@ function OutreachTab({
 
   const formatAllMessages = (msg: OutreachMessageResult) => {
     return `=== ${msg.name} (${msg.title}) ===
+
+--- Subject Line ---
+${msg.subjectLine}
 
 --- Short Pranav (${msg.shortPranav.length} chars) ---
 ${msg.shortPranav}
@@ -1689,11 +1369,16 @@ ${msg.longNeha}`;
               className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             >
               <option value="">Choose a researched firm...</option>
-              {researchedFirms.map((firm) => (
-                <option key={firm.id} value={firm.id}>
-                  {firm.firm_name} ({firm.leadership?.length || 0} leaders)
-                </option>
-              ))}
+              {researchedFirms.map((firm) => {
+                const researchedDate = firm.last_researched_at
+                  ? new Date(firm.last_researched_at).toLocaleDateString()
+                  : "Unknown";
+                return (
+                  <option key={firm.id} value={firm.id}>
+                    {firm.firm_name} ({firm.leadership?.length || 0} leaders) - {researchedDate}
+                  </option>
+                );
+              })}
             </select>
             {researchedFirms.length === 0 && (
               <p className="text-xs text-slate-400">
@@ -1717,16 +1402,16 @@ ${msg.longNeha}`;
             />
           </div>
 
-          {/* Client Description */}
+          {/* Generation Instructions */}
           <div className="space-y-1.5">
             <label htmlFor="client-description" className="text-sm font-medium text-slate-700">
-              Client Description
+              Generation Instructions
             </label>
             <textarea
               id="client-description"
               value={clientDescription}
               onChange={(e) => setClientDescription(e.target.value)}
-              placeholder="Describe the client and the connection to the firm..."
+              placeholder="Provide instructions on how to generate the outreach message (e.g., tone, key points to mention, specific angles to use...)"
               rows={3}
               className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y"
             />
@@ -1775,12 +1460,21 @@ ${msg.longNeha}`;
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Subject Line */}
+                <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-sm font-medium text-indigo-700">Subject Line</span>
+                    <CopyButton text={msg.subjectLine} />
+                  </div>
+                  <p className="text-sm text-indigo-900 font-medium">{msg.subjectLine}</p>
+                </div>
+
                 {/* Short Pranav */}
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                   <div className="mb-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-slate-700">Short Pranav</span>
-                      <Badge className={`text-xs ${msg.shortPranav.length <= 200 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                      <Badge className={`text-xs ${msg.shortPranav.length <= 300 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
                         {msg.shortPranav.length} chars
                       </Badge>
                     </div>
@@ -1794,7 +1488,7 @@ ${msg.longNeha}`;
                   <div className="mb-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-slate-700">Short Neha</span>
-                      <Badge className={`text-xs ${msg.shortNeha.length <= 200 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                      <Badge className={`text-xs ${msg.shortNeha.length <= 300 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
                         {msg.shortNeha.length} chars
                       </Badge>
                     </div>
@@ -1806,7 +1500,12 @@ ${msg.longNeha}`;
                 {/* Long Pranav */}
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                   <div className="mb-2 flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-700">Long Pranav</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-700">Long Pranav</span>
+                      <Badge className={`text-xs ${msg.longPranav.length <= 450 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                        {msg.longPranav.length} chars
+                      </Badge>
+                    </div>
                     <CopyButton text={msg.longPranav} />
                   </div>
                   <p className="text-sm text-slate-600 whitespace-pre-wrap">{msg.longPranav}</p>
@@ -1815,7 +1514,12 @@ ${msg.longNeha}`;
                 {/* Long Neha */}
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                   <div className="mb-2 flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-700">Long Neha</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-700">Long Neha</span>
+                      <Badge className={`text-xs ${msg.longNeha.length <= 450 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                        {msg.longNeha.length} chars
+                      </Badge>
+                    </div>
                     <CopyButton text={msg.longNeha} />
                   </div>
                   <p className="text-sm text-slate-600 whitespace-pre-wrap">{msg.longNeha}</p>
@@ -1830,6 +1534,248 @@ ${msg.longNeha}`;
         <div className="py-12 text-center text-slate-500">
           No messages were generated. The firm may not have leadership data.
         </div>
+      )}
+    </motion.section>
+  );
+}
+
+function OutgenTab({
+  researchedFirms,
+  outgenFirmId,
+  setOutgenFirmId,
+  outgenCaseStudyUrl,
+  setOutgenCaseStudyUrl,
+  outgenInstructions,
+  setOutgenInstructions,
+}: {
+  researchedFirms: PifInfoResponse[];
+  outgenFirmId: string;
+  setOutgenFirmId: (v: string) => void;
+  outgenCaseStudyUrl: string;
+  setOutgenCaseStudyUrl: (v: string) => void;
+  outgenInstructions: string;
+  setOutgenInstructions: (v: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const selectedFirm = researchedFirms.find((f) => f.id === outgenFirmId);
+
+  const generatePrompt = () => {
+    if (!selectedFirm) return "";
+
+    const leaders = selectedFirm.leadership || [];
+    const leadersInfo = leaders.map((leader, idx) => {
+      const parts = [`Leader ${idx + 1}:`];
+      parts.push(`  Name: ${leader.name}`);
+      parts.push(`  Title: ${leader.title}`);
+      if (leader.email) parts.push(`  Email: ${leader.email}`);
+      if (leader.linkedin) parts.push(`  LinkedIn: ${leader.linkedin}`);
+      if (leader.bio) parts.push(`  Bio: ${leader.bio}`);
+      if (leader.education?.length) parts.push(`  Education: ${leader.education.join(", ")}`);
+      if (leader.experience?.length) parts.push(`  Experience: ${leader.experience.join("; ")}`);
+      if (leader.skills?.length) parts.push(`  Skills: ${leader.skills.join(", ")}`);
+      if (leader.certifications?.length) parts.push(`  Certifications: ${leader.certifications.join(", ")}`);
+      if (leader.cases_handled?.length) parts.push(`  Notable Cases: ${leader.cases_handled.join("; ")}`);
+      if (leader.bar_admissions?.length) parts.push(`  Bar Admissions: ${leader.bar_admissions.join(", ")}`);
+      return parts.join("\n");
+    }).join("\n\n");
+
+    const researchData = selectedFirm.research_data;
+    const firmInfo = [
+      `Firm Name: ${selectedFirm.firm_name}`,
+      selectedFirm.website ? `Website: ${selectedFirm.website}` : null,
+      selectedFirm.emails.length ? `Emails: ${selectedFirm.emails.join(", ")}` : null,
+      selectedFirm.phones.length ? `Phones: ${selectedFirm.phones.join(", ")}` : null,
+      selectedFirm.addresses.length ? `Addresses: ${selectedFirm.addresses.join("; ")}` : null,
+      researchData?.practice_areas?.length ? `Practice Areas: ${researchData.practice_areas.join(", ")}` : null,
+      researchData?.firm_size ? `Firm Size: ${researchData.firm_size}` : null,
+      researchData?.founded_year ? `Founded: ${researchData.founded_year}` : null,
+      researchData?.office_locations?.length ? `Office Locations: ${researchData.office_locations.join("; ")}` : null,
+      researchData?.notable_cases?.length ? `Notable Cases: ${researchData.notable_cases.join("; ")}` : null,
+      researchData?.awards_recognition?.length ? `Awards & Recognition: ${researchData.awards_recognition.join("; ")}` : null,
+    ].filter(Boolean).join("\n");
+
+    return `Generate LinkedIn outreach messages for the leadership team at the following firm.
+
+### For each leader, create 5 outputs:
+1. **Subject line** - Personalized, hints at mutual connection OR a specific pain point relevant to their role/firm size
+2. **Short message from Pranav Modi (founder)** - Under 300 characters, hooks interest with a relevant problem/result
+3. **Short message from Neha Pipada (engineer)** - Under 300 characters, slightly more technical angle
+4. **Long message from Pranav Modi** - Under 450 characters, warm, personalized opening → relevant connection → soft CTA
+5. **Long message from Neha Pipada** - Under 450 characters, technical credibility → relevant proof point → soft CTA
+
+---
+
+### Guidelines:
+
+**Research first:**
+- Read the case study URL provided
+- If available, also check for industry-specific case studies (e.g., /law-case-study for law firms)
+- Search for and find the LinkedIn profile URL for each leader (include the link in your output)
+- Identify which of our solutions is MOST relevant to this firm's likely pain points
+
+**Personalization requirements:**
+- Reference something specific from their bio (not just "20 years of experience" — dig deeper)
+- For solo practitioners: focus on time savings, missed opportunities, after-hours coverage
+- For larger firms: focus on staff efficiency, cost savings, scalability
+- Avoid generic claims like "your clients may have visited" — find a stronger connection or don't force one
+
+**Value proposition:**
+- Lead with THEIR problem, not our solution
+- Connect our results to outcomes THEY would care about (e.g., "never miss a potential client call" vs. "saved 670 staff hours")
+- If no direct connection exists, use a "firms like yours" angle instead of fabricating a mutual client
+
+**Tone & Differentiation:**
+- Pranav: Founder, empathetic, business-outcome focused, peer-to-peer. Focus on ROI, growth, client acquisition, business impact.
+- Neha: Engineer, curious, technically credible, problem-solver. Focus on how it works, implementation ease, technical innovation.
+- IMPORTANT: Pranav and Neha's messages must take DIFFERENT angles — don't just rephrase the same message. Pranav should highlight business outcomes while Neha should highlight technical approach or problem-solving methodology.
+- Both: Warm, not salesy. End with low-pressure CTA ("happy to share what we learned" not "let's book a call")
+
+**What to avoid:**
+- ❌ Generic subject lines that could apply to anyone
+- ❌ Forcing a "mutual connection" that doesn't really exist
+- ❌ Metrics that don't resonate with their firm size
+- ❌ Focusing on what WE did vs. what THEY struggle with
+- ❌ Using healthcare case studies for law firms without bridging relevance
+
+---
+
+### Context:
+- Case study URL (primary): ${outgenCaseStudyUrl}
+${outgenInstructions ? `\n### Additional Instructions:\n${outgenInstructions}\n` : ""}
+---
+
+### Firm Information:
+${firmInfo}
+
+### Leadership Team:
+${leadersInfo || "No leadership data available."}`;
+  };
+
+  const handleCopy = async () => {
+    const prompt = generatePrompt();
+    await navigator.clipboard.writeText(prompt);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const prompt = generatePrompt();
+  const canCopy = outgenFirmId && selectedFirm;
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={easing}
+      className="space-y-6"
+    >
+      {/* Configuration Card */}
+      <Card className="rounded-2xl border border-slate-200/70 bg-white/90">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-3 text-xl">
+            <Copy className="h-5 w-5 text-indigo-600" />
+            Generate Outreach Prompt
+          </CardTitle>
+          <CardDescription>
+            Copy firm and leadership information to use with any chatbot for generating outreach messages
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Firm Selector */}
+          <div className="space-y-1.5">
+            <label htmlFor="outgen-firm" className="text-sm font-medium text-slate-700">
+              Select Firm
+            </label>
+            <select
+              id="outgen-firm"
+              value={outgenFirmId}
+              onChange={(e) => setOutgenFirmId(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="">Choose a researched firm...</option>
+              {researchedFirms.map((firm) => {
+                const researchedDate = firm.last_researched_at
+                  ? new Date(firm.last_researched_at).toLocaleDateString()
+                  : "Unknown";
+                return (
+                  <option key={firm.id} value={firm.id}>
+                    {firm.firm_name} ({firm.leadership?.length || 0} leaders) - {researchedDate}
+                  </option>
+                );
+              })}
+            </select>
+            {researchedFirms.length === 0 && (
+              <p className="text-xs text-slate-400">
+                No researched firms available. Research a firm first from the PIF Data tab.
+              </p>
+            )}
+          </div>
+
+          {/* Case Study URL */}
+          <div className="space-y-1.5">
+            <label htmlFor="outgen-case-study-url" className="text-sm font-medium text-slate-700">
+              Case Study URL
+            </label>
+            <input
+              type="url"
+              id="outgen-case-study-url"
+              value={outgenCaseStudyUrl}
+              onChange={(e) => setOutgenCaseStudyUrl(e.target.value)}
+              placeholder="https://example.com/case-study"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+
+          {/* Generation Instructions */}
+          <div className="space-y-1.5">
+            <label htmlFor="outgen-instructions" className="text-sm font-medium text-slate-700">
+              Additional Instructions (optional)
+            </label>
+            <textarea
+              id="outgen-instructions"
+              value={outgenInstructions}
+              onChange={(e) => setOutgenInstructions(e.target.value)}
+              placeholder="Any additional instructions for generating the messages (e.g., tone, key points to mention, specific angles to use...)"
+              rows={3}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y"
+            />
+          </div>
+
+          {/* Copy Button */}
+          <Button
+            onClick={handleCopy}
+            disabled={!canCopy}
+            className="flex items-center gap-2"
+          >
+            {copied ? (
+              <>
+                <Check className="h-4 w-4" />
+                Copied!
+              </>
+            ) : (
+              <>
+                <Copy className="h-4 w-4" />
+                Copy Prompt to Clipboard
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Preview */}
+      {canCopy && (
+        <Card className="rounded-2xl border border-slate-200/70 bg-white/90">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Prompt Preview</CardTitle>
+              <CopyButton text={prompt} label="Copy" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <pre className="max-h-96 overflow-auto rounded-lg border border-slate-100 bg-slate-50 p-4 text-xs text-slate-700 whitespace-pre-wrap">
+              {prompt}
+            </pre>
+          </CardContent>
+        </Card>
       )}
     </motion.section>
   );

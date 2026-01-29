@@ -36,6 +36,13 @@ export const MENU_ITEMS: MenuItem[] = [
     primary: true,
   },
   {
+    href: "/usage-stats",
+    label: "Usage Stats",
+    description: "Admin usage & config change log",
+    icon: "📈",
+    primary: true,
+  },
+  {
     href: "/archived-list",
     label: "Archived",
     description: "View archived conversations by day",
