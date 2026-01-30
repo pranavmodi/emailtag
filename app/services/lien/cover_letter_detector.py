@@ -108,16 +108,8 @@ Be strict: Only flag as conditional if the language clearly attempts to modify, 
             Dictionary with analysis results
         """
         try:
-            # If page has barcode, it's definitely not a cover letter
-            if has_barcode:
-                logger.info(f"📄 COVER LETTER: Page {page_name} has barcode → LIEN_CORE page")
-                return {
-                    "is_cover_letter": False,
-                    "has_conditional_language": False,
-                    "page_classification": "LIEN_CORE",
-                    "explanation": "Page contains barcode, classified as lien core document",
-                    "conditional_phrases_found": []
-                }
+            # All pages are analyzed for conditional language, including barcode pages.
+            # Attorneys may add conditional stipulations directly on the lien form itself.
 
             # Encode image to base64
             base64_image = base64.b64encode(image_data).decode('utf-8')

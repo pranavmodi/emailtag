@@ -1233,15 +1233,21 @@ def _build_reply_all_recipients(conversation_id: str) -> List[str]:
     # Remove internal domain recipients (system emails) from the outbound list
     # Use internal domains instead of alias to avoid misconfiguration issues
     internal_domains = ["@mediflow360.com", "@mediflow.com", "@preciseimaging.com", "@precisemri.com", "@radflow360.com"]
+    # Specific email addresses that should never receive autoresponds
+    excluded_emails = ["holisticreadsai@gmail.com"]
 
     logger.info(f"Recipients before filtering: {recipients}")
 
-    # Filter out internal recipients
+    # Filter out internal recipients and excluded emails
     external_recipients = set()
     for recipient in recipients:
-        is_internal = any(domain in recipient.lower() for domain in internal_domains)
+        recipient_lower = recipient.lower()
+        is_internal = any(domain in recipient_lower for domain in internal_domains)
+        is_excluded = recipient_lower in excluded_emails
         if is_internal:
             logger.info(f"  Removing internal recipient: {recipient}")
+        elif is_excluded:
+            logger.info(f"  Removing excluded recipient: {recipient}")
         else:
             logger.info(f"  Keeping external recipient: {recipient}")
             external_recipients.add(recipient)
