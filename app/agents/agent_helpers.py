@@ -1047,6 +1047,19 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
                                         output_data["patients_count"] = len(patients) if isinstance(patients, list) else 0
 
                                         if isinstance(patients, list) and len(patients) > 0:
+                                            # Single-match enforcement for DOB lookups
+                                            if lookup_type == "DOB" and len(patients) > 1:
+                                                logger.warning(
+                                                    f"⚠️ AMBIGUOUS MATCH: {tool_name} returned {len(patients)} patients for "
+                                                    f"{first_name} {last_name} ({lookup_type}: {original_date}). "
+                                                    f"Skipping to avoid wrong patient autoresponse. "
+                                                    f"Patient IDs: {[p.get('patient_id') for p in patients]}"
+                                                )
+                                                output_data["lookup_success"] = False
+                                                output_data["reason"] = f"Ambiguous DOB match: {len(patients)} patients returned"
+                                                output_data["ambiguous_patient_ids"] = [p.get('patient_id') for p in patients]
+                                                continue  # Skip to next lookup method or next patient
+
                                             patient_ids_found = []
                                             for idx, patient in enumerate(patients):
                                                 patient_id = patient.get("patient_id")
@@ -1096,6 +1109,16 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
                                     patients = patient_data['patients']
 
                                     if isinstance(patients, list) and len(patients) > 0:
+                                        # Single-match enforcement for DOB lookups
+                                        if lookup_type == "DOB" and len(patients) > 1:
+                                            logger.warning(
+                                                f"⚠️ AMBIGUOUS MATCH: {tool_name} returned {len(patients)} patients for "
+                                                f"{first_name} {last_name} ({lookup_type}: {original_date}). "
+                                                f"Skipping to avoid wrong patient autoresponse. "
+                                                f"Patient IDs: {[p.get('patient_id') for p in patients]}"
+                                            )
+                                            continue  # Skip to next lookup method or next patient
+
                                         patient_ids_found = []
                                         for idx, patient in enumerate(patients):
                                             patient_id = patient.get("patient_id")
