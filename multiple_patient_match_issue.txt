@@ -1,0 +1,157 @@
+ISSUE: Multiple Patient IDs Returned for Single Patient Email
+=============================================================
+Date: January 30, 2026
+Conversation: cnv_1g9m0nma
+Email Subject: Fw: EXTERNAL: Accilink Request to Confirm Attendance: Everett Jackson | DoB: Oct 27, 1965
+
+
+SUMMARY
+-------
+When processing an Accilink attendance confirmation email for patient Everett Jackson,
+the system returned two patient IDs (PRE249280 and PRE1173943) instead of one. This
+happened because the DOI-based lookup returned zero results (Radflow API bug), and the
+fallback DOB-based lookup matched two records with the same name and birth date.
+
+
+EMAIL DATA AVAILABLE
+--------------------
+The email contained rich patient identifying information:
+
+  Name:    Everett Jackson
+  DoB:     Oct 27, 1965
+  DoL:     Oct 21, 2025   (Date of Loss = Date of Injury)
+  Phone:   (213) 913-8868
+  Address: 4638 W 21st St, Los Angeles, CA 90016, USA
+
+
+WHAT HAPPENED (step by step)
+----------------------------
+1. OpenAI extracted patient info: Everett Jackson, DOB 10/27/1965, DOI 10/21/2025
+   (Phone and address were NOT extracted — the extraction prompt doesn't ask for them)
+
+2. Tier 1 (regex): No PRE-format patient ID found in email body. Moved to Tier 2.
+
+3. Tier 2, Attempt 1 — DOI Lookup (fetch_patient_by_name_and_doi):
+   MCP sent this payload to Radflow API:
+     {
+       "patientId": "",
+       "phone": "",
+       "firstName": "EVERETT",
+       "lastName": "JACKSON",
+       "birthDate": "",
+       "doi": "2025-10-21 00:00:00",
+       "accessionNumber": "",
+       "requiredField": "Details"
+     }
+
+   Radflow API response:
+     {
+       "result": { "result": null, "totalPatients": 0 },
+       "status": 1,
+       "responseStatus": "Success",
+       "exception": null
+     }
+
+   Result: 0 patients found. The DOI field is non-functional as a search parameter.
+
+4. Tier 2, Attempt 2 — DOB Lookup (fetch_patient_by_name_and_dob):
+   MCP sent this payload to Radflow API:
+     {
+       "patientId": "",
+       "phone": "",
+       "firstName": "EVERETT",
+       "lastName": "JACKSON",
+       "birthDate": "1965-10-27",
+       "doi": "",
+       "accessionNumber": "",
+       "requiredField": "Details"
+     }
+
+   Radflow API response: 2 patients returned (totalPatients: 2)
+
+5. Both patient IDs were posted as a comment to the Front conversation:
+   "Bot found patient ids PRE249280, PRE1173943 via DOB lookup"
+
+
+TWO PATIENTS RETURNED
+---------------------
+  Field          | PRE249280                              | PRE1173943
+  ---------------+----------------------------------------+------------------------------------------
+  First Name     | EVERETT                                | EVERETT GERARD
+  Last Name      | JACKSON                                | JACKSON
+  Phone          | 9096099037                             | 2138578152
+  DOB            | 1965-10-27                             | 1965-10-27
+  DOI            | (empty)                                | 2025-10-21
+  DOL            | (empty)                                | 2025-10-21
+  Address        | 4638 W 21ST LOS ANGELES CA 90016       | 4638 W 21ST ST, LOS ANGELES CA 90016
+  Financial Type | PERSONAL INJURY                        | PERSONAL INJURY
+  Radiologist    | GEORGE MEDNIK                          | ALEXANDER GRIMM
+
+  These appear to be the same person with two separate records for different injury cases.
+  PRE1173943 is the correct match for this email (DOI matches, same area code 213).
+
+
+ROOT CAUSE: RADFLOW API DOI SEARCH IS NON-FUNCTIONAL
+-----------------------------------------------------
+We tested the Radflow API endpoint (GetPatientStudyRelatedDetails) with the DOI field
+in multiple formats. All returned 0 patients:
+
+  - doi: "2025-10-21 00:00:00"  → 0 results
+  - doi: "2025-10-21"           → 0 results
+  - doi: "10/21/2025"           → 0 results
+  - With full name              → 0 results
+  - With no name (DOI only)     → 0 results
+
+The API accepts the doi parameter without error but never matches on it. This is a
+Radflow-side bug. The DOB lookup with the same API works correctly.
+
+
+SECONDARY ISSUE: UNDERUTILIZED EMAIL DATA
+------------------------------------------
+The email contains phone and address, but the OpenAI extraction step only pulls
+first_name, last_name, dob, and doi. Phone and address are ignored. These fields
+could be used to disambiguate when multiple patients are returned.
+
+
+PROPOSED FIXES (priority order)
+-------------------------------
+1. [Radflow team] Fix DOI search parameter
+   - The doi field in GetPatientStudyRelatedDetails does not function as a search
+     parameter. If fixed, the DOI lookup would have returned only PRE1173943 and
+     this issue would not have occurred.
+   - This is the highest-impact fix with zero code changes on our side.
+
+2. [emailtag] Extract phone and address from emails
+   - Update the OpenAI extraction prompt to also pull phone and address when present.
+   - Low effort change, provides more data for disambiguation.
+
+3. [emailtag] Add post-filter logic when multiple patients are returned
+   - When DOB lookup returns multiple patients and we have additional data from the
+     email (DOI, phone, address), score each candidate:
+       * DOI match   — strongest signal, if one patient's DOI matches, select it
+       * Phone match — normalize to digits and compare (exact or last 7 digits)
+       * Address match — normalized/fuzzy string comparison
+   - If one candidate scores clearly higher, use only that patient.
+   - If ambiguous, return all and flag for human review.
+
+4. [emailtag] Use phone lookup as additional fallback tier
+   - The MCP already has fetch_patient_by_phone. When name+DOI fails and name+DOB
+     returns multiple results, try phone as a tiebreaker.
+   - The email phone (213) 913-8868 = 2139138868 could help narrow results.
+
+
+FILES INVOLVED
+--------------
+  emailtag side:
+    - app/tasks/email.py  (orchestrate_post_ocr_processing — patient ID extraction logic)
+    - OpenAI extraction prompt (where phone/address extraction would be added)
+
+  precisemcp side:
+    - tools.py lines 704-805 (fetch_patient_by_name_and_dob)
+    - tools.py (fetch_patient_by_name_and_doi — adds "00:00:00" suffix, though this
+      is not the cause since even without it the API returns 0)
+    - config.py (RADFLOW_API_URL)
+
+  Radflow API:
+    - Endpoint: https://app.radflow360.com/chatbotapi/Patient/GetPatientStudyRelatedDetails
+    - DOI search parameter is non-functional — needs fix on Radflow's end

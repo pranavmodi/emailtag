@@ -1575,28 +1575,30 @@ function OutgenTab({
   outgenMutualApproved: boolean;
   setOutgenMutualApproved: (v: boolean) => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const selectedFirm = researchedFirms.find((f) => f.id === outgenFirmId);
 
-  const generatePrompt = () => {
-    if (!selectedFirm) return "";
+  const formatLeaderInfo = (leader: NonNullable<PifInfoResponse["leadership"]>[number]) => {
+    const parts: string[] = [];
+    parts.push(`Name: ${leader.name}`);
+    parts.push(`Title: ${leader.title}`);
+    if (leader.email) parts.push(`Email: ${leader.email}`);
+    if (leader.linkedin) parts.push(`LinkedIn: ${leader.linkedin}`);
+    if (leader.bio) parts.push(`Bio: ${leader.bio}`);
+    if (leader.education?.length) parts.push(`Education: ${leader.education.join(", ")}`);
+    if (leader.experience?.length) parts.push(`Experience: ${leader.experience.join("; ")}`);
+    if (leader.skills?.length) parts.push(`Skills: ${leader.skills.join(", ")}`);
+    if (leader.certifications?.length) parts.push(`Certifications: ${leader.certifications.join(", ")}`);
+    if (leader.cases_handled?.length) parts.push(`Notable Cases: ${leader.cases_handled.join("; ")}`);
+    if (leader.bar_admissions?.length) parts.push(`Bar Admissions: ${leader.bar_admissions.join(", ")}`);
+    return parts.join("\n");
+  };
+
+  const generatePrompts = (): { name: string; prompt: string }[] => {
+    if (!selectedFirm) return [];
 
     const leaders = selectedFirm.leadership || [];
-    const leadersInfo = leaders.map((leader, idx) => {
-      const parts = [`Leader ${idx + 1}:`];
-      parts.push(`  Name: ${leader.name}`);
-      parts.push(`  Title: ${leader.title}`);
-      if (leader.email) parts.push(`  Email: ${leader.email}`);
-      if (leader.linkedin) parts.push(`  LinkedIn: ${leader.linkedin}`);
-      if (leader.bio) parts.push(`  Bio: ${leader.bio}`);
-      if (leader.education?.length) parts.push(`  Education: ${leader.education.join(", ")}`);
-      if (leader.experience?.length) parts.push(`  Experience: ${leader.experience.join("; ")}`);
-      if (leader.skills?.length) parts.push(`  Skills: ${leader.skills.join(", ")}`);
-      if (leader.certifications?.length) parts.push(`  Certifications: ${leader.certifications.join(", ")}`);
-      if (leader.cases_handled?.length) parts.push(`  Notable Cases: ${leader.cases_handled.join("; ")}`);
-      if (leader.bar_admissions?.length) parts.push(`  Bar Admissions: ${leader.bar_admissions.join(", ")}`);
-      return parts.join("\n");
-    }).join("\n\n");
+    if (leaders.length === 0) return [];
 
     const researchData = selectedFirm.research_data;
     const firmInfo = [
@@ -1619,9 +1621,12 @@ function OutgenTab({
 - Did mutual client approve outreach reference? ${outgenMutualApproved ? "YES" : "NO"}
 - Specific results mutual client experienced that benefit prospect: Faster records responses, automated lien handling, cleaner documentation back to attorneys`;
 
-    return `Generate LinkedIn outreach messages for the leadership team at the following firm.
+    return leaders.map((leader) => {
+      const leaderInfo = formatLeaderInfo(leader);
 
-### For each leader, create 8 outputs (a unique subject line for each message):
+      const prompt = `Generate LinkedIn outreach messages for the following person.
+
+### Create 8 outputs (a unique subject line for each message):
 1. **Subject line for short Pranav message** - Warm, curiosity-driven (under 6 words)
 2. **Short message from Pranav Modi (founder)** - Connection request, under 300 characters, NO links, NO pitch, just genuine curiosity
 3. **Subject line for short Neha message** - Warm, hints at shared problem (under 6 words)
@@ -1798,18 +1803,20 @@ ${outgenInstructions ? `\n### Additional Instructions:\n${outgenInstructions}\n`
 ### Firm Information:
 ${firmInfo}
 
-### Leadership Team:
-${leadersInfo || "No leadership data available."}`;
+### Target Person:
+${leaderInfo}`;
+
+      return { name: leader.name, prompt };
+    });
   };
 
-  const handleCopy = async () => {
-    const prompt = generatePrompt();
-    await navigator.clipboard.writeText(prompt);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyOne = async (text: string, idx: number) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedIdx(idx);
+    setTimeout(() => setCopiedIdx(null), 2000);
   };
 
-  const prompt = generatePrompt();
+  const prompts = generatePrompts();
   const canCopy = outgenFirmId && selectedFirm;
 
   return (
@@ -1910,42 +1917,50 @@ ${leadersInfo || "No leadership data available."}`;
             </div>
           </div>
 
-          {/* Copy Button */}
-          <Button
-            onClick={handleCopy}
-            disabled={!canCopy}
-            className="flex items-center gap-2"
-          >
-            {copied ? (
-              <>
-                <Check className="h-4 w-4" />
-                Copied!
-              </>
-            ) : (
-              <>
-                <Copy className="h-4 w-4" />
-                Copy Prompt to Clipboard
-              </>
-            )}
-          </Button>
         </CardContent>
       </Card>
 
-      {/* Preview */}
-      {canCopy && (
-        <Card className="rounded-2xl border border-slate-200/70 bg-white/90">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">Prompt Preview</CardTitle>
-              <CopyButton text={prompt} label="Copy" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <pre className="max-h-96 overflow-auto rounded-lg border border-slate-100 bg-slate-50 p-4 text-xs text-slate-700 whitespace-pre-wrap">
-              {prompt}
-            </pre>
-          </CardContent>
-        </Card>
+      {/* Per-Leader Prompts */}
+      {canCopy && prompts.length > 0 && (
+        <div className="space-y-4">
+          {prompts.map((item, idx) => (
+            <Card key={idx} className="rounded-2xl border border-slate-200/70 bg-white/90">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">{item.name}</CardTitle>
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleCopyOne(item.prompt, idx)}
+                    className="flex items-center gap-1.5 text-sm px-3 py-1.5 h-auto"
+                  >
+                    {copiedIdx === idx ? (
+                      <>
+                        <Check className="h-3.5 w-3.5" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy Prompt
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <pre className="max-h-72 overflow-auto rounded-lg border border-slate-100 bg-slate-50 p-4 text-xs text-slate-700 whitespace-pre-wrap">
+                  {item.prompt}
+                </pre>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {canCopy && prompts.length === 0 && (
+        <div className="py-12 text-center text-slate-500">
+          No leadership data available for this firm.
+        </div>
       )}
     </motion.section>
   );
