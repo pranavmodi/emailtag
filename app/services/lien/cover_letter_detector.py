@@ -53,29 +53,59 @@ This is NOT a cover letter if:
 
 PART 2: CONDITIONAL LANGUAGE DETECTION
 
-Look for language that attempts to:
-- Add additional conditions to the lien ("subject to", "conditional upon", "only if")
-- Modify standard lien terms ("we require that", "this lien will only be valid if")
-- Request special accommodations ("we need you to", "please provide", "must agree to")
-- Add custom clauses or amendments
-- Make the lien contingent on something
-- Request changes to standard procedures
+CRITICAL: You must distinguish between Precise Imaging's own standard lien language and language added or imposed by the attorney. Only flag language that was added by or favors the attorney — NOT Precise Imaging's own standard printed terms.
 
-Examples of CONDITIONAL language to flag:
+IGNORE (Precise Imaging's standard lien clauses — do NOT flag these):
+- "Modifications or addendums void unless approved in writing by Precise Imaging"
+- "I understand I may revoke this in writing at any time"
+- "payment is not contingent on any settlement, judgment or verdict"
+- "may declare the entire balance due and payable"
+- "Patient agrees to pay all of Precise Imaging's reasonable attorneys' fees, collection costs and expenses"
+- "the substantially prevailing party shall be entitled to reasonable attorneys' fees"
+- "if ... violates that section ... the debt shall be void and unenforceable"
+- "I hereby agree to waive the running of any Statute of Limitations for an additional period of four (4) years"
+- "failure to provide periodic case status updates may result in the patient's account(s) being referred to collections"
+- Any clause that protects Precise Imaging's interests, enforces the patient's or attorney's obligations TO Precise Imaging, or is part of the standard pre-printed lien form
+- Similarly ignore standard clauses from Telerad Pros or any other Precise Imaging affiliate
+
+FLAG (attorney-added or attorney-favoring language):
+Look for language — whether on a cover letter, the lien form itself, or any page — that:
+- Gives the attorney's fees priority or preference over the lien ("attorney fees take preference", "attorney fees shall be paid first", "attorney fees have priority over all other liens")
+- Defines conditions under which the lien will be rendered void, nullified, or unenforceable in the attorney's favor ("lien shall be void if", "lien is null and void upon", "this lien shall terminate if")
+- Relieves or limits the attorney's obligation to honor the lien ("attorney shall not be responsible for", "attorney is not obligated to honor this lien", "attorney is released from", "attorney bears no liability for")
+- Caps, limits, or reduces the lien amount ("lien shall not exceed", "maximum lien amount", "lien is limited to")
+- Adds conditions to the lien ("subject to", "conditional upon", "only if")
+- Modifies standard lien terms ("we require that", "this lien will only be valid if")
+- Requests special accommodations ("we need you to", "must agree to")
+- Adds custom clauses or amendments favoring the attorney
+- Makes the lien contingent on something that benefits the attorney
+- Requests changes to standard procedures
+- Appears as handwritten annotations, margin notes, or typed additions that impose new terms not present in the standard lien form
+
+Examples of language to FLAG:
+- "NOTICE: Attorneys fees take preference to any other lien."
+- "If medical records are not timely received, this lien shall be null and void and Attorney shall not be obligated to honor this lien."
+- "Attorney fees shall take preference over other liens"
+- "This lien shall be void if settlement does not exceed..."
+- "Attorney is not responsible for honoring this lien if..."
+- "Lien amount shall not exceed X% of the settlement"
+- "Notwithstanding anything herein, attorney shall have no obligation to..."
+- "This lien is limited to..."
+- "In the event of insufficient funds, attorney fees take priority"
 - "This lien is subject to final approval by..."
 - "We will only proceed if you agree to..."
-- "Additional terms: ..."
 - "On condition that you provide..."
 - "This agreement is contingent upon..."
 - "We require that you modify the payment terms to..."
 - "Amendment to standard lien: ..."
 
-Examples of ACCEPTABLE language (informational, not conditional):
+Examples of ACCEPTABLE language (do NOT flag):
 - "Please find attached the signed lien agreement"
 - "Enclosed are the lien documents for patient John Doe"
 - "We have signed the standard lien form"
 - "Thank you for your services"
 - "Please contact us with any questions"
+- Any of Precise Imaging's own standard pre-printed lien clauses listed above
 
 Response format (JSON):
 {
@@ -88,7 +118,7 @@ Response format (JSON):
     "explanation": "brief explanation of the classification and findings"
 }
 
-Be strict: Only flag as conditional if the language clearly attempts to modify, restrict, or add conditions to the standard lien agreement."""
+Be strict: Only flag language that was clearly added by or favors the attorney at the expense of Precise Imaging's lien rights. Do NOT flag Precise Imaging's own standard pre-printed lien clauses — even if they sound conditional, they are part of the standard form and protect the lien holder. Focus on attorney-added modifications: fee priority clauses, lien voiding conditions, liability limitations, lien amount caps, or any other stipulations that relieve the attorney from honoring the lien. These may appear on any page, including the lien form itself (as handwritten notes, margin annotations, stamps, or typed additions)."""
 
     async def analyze_page_content(
         self,
@@ -162,6 +192,12 @@ Be strict: Only flag as conditional if the language clearly attempts to modify, 
                 is_cover = analysis.get("is_cover_letter", False)
                 has_conditional = analysis.get("has_conditional_language", False)
                 page_class = analysis.get("page_classification", "OTHER")
+
+                # A page with a barcode is never a cover letter, but may still
+                # contain conditional language added by the attorney.
+                if has_barcode:
+                    is_cover = False
+                    page_class = "LIEN_CORE"
 
                 if is_cover:
                     logger.info(f"📄 COVER LETTER: Page {page_name} identified as cover letter")
