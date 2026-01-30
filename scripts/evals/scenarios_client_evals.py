@@ -1490,5 +1490,47 @@ Test ID: {UNIQUE_TEST_ID}"""
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": ["Apt status req"]
+    },
+    "77": {
+        "description": "Pedro Salcedo - Lien Modified (Conditional Language) - Two-page ASL lien with attorney-added conditional stipulations favoring the attorney",
+        "subject": "RE: Salcedo, Pedro - Signed Lien Documents",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>Please find attached the signed lien documents for our client Pedro Salcedo.</p>"
+            "<p>Please review and process accordingly.</p>"
+            "<p>Thank you.</p>"
+            "<p>Best regards,<br>"
+            "Attorney Services</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "SIGNED_LIEN_SALCEDO_PEDRO-2.pdf",
+                "filepath": "data/documents/lientest/SIGNED_LIEN_SALCEDO_PEDRO-2.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Lien Modified", "AI: Human review required"]
+    },
+    "78": {
+        "description": "Pedro Salcedo - Lien Modified (Conditional Language) - Single ASL lien with attorney-added conditional stipulations favoring the attorney",
+        "subject": "RE: Salcedo, Pedro - Signed Lien",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>Please find attached the signed lien for our client Pedro Salcedo.</p>"
+            "<p>Please process the attached documentation.</p>"
+            "<p>Thank you for your prompt attention.</p>"
+            "<p>Best regards,<br>"
+            "Attorney Services</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "SIGNED_LIEN_SALCEDO_PEDRO.pdf",
+                "filepath": "data/documents/lientest/SIGNED_LIEN_SALCEDO_PEDRO.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["Lien Modified", "AI: Human review required"]
     }
 }

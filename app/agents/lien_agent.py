@@ -19,6 +19,7 @@ from app.core.config import settings as app_settings_instance
 from app.services import frontapp_service
 from app.agents.agent_helpers import send_reply_to_front_direct, extract_patient_id_from_email_logic
 from app.mcp import call_mcp_tool
+from collections import defaultdict
 
 # --- BEGIN: Logging ---
 logger = get_task_logger(__name__)
@@ -40,6 +41,99 @@ LIEN_TEST_UPLOAD_DIR = "/tmp/lien_test_uploads"
 # Templates are fetched from database via _fetch_lien_templates_from_db()
 
 # --- BEGIN: Helper Functions ---
+
+
+class _SafeFormatDict(defaultdict):
+    """A defaultdict that returns the key wrapped in braces for missing keys.
+    Used for safe template formatting so unknown placeholders like {patient_id}
+    don't raise KeyError — they are left as-is in the output."""
+
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
+def _safe_format_template(template: str, **kwargs) -> str:
+    """Format a template string, leaving unknown placeholders intact."""
+    safe = _SafeFormatDict(str, **kwargs)
+    return template.format_map(safe)
+
+
+async def _build_rejection_placeholder_values(
+    patient_id: Optional[str],
+    lien_type: str,
+    signature_type: str,
+    custom_placeholders: Optional[Dict[str, str]] = None
+) -> Dict[str, str]:
+    """
+    Build a full set of placeholder values for rejection templates.
+    Fetches patient info and lien status table when patient_id is available.
+    Returns a dict suitable for template formatting.
+    """
+    values: Dict[str, str] = {
+        "lien_type": lien_type or "",
+        "patient_id": patient_id or "",
+        "patient_name": "",
+        "dob": "",
+        "doi": "",
+        "lien_status_table": "",
+        "call_log_table": "",
+    }
+
+    if patient_id:
+        try:
+            # Fetch patient info
+            patient_info_response = await call_mcp_tool(
+                tool_name="fetch_patient_info",
+                arguments={"patient_id": patient_id}
+            )
+
+            if patient_info_response and isinstance(patient_info_response, dict):
+                data_section = patient_info_response.get('data', {})
+                if data_section and isinstance(data_section, dict):
+                    patients_list = data_section.get('patients', [])
+                    if patients_list and len(patients_list) > 0:
+                        patient = patients_list[0]
+                        first_name = patient.get('first_name', '').strip()
+                        last_name = patient.get('last_name', '').strip()
+                        if first_name and last_name:
+                            values["patient_name"] = f"{first_name} {last_name}"
+                        elif first_name:
+                            values["patient_name"] = first_name
+                        elif last_name:
+                            values["patient_name"] = last_name
+
+                        raw_dob = patient.get('birth_date')
+                        if raw_dob:
+                            try:
+                                date_obj = datetime.strptime(raw_dob, '%Y-%m-%d')
+                                values["dob"] = date_obj.strftime('%m/%d/%Y')
+                            except Exception:
+                                values["dob"] = raw_dob
+
+                        raw_doi = patient.get('doi')
+                        if raw_doi:
+                            try:
+                                date_obj = datetime.strptime(raw_doi, '%Y-%m-%d')
+                                values["doi"] = date_obj.strftime('%m/%d/%Y')
+                            except Exception:
+                                values["doi"] = raw_doi
+
+            # Generate lien status table (no upload results for rejections)
+            values["lien_status_table"] = await _generate_lien_status_table(patient_id, [], signature_type)
+
+            # Generate call log table
+            from app.helpers.call_log_table import generate_call_log_table
+            values["call_log_table"] = await generate_call_log_table(patient_id)
+
+        except Exception as e:
+            logger.warning(f"Failed to fetch patient info for rejection template: {e}")
+
+    # Merge custom workspace placeholders
+    if custom_placeholders:
+        values.update(custom_placeholders)
+
+    return values
+
 
 async def _fetch_custom_placeholders_from_db() -> Dict[str, str]:
     """
@@ -764,6 +858,25 @@ async def handle_lien_request(
     # Determine lien type from tags
     lien_type = _determine_lien_type(applied_tags, signature_type)
 
+    # Extract patient ID early so rejection templates can use it
+    patient_id = None
+    if email_obj.extracted_patient_ids and len(email_obj.extracted_patient_ids) > 0:
+        patient_id = email_obj.extracted_patient_ids[0]
+        logger.info(f"🔍 LIEN AGENT: Early patient ID from document barcode: {patient_id}")
+    else:
+        logger.info(f"🔍 LIEN AGENT: No barcode patient ID found early, attempting email text extraction")
+        patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id, email_subject)
+        if patient_id:
+            logger.info(f"🔍 LIEN AGENT: Early patient ID from email text: {patient_id}")
+
+    # Build placeholder values for rejection templates (patient info, lien status table, etc.)
+    rejection_placeholders = await _build_rejection_placeholder_values(
+        patient_id=patient_id,
+        lien_type=lien_type,
+        signature_type=signature_type,
+        custom_placeholders=custom_placeholders
+    )
+
     # Step 2: Check email content for conditional language
     if email_analysis.get("has_conditional_language", False):
         logger.warning(f"⚠️ EMAIL CONDITIONAL LANGUAGE: Detected in email content for conversation {front_conversation_id}")
@@ -786,7 +899,7 @@ async def handle_lien_request(
                     phrases_text = f"\n\nDetected language:\n{phrases_list}"
 
                 # Create response text with detected phrases
-                response_text = template_to_use.format(lien_type=lien_type)
+                response_text = _safe_format_template(template_to_use, **rejection_placeholders)
                 # Append detected phrases if using the generic modified template
                 if not templates.get("email_conditional") and phrases_text:
                     response_text += f"<br/><br/><em>Specifically, we detected conditional language in the email message.{phrases_text.replace(chr(10), '<br/>')}</em>"
@@ -848,7 +961,7 @@ async def handle_lien_request(
                     phrases_text = f"\n\nDetected language:\n{phrases_list}"
 
                 # Create response text with detected phrases
-                response_text = template_to_use.format(lien_type=lien_type)
+                response_text = _safe_format_template(template_to_use, **rejection_placeholders)
                 # Append detected phrases if using the generic modified template
                 if not templates.get("cover_letter_conditional") and phrases_text:
                     response_text += f"<br/><br/><em>Specifically, we detected conditional language in the cover letter.{phrases_text.replace(chr(10), '<br/>')}</em>"
@@ -898,9 +1011,16 @@ async def handle_lien_request(
             # Add human review tag
             frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
 
-            # Add comment explaining the issue with the other company name
-            comment_text = f"This lien appears to belong to another company: {detected_company_name}. Please review manually."
-            frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
+            # Send autoresponse (or save to sandbox in test mode)
+            response_text = f"This lien appears to belong to another company: {detected_company_name}. Please review manually."
+            await send_or_save_response(
+                conversation_id=front_conversation_id,
+                response_text=response_text,
+                tags_to_add=None,
+                test_mode=test_mode,
+                lien_type=lien_type,
+                signature_type=signature_type
+            )
 
             return {
                 "agent_handled": True,
@@ -934,7 +1054,7 @@ async def handle_lien_request(
             if templates.get("modified"):
                 await send_or_save_response(
                     conversation_id=front_conversation_id,
-                    response_text=templates["modified"].format(lien_type=lien_type),
+                    response_text=_safe_format_template(templates["modified"], **rejection_placeholders),
                     tags_to_add=None,
                     test_mode=test_mode,
                     lien_type=lien_type,
@@ -969,7 +1089,7 @@ async def handle_lien_request(
             if templates.get("invalid_signature"):
                 await send_or_save_response(
                     conversation_id=front_conversation_id,
-                    response_text=templates["invalid_signature"].format(lien_type=lien_type),
+                    response_text=_safe_format_template(templates["invalid_signature"], **rejection_placeholders),
                     tags_to_add=None,
                     test_mode=test_mode,
                     lien_type=lien_type,
@@ -1004,7 +1124,7 @@ async def handle_lien_request(
             if templates.get("unreadable"):
                 await send_or_save_response(
                     conversation_id=front_conversation_id,
-                    response_text=templates["unreadable"].format(lien_type=lien_type),
+                    response_text=_safe_format_template(templates["unreadable"], **rejection_placeholders),
                     tags_to_add=None,
                     test_mode=test_mode,
                     lien_type=lien_type,
@@ -1036,9 +1156,16 @@ async def handle_lien_request(
             # Add human review tag
             frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
 
-            # Add comment to Front conversation
-            comment_text = "Barcodes are the same on multiple pages. Please review and handle accordingly."
-            frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
+            # Send autoresponse (or save to sandbox in test mode)
+            response_text = "Barcodes are the same on multiple pages. Please review and handle accordingly."
+            await send_or_save_response(
+                conversation_id=front_conversation_id,
+                response_text=response_text,
+                tags_to_add=None,
+                test_mode=test_mode,
+                lien_type=lien_type,
+                signature_type=signature_type
+            )
 
             return {
                 "agent_handled": True,
@@ -1069,7 +1196,7 @@ async def handle_lien_request(
     #         if templates.get("unreadable"):
     #             await send_or_save_response(
     #                 conversation_id=front_conversation_id,
-    #                 response_text=templates["unreadable"].format(lien_type=lien_type),
+    #                 response_text=_safe_format_template(templates["unreadable"], **rejection_placeholders),
     #                 tags_to_add=None,
     #                 test_mode=test_mode,
     #                 lien_type=lien_type,
@@ -1091,18 +1218,9 @@ async def handle_lien_request(
     #         logger.error(f"Failed to request clearer document: {e}")
     #         return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to request clearer document: {e}"}}
 
-    # Extract patient ID - First check if it was already extracted from document barcode
-    patient_id = None
-
-    if email_obj.extracted_patient_ids and len(email_obj.extracted_patient_ids) > 0:
-        patient_id = email_obj.extracted_patient_ids[0]
-        logger.info(f"🔍 LIEN AGENT: Using patient ID from document barcode: {patient_id}")
-    else:
-        logger.info(f"🔍 LIEN AGENT: No barcode patient ID found, attempting to extract from email text")
-        patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id, email_subject)
-
+    # patient_id was already extracted early (before rejection checks)
     if patient_id:
-        logger.info(f"🔍 LIEN AGENT: Patient ID found: {patient_id}")
+        logger.info(f"🔍 LIEN AGENT: Patient ID available for processing: {patient_id}")
     else:
         logger.warning(f"🔍 LIEN AGENT: No patient ID found for conversation {front_conversation_id}")
 
@@ -1116,7 +1234,7 @@ async def handle_lien_request(
             if templates.get("patient_not_found"):
                 await send_or_save_response(
                     conversation_id=front_conversation_id,
-                    response_text=templates["patient_not_found"].format(lien_type=lien_type),
+                    response_text=_safe_format_template(templates["patient_not_found"], **rejection_placeholders),
                     tags_to_add=None,
                     test_mode=test_mode,
                     lien_type=lien_type,
@@ -1470,10 +1588,8 @@ async def handle_lien_request(
             else:
                 logger.warning(f"FRONT_BOT_TEAMMATE_ID not configured — cannot assign conversation {front_conversation_id} during RadFlow wait")
 
-            # TEMPORARILY DISABLED: 5-minute wait for RadFlow to update signature status
-            # logger.info(f"⏳ Waiting 5 minutes for RadFlow to update signature status for {len(unique_patient_ids)} patient(s)...")
-            # await asyncio.sleep(300)  # 5 minutes = 300 seconds
-            logger.info(f"⏩ Skipping 5-minute RadFlow wait (temporarily disabled). Proceeding for {len(unique_patient_ids)} patient(s)")
+            logger.info(f"⏳ Waiting 5 minutes for RadFlow to update signature status for {len(unique_patient_ids)} patient(s)...")
+            await asyncio.sleep(300)  # 5 minutes = 300 seconds
 
         # Generate consolidated response for multiple patients
         if len(unique_patient_ids) > 1:
