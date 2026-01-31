@@ -26,6 +26,9 @@ LIEN_TEST_UPLOAD_DIR = "/tmp/lien_test_uploads"
 # Bill balance test outputs directory
 BILL_BALANCE_TEST_OUTPUT_DIR = "/tmp/bill_balance_test_outputs"
 
+# Apt status test outputs directory
+APT_STATUS_TEST_OUTPUT_DIR = "/tmp/apt_status_test_outputs"
+
 router = APIRouter()
 
 
@@ -520,6 +523,238 @@ async def clear_all_bill_balance_test_outputs():
         return {"message": "All bill balance test outputs cleared"}
     except Exception as e:
         logger.error(f"Error clearing bill balance test outputs: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to clear test outputs: {str(e)}"
+        )
+
+
+@router.get("/apt-status-test-mode-status")
+async def get_apt_status_test_mode_status(db: AsyncSession = Depends(get_db)):
+    """Get current apt status test mode status."""
+    try:
+        setting = await system_settings_crud.get_by_key(db, "apt_status_test_mode")
+        if setting:
+            return {
+                "apt_status_test_mode": setting.setting_value,
+                "description": setting.description,
+                "last_updated": setting.updated_at,
+                "updated_by": setting.updated_by
+            }
+        else:
+            return {
+                "apt_status_test_mode": False,
+                "description": "Apt status test mode. When enabled, responses are saved to a local directory instead of sending via Front API.",
+                "last_updated": None,
+                "updated_by": None
+            }
+    except Exception as e:
+        logger.error(f"Error fetching apt status test mode status: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch apt status test mode status: {str(e)}"
+        )
+
+
+@router.post("/apt-status-test-mode-toggle")
+async def toggle_apt_status_test_mode(
+    update: SystemSettingUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Toggle apt status test mode on/off."""
+    try:
+        setting = await system_settings_crud.update_setting(
+            db,
+            "apt_status_test_mode",
+            update.setting_value,
+            updated_by=update.updated_by,
+            expected_updated_at=update.expected_updated_at
+        )
+
+        return {
+            "apt_status_test_mode": setting.setting_value,
+            "description": setting.description or "Apt status test mode",
+            "last_updated": setting.updated_at,
+            "updated_by": setting.updated_by
+        }
+    except StaleUpdateError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This setting was modified by {e.updated_by or 'another user'} at {e.current_updated_at}. Please refresh and try again."
+        )
+    except Exception as e:
+        logger.error(f"Error toggling apt status test mode: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to toggle apt status test mode: {str(e)}"
+        )
+
+
+@router.get("/apt-status-test-outputs")
+async def list_apt_status_test_outputs(db: AsyncSession = Depends(get_db)):
+    """List all conversation IDs with apt status test outputs, ordered by latest first."""
+    try:
+        from app.models.email import Email
+        from sqlalchemy import select
+
+        test_dir = Path(APT_STATUS_TEST_OUTPUT_DIR)
+
+        if not test_dir.exists():
+            return {"conversations": []}
+
+        conversations = []
+        for conv_dir in test_dir.iterdir():
+            if conv_dir.is_dir():
+                # Find all response files
+                response_files = list(conv_dir.glob("response*.json"))
+
+                # Get directory modification time
+                latest_time = conv_dir.stat().st_mtime
+                for rf in response_files:
+                    latest_time = max(latest_time, rf.stat().st_mtime)
+
+                conv_id = conv_dir.name
+                conv_info = {
+                    "conversation_id": conv_id,
+                    "timestamp": latest_time,
+                    "has_response": len(response_files) > 0,
+                    "response_count": len(response_files),
+                    "subject": None,
+                    "sender": None,
+                    "patient_ids": [],
+                }
+
+                # Try to get email info from database
+                try:
+                    stmt = select(Email).where(Email.front_conversation_id == conv_id).limit(1)
+                    result = await db.execute(stmt)
+                    email = result.scalar_one_or_none()
+                    if email:
+                        conv_info["subject"] = email.subject
+                        conv_info["sender"] = email.sender
+                except Exception as db_err:
+                    logger.warning(f"Could not fetch email info for {conv_id}: {db_err}")
+
+                # Try to get patient IDs from response files
+                for rf in response_files:
+                    try:
+                        with open(rf, "r") as f:
+                            response_data = json.load(f)
+                            patient_id = response_data.get("patient_id")
+                            if patient_id:
+                                conv_info["patient_ids"].append(patient_id)
+                    except Exception as json_err:
+                        logger.warning(f"Could not parse {rf.name} for {conv_id}: {json_err}")
+
+                conversations.append(conv_info)
+
+        # Sort by timestamp descending (latest first)
+        conversations.sort(key=lambda x: x["timestamp"], reverse=True)
+
+        return {"conversations": conversations}
+    except Exception as e:
+        logger.error(f"Error listing apt status test outputs: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list apt status test outputs: {str(e)}"
+        )
+
+
+@router.get("/apt-status-test-outputs/{conversation_id}/response")
+async def get_apt_status_test_response(conversation_id: str):
+    """Get all response files for a specific apt status test conversation."""
+    try:
+        conv_dir = Path(APT_STATUS_TEST_OUTPUT_DIR) / conversation_id
+
+        if not conv_dir.exists():
+            raise HTTPException(status_code=404, detail="Conversation directory not found")
+
+        # Security check
+        if not str(conv_dir.resolve()).startswith(str(Path(APT_STATUS_TEST_OUTPUT_DIR).resolve())):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Find all response files
+        response_files = list(conv_dir.glob("response*.json"))
+
+        if not response_files:
+            raise HTTPException(status_code=404, detail="No response files found")
+
+        # Load all responses
+        responses = []
+        for rf in sorted(response_files, key=lambda x: x.stat().st_mtime):
+            try:
+                with open(rf, "r") as f:
+                    response_data = json.load(f)
+                    response_data["_filename"] = rf.name
+                    responses.append(response_data)
+            except Exception as json_err:
+                logger.warning(f"Could not parse {rf.name}: {json_err}")
+
+        if not responses:
+            raise HTTPException(status_code=404, detail="No valid response files found")
+
+        first_response = responses[0]
+        return {
+            "conversation_id": first_response.get("conversation_id"),
+            "timestamp": first_response.get("timestamp"),
+            "response_text": first_response.get("response_text"),
+            "patient_id": first_response.get("patient_id"),
+            "response_type": first_response.get("response_type", "apt_status"),
+            "details": first_response.get("details"),
+            "status": first_response.get("status"),
+            "responses": responses,
+            "response_count": len(responses)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reading apt status test response: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to read response file: {str(e)}"
+        )
+
+
+@router.delete("/apt-status-test-outputs/{conversation_id}")
+async def delete_apt_status_test_output(conversation_id: str):
+    """Delete a specific apt status test output directory."""
+    try:
+        import shutil
+        conv_dir = Path(APT_STATUS_TEST_OUTPUT_DIR) / conversation_id
+
+        if not conv_dir.exists():
+            raise HTTPException(status_code=404, detail="Conversation directory not found")
+
+        # Security check
+        if not str(conv_dir.resolve()).startswith(str(Path(APT_STATUS_TEST_OUTPUT_DIR).resolve())):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        shutil.rmtree(conv_dir)
+        return {"message": f"Deleted test output for conversation {conversation_id}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting apt status test output: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete test output: {str(e)}"
+        )
+
+
+@router.delete("/apt-status-test-outputs")
+async def clear_all_apt_status_test_outputs():
+    """Clear all apt status test outputs."""
+    try:
+        import shutil
+        test_dir = Path(APT_STATUS_TEST_OUTPUT_DIR)
+
+        if test_dir.exists():
+            shutil.rmtree(test_dir)
+            test_dir.mkdir(parents=True, exist_ok=True)
+
+        return {"message": "All apt status test outputs cleared"}
+    except Exception as e:
+        logger.error(f"Error clearing apt status test outputs: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to clear test outputs: {str(e)}"

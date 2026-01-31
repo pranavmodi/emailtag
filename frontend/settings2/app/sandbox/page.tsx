@@ -103,7 +103,41 @@ type BillBalanceResponseDetail = {
   response_count?: number;
 };
 
-type TabType = "liens" | "bill_balance";
+// Apt Status types
+type AptStatusOutput = {
+  conversation_id: string;
+  timestamp: number;
+  has_response: boolean;
+  subject: string | null;
+  sender: string | null;
+  patient_ids?: string[];
+  response_count?: number;
+};
+
+type SingleAptStatusResponse = {
+  conversation_id: string;
+  timestamp: string;
+  response_text: string;
+  patient_id?: string;
+  response_type?: string;
+  details?: Record<string, unknown>;
+  status: string;
+  _filename?: string;
+};
+
+type AptStatusResponseDetail = {
+  conversation_id: string;
+  timestamp: string;
+  response_text: string;
+  patient_id?: string;
+  response_type?: string;
+  details?: Record<string, unknown>;
+  status: string;
+  responses?: SingleAptStatusResponse[];
+  response_count?: number;
+};
+
+type TabType = "liens" | "bill_balance" | "apt_status";
 
 const formatFileSize = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`;
@@ -151,6 +185,16 @@ export default function SandboxPage() {
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Apt Status state
+  const [aptStatusOutputs, setAptStatusOutputs] = useState<AptStatusOutput[]>([]);
+  const [selectedAptStatus, setSelectedAptStatus] = useState<string | null>(null);
+  const [aptStatusResponse, setAptStatusResponse] = useState<AptStatusResponseDetail | null>(null);
+  const [isLoadingAptStatus, setIsLoadingAptStatus] = useState(true);
+  const [isLoadingAptStatusResponse, setIsLoadingAptStatusResponse] = useState(false);
+  const [isClearingAptStatus, setIsClearingAptStatus] = useState(false);
+  const [showClearAptStatusConfirm, setShowClearAptStatusConfirm] = useState(false);
+  const [aptStatusError, setAptStatusError] = useState<string | null>(null);
+
   // Bill Balance state
   const [billBalanceOutputs, setBillBalanceOutputs] = useState<BillBalanceOutput[]>([]);
   const [selectedBillBalance, setSelectedBillBalance] = useState<string | null>(null);
@@ -178,6 +222,68 @@ export default function SandboxPage() {
       setLienError(message);
     } finally {
       setIsLoadingLiens(false);
+    }
+  };
+
+  // Load apt status outputs
+  const loadAptStatusOutputs = async () => {
+    setIsLoadingAptStatus(true);
+    setAptStatusError(null);
+    try {
+      const data = await SettingsApi.getAptStatusTestOutputs();
+      setAptStatusOutputs(data.conversations);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const message =
+        error instanceof Error ? error.message : "Failed to load apt status test outputs";
+      setAptStatusError(message);
+    } finally {
+      setIsLoadingAptStatus(false);
+    }
+  };
+
+  const loadAptStatusResponseDetails = async (conversationId: string) => {
+    setIsLoadingAptStatusResponse(true);
+    setAptStatusError(null);
+    try {
+      const data = await SettingsApi.getAptStatusTestResponse(conversationId);
+      setAptStatusResponse(data);
+      setSelectedAptStatus(conversationId);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const message =
+        error instanceof Error ? error.message : "Failed to load apt status response";
+      setAptStatusError(message);
+    } finally {
+      setIsLoadingAptStatusResponse(false);
+    }
+  };
+
+  const handleClearAllAptStatus = async () => {
+    setIsClearingAptStatus(true);
+    setAptStatusError(null);
+    try {
+      await SettingsApi.clearAllAptStatusTestOutputs();
+      setShowClearAptStatusConfirm(false);
+      setSelectedAptStatus(null);
+      setAptStatusResponse(null);
+      await loadAptStatusOutputs();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const message =
+        error instanceof Error ? error.message : "Failed to clear apt status outputs";
+      setAptStatusError(message);
+    } finally {
+      setIsClearingAptStatus(false);
     }
   };
 
@@ -269,6 +375,7 @@ export default function SandboxPage() {
   useEffect(() => {
     loadConversations();
     loadBillBalanceOutputs();
+    loadAptStatusOutputs();
   }, []);
 
   // Filter conversations based on search query
@@ -291,6 +398,18 @@ export default function SandboxPage() {
       (output.subject?.toLowerCase().includes(query) ?? false) ||
       (output.sender?.toLowerCase().includes(query) ?? false) ||
       (output.patient_id?.toLowerCase().includes(query) ?? false) ||
+      (output.patient_ids?.some(pid => pid.toLowerCase().includes(query)) ?? false)
+    );
+  });
+
+  // Filter apt status outputs based on search query
+  const filteredAptStatusOutputs = aptStatusOutputs.filter((output) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      output.conversation_id.toLowerCase().includes(query) ||
+      (output.subject?.toLowerCase().includes(query) ?? false) ||
+      (output.sender?.toLowerCase().includes(query) ?? false) ||
       (output.patient_ids?.some(pid => pid.toLowerCase().includes(query)) ?? false)
     );
   });
@@ -355,7 +474,7 @@ export default function SandboxPage() {
     }
   };
 
-  const isLoading = isLoadingLiens || isLoadingBillBalance;
+  const isLoading = isLoadingLiens || isLoadingBillBalance || isLoadingAptStatus;
   const totalLienFiles = conversations.reduce((sum, conv) => sum + conv.file_count, 0);
 
   if (isLoading) {
@@ -400,7 +519,7 @@ export default function SandboxPage() {
             </p>
           </div>
         </div>
-        <div className="grid gap-3 text-sm text-white/80 sm:grid-cols-4">
+        <div className="grid gap-3 text-sm text-white/80 sm:grid-cols-5">
           <div>
             <p className="text-xs uppercase tracking-wide text-white/60">Lien Conversations</p>
             <p className="text-lg font-semibold">{conversations.length}</p>
@@ -412,6 +531,10 @@ export default function SandboxPage() {
           <div>
             <p className="text-xs uppercase tracking-wide text-white/60">Bill Balance Outputs</p>
             <p className="text-lg font-semibold">{billBalanceOutputs.length}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-white/60">Apt Status Outputs</p>
+            <p className="text-lg font-semibold">{aptStatusOutputs.length}</p>
           </div>
           <div>
             <p className="text-xs uppercase tracking-wide text-white/60">Status</p>
@@ -455,6 +578,24 @@ export default function SandboxPage() {
               activeTab === "bill_balance" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"
             }`}>
               {billBalanceOutputs.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("apt_status")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+            activeTab === "apt_status"
+              ? "bg-white text-slate-900 shadow-sm"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          <Calendar className="h-4 w-4" />
+          Apt Status
+          {aptStatusOutputs.length > 0 && (
+            <span className={`px-1.5 py-0.5 rounded text-xs ${
+              activeTab === "apt_status" ? "bg-indigo-100 text-indigo-700" : "bg-slate-200 text-slate-600"
+            }`}>
+              {aptStatusOutputs.length}
             </span>
           )}
         </button>
@@ -839,6 +980,363 @@ export default function SandboxPage() {
                             </motion.div>
                           ))}
                           </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Apt Status Tab */}
+      {activeTab === "apt_status" && (
+        <>
+          {/* Actions bar */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-slate-900">Apt Status Test Outputs</h2>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={loadAptStatusOutputs}
+                variant="ghost"
+                className="border border-slate-200 hover:bg-slate-50"
+                disabled={isClearingAptStatus}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
+              {aptStatusOutputs.length > 0 && (
+                <Button
+                  onClick={() => setShowClearAptStatusConfirm(true)}
+                  variant="ghost"
+                  className="border border-rose-200 text-rose-600 hover:bg-rose-50"
+                  disabled={isClearingAptStatus}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear All
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {aptStatusError && <ErrorBanner message={aptStatusError} />}
+
+          {/* Clear Apt Status Confirmation Dialog */}
+          {showClearAptStatusConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+              onClick={() => !isClearingAptStatus && setShowClearAptStatusConfirm(false)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={easing}
+                className="mx-4 w-full max-w-md rounded-2xl border border-rose-200 bg-white p-6 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-100">
+                    <Trash2 className="h-6 w-6 text-rose-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">Clear All Apt Status Data?</h3>
+                    <p className="text-sm text-slate-600">This action cannot be undone</p>
+                  </div>
+                </div>
+                <p className="mb-6 text-sm text-slate-700 leading-relaxed">
+                  This will permanently delete all {aptStatusOutputs.length} apt status output{aptStatusOutputs.length !== 1 ? "s" : ""} from the sandbox.
+                </p>
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => setShowClearAptStatusConfirm(false)}
+                    variant="ghost"
+                    className="flex-1 border border-slate-200 hover:bg-slate-50"
+                    disabled={isClearingAptStatus}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleClearAllAptStatus}
+                    className="flex-1 bg-rose-600 text-white hover:bg-rose-700"
+                    disabled={isClearingAptStatus}
+                  >
+                    {isClearingAptStatus ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Clearing...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Clear All
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+
+          {filteredAptStatusOutputs.length === 0 && !aptStatusError && (
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={easing}
+            >
+              <Card className="border-dashed border-2 border-slate-200 bg-slate-50/50">
+                <CardContent className="flex flex-col items-center gap-6 py-16 text-center">
+                  <div className="rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 p-6">
+                    {searchQuery ? <Search className="h-16 w-16 text-slate-400" /> : <Calendar className="h-16 w-16 text-slate-400" />}
+                  </div>
+                  <div className="max-w-md">
+                    <h3 className="text-xl font-semibold text-slate-900 mb-2">
+                      {searchQuery ? "No Matching Results" : "No Apt Status Test Data Yet"}
+                    </h3>
+                    <p className="text-slate-600 leading-relaxed">
+                      {searchQuery
+                        ? `No apt status conversations match "${searchQuery}". Try a different search term.`
+                        : "Enable apt status sandbox mode in settings and process apt status emails to see outputs here."
+                      }
+                    </p>
+                  </div>
+                  {searchQuery ? (
+                    <Button variant="ghost" className="mt-2 border border-slate-200" onClick={() => setSearchQuery("")}>
+                      Clear Search
+                    </Button>
+                  ) : (
+                    <Link href="/">
+                      <Button variant="primary" className="mt-2">
+                        Go to Settings
+                      </Button>
+                    </Link>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          <div className="space-y-3">
+            {filteredAptStatusOutputs.map((output, index) => (
+              <motion.div
+                key={output.conversation_id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ ...easing, delay: index * 0.05 }}
+              >
+                <Card className="group hover:shadow-lg hover:border-indigo-200 transition-all duration-200 border border-slate-200 overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className="p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-4 flex-1 min-w-0">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-violet-500 shadow-md group-hover:shadow-lg transition-shadow">
+                            <Calendar className="h-6 w-6 text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-slate-900 truncate text-base mb-1">
+                              {output.subject || output.conversation_id}
+                            </h3>
+                            <a
+                              href={`https://app.frontapp.com/open/${output.conversation_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs font-mono text-blue-600 hover:text-blue-800 hover:underline break-all mb-2"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {output.conversation_id}
+                              <ExternalLink className="h-3 w-3 shrink-0" />
+                            </a>
+                            <div className="flex items-center gap-2 text-sm text-slate-600 mb-3">
+                              <span className="truncate">{output.sender || "Unknown sender"}</span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {(output.response_count ?? 0) > 1 && (
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 text-xs font-medium">
+                                  <Mail className="h-3.5 w-3.5" />
+                                  {output.response_count} responses
+                                </div>
+                              )}
+                              {output.patient_ids && output.patient_ids.length > 0 && (
+                                output.patient_ids.map((pid, idx) => (
+                                  <div key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-medium">
+                                    Patient: {pid}
+                                  </div>
+                                ))
+                              )}
+                              {output.timestamp && (
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 text-slate-600 text-xs">
+                                  <Calendar className="h-3.5 w-3.5" />
+                                  {formatDate(output.timestamp)}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => loadAptStatusResponseDetails(output.conversation_id)}
+                          disabled={isLoadingAptStatusResponse && selectedAptStatus === output.conversation_id}
+                          variant={selectedAptStatus === output.conversation_id ? "primary" : "ghost"}
+                          className="shrink-0 h-10 px-4 text-sm font-medium"
+                        >
+                          {isLoadingAptStatusResponse && selectedAptStatus === output.conversation_id ? (
+                            <>
+                              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                              Loading...
+                            </>
+                          ) : (
+                            <>
+                              {selectedAptStatus === output.conversation_id ? (
+                                <>
+                                  <ChevronUp className="mr-2 h-4 w-4" />
+                                  Hide Response
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown className="mr-2 h-4 w-4" />
+                                  View Response
+                                </>
+                              )}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                    {selectedAptStatus === output.conversation_id && aptStatusResponse && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={easing}
+                        className="border-t border-slate-100 bg-slate-50/50"
+                      >
+                        <div className="p-5 space-y-4">
+                          {(aptStatusResponse.response_count ?? 1) > 1 && (
+                            <div className="flex items-center gap-2 text-sm font-medium text-purple-700 bg-purple-50 px-3 py-2 rounded-lg">
+                              <Mail className="h-4 w-4" />
+                              {aptStatusResponse.response_count} separate emails would be sent (one per patient)
+                            </div>
+                          )}
+
+                          {aptStatusResponse.responses && aptStatusResponse.responses.length > 0 ? (
+                            aptStatusResponse.responses.map((response, respIdx) => (
+                              <motion.div
+                                key={respIdx}
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.1 + respIdx * 0.05 }}
+                                className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-purple-50 p-5 shadow-sm"
+                              >
+                                <div className="flex items-start gap-3 mb-4">
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-500 text-white shadow-md">
+                                    <MessageSquare className="h-5 w-5" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <h4 className="text-base font-semibold text-slate-900 mb-1">
+                                      {(aptStatusResponse.responses?.length ?? 0) > 1
+                                        ? `Response ${respIdx + 1} of ${aptStatusResponse.responses?.length}`
+                                        : "Generated Apt Status Response"
+                                      }
+                                    </h4>
+                                    <p className="text-xs text-slate-600">
+                                      This message would be sent in production mode
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                  {response.patient_id && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
+                                      Patient: {response.patient_id}
+                                    </span>
+                                  )}
+                                  {response.response_type && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
+                                      Type: {response.response_type}
+                                    </span>
+                                  )}
+                                  {response.status && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
+                                      Status: {response.status}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="rounded-lg bg-white border border-slate-200 p-4 shadow-sm">
+                                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
+                                    Message Content:
+                                  </p>
+                                  <div className="max-w-none">
+                                    {response.response_text ? (
+                                      <div
+                                        className="text-sm text-slate-700 leading-relaxed [&_ul]:list-disc [&_ul]:ml-6 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:ml-6 [&_ol]:my-2 [&_li]:my-1 [&_p]:my-2 [&_br]:block [&_a]:text-blue-600 [&_a]:underline [&_b]:font-bold [&_strong]:font-bold [&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-slate-300 [&_th]:p-2 [&_th]:bg-slate-50 [&_td]:border [&_td]:border-slate-300 [&_td]:p-2"
+                                        dangerouslySetInnerHTML={{ __html: response.response_text }}
+                                      />
+                                    ) : (
+                                      <p className="text-sm text-slate-500">No response content available.</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </motion.div>
+                            ))
+                          ) : (
+                            <motion.div
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.1 }}
+                              className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-purple-50 p-5 shadow-sm"
+                            >
+                              <div className="flex items-start gap-3 mb-4">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-500 text-white shadow-md">
+                                  <MessageSquare className="h-5 w-5" />
+                                </div>
+                                <div className="flex-1">
+                                  <h4 className="text-base font-semibold text-slate-900 mb-1">
+                                    Generated Apt Status Response
+                                  </h4>
+                                  <p className="text-xs text-slate-600">
+                                    This message would be sent in production mode
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap gap-2 mb-4">
+                                {aptStatusResponse.patient_id && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
+                                    Patient: {aptStatusResponse.patient_id}
+                                  </span>
+                                )}
+                                {aptStatusResponse.response_type && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
+                                    Type: {aptStatusResponse.response_type}
+                                  </span>
+                                )}
+                                {aptStatusResponse.status && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
+                                    Status: {aptStatusResponse.status}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="rounded-lg bg-white border border-slate-200 p-4 shadow-sm">
+                                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
+                                  Message Content:
+                                </p>
+                                <div className="max-w-none">
+                                  {aptStatusResponse.response_text ? (
+                                    <div
+                                      className="text-sm text-slate-700 leading-relaxed [&_ul]:list-disc [&_ul]:ml-6 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:ml-6 [&_ol]:my-2 [&_li]:my-1 [&_p]:my-2 [&_br]:block [&_a]:text-blue-600 [&_a]:underline [&_b]:font-bold [&_strong]:font-bold [&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-slate-300 [&_th]:p-2 [&_th]:bg-slate-50 [&_td]:border [&_td]:border-slate-300 [&_td]:p-2"
+                                      dangerouslySetInnerHTML={{ __html: aptStatusResponse.response_text }}
+                                    />
+                                  ) : (
+                                    <p className="text-sm text-slate-500">No response content available.</p>
+                                  )}
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
                         </div>
                       </motion.div>
                     )}

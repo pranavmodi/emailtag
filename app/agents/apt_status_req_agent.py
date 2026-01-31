@@ -51,6 +51,49 @@ from app.agents.agent_helpers import (
 
 logger = get_task_logger(__name__)
 
+# Test output directory for apt status sandbox mode
+APT_STATUS_TEST_OUTPUT_DIR = "/tmp/apt_status_test_outputs"
+
+
+def save_apt_status_test_response(
+    conversation_id: str,
+    response_text: str,
+    patient_id: str = None,
+    response_type: str = "apt_status",
+    details: dict = None,
+    tags_to_add: list = None
+):
+    """Save apt status response to file instead of sending via Front API (test mode)."""
+    from pathlib import Path
+    from datetime import datetime
+
+    conv_dir = Path(APT_STATUS_TEST_OUTPUT_DIR) / conversation_id
+    conv_dir.mkdir(parents=True, exist_ok=True)
+
+    # Use patient_id in filename if available, otherwise use response.json
+    if patient_id:
+        filename = f"response_{patient_id}.json"
+    else:
+        filename = "response.json"
+
+    response_data = {
+        "conversation_id": conversation_id,
+        "timestamp": datetime.utcnow().isoformat(),
+        "response_text": response_text,
+        "patient_id": patient_id,
+        "response_type": response_type,
+        "tags_to_add": tags_to_add,
+        "details": details or {},
+        "status": "test_mode_saved"
+    }
+
+    response_file = conv_dir / filename
+    with open(response_file, "w") as f:
+        json.dump(response_data, f, indent=2, default=str)
+
+    logger.info(f"🧪 APT STATUS TEST MODE: Saved response to {response_file}")
+    return {"status": "success", "message": f"Test mode: response saved to {response_file}"}
+
 # --- BEGIN: Tag Constants for Appointment Status Agent ---
 TAG_AI_HUMAN_REVIEW_REQUIRED = "AI: Human review required" # Centralized tag for errors/escalations
 # --- END: Tag Constants ---
@@ -696,7 +739,8 @@ async def handle_apt_status_request_agent_sdk(
     email_sender: str,  # Email sender for authorization verification
     settings_obj: Any = app_settings_instance,
     email_subject: str = None,  # Add email_subject parameter
-    extracted_patient_ids: List[str] = None  # Add pre-extracted patient IDs parameter (list)
+    extracted_patient_ids: List[str] = None,  # Add pre-extracted patient IDs parameter (list)
+    test_mode: bool = False  # Sandbox/test mode flag
 ) -> Dict[str, Any]:
     """
     Handles an "Apt Status Req" using the openai-agents SDK with MCP server integration.
@@ -723,7 +767,8 @@ async def handle_apt_status_request_agent_sdk(
                 email_sender=email_sender,
                 settings_obj=settings_obj,
                 email_subject=email_subject,
-                extracted_patient_ids=[patient_id]  # Single patient ID in list
+                extracted_patient_ids=[patient_id],  # Single patient ID in list
+                test_mode=test_mode  # Pass test mode flag
             )
             all_results.append(result)
 
@@ -731,13 +776,15 @@ async def handle_apt_status_request_agent_sdk(
         all_handled = all(r.get("agent_handled", False) for r in all_results)
         all_processed = all(r.get("processed_flag", False) for r in all_results)
 
-        # Archive the conversation after all patient responses have been sent
-        if all_handled and all_processed:
+        # Archive the conversation after all patient responses have been sent (skip in test mode)
+        if all_handled and all_processed and not test_mode:
             archive_success = frontapp_service.archive_conversation_in_front(front_conversation_id)
             if archive_success:
                 logger.info(f"Conversation archived after processing {len(extracted_patient_ids)} patients")
             else:
                 logger.warning(f"Failed to archive conversation {front_conversation_id}")
+        elif all_handled and all_processed and test_mode:
+            logger.info(f"🧪 APT STATUS TEST MODE: Skipping archive for {front_conversation_id}")
 
         logger.info(f"Completed processing {len(extracted_patient_ids)} patients")
         return {
@@ -758,16 +805,30 @@ async def handle_apt_status_request_agent_sdk(
     mcp_connected = await mcp_client.connect()
     if not mcp_connected:
         logger.error("Failed to connect to MCP server, falling back to error response")
-        await send_fallback_reply_and_tag(
-            front_conversation_id,
-            "Our automated assistant is currently unable to connect to patient data services. A team member will review your request.",
-            TAG_AI_HUMAN_REVIEW_REQUIRED
-        )
+        fallback_msg = "Our automated assistant is currently unable to connect to patient data services. A team member will review your request."
+        if test_mode:
+            save_apt_status_test_response(
+                conversation_id=front_conversation_id,
+                response_text=fallback_msg,
+                patient_id=extracted_patient_id,
+                response_type="mcp_connection_error",
+                tags_to_add=[TAG_AI_HUMAN_REVIEW_REQUIRED]
+            )
+            frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
+        else:
+            await send_fallback_reply_and_tag(
+                front_conversation_id,
+                fallback_msg,
+                TAG_AI_HUMAN_REVIEW_REQUIRED
+            )
         return {
             "agent_handled": False,
             "processed_flag": True,
             "details": {"reason": "MCP server connection failed. Fallback reply sent."}
         }
+
+    if test_mode:
+        logger.info(f"🧪 APT STATUS TEST MODE: Processing {front_conversation_id} in sandbox mode")
 
     # --- BEGIN: SENDER VERIFICATION ---
     # Check if sender verification is enabled in settings
@@ -833,15 +894,27 @@ async def handle_apt_status_request_agent_sdk(
 
             # Only try to send with attachment if we have a HIPAA form
             if hipaa_form_path:
-                result = await send_reply_to_front_with_attachment(
-                    front_conversation_id,
-                    hipaa_template,
-                    hipaa_form_path,
-                    tags_to_add=["AI handled", TAG_AI_HUMAN_REVIEW_REQUIRED]
-                )
-
-                if result.get("status") == "success":
-                    logger.info(f"✅ Sent HIPAA form to unauthorized sender and tagged for review")
+                if test_mode:
+                    # In test mode, save the HIPAA response to file
+                    save_apt_status_test_response(
+                        conversation_id=front_conversation_id,
+                        response_text=hipaa_template,
+                        patient_id=extracted_patient_id,
+                        response_type="hipaa_form_unauthorized",
+                        details={
+                            "action": "sender_not_authorized_hipaa_sent",
+                            "sender": email_sender,
+                            "role": verification_result["role"],
+                            "hipaa_form_path": hipaa_form_path,
+                        },
+                        tags_to_add=["AI handled", TAG_AI_HUMAN_REVIEW_REQUIRED]
+                    )
+                    # Still apply tags in test mode
+                    frontapp_service.add_conversation_tags(
+                        front_conversation_id,
+                        ["AI handled", TAG_AI_HUMAN_REVIEW_REQUIRED]
+                    )
+                    logger.info(f"🧪 APT STATUS TEST MODE: Saved HIPAA response to file")
                     return {
                         "agent_handled": True,
                         "processed_flag": True,
@@ -851,24 +924,65 @@ async def handle_apt_status_request_agent_sdk(
                             "patient_id": extracted_patient_id,
                             "role": verification_result["role"],
                             "verification_status": verification_result["verification_status"],
-                            "reason": "Sender not authorized - HIPAA form sent"
+                            "reason": "Sender not authorized - HIPAA form saved to sandbox"
                         }
                     }
                 else:
-                    logger.error(f"Failed to send HIPAA form with attachment: {result}")
+                    result = await send_reply_to_front_with_attachment(
+                        front_conversation_id,
+                        hipaa_template,
+                        hipaa_form_path,
+                        tags_to_add=["AI handled", TAG_AI_HUMAN_REVIEW_REQUIRED]
+                    )
+
+                    if result.get("status") == "success":
+                        logger.info(f"✅ Sent HIPAA form to unauthorized sender and tagged for review")
+                        return {
+                            "agent_handled": True,
+                            "processed_flag": True,
+                            "details": {
+                                "action": "sender_not_authorized_hipaa_sent",
+                                "sender": email_sender,
+                                "patient_id": extracted_patient_id,
+                                "role": verification_result["role"],
+                                "verification_status": verification_result["verification_status"],
+                                "reason": "Sender not authorized - HIPAA form sent"
+                            }
+                        }
+                    else:
+                        logger.error(f"Failed to send HIPAA form with attachment: {result}")
 
             # Fallback: No HIPAA form available or failed to send - use unauthorized template
             logger.info("Using unauthorized template (no HIPAA form or send failed)")
 
-            await send_reply_to_front_direct(
-                conversation_id=front_conversation_id,
-                reply_text=unauthorized_template
-            )
+            if test_mode:
+                save_apt_status_test_response(
+                    conversation_id=front_conversation_id,
+                    response_text=unauthorized_template,
+                    patient_id=extracted_patient_id,
+                    response_type="unauthorized_escalated",
+                    details={
+                        "action": "sender_not_authorized_escalated",
+                        "sender": email_sender,
+                        "role": verification_result["role"],
+                    },
+                    tags_to_add=[TAG_AI_HUMAN_REVIEW_REQUIRED]
+                )
+                frontapp_service.add_conversation_tags(
+                    front_conversation_id,
+                    [TAG_AI_HUMAN_REVIEW_REQUIRED]
+                )
+                logger.info(f"🧪 APT STATUS TEST MODE: Saved unauthorized response to file")
+            else:
+                await send_reply_to_front_direct(
+                    conversation_id=front_conversation_id,
+                    reply_text=unauthorized_template
+                )
 
-            frontapp_service.add_conversation_tags(
-                front_conversation_id,
-                [TAG_AI_HUMAN_REVIEW_REQUIRED]
-            )
+                frontapp_service.add_conversation_tags(
+                    front_conversation_id,
+                    [TAG_AI_HUMAN_REVIEW_REQUIRED]
+                )
 
             return {
                 "agent_handled": True,
@@ -973,6 +1087,35 @@ Do not ask for confirmation. Execute the described logic.
             http_client=custom_httpx_client
         )
 
+        # In test mode, create a wrapper tool that saves to file instead of sending
+        if test_mode:
+            @function_tool
+            async def send_reply_to_front_test(conversation_id: str, reply_text: str, tags_to_add: Optional[List[str]] = None) -> Dict[str, Any]:
+                """Send a reply to the Front conversation (TEST MODE - saves to file instead of sending)."""
+                logger.info(f"🧪 APT STATUS TEST MODE: Intercepted send_reply_to_front for {conversation_id}")
+                # Still apply tags to Front even in test mode
+                if tags_to_add:
+                    try:
+                        frontapp_service.add_conversation_tags(conversation_id, tags_to_add)
+                        logger.info(f"🧪 APT STATUS TEST MODE: Applied tags {tags_to_add} to {conversation_id}")
+                    except Exception as tag_err:
+                        logger.error(f"Failed to apply tags in test mode: {tag_err}")
+
+                # Save response to file
+                result = save_apt_status_test_response(
+                    conversation_id=conversation_id,
+                    response_text=reply_text,
+                    patient_id=extracted_patient_id,
+                    response_type="apt_status",
+                    details={"tags_to_add": tags_to_add},
+                    tags_to_add=tags_to_add
+                )
+                return result
+
+            send_tool = send_reply_to_front_test
+        else:
+            send_tool = send_reply_to_front
+
         apt_status_agent = Agent(
             name="AppointmentStatusAgent_MCP_v1", # Updated name
             instructions=instructions,
@@ -983,7 +1126,7 @@ Do not ask for confirmation. Execute the described logic.
             tools=[
                 fetch_appointment_details_by_patient_id,
                 generate_formatted_reply,
-                send_reply_to_front,
+                send_tool,
             ],
             model_settings=ModelSettings(
                 temperature=0.1 # Further reduced temperature for stricter adherence to tool use

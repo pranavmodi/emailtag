@@ -54,6 +54,14 @@ const BILL_BALANCE_MODE_OPTIONS: SegmentOption<BillBalanceMode>[] = [
   { value: "production", label: "Production", description: "Send via Front API" },
 ];
 
+// Apt Status mode options for 3-way toggle
+type AptStatusMode = "off" | "sandbox" | "production";
+const APT_STATUS_MODE_OPTIONS: SegmentOption<AptStatusMode>[] = [
+  { value: "off", label: "Off", description: "Apt status autorespond disabled" },
+  { value: "sandbox", label: "Sandbox", description: "Save to local directory for testing" },
+  { value: "production", label: "Production", description: "Send via Front API" },
+];
+
 const easing = { duration: 0.45, ease: [0.16, 1, 0.3, 1] };
 
 const AUTORESPOND_LAYOUT: Array<{
@@ -62,12 +70,7 @@ const AUTORESPOND_LAYOUT: Array<{
   accent: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
 }> = [
-  {
-    key: "apt_status_req",
-    settingKey: "autorespond_apt_status_req",
-    accent: "from-indigo-500 to-purple-500",
-    icon: ClipboardList,
-  },
+  // Note: apt_status_req removed from here - now uses custom 3-way toggle (off/sandbox/production)
   {
     key: "medical_records",
     settingKey: "autorespond_medical_records",
@@ -122,6 +125,7 @@ export default function Settings2Page() {
   const [skipInternalDomains, setSkipInternalDomains] = useState<boolean>(false);
   const [lienMode, setLienMode] = useState<LienMode>("off");
   const [billBalanceMode, setBillBalanceMode] = useState<BillBalanceMode>("off");
+  const [aptStatusMode, setAptStatusMode] = useState<AptStatusMode>("off");
   const [isLoading, setIsLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [autorespondError, setAutorespondError] = useState<string | null>(null);
@@ -129,6 +133,7 @@ export default function Settings2Page() {
   const [internalDomainsError, setInternalDomainsError] = useState<string | null>(null);
   const [lienModeError, setLienModeError] = useState<string | null>(null);
   const [billBalanceModeError, setBillBalanceModeError] = useState<string | null>(null);
+  const [aptStatusModeError, setAptStatusModeError] = useState<string | null>(null);
   const [noActionList, setNoActionList] = useState<string[]>([]);
   const [noActionError, setNoActionError] = useState<string | null>(null);
   const [newNoActionItem, setNewNoActionItem] = useState<string>("");
@@ -153,13 +158,14 @@ export default function Settings2Page() {
         if (!mounted) return;
         setUser(auth.username ?? "Admin");
 
-        const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, lienTestModePayload, billBalanceTestModePayload, noActionPayload] = await Promise.all([
+        const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, lienTestModePayload, billBalanceTestModePayload, aptStatusTestModePayload, noActionPayload] = await Promise.all([
           SettingsApi.getProcessingStatus(),
           SettingsApi.getAutorespondSettings(),
           SettingsApi.getWorkspaceSettings(),
           SettingsApi.getSkipInternalDomainsStatus(),
           SettingsApi.getLienTestModeStatus(),
           SettingsApi.getBillBalanceTestModeStatus(),
+          SettingsApi.getAptStatusTestModeStatus(),
           SettingsApi.getNoActionList(),
         ]);
         if (!mounted) return;
@@ -187,6 +193,16 @@ export default function Settings2Page() {
         } else {
           setBillBalanceMode("production");
         }
+        // Derive aptStatusMode from two backend settings
+        const aptStatusEnabled = autorespondPayload.apt_status_req?.enabled ?? false;
+        const aptStatusTestMode = aptStatusTestModePayload.apt_status_test_mode ?? false;
+        if (!aptStatusEnabled) {
+          setAptStatusMode("off");
+        } else if (aptStatusTestMode) {
+          setAptStatusMode("sandbox");
+        } else {
+          setAptStatusMode("production");
+        }
         // Set no-action list
         setNoActionList(noActionPayload.no_action_list || []);
         // Store timestamps for optimistic concurrency
@@ -195,6 +211,7 @@ export default function Settings2Page() {
           skip_internal_domains: internalDomainsPayload.last_updated,
           lien_test_mode: lienTestModePayload.last_updated,
           bill_balance_test_mode: billBalanceTestModePayload.last_updated,
+          apt_status_test_mode: aptStatusTestModePayload.last_updated,
         });
         setStatusError(null);
         setAutorespondError(null);
@@ -202,6 +219,7 @@ export default function Settings2Page() {
         setInternalDomainsError(null);
         setLienModeError(null);
         setBillBalanceModeError(null);
+        setAptStatusModeError(null);
         setNoActionError(null);
         setConflictMessage(null);
       } catch (error) {
@@ -228,13 +246,14 @@ export default function Settings2Page() {
   // Re-fetch all settings when the tab becomes visible again (handles stale state)
   const refreshSettings = useCallback(async () => {
     try {
-      const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, lienTestModePayload, billBalanceTestModePayload, noActionPayload] = await Promise.all([
+      const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, lienTestModePayload, billBalanceTestModePayload, aptStatusTestModePayload, noActionPayload] = await Promise.all([
         SettingsApi.getProcessingStatus(),
         SettingsApi.getAutorespondSettings(),
         SettingsApi.getWorkspaceSettings(),
         SettingsApi.getSkipInternalDomainsStatus(),
         SettingsApi.getLienTestModeStatus(),
         SettingsApi.getBillBalanceTestModeStatus(),
+        SettingsApi.getAptStatusTestModeStatus(),
         SettingsApi.getNoActionList(),
       ]);
       setStatus(processingPayload);
@@ -247,12 +266,16 @@ export default function Settings2Page() {
       const billBalanceEnabled = autorespondPayload.bill_balance_request?.enabled ?? false;
       const billBalanceTestMode = billBalanceTestModePayload.bill_balance_test_mode ?? false;
       setBillBalanceMode(!billBalanceEnabled ? "off" : billBalanceTestMode ? "sandbox" : "production");
+      const aptStatusEnabled = autorespondPayload.apt_status_req?.enabled ?? false;
+      const aptStatusTestMode = aptStatusTestModePayload.apt_status_test_mode ?? false;
+      setAptStatusMode(!aptStatusEnabled ? "off" : aptStatusTestMode ? "sandbox" : "production");
       setNoActionList(noActionPayload.no_action_list || []);
       setSettingTimestamps({
         email_processing: processingPayload.last_updated,
         skip_internal_domains: internalDomainsPayload.last_updated,
         lien_test_mode: lienTestModePayload.last_updated,
         bill_balance_test_mode: billBalanceTestModePayload.last_updated,
+        apt_status_test_mode: aptStatusTestModePayload.last_updated,
       });
       setConflictMessage(null);
     } catch (err) {
@@ -504,6 +527,60 @@ export default function Settings2Page() {
       trackError(message, "bill_balance_mode_change");
     } finally {
       setBusyFlag("bill_balance_mode", false);
+    }
+  };
+
+  const handleAptStatusModeChange = async (mode: AptStatusMode) => {
+    setBusyFlag("apt_status_mode", true);
+    try {
+      // Derive the two backend settings from the mode
+      const aptStatusEnabled = mode !== "off";
+      const testMode = mode === "sandbox";
+
+      // Update both settings with concurrency tokens
+      const [autorespondResult, testModeResult] = await Promise.all([
+        SettingsApi.toggleAutorespond("autorespond_apt_status_req", aptStatusEnabled, settingTimestamps.autorespond_apt_status_req),
+        SettingsApi.toggleAptStatusTestMode(testMode, settingTimestamps.apt_status_test_mode),
+      ]);
+
+      // Update local state
+      setAptStatusMode(mode);
+      setAutorespond((prev) =>
+        prev
+          ? {
+              ...prev,
+              apt_status_req: prev.apt_status_req
+                ? { ...prev.apt_status_req, enabled: aptStatusEnabled }
+                : prev.apt_status_req,
+            }
+          : prev
+      );
+      setSettingTimestamps((prev) => ({
+        ...prev,
+        autorespond_apt_status_req: autorespondResult.updated_at ?? null,
+        apt_status_test_mode: testModeResult.last_updated,
+      }));
+      setAptStatusModeError(null);
+      setConflictMessage(null);
+      trackAction("apt_status_mode_change", "AptStatusModeToggle", { new_mode: mode });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      if (error instanceof ApiError && error.status === 409) {
+        setConflictMessage(error.message);
+        await refreshSettings();
+        return;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to update apt status mode";
+      setAptStatusModeError(message);
+      trackError(message, "apt_status_mode_change");
+    } finally {
+      setBusyFlag("apt_status_mode", false);
     }
   };
 
@@ -944,6 +1021,46 @@ export default function Settings2Page() {
               </motion.div>
             );
           })}
+
+          {/* Apt Status 3-way toggle (Off / Sandbox / Production) */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...easing, delay: 0.08 }}
+            className="h-full"
+          >
+            <Card className={isGlobalDisabled ? "opacity-60" : "opacity-100"}>
+              <CardContent className="space-y-4 pt-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-lg">
+                        <ClipboardList className="h-5 w-5" />
+                      </span>
+                      <div>
+                        <p className="text-base font-semibold text-slate-900">
+                          {autorespond?.apt_status_req?.label ?? "Apt Status Req"}
+                        </p>
+                        <p className="text-xs uppercase tracking-wide text-slate-400">
+                          apt status
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-500">
+                      {autorespond?.apt_status_req?.description ?? "Automatically respond to appointment status request emails"}
+                    </p>
+                  </div>
+                  <SegmentedControl
+                    options={APT_STATUS_MODE_OPTIONS}
+                    value={aptStatusMode}
+                    onChange={handleAptStatusModeChange}
+                    disabled={isGlobalDisabled || busy.apt_status_mode}
+                  />
+                </div>
+                {aptStatusModeError && <ErrorBanner message={aptStatusModeError} />}
+              </CardContent>
+            </Card>
+          </motion.div>
 
           {/* Liens 3-way toggle (Off / Sandbox / Production) */}
           <motion.div

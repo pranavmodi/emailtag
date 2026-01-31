@@ -160,6 +160,12 @@ class CRUDSystemSettings:
                     "(/tmp/bill_balance_test_outputs/{conversation_id}/) instead of sending via Front API. "
                     "Use this for testing bill balance processing without affecting production data."
                 )
+            elif setting_key == "apt_status_test_mode":
+                description = (
+                    "Apt status test mode. When enabled, apt status responses are saved to a local directory "
+                    "(/tmp/apt_status_test_outputs/{conversation_id}/) instead of sending via Front API. "
+                    "Use this for testing apt status processing without affecting production data."
+                )
 
             setting = SystemSetting(
                 setting_key=setting_key,

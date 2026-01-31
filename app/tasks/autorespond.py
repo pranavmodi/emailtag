@@ -168,10 +168,11 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                     skip_internal = await system_settings_crud.get_setting_value(async_db, "skip_internal_domains", default=False)
                     lien_sandbox = await system_settings_crud.get_setting_value(async_db, "lien_test_mode", default=False)
                     bill_balance_sandbox = await system_settings_crud.get_setting_value(async_db, "bill_balance_test_mode", default=False)
-                    return skip_internal, lien_sandbox, bill_balance_sandbox
+                    apt_status_sandbox = await system_settings_crud.get_setting_value(async_db, "apt_status_test_mode", default=False)
+                    return skip_internal, lien_sandbox, bill_balance_sandbox, apt_status_sandbox
 
-            skip_internal_domains, lien_test_mode, bill_balance_test_mode = asyncio.run(check_filtering_and_sandbox())
-            any_sandbox_enabled = lien_test_mode or bill_balance_test_mode
+            skip_internal_domains, lien_test_mode, bill_balance_test_mode, apt_status_test_mode = asyncio.run(check_filtering_and_sandbox())
+            any_sandbox_enabled = lien_test_mode or bill_balance_test_mode or apt_status_test_mode
 
             if skip_internal_domains:
                 if any_sandbox_enabled:
@@ -181,6 +182,8 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                         sandbox_types.append("lien")
                     if bill_balance_test_mode:
                         sandbox_types.append("bill_balance")
+                    if apt_status_test_mode:
+                        sandbox_types.append("apt_status")
                     logger.info(f"🧪 SANDBOX MODE: Email {email_id} sender '{sender_email}' is internal but sandbox mode is enabled ({', '.join(sandbox_types)}). Processing for sandbox.")
                 else:
                     # No sandbox mode - block autorespond as usual
@@ -282,12 +285,24 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
         # --- End Human Review Check ---
 
         if APT_STATUS_REQ_TAG_NAME in applied_tag_names:
+            # Check if apt status test mode is enabled
+            async def _check_apt_status_test_mode():
+                async with AsyncSessionLocal() as async_db:
+                    return await system_settings_crud.get_setting_value(async_db, "apt_status_test_mode", default=False)
+
+            apt_status_test_mode_enabled = asyncio.run(_check_apt_status_test_mode())
+
             # Check if apt_status_req autorespond is enabled
             if not asyncio.run(_check_autorespond_enabled("autorespond_apt_status_req")):
                 logger.info(f"📴 Apt Status Req autorespond DISABLED - Skipping agent for email {email_id}")
                 auto_response_details = {"reason": "Apt Status Req autorespond is disabled"}
             else:
                 agent_name_for_status = "apt_status_req"
+
+                if apt_status_test_mode_enabled:
+                    logger.info(f"🧪 APT STATUS TEST MODE: Email {email_id} tagged with '{APT_STATUS_REQ_TAG_NAME}'. Response will be saved to file (not sent)")
+                else:
+                    pass  # Normal production logging happens below
 
                 # Use pre-extracted patient IDs from database (extracted before classification)
                 def _get_all_patient_ids():
@@ -319,14 +334,26 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                             # Send deterministic response asking for patient details
                             from app.agents.templates.shared_templates import TEMPLATE_REQUEST_PATIENT_ID
 
-                            # Import the direct helper function (not the FunctionTool)
-                            from app.agents.agent_helpers import send_reply_to_front_direct
+                            if apt_status_test_mode_enabled:
+                                # In test mode, save the deterministic response to file
+                                from app.agents.apt_status_req_agent import save_apt_status_test_response
+                                save_apt_status_test_response(
+                                    conversation_id=front_conversation_id,
+                                    response_text=TEMPLATE_REQUEST_PATIENT_ID,
+                                    patient_id=None,
+                                    response_type="request_patient_id",
+                                    details={"reason": "Deterministic response - requested patient details (saved to sandbox)"}
+                                )
+                                logger.info(f"🧪 APT STATUS TEST MODE: Saved deterministic 'ask for patient details' response to file")
+                            else:
+                                # Import the direct helper function (not the FunctionTool)
+                                from app.agents.agent_helpers import send_reply_to_front_direct
 
-                            await send_reply_to_front_direct(
-                                conversation_id=front_conversation_id,
-                                reply_text=TEMPLATE_REQUEST_PATIENT_ID,
-                                tags_to_add=None
-                            )
+                                await send_reply_to_front_direct(
+                                    conversation_id=front_conversation_id,
+                                    reply_text=TEMPLATE_REQUEST_PATIENT_ID,
+                                    tags_to_add=None
+                                )
 
                             agent_result_dict = {
                                 "agent_handled": True,
@@ -343,7 +370,8 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                         email_sender=sender_email,  # Pass sender email for authorization verification (may be spoofed for testing)
                         settings_obj=settings,  # Pass the main settings module
                         email_subject=email_obj.subject,  # Pass the email subject from DB
-                        extracted_patient_ids=extracted_patient_ids  # Pass ALL pre-extracted patient IDs
+                        extracted_patient_ids=extracted_patient_ids,  # Pass ALL pre-extracted patient IDs
+                        test_mode=apt_status_test_mode_enabled  # Pass test mode flag
                     )
 
                 # Celery tasks are synchronous, so we run the async orchestrator using asyncio.run()
