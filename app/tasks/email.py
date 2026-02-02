@@ -317,6 +317,18 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
             email_id=email_id
         )
 
+        tracer.log_step(
+            step_name=TraceSteps.ORCHESTRATION_STARTED,
+            step_type=StepTypes.BUSINESS_LOGIC,
+            status=TraceStatus.COMPLETED,
+            input_data={
+                "email_id": email_id,
+                "front_conversation_id": front_conversation_id,
+                "has_attachments": email_obj.has_attachments,
+                "current_status": email_obj.status,
+            }
+        )
+
         # --- TOPIC SPLIT DETECTION --- (Uses comprehensive tag-based split detection)
         logger.info(f"🔀 TOPIC SPLIT CHECK: Starting split analysis for email {email_id} in conversation {front_conversation_id}")
         is_potential_split = False
@@ -503,13 +515,31 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
             
             was_archived = asyncio.run(_run_archive_check_async())
 
+            tracer.log_step(
+                step_name=TraceSteps.ORCHESTRATION_ARCHIVE_RESULT,
+                step_type=StepTypes.BUSINESS_LOGIC,
+                status=TraceStatus.COMPLETED,
+                output_data={
+                    "was_archived": was_archived,
+                }
+            )
+
             if was_archived:
                 logger.info(f"Conversation {front_conversation_id} was archived. Orchestration complete for this path.")
                 email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="archived_in_orchestration", is_processed=True))
                 return {"status": "success_archived_orchestration", "email_id": email_id}
-                
+
         except Exception as e_archive_check:
             logger.error(f"Error during pre-tagging archive check for {front_conversation_id}: {e_archive_check}", exc_info=True)
+            tracer.log_step(
+                step_name=TraceSteps.ORCHESTRATION_ARCHIVE_RESULT,
+                step_type=StepTypes.BUSINESS_LOGIC,
+                status=TraceStatus.FAILED,
+                error_data={
+                    "error_type": type(e_archive_check).__name__,
+                    "error_message": str(e_archive_check),
+                }
+            )
             # Proceed with tagging if archive check fails
 
         # --- PATIENT ID EXTRACTION --- (NEW: Before Classification)
@@ -568,21 +598,42 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
         # perform_tagging_task.delay(email_id)
         perform_tagging_task.apply_async(args=[email_id], queue='tagging')
         logger.info(f"Queued email {email_id} for tagging on 'tagging' queue.")
+
+        tracer.log_step(
+            step_name=TraceSteps.ORCHESTRATION_QUEUED_TAGGING,
+            step_type=StepTypes.TASK_QUEUE,
+            status=TraceStatus.COMPLETED,
+            output_data={
+                "email_id": email_id,
+                "queue": "tagging",
+            }
+        )
+
         return {"status": "queued_for_tagging", "email_id": email_id}
 
     except Exception as e:
         logger.exception(f"Error in orchestrate_post_ocr_processing for {email_id}: {str(e)}")
         if db.is_active:
             db.rollback()
-        # Update email status to reflect orchestration failure
-        try: # Try to update status even in exception block
-            email_uuid_for_error = UUID(email_id) # Re-validate for safety
-            # email_obj_for_error = email_crud_sync.get(db, id=email_uuid_for_error) # db might be closed or rolled back
-            # To update status in case of failure, we might need a fresh session or a separate utility
-            # For now, this error will be caught by Celery retry or marked as failed by Celery itself.
-            # Consider a robust way to mark email as 'orchestration_failed' if possible.
-        except: # Outer try-except for safety with UUID conversion
-            pass 
+        # Log the failure as a trace so it's visible in the trace viewer
+        try:
+            import traceback as tb_module
+            failure_tracer = create_tracer(
+                front_conversation_id=front_conversation_id if 'front_conversation_id' in locals() else "unknown",
+                email_id=email_id
+            )
+            failure_tracer.log_step(
+                step_name=TraceSteps.ORCHESTRATION_FAILED,
+                step_type=StepTypes.ERROR_HANDLING,
+                status=TraceStatus.FAILED,
+                error_data={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "traceback": tb_module.format_exc(),
+                }
+            )
+        except Exception:
+            logger.error(f"Failed to log orchestration failure trace for {email_id}")
         return {"status": "error", "message": str(e)}
     finally:
         if db.is_active:

@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
+  Sparkles,
 } from "lucide-react";
 
 import { ApiError, ClassificationTracesApi, SettingsApi, type FullTracesResponse } from "@/lib/api";
@@ -599,6 +600,9 @@ function ClassificationTracesContent() {
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState(conversationIdParam || "");
   const [expandedTraces, setExpandedTraces] = useState<Record<number, boolean>>({});
+  const [summaryText, setSummaryText] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -717,6 +721,25 @@ function ClassificationTracesContent() {
 
   const toggleTrace = (index: number) => {
     setExpandedTraces(prev => ({ ...prev, [index]: !prev[index] }));
+  };
+
+  const handleSummarize = async () => {
+    if (!conversationIdParam) return;
+    setSummaryLoading(true);
+    setSummaryError(null);
+    setSummaryText(null);
+    try {
+      const result = await ClassificationTracesApi.summarize(conversationIdParam);
+      setSummaryText(result.summary);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setSummaryError(err.message);
+      } else {
+        setSummaryError("Failed to generate summary");
+      }
+    } finally {
+      setSummaryLoading(false);
+    }
   };
 
   return (
@@ -840,8 +863,21 @@ function ClassificationTracesContent() {
             >
               {/* Summary Card */}
               <Card className="mb-6 bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white border-0">
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="text-xl">Decision Summary</CardTitle>
+                  <Button
+                    onClick={handleSummarize}
+                    disabled={summaryLoading}
+                    variant="ghost"
+                    className="text-white hover:bg-white/20 gap-2"
+                  >
+                    {summaryLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                    {summaryLoading ? "Summarizing..." : "Summarize"}
+                  </Button>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -872,6 +908,39 @@ function ClassificationTracesContent() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* AI Summary */}
+              {summaryError && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="mb-6 rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-700"
+                >
+                  <p className="font-medium">Summary Error</p>
+                  <p className="text-sm mt-1">{summaryError}</p>
+                </motion.div>
+              )}
+              {summaryText && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={easing}
+                >
+                  <Card className="mb-6">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-purple-600" />
+                        AI Summary
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <pre className="whitespace-pre-wrap text-sm text-slate-700 font-sans leading-relaxed">
+                        {summaryText}
+                      </pre>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
 
               {/* Traces List */}
               {traceData.traces.length === 0 ? (

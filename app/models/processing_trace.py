@@ -101,7 +101,8 @@ class TraceSteps:
     PATIENT_ID_EXTRACTION = "patient_id_extraction"
     OPENAI_PATIENT_EXTRACTION = "openai_patient_extraction"
     MCP_PATIENT_LOOKUP = "mcp_patient_lookup"
-    
+    PATIENT_ID_VALIDATION = "patient_id_validation"
+
     # Task orchestration
     TASK_QUEUED = "task_queued"
     OCR_REQUIREMENTS_CHECK = "ocr_requirements_check"
@@ -128,6 +129,12 @@ class TraceSteps:
     # Status updates
     STATUS_UPDATED = "status_updated"
     PROCESSING_COMPLETED = "processing_completed"
+
+    # Orchestration
+    ORCHESTRATION_STARTED = "orchestration_started"
+    ORCHESTRATION_ARCHIVE_RESULT = "orchestration_archive_result"
+    ORCHESTRATION_QUEUED_TAGGING = "orchestration_queued_tagging"
+    ORCHESTRATION_FAILED = "orchestration_failed"
 
 
 # Status constants

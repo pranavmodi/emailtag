@@ -560,9 +560,11 @@ ANALYSIS REQUIREMENTS:
             elif any(keyword in description for keyword in ['lien agreement', 'lien document', 'personal injury lien', 'radiologist lien', 'technologist lien', 'tech lien', 'rad lien']):
                 should_apply_enhanced_processing = True
                 logger.info(f"🔍 LIEN DETECTED (in description): Mixed document with liens, applying enhanced lien processing to {filename}")
-            elif any(keyword in description for keyword in ['patient information form', 'patient info form', 'patient demographic', 'patient information']):
-                should_apply_enhanced_processing = True
-                logger.info(f"🔍 PATIENT INFO DETECTED (in description): May contain patient demo, applying enhanced lien processing to {filename}")
+            # TEMPORARILY DISABLED: Patient info keyword matching was causing false positives
+            # on non-lien documents (e.g. plain images). Re-enable when doc_type filtering is improved.
+            # elif any(keyword in description for keyword in ['patient information form', 'patient info form', 'patient demographic', 'patient information']):
+            #     should_apply_enhanced_processing = True
+            #     logger.info(f"🔍 PATIENT INFO DETECTED (in description): May contain patient demo, applying enhanced lien processing to {filename}")
 
         if should_apply_enhanced_processing:
             try:

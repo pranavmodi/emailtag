@@ -323,6 +323,28 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                     # Get all pre-extracted patient IDs from database
                     extracted_patient_ids = _get_all_patient_ids()
 
+                    # AI validation — filter patient IDs based on email context
+                    if len(extracted_patient_ids) >= 1:
+                        from app.agents.agent_helpers import validate_patient_ids_for_autorespond
+                        validation_result = await validate_patient_ids_for_autorespond(
+                            email_content=current_email_content,
+                            email_subject=email_obj.subject or "",
+                            structured_history_messages=structured_history_messages,
+                            extracted_patient_ids=extracted_patient_ids,
+                            conversation_id=front_conversation_id
+                        )
+                        filtered_ids = validation_result.get("filtered_patient_ids", extracted_patient_ids)
+                        if filtered_ids:
+                            extracted_patient_ids = filtered_ids
+                            logger.info(f"🔍 AI VALIDATION: Filtered patient IDs: {extracted_patient_ids}")
+                        else:
+                            logger.warning(f"🔍 AI VALIDATION: All IDs filtered out, using original: {extracted_patient_ids}")
+                        # Log validation details
+                        details = validation_result.get("validation_details", {})
+                        if details.get("patients_to_ignore"):
+                            for ignored in details["patients_to_ignore"]:
+                                logger.info(f"🔍 AI VALIDATION IGNORED: {ignored['patient_id']} - {ignored['reason']}")
+
                     # If no patient ID found, check if we've already asked for patient details
                     if not extracted_patient_ids:
                         # Check conversation history for previous "Please provide" requests

@@ -810,6 +810,27 @@ function FirmCard({
               View
             </Button>
           )}
+          <Button
+            variant="ghost"
+            onClick={handleResearch}
+            disabled={isResearching}
+            className="h-8 px-2 text-sm text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+          >
+            {isResearching ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {researchStatus === "queued" && "Queued..."}
+                {researchStatus === "in_progress" && "Researching..."}
+                {researchStatus === "starting" && "Starting..."}
+                {!researchStatus && "Researching..."}
+              </>
+            ) : (
+              <>
+                <Sparkles className="mr-2 h-4 w-4" />
+                {firm.research_status === "completed" ? "Re-Research" : "Research"}
+              </>
+            )}
+          </Button>
           {isExpanded ? (
             <ChevronUp className="h-5 w-5 text-slate-400" />
           ) : (
@@ -1193,28 +1214,7 @@ function FirmCard({
           )}
 
           {/* Actions */}
-          <div className="mt-4 flex justify-between border-t border-slate-100 pt-4">
-            <Button
-              variant="ghost"
-              onClick={handleResearch}
-              disabled={isResearching}
-              className="text-amber-600 hover:bg-amber-50 hover:text-amber-700"
-            >
-              {isResearching ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {researchStatus === "queued" && "Queued..."}
-                  {researchStatus === "in_progress" && "Researching..."}
-                  {researchStatus === "starting" && "Starting..."}
-                  {!researchStatus && "Researching..."}
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  {firm.research_status === "completed" ? "Re-Research" : "Research Firm"}
-                </>
-              )}
-            </Button>
+          <div className="mt-4 flex justify-end border-t border-slate-100 pt-4">
             <Button
               variant="ghost"
               onClick={(e) => {

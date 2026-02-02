@@ -1,5 +1,6 @@
 """API Endpoints for viewing email processing traces."""
 
+import json
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -7,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc, func, distinct
+import httpx
 
 from app.services.trace_service import get_conversation_traces, get_conversation_traces_async
 from app.crud.sync import processing_trace as trace_crud_sync
@@ -15,6 +17,7 @@ from app.api.api_v1.dependencies import check_authenticated
 from app.models.classification_trace import ClassificationTrace
 from app.models.processing_trace import EmailProcessingTrace
 from app.models.email import Email
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -796,3 +799,191 @@ async def get_full_classification_traces_api(
     except Exception as e:
         logger.error(f"Error fetching full traces for {conversation_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error fetching traces: {str(e)}")
+
+
+@router.post("/classification-traces/api/summarize")
+async def summarize_classification_traces(
+    conversation_id: str = Query(..., description="Front conversation ID"),
+    is_authenticated: bool = Depends(check_authenticated)
+):
+    """Use AI to summarize all trace data for a conversation."""
+    if not is_authenticated:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        db = SessionLocal()
+        try:
+            # Gather trace data (reuse same logic as /full endpoint)
+            classification_traces = db.query(ClassificationTrace).filter(
+                ClassificationTrace.front_conversation_id == conversation_id
+            ).order_by(ClassificationTrace.step_order).all()
+
+            archival_traces = db.query(EmailProcessingTrace).filter(
+                EmailProcessingTrace.front_conversation_id == conversation_id,
+                EmailProcessingTrace.step_name.like("archive_%")
+            ).order_by(EmailProcessingTrace.step_order).all()
+
+            email = db.query(Email).filter(
+                Email.front_conversation_id == conversation_id
+            ).first()
+
+            # Build compact trace summary (strip large fields like full_prompt)
+            traces_compact = []
+
+            # Document processing
+            if email and email.ocr_results:
+                for idx, doc in enumerate(email.ocr_results):
+                    doc_analysis = doc.get("document_analysis", {})
+                    doc_data = doc_analysis.get("data", {}) if doc_analysis.get("success") else {}
+                    enhanced_lien = doc.get("enhanced_lien_processing", {})
+                    traces_compact.append({
+                        "type": "document_processing",
+                        "step": f"Document {idx + 1}: {doc.get('filename', 'Unknown')}",
+                        "document_type": doc_data.get("document_type", doc.get("document_type", "unknown")),
+                        "patient_id": doc_data.get("patient_id"),
+                        "confidence": doc_data.get("confidence"),
+                        "description": doc_data.get("description"),
+                        "processing_status": doc.get("processing_status"),
+                        "signature_detection": enhanced_lien.get("signature_detection", {}).get("lien_signature_type") if enhanced_lien else None,
+                        "barcode_found": enhanced_lien.get("barcode_detection", {}).get("barcode_found") if enhanced_lien else None,
+                        "cover_letter": enhanced_lien.get("cover_letter_analysis", {}).get("is_cover_letter") if enhanced_lien else None,
+                        "has_conditional_language": enhanced_lien.get("cover_letter_analysis", {}).get("has_conditional_language") if enhanced_lien else None,
+                    })
+
+            # Lien modification results
+            if email and email.lien_modification_results:
+                for idx, mod in enumerate(email.lien_modification_results):
+                    strike_data = mod.get("strikethrough_data", {})
+                    traces_compact.append({
+                        "type": "lien_modification_check",
+                        "step": f"Lien modification check: attachment {idx + 1}",
+                        "strikethrough_detected": strike_data.get("strikethrough_detected", mod.get("modifications_detected", False)),
+                        "document_quality": strike_data.get("document_quality") or mod.get("document_quality"),
+                        "total_instances": strike_data.get("summary", {}).get("total_strikethrough_instances", 0),
+                    })
+
+            # Archival traces
+            for trace in archival_traces:
+                output = trace.output_data or {}
+                traces_compact.append({
+                    "type": "archival",
+                    "step": trace.step_name,
+                    "status": trace.status,
+                    "decision": output.get("decision") or output.get("final_decision") or output.get("result"),
+                    "reason": output.get("reason"),
+                    "summary": output.get("summary"),
+                    "duration_ms": trace.duration_ms,
+                    "error": trace.error_data.get("error") if trace.error_data else None,
+                })
+
+            # Classification traces
+            for trace in classification_traces:
+                traces_compact.append({
+                    "type": "classification",
+                    "step": trace.step_name,
+                    "classification_path": trace.classification_path,
+                    "chosen_option": trace.chosen_option,
+                    "classification_reason": trace.classification_reason,
+                    "llm_model": trace.llm_model,
+                    "duration_ms": trace.duration_ms,
+                    "total_tokens": trace.total_tokens,
+                    "email_format": trace.email_format,
+                    "message_count": trace.message_count,
+                })
+
+            # Build email context
+            email_context = {}
+            if email:
+                email_context = {
+                    "subject": email.subject,
+                    "sender": email.sender,
+                    "status": email.status,
+                    "has_attachments": email.has_attachments,
+                    "extracted_patient_ids": email.extracted_patient_ids,
+                }
+
+            if not traces_compact and not email_context:
+                return JSONResponse(content={
+                    "conversation_id": conversation_id,
+                    "summary": "No trace data found for this conversation."
+                })
+
+            # Build prompt
+            prompt = f"""You are an expert at analyzing email processing traces for Precise Imaging's email classification system.
+
+Given the following data for conversation {conversation_id}, provide a clear, structured summary of what happened during processing.
+
+EMAIL METADATA:
+{json.dumps(email_context, indent=2, default=str)}
+
+PROCESSING TRACES (in order):
+{json.dumps(traces_compact, indent=2, default=str)}
+
+Please summarize:
+1. **Email Overview**: What the email was about (subject, sender, apparent intent)
+2. **Processing Steps**: What steps completed and their key outcomes
+3. **Classification Result**: Final tags/classification path chosen, and the reasoning
+4. **Document Processing**: If attachments were processed, what was found (document types, patient IDs, lien details, signatures, barcodes, modifications)
+5. **Anomalies or Issues**: Any failures, errors, stuck statuses, missing steps, or unexpected results
+6. **Autorespond Outcome**: If there was an autorespond decision, what was it
+
+Keep the summary concise but thorough. Use bullet points. If a section has no relevant data, skip it."""
+
+        finally:
+            db.close()
+
+        # Call OpenAI API
+        headers = {
+            "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": "gpt-4o",
+            "input": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": prompt}
+                    ]
+                }
+            ],
+            "max_output_tokens": 2000,
+        }
+
+        async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/responses",
+                headers=headers,
+                json=payload,
+            )
+
+            if response.status_code != 200:
+                logger.error(f"OpenAI API error {response.status_code}: {response.text}")
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"OpenAI API error: {response.status_code}"
+                )
+
+            result = response.json()
+            # Extract text from Responses API output
+            summary_text = ""
+            for item in result.get("output", []):
+                if item.get("type") == "message":
+                    for content_block in item.get("content", []):
+                        if content_block.get("type") == "output_text":
+                            summary_text += content_block.get("text", "")
+
+            if not summary_text:
+                summary_text = "Unable to generate summary from the AI response."
+
+        return JSONResponse(content={
+            "conversation_id": conversation_id,
+            "summary": summary_text
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error summarizing traces for {conversation_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error generating summary: {str(e)}")

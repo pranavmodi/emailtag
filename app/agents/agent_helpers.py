@@ -941,11 +941,9 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
                 frontapp_service.add_multiple_patient_ids_comment_safe(conversation_id, unique_ids, "email content")
             except Exception as e:
                 logger.error(f"Failed to add patient ID comment to conversation {conversation_id}: {e}", exc_info=True)
-        
-        return found_patient_ids
 
-    # Tier 2: OpenAI-based extraction as fallback
-    logger.info(f"🔍 TIER 2 OPENAI: No PRE IDs found, proceeding to OpenAI extraction")
+    # Tier 2: OpenAI-based extraction (always runs to find additional patients)
+    logger.info(f"🔍 TIER 2 OPENAI: Proceeding to OpenAI extraction (Tier 1 found {len(found_patient_ids)} PRE IDs)")
     try:
         logger.info(f"🔍 TIER 2 OPENAI: Calling _extract_patient_info_with_openai...")
         openai_extracted_list = await _extract_patient_info_with_openai(cleaned_email_content, subject, conversation_id)
@@ -1147,19 +1145,218 @@ async def extract_all_patient_ids_from_email_logic(email_content: str, conversat
                     logger.error(f"🔍 PATIENT PROCESSING ERROR: Exception processing patient {first_name} {last_name}: {patient_exception}", exc_info=True)
                     continue  # Continue with next patient
 
-            # Return all found patient IDs after processing all patients
+            # Log Tier 2 results
             if found_patient_ids:
                 logger.info(f"🔍 TIER 2 COMPLETE: Found total of {len(found_patient_ids)} patient ID(s): {', '.join(found_patient_ids)}")
-                return found_patient_ids
         else:
             logger.info(f"🔍 TIER 2 OPENAI: No patient information extracted by OpenAI")
-                
+
     except Exception as openai_exception:
         logger.error(f"🔍 TIER 2 OPENAI ERROR: Exception during OpenAI extraction: {openai_exception}", exc_info=True)
-    
-    # Final fallback - no patient ID found
-    logger.info(f"🔍 PATIENT_ID_EXTRACTION COMPLETE: No patient IDs found via any method")
-    return []
+
+    # Return all found patient IDs (merged from Tier 1 + Tier 2)
+    if found_patient_ids:
+        logger.info(f"🔍 PATIENT_ID_EXTRACTION COMPLETE: Returning {len(found_patient_ids)} patient ID(s): {', '.join(found_patient_ids)}")
+    else:
+        logger.info(f"🔍 PATIENT_ID_EXTRACTION COMPLETE: No patient IDs found via any method")
+    return found_patient_ids
+
+
+async def validate_patient_ids_for_autorespond(
+    email_content: str,
+    email_subject: str,
+    structured_history_messages: List[Dict[str, Any]],
+    extracted_patient_ids: List[str],
+    conversation_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Uses AI to validate which extracted patient IDs are actually relevant to the sender's request.
+
+    Analyzes the email thread context to determine which PRE IDs the sender is actually
+    requesting information about, filtering out IDs that appear only in quoted text,
+    auto-replies, or were assigned in error.
+
+    Args:
+        email_content: The current email content
+        email_subject: The email subject line
+        structured_history_messages: Conversation history messages
+        extracted_patient_ids: List of PRE patient IDs extracted by Tier 1/Tier 2
+        conversation_id: Optional Front conversation ID for tracing
+
+    Returns:
+        Dict with 'filtered_patient_ids' list and 'validation_details' dict
+    """
+    # Safe fallback: return all IDs unchanged
+    fallback_result = {
+        "filtered_patient_ids": extracted_patient_ids,
+        "validation_details": {
+            "patients_to_process": [{"patient_id": pid, "reason": "Fallback - validation skipped"} for pid in extracted_patient_ids],
+            "patients_to_ignore": []
+        }
+    }
+
+    if not extracted_patient_ids:
+        return {
+            "filtered_patient_ids": [],
+            "validation_details": {"patients_to_process": [], "patients_to_ignore": []}
+        }
+
+    custom_httpx_client = None
+    try:
+        # Format conversation history for the prompt
+        history_text = ""
+        if structured_history_messages:
+            for msg in structured_history_messages:
+                sender = msg.get("from", msg.get("sender", "Unknown"))
+                body = msg.get("body", "")
+                history_text += f"--- Message from {sender} ---\n{body}\n\n"
+
+        system_prompt = (
+            "You are analyzing an email thread to determine which patient(s) the sender is "
+            "requesting appointment status information for. You will be given a list of extracted "
+            "PRE patient IDs found in the email thread.\n\n"
+            "Your job is to classify each PRE ID into one of two categories:\n"
+            "1. patients_to_process: IDs that the sender is actually requesting information about\n"
+            "2. patients_to_ignore: IDs that are NOT relevant to the sender's current request\n\n"
+            "RULES:\n"
+            "- Focus on the LATEST/most recent message to understand the sender's current intent\n"
+            "- Quoted or forwarded text is context only — do NOT assume PRE IDs in quoted auto-replies "
+            "are what the sender is asking about\n"
+            "- If the thread acknowledges a PRE ID was assigned in error or belongs to a different patient, "
+            "ignore that ID\n"
+            "- Each PRE ID must appear in exactly one list (process OR ignore)\n"
+            "- When in doubt, INCLUDE the ID in patients_to_process (err on the side of processing)\n"
+            "- Provide a clear, concise reason for each decision"
+        )
+
+        user_prompt = (
+            f"Email Subject: {email_subject}\n\n"
+            f"Current Email Content:\n{email_content}\n\n"
+        )
+        if history_text:
+            user_prompt += f"Conversation History (oldest first):\n{history_text}\n\n"
+        user_prompt += (
+            f"Extracted PRE Patient IDs: {', '.join(extracted_patient_ids)}\n\n"
+            "Classify each PRE ID into patients_to_process or patients_to_ignore. "
+            "Return your response as JSON matching the required schema."
+        )
+
+        json_schema = {
+            "name": "patient_id_validation",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "patients_to_process": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "patient_id": {"type": "string"},
+                                "reason": {"type": "string"}
+                            },
+                            "required": ["patient_id", "reason"],
+                            "additionalProperties": False
+                        }
+                    },
+                    "patients_to_ignore": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "patient_id": {"type": "string"},
+                                "reason": {"type": "string"}
+                            },
+                            "required": ["patient_id", "reason"],
+                            "additionalProperties": False
+                        }
+                    }
+                },
+                "required": ["patients_to_process", "patients_to_ignore"],
+                "additionalProperties": False
+            }
+        }
+
+        custom_httpx_client = httpx.AsyncClient(verify=False)
+        openai_client = AsyncOpenAI(
+            api_key=app_settings_instance.OPENAI_API_KEY if hasattr(app_settings_instance, 'OPENAI_API_KEY') else os.environ.get("OPENAI_API_KEY"),
+            http_client=custom_httpx_client
+        )
+
+        logger.info(f"🔍 PATIENT ID VALIDATION: Validating {len(extracted_patient_ids)} IDs: {extracted_patient_ids}")
+
+        # Create tracer if conversation_id is provided
+        tracer = None
+        if conversation_id:
+            tracer = create_tracer(front_conversation_id=conversation_id)
+
+        if tracer:
+            with tracer.trace_step(
+                step_name=TraceSteps.PATIENT_ID_VALIDATION,
+                step_type=StepTypes.API_CALL,
+                input_data={
+                    "extracted_patient_ids": extracted_patient_ids,
+                    "email_subject": email_subject,
+                    "model": "gpt-4o"
+                }
+            ) as (trace_id, output_data):
+                response = await openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    temperature=0.1,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": json_schema
+                    }
+                )
+                result_text = response.choices[0].message.content
+                output_data["raw_response"] = result_text
+        else:
+            response = await openai_client.chat.completions.create(
+                model="gpt-4o",
+                temperature=0.1,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": json_schema
+                }
+            )
+            result_text = response.choices[0].message.content
+
+        # Parse the response
+        parsed = json.loads(result_text)
+        patients_to_process = parsed.get("patients_to_process", [])
+        patients_to_ignore = parsed.get("patients_to_ignore", [])
+
+        filtered_ids = [p["patient_id"] for p in patients_to_process if p.get("patient_id")]
+
+        logger.info(f"🔍 PATIENT ID VALIDATION RESULT: Process={[p['patient_id'] for p in patients_to_process]}, Ignore={[p['patient_id'] for p in patients_to_ignore]}")
+
+        # If all IDs were filtered out, return all original IDs as fallback
+        if not filtered_ids:
+            logger.warning(f"🔍 PATIENT ID VALIDATION: All IDs filtered out, returning original IDs as fallback")
+            return fallback_result
+
+        return {
+            "filtered_patient_ids": filtered_ids,
+            "validation_details": {
+                "patients_to_process": patients_to_process,
+                "patients_to_ignore": patients_to_ignore
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"🔍 PATIENT ID VALIDATION ERROR: {e}", exc_info=True)
+        return fallback_result
+    finally:
+        if custom_httpx_client:
+            await custom_httpx_client.aclose()
 
 
 async def _add_patient_id_comment_to_front(conversation_id: str, patient_id: str, extraction_method: str):
