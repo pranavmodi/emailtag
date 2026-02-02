@@ -172,5 +172,66 @@ class CRUDEmail(CRUDBase[Email, EmailCreate, EmailUpdate]):
         return result.scalars().all()
 
 
+    async def search_by_firm_info(
+        self,
+        db: AsyncSession,
+        *,
+        firm_name: Optional[str] = None,
+        email_address: Optional[str] = None,
+        website_domain: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Email]:
+        """
+        Search emails by firm-related info: firm name in subject/content,
+        sender/recipient matching email or domain.
+
+        Args:
+            db: Database session
+            firm_name: Firm name to search in subject/content (ILIKE)
+            email_address: Email address to match sender/recipients
+            website_domain: Domain to match sender email domain
+            limit: Max results
+
+        Returns:
+            List of matching Email objects, deduplicated by conversation_id
+        """
+        from sqlalchemy import or_, cast, String as SAString
+
+        conditions = []
+
+        if firm_name:
+            pattern = f"%{firm_name}%"
+            conditions.append(self.model.subject.ilike(pattern))
+            conditions.append(self.model.content_text.ilike(pattern))
+
+        if email_address:
+            email_pattern = f"%{email_address}%"
+            conditions.append(self.model.sender.ilike(email_pattern))
+            # recipients is a JSON array, cast and search
+            conditions.append(cast(self.model.recipients, SAString).ilike(email_pattern))
+
+        if website_domain:
+            domain_pattern = f"%@{website_domain}%"
+            conditions.append(self.model.sender.ilike(domain_pattern))
+            conditions.append(cast(self.model.recipients, SAString).ilike(domain_pattern))
+
+        if not conditions:
+            return []
+
+        query = (
+            select(self.model)
+            .filter(or_(*conditions))
+            .distinct(self.model.front_conversation_id)
+            .order_by(
+                self.model.front_conversation_id,
+                self.model.created_at.desc()
+            )
+            .limit(limit)
+        )
+
+        result = await db.execute(query)
+        return result.scalars().all()
+
+
 # Create an instance of the CRUD
-email = CRUDEmail(Email) 
+email = CRUDEmail(Email)

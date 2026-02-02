@@ -24,11 +24,225 @@ from app.schemas.pif_info import (
     OutreachRequest,
     OutreachResponse,
     OutreachMessageResult,
+    FirmLookupRequest,
+    FirmLookupConversation,
+    FirmLookupResponse,
+    FirmLookupCreateRequest,
+    FirmLookupCreateResponse,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.post("/firm-lookup", response_model=FirmLookupResponse)
+async def firm_lookup(
+    request: FirmLookupRequest,
+    db: AsyncSession = Depends(get_db),
+) -> FirmLookupResponse:
+    """
+    Search for a firm across local database and Front conversations.
+
+    Step A: Search local pif_info table for matching firms.
+    Step B: Search local email table for matching conversations.
+    Step C: Search Front API for matching conversations.
+
+    Args:
+        request: Firm lookup parameters
+        db: Database session
+
+    Returns:
+        Matching firms and conversations from all sources
+    """
+    from app.crud import email as email_crud
+    from urllib.parse import urlparse
+
+    logger.info(f"Firm lookup for: {request.firm_name}")
+
+    # Step A: Search local pif_info table
+    matching_firms_list, _ = await pif_info_crud.search(
+        db, search=request.firm_name, skip=0, limit=10
+    )
+
+    # Step B: Search local email table
+    # Extract domain from website if provided
+    website_domain = None
+    if request.website:
+        try:
+            parsed = urlparse(request.website if "://" in request.website else f"https://{request.website}")
+            website_domain = parsed.hostname
+            if website_domain and website_domain.startswith("www."):
+                website_domain = website_domain[4:]
+        except Exception:
+            pass
+
+    local_emails = await email_crud.search_by_firm_info(
+        db,
+        firm_name=request.firm_name,
+        email_address=request.email,
+        website_domain=website_domain,
+        limit=50,
+    )
+
+    conversations: List[FirmLookupConversation] = []
+    seen_conv_ids = set()
+
+    for em in local_emails:
+        if em.front_conversation_id and em.front_conversation_id not in seen_conv_ids:
+            seen_conv_ids.add(em.front_conversation_id)
+            snippet = (em.content_text or "")[:200] if em.content_text else None
+            conversations.append(FirmLookupConversation(
+                conversation_id=em.front_conversation_id,
+                subject=em.subject,
+                sender=em.sender,
+                created_at=em.created_at.isoformat() if em.created_at else None,
+                snippet=snippet,
+                source="local",
+            ))
+
+    # Step C: Search Front API
+    try:
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
+        from pifstats.src.front_client import search_front_conversations
+
+        front_results = search_front_conversations(request.firm_name, limit=25)
+        for conv in front_results:
+            conv_id = conv.get("conversation_id", "")
+            if conv_id and conv_id not in seen_conv_ids:
+                seen_conv_ids.add(conv_id)
+                recipients = conv.get("recipients", [])
+                sender_str = recipients[0] if recipients else None
+                created_at_val = conv.get("created_at")
+                created_at_str = None
+                if created_at_val:
+                    if isinstance(created_at_val, (int, float)):
+                        from datetime import datetime as dt
+                        created_at_str = dt.fromtimestamp(created_at_val).isoformat()
+                    else:
+                        created_at_str = str(created_at_val)
+
+                conversations.append(FirmLookupConversation(
+                    conversation_id=conv_id,
+                    subject=conv.get("subject"),
+                    sender=sender_str,
+                    created_at=created_at_str,
+                    snippet=None,
+                    source="front",
+                ))
+    except Exception as e:
+        logger.error(f"Error searching Front API: {e}")
+
+    logger.info(
+        f"Firm lookup results: {len(matching_firms_list)} firms, "
+        f"{len(conversations)} conversations"
+    )
+
+    return FirmLookupResponse(
+        matching_firms=matching_firms_list,
+        conversations=conversations,
+        total_conversations=len(conversations),
+    )
+
+
+@router.post("/firm-lookup/create", response_model=FirmLookupCreateResponse)
+async def firm_lookup_create(
+    request: FirmLookupCreateRequest,
+    db: AsyncSession = Depends(get_db),
+) -> FirmLookupCreateResponse:
+    """
+    Create a firm entry from lookup results and optionally start research.
+
+    Creates a new PIF entry or updates an existing one if matched by name/website.
+    Associates selected conversation IDs with the firm.
+
+    Args:
+        request: Firm creation parameters with optional conversation IDs
+        db: Database session
+
+    Returns:
+        Created/updated firm and optional research task ID
+    """
+    logger.info(f"Creating firm from lookup: {request.firm_name}")
+
+    # Check for existing firm by name or website
+    existing = None
+    if request.website:
+        existing = await pif_info_crud.get_by_website(db, request.website)
+    if not existing:
+        existing = await pif_info_crud.get_by_firm_name(db, request.firm_name)
+
+    is_new = False
+    if existing:
+        # Update existing: merge conversation IDs
+        merged_conv_ids = list(
+            set(existing.conversation_ids or []) | set(request.selected_conversation_ids or [])
+        )
+        update_data: Dict[str, Any] = {"conversation_ids": merged_conv_ids}
+
+        # Update optional fields if provided and not already set
+        if request.website and not existing.website:
+            update_data["website"] = request.website
+        if request.email and request.email not in (existing.emails or []):
+            update_data["emails"] = list(set(existing.emails or []) | {request.email})
+        if request.phone and request.phone not in (existing.phones or []):
+            update_data["phones"] = list(set(existing.phones or []) | {request.phone})
+        if request.contact_name:
+            existing_names = {c.get("name", "").lower() for c in (existing.contacts or [])}
+            if request.contact_name.lower() not in existing_names:
+                new_contacts = list(existing.contacts or [])
+                new_contacts.append({"name": request.contact_name, "title": "", "email": request.email or "", "phone": request.phone or "", "extension": ""})
+                update_data["contacts"] = new_contacts
+
+        pif = await pif_info_crud.update(db, db_obj=existing, obj_in=update_data)
+    else:
+        # Create new firm
+        is_new = True
+        contacts = []
+        if request.contact_name:
+            contacts.append({
+                "name": request.contact_name,
+                "title": "",
+                "email": request.email or "",
+                "phone": request.phone or "",
+                "extension": "",
+            })
+
+        pif_create = PifInfoCreate(
+            firm_name=request.firm_name,
+            website=request.website,
+            emails=[request.email] if request.email else [],
+            phones=[request.phone] if request.phone else [],
+            contacts=contacts,
+            conversation_ids=request.selected_conversation_ids or [],
+        )
+        pif = await pif_info_crud.create(db, obj_in=pif_create)
+
+    # Optionally start research
+    task_id = None
+    if request.start_research:
+        try:
+            await pif_info_crud.update(db, db_obj=pif, obj_in={"research_status": "queued"})
+            from app.tasks.firm_research import research_firm_task
+            task = research_firm_task.delay(str(pif.id))
+            task_id = task.id
+            logger.info(f"Research task queued for firm: {pif.firm_name}, task_id: {task_id}")
+        except Exception as e:
+            logger.error(f"Failed to start research for {pif.firm_name}: {e}")
+
+    action = "Created" if is_new else "Updated"
+    msg = f"{action} firm '{pif.firm_name}'"
+    if task_id:
+        msg += f" and started research (task_id: {task_id})"
+
+    return FirmLookupCreateResponse(
+        pif=pif,
+        is_new=is_new,
+        task_id=task_id,
+        message=msg,
+    )
 
 
 @router.get("/", response_model=PifInfoListResponse)

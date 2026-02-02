@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 
 import { ApiError, PifApi } from "@/lib/api";
-import type { PifInfoResponse, PifInfoListResponse, ProcessDayResponse, ResearchStatusResponse, OutreachMessageResult } from "@/lib/types";
+import type { PifInfoResponse, PifInfoListResponse, ProcessDayResponse, ResearchStatusResponse, OutreachMessageResult, FirmLookupResponse, FirmLookupConversation, FirmLookupCreateResponse } from "@/lib/types";
 import { ResearchModal } from "./ResearchModal";
 import {
   Card,
@@ -89,7 +89,7 @@ export default function PifListPage() {
 
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<"pif" | "outreach" | "outgen">("pif");
+  const [activeTab, setActiveTab] = useState<"pif" | "lookup" | "outreach" | "outgen">("pif");
 
   // Outreach state
   const [outreachFirmId, setOutreachFirmId] = useState<string>("");
@@ -383,6 +383,17 @@ export default function PifListPage() {
             PIF Data
           </button>
           <button
+            onClick={() => setActiveTab("lookup")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "lookup"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Search className="h-4 w-4 inline-block mr-1.5 -mt-0.5" />
+            Lookup
+          </button>
+          <button
             onClick={() => setActiveTab("outreach")}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
               activeTab === "outreach"
@@ -634,6 +645,15 @@ export default function PifListPage() {
             </Card>
           </motion.section>
         </>
+        )}
+
+        {activeTab === "lookup" && (
+          <FirmLookupTab
+            onFirmCreated={() => {
+              fetchData();
+              fetchResearchedFirms();
+            }}
+          />
         )}
 
         {activeTab === "outreach" && (
@@ -1266,6 +1286,571 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
         </>
       )}
     </button>
+  );
+}
+
+function FirmLookupTab({
+  onFirmCreated,
+}: {
+  onFirmCreated: () => void;
+}) {
+  const [firmName, setFirmName] = useState("");
+  const [website, setWebsite] = useState("");
+  const [emailField, setEmailField] = useState("");
+  const [phone, setPhone] = useState("");
+  const [contactName, setContactName] = useState("");
+
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [lookupResult, setLookupResult] = useState<FirmLookupResponse | null>(null);
+
+  // Selected conversations for association
+  const [selectedConvIds, setSelectedConvIds] = useState<Set<string>>(new Set());
+
+  // Creation state
+  const [isCreating, setIsCreating] = useState(false);
+  const [createResult, setCreateResult] = useState<FirmLookupCreateResponse | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  // Research polling state
+  const [isResearching, setIsResearching] = useState(false);
+  const [researchStatus, setResearchStatus] = useState<string | null>(null);
+  const [researchedFirm, setResearchedFirm] = useState<PifInfoResponse | null>(null);
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!firmName.trim()) return;
+
+    setIsSearching(true);
+    setSearchError(null);
+    setLookupResult(null);
+    setSelectedConvIds(new Set());
+    setCreateResult(null);
+    setCreateError(null);
+    setResearchedFirm(null);
+
+    try {
+      const result = await PifApi.firmLookup({
+        firm_name: firmName.trim(),
+        website: website.trim() || undefined,
+        email: emailField.trim() || undefined,
+        phone: phone.trim() || undefined,
+        contact_name: contactName.trim() || undefined,
+      });
+      setLookupResult(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Search failed";
+      setSearchError(message);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const toggleConversation = (convId: string) => {
+    setSelectedConvIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(convId)) {
+        next.delete(convId);
+      } else {
+        next.add(convId);
+      }
+      return next;
+    });
+  };
+
+  const selectAllConversations = () => {
+    if (!lookupResult) return;
+    const allIds = lookupResult.conversations.map((c) => c.conversation_id);
+    setSelectedConvIds(new Set(allIds));
+  };
+
+  const deselectAllConversations = () => {
+    setSelectedConvIds(new Set());
+  };
+
+  const pollResearchStatus = async (taskId: string) => {
+    const maxAttempts = 120;
+    let attempts = 0;
+
+    const poll = async (): Promise<void> => {
+      attempts++;
+      try {
+        const status = await PifApi.getResearchStatus(taskId);
+        setResearchStatus(status.status);
+
+        if (status.status === "completed") {
+          setIsResearching(false);
+          // Fetch the updated firm
+          if (status.pif_id && status.pif_id !== "00000000-0000-0000-0000-000000000000") {
+            try {
+              const updatedFirm = await PifApi.get(status.pif_id);
+              setResearchedFirm(updatedFirm);
+            } catch {
+              // Ignore fetch error
+            }
+          }
+          onFirmCreated();
+        } else if (status.status === "failed") {
+          setIsResearching(false);
+          setCreateError(status.message || "Research failed");
+        } else if (attempts < maxAttempts) {
+          setTimeout(poll, 5000);
+        } else {
+          setIsResearching(false);
+          setCreateError("Research timed out");
+        }
+      } catch (err) {
+        setIsResearching(false);
+        const message = err instanceof Error ? err.message : "Failed to check research status";
+        setCreateError(message);
+      }
+    };
+
+    await poll();
+  };
+
+  const handleCreate = async (startResearch: boolean) => {
+    if (!firmName.trim()) return;
+
+    setIsCreating(true);
+    setCreateError(null);
+    setCreateResult(null);
+
+    try {
+      const result = await PifApi.firmLookupCreate({
+        firm_name: firmName.trim(),
+        website: website.trim() || undefined,
+        email: emailField.trim() || undefined,
+        phone: phone.trim() || undefined,
+        contact_name: contactName.trim() || undefined,
+        selected_conversation_ids: Array.from(selectedConvIds),
+        start_research: startResearch,
+      });
+      setCreateResult(result);
+      onFirmCreated();
+
+      // If research was started, poll for status
+      if (result.task_id) {
+        setIsResearching(true);
+        setResearchStatus("queued");
+        await pollResearchStatus(result.task_id);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to create firm";
+      setCreateError(message);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={easing}
+      className="space-y-6"
+    >
+      {/* Search Form */}
+      <Card className="rounded-2xl border border-slate-200/70 bg-white/90">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-3 text-xl">
+            <Search className="h-5 w-5 text-indigo-600" />
+            Firm Lookup
+          </CardTitle>
+          <CardDescription>
+            Search for a firm across local database and Front conversations
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSearch} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5 sm:col-span-2">
+                <label htmlFor="lookup-firm-name" className="text-sm font-medium text-slate-700">
+                  Firm Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="lookup-firm-name"
+                  value={firmName}
+                  onChange={(e) => setFirmName(e.target.value)}
+                  placeholder="Enter firm name..."
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="lookup-website" className="text-sm font-medium text-slate-700">
+                  Website
+                </label>
+                <input
+                  type="text"
+                  id="lookup-website"
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  placeholder="example.com"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="lookup-email" className="text-sm font-medium text-slate-700">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  id="lookup-email"
+                  value={emailField}
+                  onChange={(e) => setEmailField(e.target.value)}
+                  placeholder="contact@example.com"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="lookup-phone" className="text-sm font-medium text-slate-700">
+                  Phone
+                </label>
+                <input
+                  type="tel"
+                  id="lookup-phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="(555) 123-4567"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="lookup-contact" className="text-sm font-medium text-slate-700">
+                  Contact Name
+                </label>
+                <input
+                  type="text"
+                  id="lookup-contact"
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  placeholder="John Doe"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+
+            <Button type="submit" disabled={isSearching || !firmName.trim()} className="flex items-center gap-2">
+              {isSearching ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Searching...
+                </>
+              ) : (
+                <>
+                  <Search className="h-4 w-4" />
+                  Search
+                </>
+              )}
+            </Button>
+          </form>
+
+          {searchError && (
+            <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+              {searchError}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Results */}
+      {lookupResult && (
+        <>
+          {/* Matching Existing Firms */}
+          {lookupResult.matching_firms.length > 0 && (
+            <Card className="rounded-2xl border border-amber-200/70 bg-amber-50/30">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-3 text-lg">
+                  <Building2 className="h-5 w-5 text-amber-600" />
+                  Existing Firms Found
+                  <Badge className="bg-amber-100 text-amber-700">
+                    {lookupResult.matching_firms.length}
+                  </Badge>
+                </CardTitle>
+                <CardDescription>
+                  These firms already exist in the database
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {lookupResult.matching_firms.map((firm) => (
+                  <div
+                    key={firm.id}
+                    className="flex items-center justify-between rounded-lg border border-amber-200 bg-white p-3"
+                  >
+                    <div>
+                      <div className="font-medium text-slate-800">{firm.firm_name}</div>
+                      <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                        {firm.website && (
+                          <span className="flex items-center gap-1">
+                            <Globe className="h-3 w-3" />
+                            {firm.website}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <MessageSquare className="h-3 w-3" />
+                          {firm.conversation_ids.length} conversations
+                        </span>
+                        {firm.research_status === "completed" && (
+                          <span className="flex items-center gap-1 text-emerald-600">
+                            <Sparkles className="h-3 w-3" />
+                            Researched
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      {firm.research_status !== "completed" && (
+                        <Badge className="bg-slate-100 text-slate-600">Not researched</Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Matching Conversations */}
+          <Card className="rounded-2xl border border-slate-200/70 bg-white/90">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-3 text-lg">
+                <MessageSquare className="h-5 w-5 text-indigo-600" />
+                Matching Conversations
+                <Badge className="bg-slate-100 text-slate-600">
+                  {lookupResult.total_conversations}
+                </Badge>
+              </CardTitle>
+              <CardDescription>
+                Conversations matching &quot;{firmName}&quot; from local DB and Front
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {lookupResult.conversations.length > 0 ? (
+                <>
+                  <div className="flex items-center gap-2 text-sm">
+                    <button
+                      onClick={selectAllConversations}
+                      className="text-indigo-600 hover:text-indigo-800 hover:underline"
+                    >
+                      Select all
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      onClick={deselectAllConversations}
+                      className="text-indigo-600 hover:text-indigo-800 hover:underline"
+                    >
+                      Deselect all
+                    </button>
+                    {selectedConvIds.size > 0 && (
+                      <span className="text-slate-500">
+                        ({selectedConvIds.size} selected)
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="max-h-96 overflow-y-auto space-y-1">
+                    {lookupResult.conversations.map((conv) => (
+                      <label
+                        key={conv.conversation_id}
+                        className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                          selectedConvIds.has(conv.conversation_id)
+                            ? "border-indigo-300 bg-indigo-50/50"
+                            : "border-slate-100 bg-white hover:bg-slate-50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedConvIds.has(conv.conversation_id)}
+                          onChange={() => toggleConversation(conv.conversation_id)}
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-slate-800 truncate">
+                              {conv.subject || "(No subject)"}
+                            </span>
+                            <Badge className={`text-xs ${
+                              conv.source === "local"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-blue-100 text-blue-700"
+                            }`}>
+                              {conv.source}
+                            </Badge>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs text-slate-500 mt-0.5">
+                            {conv.sender && <span>From: {conv.sender}</span>}
+                            {conv.created_at && (
+                              <span>{new Date(conv.created_at).toLocaleDateString()}</span>
+                            )}
+                          </div>
+                          {conv.snippet && (
+                            <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                              {conv.snippet}
+                            </p>
+                          )}
+                        </div>
+                        <a
+                          href={`https://app.frontapp.com/open/${conv.conversation_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-shrink-0 text-slate-400 hover:text-indigo-600"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="py-8 text-center text-slate-500">
+                  No matching conversations found
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              {!createResult && (
+                <div className="flex gap-3 border-t border-slate-100 pt-4">
+                  <Button
+                    onClick={() => handleCreate(false)}
+                    disabled={isCreating || isResearching}
+                    variant="ghost"
+                    className="flex items-center gap-2 border border-slate-200"
+                  >
+                    {isCreating && !isResearching ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <Building2 className="h-4 w-4" />
+                        Add Firm
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={() => handleCreate(true)}
+                    disabled={isCreating || isResearching}
+                    className="flex items-center gap-2"
+                  >
+                    {isResearching ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {researchStatus === "queued" && "Queued..."}
+                        {researchStatus === "in_progress" && "Researching..."}
+                        {!researchStatus && "Starting..."}
+                      </>
+                    ) : isCreating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" />
+                        Add &amp; Research
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {createError && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                  {createError}
+                </div>
+              )}
+
+              {createResult && !researchedFirm && !isResearching && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                  {createResult.message}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Created/Researched Firm Card */}
+          {(researchedFirm || (createResult && !isResearching)) && (
+            <Card className="rounded-2xl border border-emerald-200/70 bg-emerald-50/30">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-3 text-lg">
+                  <Check className="h-5 w-5 text-emerald-600" />
+                  {researchedFirm ? "Firm Created & Researched" : "Firm Created"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {researchedFirm ? (
+                  <div className="space-y-3">
+                    <div className="font-medium text-slate-800">{researchedFirm.firm_name}</div>
+                    {researchedFirm.website && (
+                      <div className="flex items-center gap-2 text-sm text-slate-600">
+                        <Globe className="h-4 w-4 text-indigo-500" />
+                        <a
+                          href={researchedFirm.website.startsWith("http") ? researchedFirm.website : `https://${researchedFirm.website}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-indigo-600 hover:underline"
+                        >
+                          {researchedFirm.website}
+                        </a>
+                      </div>
+                    )}
+                    {researchedFirm.leadership && researchedFirm.leadership.length > 0 && (
+                      <div>
+                        <h4 className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <Sparkles className="h-4 w-4 text-amber-500" />
+                          Leadership ({researchedFirm.leadership.length})
+                        </h4>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {researchedFirm.leadership.map((leader, i) => (
+                            <div
+                              key={i}
+                              className="rounded-lg border border-amber-100 bg-white p-3 text-sm"
+                            >
+                              <div className="font-medium text-slate-800">{leader.name}</div>
+                              {leader.title && (
+                                <div className="text-xs text-slate-600">{leader.title}</div>
+                              )}
+                              {leader.email && (
+                                <div className="text-xs text-slate-500 mt-1">{leader.email}</div>
+                              )}
+                              {isValidLinkedInUrl(leader.linkedin) && (
+                                <a
+                                  href={leader.linkedin?.startsWith("http") ? leader.linkedin : `https://${leader.linkedin}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1"
+                                >
+                                  <Linkedin className="h-3 w-3" />
+                                  LinkedIn
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="text-xs text-slate-500">
+                      {researchedFirm.conversation_ids.length} conversations associated
+                    </div>
+                  </div>
+                ) : createResult ? (
+                  <div className="space-y-2">
+                    <div className="font-medium text-slate-800">{createResult.pif.firm_name}</div>
+                    <div className="text-sm text-slate-600">{createResult.message}</div>
+                    <div className="text-xs text-slate-500">
+                      {createResult.pif.conversation_ids.length} conversations associated
+                    </div>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+    </motion.section>
   );
 }
 

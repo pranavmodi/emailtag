@@ -81,6 +81,56 @@ def clean_html(html_content: str) -> str:
     return re.sub(r'<[^>]*>', '', html_content).strip()
 
 
+def search_front_conversations(query: str, limit: int = 25) -> List[Dict[str, Any]]:
+    """
+    Search Front conversations by a free-text query.
+
+    Uses the Front API search endpoint which searches subjects and message bodies.
+
+    Args:
+        query: The search query string
+        limit: Maximum number of results to return
+
+    Returns:
+        List of conversation dicts with id, subject, recipients, created_at
+    """
+    from urllib.parse import quote
+
+    encoded_query = quote(query)
+    url = f"{settings.FRONT_API_BASE_URL}/conversations/search/{encoded_query}"
+
+    try:
+        with httpx.Client(verify=False, timeout=30.0) as client:
+            response = client.get(url, headers=get_headers())
+            response.raise_for_status()
+            data = response.json()
+            results = data.get("_results", [])
+
+            conversations = []
+            for conv in results[:limit]:
+                recipients = []
+                for recipient in conv.get("recipients", []):
+                    handle = recipient.get("handle")
+                    if handle:
+                        recipients.append(handle)
+
+                conversations.append({
+                    "conversation_id": conv.get("id", ""),
+                    "subject": conv.get("subject", ""),
+                    "recipients": recipients,
+                    "created_at": conv.get("created_at"),
+                })
+
+            logger.info(f"Front search for '{query}' returned {len(conversations)} conversations")
+            return conversations
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error searching Front conversations for '{query}': {e.response.status_code}")
+        return []
+    except httpx.RequestError as e:
+        logger.error(f"Request error searching Front conversations for '{query}': {str(e)}")
+        return []
+
+
 def get_conversation_with_messages(conversation_id: str) -> Dict[str, Any]:
     """
     Get a conversation with all its messages formatted for entity extraction.

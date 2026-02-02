@@ -160,3 +160,48 @@ class OutreachResponse(BaseModel):
     firm_name: str
     messages: List[OutreachMessageResult]
     errors: List[str] = Field(default_factory=list)
+
+
+class FirmLookupRequest(BaseModel):
+    """Schema for firm lookup request."""
+    firm_name: str = Field(..., description="Name of the firm to search for")
+    website: Optional[str] = Field(None, description="Firm website URL")
+    email: Optional[str] = Field(None, description="Email address associated with the firm")
+    phone: Optional[str] = Field(None, description="Phone number")
+    contact_name: Optional[str] = Field(None, description="Name of a contact person")
+
+
+class FirmLookupConversation(BaseModel):
+    """Schema for a conversation found during firm lookup."""
+    conversation_id: str
+    subject: Optional[str] = None
+    sender: Optional[str] = None
+    created_at: Optional[str] = None
+    snippet: Optional[str] = None
+    source: str = Field(..., description="Source of the conversation: 'local' or 'front'")
+
+
+class FirmLookupResponse(BaseModel):
+    """Schema for firm lookup response."""
+    matching_firms: List[PifInfoResponse] = Field(default_factory=list)
+    conversations: List[FirmLookupConversation] = Field(default_factory=list)
+    total_conversations: int = 0
+
+
+class FirmLookupCreateRequest(BaseModel):
+    """Schema for creating a firm from lookup results."""
+    firm_name: str = Field(..., description="Name of the firm")
+    website: Optional[str] = Field(None, description="Firm website URL")
+    email: Optional[str] = Field(None, description="Email address")
+    phone: Optional[str] = Field(None, description="Phone number")
+    contact_name: Optional[str] = Field(None, description="Contact person name")
+    selected_conversation_ids: List[str] = Field(default_factory=list, description="Conversation IDs to associate")
+    start_research: bool = Field(False, description="Whether to start research immediately")
+
+
+class FirmLookupCreateResponse(BaseModel):
+    """Schema for firm lookup create response."""
+    pif: PifInfoResponse
+    is_new: bool
+    task_id: Optional[str] = Field(None, description="Research task ID if research was started")
+    message: str
