@@ -440,7 +440,70 @@ class EnhancedLienService:
         except Exception as e:
             logger.error(f"Error consolidating page results: {e}")
             return self._error_response(f"Consolidation error: {str(e)}")
-    
+
+    def _select_best_lien_page(
+        self,
+        page_indices: List[int],
+        page_results: List[Dict]
+    ) -> int:
+        """
+        Select the best page from duplicate lien pages.
+
+        When multiple pages have the same (patient_id, lien_type), this method
+        evaluates each page and returns the one with the highest quality score.
+
+        Scoring:
+        - +10 points: Has valid signature (ASL or PSL)
+        - +5 points: No conditional language detected
+        - +2 points: Complete barcode data
+
+        Args:
+            page_indices: List of page indices that are duplicates
+            page_results: Full list of page processing results
+
+        Returns:
+            The page index with the highest score. If tied, returns the first page.
+        """
+        scored_pages = []
+
+        for page_idx in page_indices:
+            page = page_results[page_idx]
+            score = 0
+
+            # Check signature quality (+10 for valid signature)
+            sig_data = page.get("signature_detection", {}).get("signature_data", {})
+            sig_type = sig_data.get("lien_signature_type", "UNKNOWN")
+            if sig_type in ("ASL", "PSL"):
+                score += 10
+
+            # Check for conditional language (-5 if present, so +5 if absent)
+            cover_analysis = page.get("cover_letter_analysis", {})
+            if not cover_analysis.get("has_conditional_language", False):
+                score += 5
+
+            # Check barcode completeness (+2 for complete data)
+            barcode = page.get("barcode_detection", {})
+            combined_data = barcode.get("combined_data", {})
+            has_patient_id = bool(
+                combined_data.get("PatientIDs") or
+                combined_data.get("lien_patient_ids") or
+                combined_data.get("PatientID")
+            )
+            if barcode.get("barcode_found") and has_patient_id:
+                score += 2
+
+            scored_pages.append((page_idx, score, sig_type))
+            logger.info(f"📄 DEDUP SCORE: Page {page_idx} = {score} points (signature={sig_type})")
+
+        # Sort by score descending, return best
+        scored_pages.sort(key=lambda x: x[1], reverse=True)
+        best_page = scored_pages[0][0]
+        dropped_pages = [p[0] for p in scored_pages[1:]]
+
+        logger.info(f"📄 DEDUP: Selected page {best_page}, dropping pages {dropped_pages}")
+
+        return best_page
+
     def _generate_page_groupings(self, page_results: List[Dict]) -> List[Dict[str, Any]]:
         """
         Generate page groupings based on unique patient ID + lien type OR patient ID + page type combinations.
