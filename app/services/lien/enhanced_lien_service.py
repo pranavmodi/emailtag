@@ -628,6 +628,31 @@ class EnhancedLienService:
                     groupings_map[group_key]["pages"].append(page_idx)
                     logger.info(f"📄 GROUPING: Page {page_idx} → Patient {patient_id}, PageType=lien, LienType={lien_type.upper()}")
 
+        # Deduplicate: For lien groups with multiple pages, select the best one
+        for group_key, group_data in groupings_map.items():
+            if group_data["page_type"] == "lien" and len(group_data["pages"]) > 1:
+                logger.info(
+                    f"📄 DEDUP: Multiple pages detected for {group_key}: {group_data['pages']}"
+                )
+                best_page = self._select_best_lien_page(
+                    group_data["pages"],
+                    page_results
+                )
+                # Update group to only include the best page
+                dropped_pages = [p for p in group_data["pages"] if p != best_page]
+                group_data["pages"] = [best_page]
+
+                # Update signature info from the selected best page
+                best_page_result = page_results[best_page]
+                sig_data = best_page_result.get("signature_detection", {}).get("signature_data", {})
+                group_data["signature_type"] = sig_data.get("lien_signature_type", "UNKNOWN")
+                group_data["signature_data"] = sig_data
+
+                logger.info(
+                    f"📄 DEDUP: Kept page {best_page}, dropped {dropped_pages} for "
+                    f"Patient={group_data['patient_id']}, LienType={group_data['lien_type']}"
+                )
+
         # Convert map to list
         page_groupings = list(groupings_map.values())
 
