@@ -118,6 +118,12 @@ Classification Rules for Medical Records & Images:
   - Identity verification or profile matching issues (e.g., "ID does not match patient profile", "verify patient identity")
   - Patient information corrections (e.g., "update patient name", "correct DOB", "fix patient details")
   - These are considered part of Medical Records & Images because they involve patient documentation and records management, even if they are automated notifications rather than explicit requests.
+ d. **PORTAL ACCESS & LOGIN ISSUES**: Classify as Medical Records & Images if the email relates to:
+  - Portal login problems (e.g., "can't log in", "unable to login", "login not working", "can't access the portal")
+  - Portal access requests (e.g., "need portal access", "grant access to portal", "add user to portal")
+  - Portal technical issues (e.g., "portal not loading", "error accessing portal", "portal support request")
+  - Portal credential issues (e.g., "forgot password", "reset password", "username not working")
+  - These are classified as Medical Records & Images because the portal is used for accessing medical records and images, so any portal-related issues fall under this category.
 
 3. Associated Tags & Metadata:
  a. Apply the Medical Records & Images category if associated tags are solely imaging related (e.g., "Image Request", "Report Request") and there is no accompanying billing or lien-related tag.
@@ -208,6 +214,7 @@ Use "No Tag" for emails that are unrelated to the core business operations of sc
 - Scheduling appointments or referrals
 - Medical records, reports, or imaging requests
 - Patient documentation (photo IDs, insurance cards, patient profiles, identity verification)
+- Portal access, login issues, or portal support requests
 - Billing, payments, liens, or financial matters
 
 If there is ANY patient-related content, scheduling information, records request, patient documentation upload, or billing discussion, classify under the appropriate category (Scheduling, Medical Records & Images, or Accounts Receivable) instead of "No Tag".
@@ -219,5 +226,12 @@ If there is ANY patient-related content, scheduling information, records request
 - Insurance card submissions → Medical Records & Images
 - Patient information mismatches → Medical Records & Images
 - Patient demographic forms/intake documents (Patient Demo) → Medical Records & Images
+
+**EXAMPLES OF PORTAL ISSUES (NOT "No Tag"):**
+- "I can't log in to the portal" → Medical Records & Images (sub-tagged as Portal Requests)
+- "Unable to access the portal" → Medical Records & Images (sub-tagged as Portal Requests)
+- "Need portal access" or "grant access to portal" → Medical Records & Images (sub-tagged as Portal Requests)
+- "Portal is not working" or "portal support" → Medical Records & Images (sub-tagged as Portal Requests)
+- "Forgot password" or "reset password" → Medical Records & Images (sub-tagged as Portal Requests)
 
 --- END NO TAG RULES ---

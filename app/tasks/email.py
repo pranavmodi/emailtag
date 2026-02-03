@@ -1038,6 +1038,14 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                         logger.warning(f"Failed to add human review tag to conversation {front_conversation_id} for case update tags")
                 else:
                     logger.debug(f"No case update tags found in {new_tags} for conversation {front_conversation_id}")
+
+                # Check if Portal Requests tag was applied and add human review tag
+                if "Portal Requests" in new_tags:
+                    human_review_success = add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+                    if human_review_success:
+                        logger.info(f"Added human review tag to conversation {front_conversation_id} due to Portal Requests tag")
+                    else:
+                        logger.warning(f"Failed to add human review tag to conversation {front_conversation_id} for Portal Requests")
                 
                 # --- INBOX ROUTING LOGIC ---
                 if settings.INBOX_ROUTING_ENABLED:
@@ -1107,6 +1115,14 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                         logger.info(f"Added human review tag to conversation {front_conversation_id} due to case update tags (main tagging failed): {[tag for tag in new_tags if tag in case_update_tags]}")
                     else:
                         logger.warning(f"Failed to add human review tag to conversation {front_conversation_id} for case update tags (main tagging also failed)")
+
+                # Check if Portal Requests tag was applied and add human review tag (main tagging failed case)
+                if "Portal Requests" in new_tags:
+                    human_review_success = add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+                    if human_review_success:
+                        logger.info(f"Added human review tag to conversation {front_conversation_id} due to Portal Requests tag (main tagging failed)")
+                    else:
+                        logger.warning(f"Failed to add human review tag to conversation {front_conversation_id} for Portal Requests (main tagging also failed)")
         
         # --- INBOX ROUTING (for failed main tagging case) ---
         # Attempt inbox routing even if main tag application failed, based on determined tags
