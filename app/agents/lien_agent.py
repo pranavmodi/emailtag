@@ -52,10 +52,39 @@ class _SafeFormatDict(defaultdict):
         return "{" + key + "}"
 
 
-def _safe_format_template(template: str, **kwargs) -> str:
-    """Format a template string, leaving unknown placeholders intact."""
-    safe = _SafeFormatDict(str, **kwargs)
-    return template.format_map(safe)
+def _safe_format_template(template: str, max_iterations: int = 10, **kwargs) -> str:
+    """
+    Format a template string with nested placeholder resolution.
+
+    Performs multiple passes until no more replacements are made or max iterations reached.
+    This allows placeholders within placeholder values to be resolved.
+
+    Example: If {greeting} = "Hello {patient_name}" and {patient_name} = "Jane Smith",
+    the result will be "Hello Jane Smith" after two passes.
+
+    Args:
+        template: The template string with placeholders
+        max_iterations: Maximum number of passes to prevent infinite loops (default: 10)
+        **kwargs: Placeholder key-value pairs
+
+    Returns:
+        The template with all nested placeholders resolved, unknown placeholders left intact
+    """
+    result = template
+    for _ in range(max_iterations):
+        previous = result
+        safe = _SafeFormatDict(str, **kwargs)
+        try:
+            result = result.format_map(safe)
+        except (KeyError, ValueError) as e:
+            # If formatting fails, return what we have
+            logger.warning(f"Template formatting error during nested resolution: {e}")
+            break
+
+        if result == previous:
+            break  # No more replacements made
+
+    return result
 
 
 async def _build_rejection_placeholder_values(
@@ -1756,8 +1785,8 @@ async def handle_lien_request(
             placeholder_values.update(custom_placeholders)
             logger.info(f"📝 Merged {len(custom_placeholders)} custom placeholders into template")
 
-        # Generate success response with all placeholders
-        reply_body = templates["success"].format(**placeholder_values)
+        # Generate success response with nested placeholder resolution
+        reply_body = _safe_format_template(templates["success"], **placeholder_values)
 
         # Add note about patient demo if present
         if has_patient_demo:

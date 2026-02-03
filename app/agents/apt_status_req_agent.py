@@ -100,6 +100,54 @@ TAG_AI_HUMAN_REVIEW_REQUIRED = "AI: Human review required" # Centralized tag for
 
 # --- Response Templates have been moved to app/agents/templates/appointment_status_templates.py ---
 
+# --- BEGIN: Nested Placeholder Resolution Helper ---
+class _SafeFormatDict(dict):
+    """A dict that returns the key wrapped in braces for missing keys.
+    Used for safe template formatting so unknown placeholders don't raise KeyError."""
+
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
+def resolve_nested_placeholders(
+    template: str,
+    placeholder_values: dict,
+    max_iterations: int = 10
+) -> str:
+    """
+    Resolve nested placeholders by performing multiple passes.
+    Continues until no more replacements are made or max iterations reached.
+
+    This allows placeholders within placeholder values to be resolved.
+    Example: If {greeting} = "Hello {patient_name}" and {patient_name} = "Jane Smith",
+    the result will be "Hello Jane Smith" after two passes.
+
+    Args:
+        template: The template string with placeholders
+        placeholder_values: Dict of placeholder names (without braces) to values
+        max_iterations: Maximum number of passes to prevent infinite loops (default: 10)
+
+    Returns:
+        The template with all nested placeholders resolved
+    """
+    result = template
+    for _ in range(max_iterations):
+        previous = result
+        # Use safe format dict to leave unknown placeholders intact
+        safe_dict = _SafeFormatDict(placeholder_values)
+        try:
+            result = result.format_map(safe_dict)
+        except (KeyError, ValueError) as e:
+            # If formatting fails, return what we have
+            logger.warning(f"Template formatting error during nested resolution: {e}")
+            break
+
+        if result == previous:
+            break  # No more replacements made
+
+    return result
+# --- END: Nested Placeholder Resolution Helper ---
+
 # --- BEGIN: Placeholder Static Information (Fallback if DB fetch fails) ---
 DEFAULT_SCHEDULING_PHONE = "800-558-2223"
 DEFAULT_NO_SHOW_POLICY = "**If the patient cannot make the appointment please contact us within 48 hours of the appointment to reschedule or cancel to avoid any no-show fees. Two no-shows will require a $50 no-show payment before being scheduled for a 3rd time.**"
@@ -410,8 +458,9 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
         logger.info(f"   Using UNIFIED template format (standard approach)")
 
         # STANDARD APPROACH: Use unified template with all placeholders (custom + type-specific)
-        logger.info("Formatting unified template with placeholders")
-        formatted_template = unified_template.format(**placeholder_values)
+        # Use nested placeholder resolution to handle placeholders within placeholder values
+        logger.info("Formatting unified template with nested placeholder resolution")
+        formatted_template = resolve_nested_placeholders(unified_template, placeholder_values)
 
         # logger.info(f"DEBUG: Generated HTML response: {formatted_template}")
         return formatted_template

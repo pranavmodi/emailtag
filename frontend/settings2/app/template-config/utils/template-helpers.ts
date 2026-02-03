@@ -8,6 +8,41 @@ export const getTagLabel = (value: string) =>
   TAG_OPTIONS.find((option) => option.value === value)?.label ?? value;
 
 /**
+ * Resolve nested placeholders by performing multiple passes.
+ * Continues until no more replacements are made or max iterations reached.
+ * This allows placeholders within placeholder values to be resolved.
+ *
+ * Example: If {greeting} = "Hello {patient_name}" and {patient_name} = "Jane Smith",
+ * the result will be "Hello Jane Smith" after two passes.
+ *
+ * @param template - The template string with placeholders
+ * @param placeholders - Record of placeholder keys (with braces) to values
+ * @param maxIterations - Maximum number of passes to prevent infinite loops (default: 10)
+ * @returns The template with all nested placeholders resolved
+ */
+export const resolveNestedPlaceholders = (
+  template: string,
+  placeholders: Record<string, string>,
+  maxIterations: number = 10
+): string => {
+  let result = template;
+  let iteration = 0;
+  let previousResult = '';
+
+  while (result !== previousResult && iteration < maxIterations) {
+    previousResult = result;
+    Object.entries(placeholders).forEach(([key, value]) => {
+      // Escape special regex characters in the placeholder key
+      const regex = new RegExp(key.replace(/[{}]/g, '\\$&'), 'g');
+      result = result.replace(regex, value);
+    });
+    iteration++;
+  }
+
+  return result;
+};
+
+/**
  * Get all dummy placeholder values (shared across all preview functions)
  */
 export const getDummyPlaceholders = (): Record<string, string> => {
@@ -84,25 +119,28 @@ export const generatePreviewHtml = (
   // Start with unified template
   let formattedTemplate = settings.unified_template || "";
 
-  // Replace all dummy placeholders
-  Object.entries(dummyPlaceholders).forEach(([placeholder, value]) => {
-    formattedTemplate = formattedTemplate.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
-  });
+  // Build a combined placeholders object for nested resolution
+  // This includes dummy placeholders, personal injury info, and custom placeholders
+  const allPlaceholders: Record<string, string> = { ...dummyPlaceholders };
 
-  // Replace personal injury info (special case - conditional based on showPersonalInjury)
-  formattedTemplate = formattedTemplate.replace(/\{personal_injury_info\}/g, personalInjuryInfo);
+  // Add personal injury info (special case - conditional based on showPersonalInjury)
+  allPlaceholders["{personal_injury_info}"] = personalInjuryInfo;
 
-  // Replace all OTHER custom placeholders (workspace-wide), skipping personal_injury_info since it's already handled
+  // Add all OTHER custom placeholders (workspace-wide), skipping personal_injury_info since it's handled above
   if (settings.custom_placeholders) {
     Object.entries(settings.custom_placeholders).forEach(([key, value]) => {
       // Skip personal_injury_info since it's handled above with conditional logic
       if (key === 'personal_injury_info') {
         return;
       }
-      const regex = new RegExp(`\\{${key}\\}`, 'g');
-      formattedTemplate = formattedTemplate.replace(regex, value);
+      // Custom placeholders are stored without braces, so add them
+      allPlaceholders[`{${key}}`] = value;
     });
   }
+
+  // Use multi-pass nested placeholder resolution
+  // This allows placeholders within placeholder values to be resolved
+  formattedTemplate = resolveNestedPlaceholders(formattedTemplate, allPlaceholders);
 
   return formattedTemplate;
 };

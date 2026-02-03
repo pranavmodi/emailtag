@@ -2,10 +2,15 @@
 Handles Medical Records & Images requests using an AI agent.
 
 This module contains the logic for an AI agent that processes emails tagged
-with any Medical Records & Images tags: "Release of Records", "Image Request", 
-"CD Requests", and "Reports Request". It verifies the sender's identity against 
-patient records, determines the appropriate response based on the sender's role 
-(attorney, doctor, etc.), and handles follow-up interactions like HIPAA form submissions.
+with any Medical Records & Images tags: "Release of Records", "Image Request",
+"CD Requests", and "Reports Request". It verifies the sender's identity using
+the full verification flow which includes:
+1. RadFlow contacts database check (known attorneys, doctors, etc.)
+2. Study participants verification
+
+Based on the sender's verified role (attorney, doctor, known_contact, etc.),
+it determines the appropriate response and handles follow-up interactions
+like HIPAA form submissions for unauthorized senders.
 """
 import asyncio
 import os
@@ -26,8 +31,7 @@ from app.agents.agent_helpers import (
     extract_all_patient_ids_from_email_logic,
     send_reply_to_front_direct,
     send_reply_to_front_with_attachment,
-    compile_study_participants,
-    verify_sender_authorization
+    verify_sender_for_patient_access
 )
 # --- END: Agent Helper Imports ---
 
@@ -218,31 +222,30 @@ async def handle_release_of_records_request(
     
     studies = study_result.get("studies", [])
     patient_info = patient_result.get("patients", [{}])[0]
-    
-    # Compile participants
-    participants_result = await compile_study_participants(patient_id, studies)
-    if not participants_result.get("success"):
-        logger.error("Failed to compile participants - tagging for human review without sending message")
+
+    # Verify sender using full verification flow (includes RadFlow contact check)
+    verification_result = await verify_sender_for_patient_access(patient_id, email_sender, studies)
+
+    if verification_result.get("verification_status") == "error":
+        logger.error("Failed to verify sender - tagging for human review without sending message")
         await send_fallback_reply_and_tag(
             front_conversation_id,
-            "",  # Don't send any message to user on participant lookup errors
+            "",  # Don't send any message to user on verification errors
             TAG_AI_HUMAN_REVIEW_REQUIRED
         )
-        return {"agent_handled": False, "processed_flag": True, "details": {"reason": "Participant compilation failed - tagged for human review"}}
-
-    participants = participants_result.get("participants", [])
-
-    # Verify sender
-    verification_result = await verify_sender_authorization(email_sender, participants)
+        return {"agent_handled": False, "processed_flag": True, "details": {"reason": "Sender verification failed - tagged for human review"}}
 
     agent_outcome = {"agent_handled": False, "processed_flag": False}
 
     try:
+        is_authorized = verification_result.get("authorized", False)
         verification_role = verification_result.get("role", "unknown")
         player_info = verification_result.get("player_info", {})
-        
-        # Handle HIPAA needed case with attachment
-        if verification_role in ["attorney_not_on_file", "doctor_not_on_file", "unknown"]:
+
+        logger.info(f"Sender verification result: authorized={is_authorized}, role={verification_role}, status={verification_result.get('verification_status')}")
+
+        # Handle unauthorized senders - send HIPAA form
+        if not is_authorized:
             hipaa_form_path = "/home/fret/work/emailtag/app/agents/templates/Medical-Release-Form.pdf"
             
             result = await send_reply_to_front_with_attachment(
@@ -276,22 +279,36 @@ async def handle_release_of_records_request(
                 agent_outcome["processed_flag"] = True
                 agent_outcome["details"] = {"reason": "CD request after link sent, escalated to human review"}
                 return agent_outcome
-            
+
             # Send normal doctor response with secure link
             base_url = app_settings_instance.SECURE_VIEWER_URL or "https://viewer.precisemri.com"
             mock_token = f"token_{patient_id}_{os.urandom(8).hex()}"
             secure_link = f"{base_url}/view?token={mock_token}"
             doctor_name = player_info.get("email", "").split("@")[0] if player_info.get("email") else "Doctor"
-            
+
             reply_text = TEMPLATE_DOCTOR_ON_FILE_LINK.format(
-                doctor_name=doctor_name, 
+                doctor_name=doctor_name,
                 secure_link=secure_link
             )
-            
-        # Handle attorney on file case
-        elif verification_role == "attorney_on_file":
+
+        # Handle attorney on file case OR known contact from RadFlow database
+        # Known contacts are typically attorneys verified in RadFlow's contact system
+        elif verification_role in ["attorney_on_file", "known_contact"]:
             portal_link = app_settings_instance.ATTORNEY_PORTAL_URL or "https://app.radflow360.com/"
             reply_text = TEMPLATE_ATTORNEY_ON_FILE_PORTAL.format(attorney_portal_link=portal_link)
+
+        # Handle other authorized cases (e.g., domain_verified) - escalate to human review
+        else:
+            logger.info(f"Authorized sender with unhandled role '{verification_role}' - escalating to human review")
+            await send_fallback_reply_and_tag(
+                front_conversation_id,
+                "A team member will review your request and assist you shortly.",
+                TAG_AI_HUMAN_REVIEW_REQUIRED
+            )
+            agent_outcome["agent_handled"] = True
+            agent_outcome["processed_flag"] = True
+            agent_outcome["details"] = {"reason": f"Authorized sender with role '{verification_role}' escalated to human review"}
+            return agent_outcome
         
         # Send the response for attorney/doctor on file cases
         result = await send_reply_to_front_direct(
