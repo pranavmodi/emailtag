@@ -27,7 +27,7 @@ When the AI email tagging system classifies incoming emails, conversations are a
 - `Cash Patient`
 - `Cancel Request`
 - `Reschedule Request`
-- `Schedule Request`
+- `Scheduling request`
 - `Will contact patient`
 
 ---

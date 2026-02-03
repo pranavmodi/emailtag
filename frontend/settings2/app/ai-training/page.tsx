@@ -511,9 +511,9 @@ function ConversationRow({ conversation }: { conversation: AITrainingConversatio
       <td className="px-4 py-3 text-xs">
         {displayTags.length > 0 ? (
           <div className="flex flex-wrap gap-1">
-            {displayTags.map((tag) => (
+            {displayTags.map((tag, idx) => (
               <span
-                key={tag}
+                key={`${tag}-${idx}`}
                 className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700 border border-emerald-200 text-xs"
               >
                 {tag}

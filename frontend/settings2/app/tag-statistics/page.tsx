@@ -43,7 +43,7 @@ const TAG_GROUPS: Array<{ label: string; options: string[] }> = [
   },
   {
     label: "Scheduling",
-    options: ["Cancelled", "Reschedule Request", "Schedule Request", "Will contact patient"],
+    options: ["Cancelled", "Reschedule Request", "Scheduling request", "Will contact patient"],
   },
   {
     label: "Medical Records & Images",

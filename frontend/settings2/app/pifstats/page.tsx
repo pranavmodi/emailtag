@@ -2210,185 +2210,220 @@ function OutgenTab({
       const leaderInfo = formatLeaderInfo(leader);
 
       const prompt = `Generate LinkedIn outreach messages for the following person.
+Create 8 outputs (a unique subject line for each message):
 
-### Create 8 outputs (a unique subject line for each message):
-1. **Subject line for short Pranav message** - Warm, curiosity-driven (under 6 words)
-2. **Short message from Pranav Modi (founder)** - Connection request, under 300 characters, NO links, NO pitch, just genuine curiosity
-3. **Subject line for short Neha message** - Warm, hints at shared problem (under 6 words)
-4. **Short message from Neha Pipada (engineer)** - Connection request, under 300 characters, NO links, NO pitch, curious about their workflow
-5. **Subject line for long Pranav message** - Personalized, conversational (under 6 words)
-6. **Long message from Pranav Modi** - InMail, under 450 characters, warm opener, includes case study link, soft CTA
-7. **Subject line for long Neha message** - Personalized, problem-focused (under 6 words)
-8. **Long message from Neha Pipada** - InMail, under 450 characters, technical credibility, includes case study link, soft CTA
+Subject line for short Pranav message - Warm, curiosity-driven (under 6 words)
+Short message from Pranav Modi (founder) - Connection request, under 300 characters, NO links, NO pitch, just genuine curiosity
+Subject line for short Neha message - Warm, hints at shared problem (under 6 words)
+Short message from Neha Pipada (engineer) - Connection request, under 300 characters, NO links, NO pitch, curious about their workflow
+Subject line for long Pranav message - Personalized, conversational (under 6 words)
+Long message from Pranav Modi - InMail, under 450 characters, warm opener, includes case study link, soft CTA
+Subject line for long Neha message - Personalized, problem-focused (under 6 words)
+Long message from Neha Pipada - InMail, under 450 characters, technical credibility, includes case study link, soft CTA
 
----
 
-### Guidelines:
-
-**CRITICAL: Connection Requests vs. InMails**
-
+Guidelines:
+CRITICAL: Connection Requests vs. InMails
 Short messages (1-4) are CONNECTION REQUESTS. They are NOT mini-pitches.
-- NO links, NO case study URLs, NO product mentions
-- Goal: Earn the right to have a conversation
-- Formula: Specific observation about them + genuine question
-- Should feel like you'd want to grab coffee with this person
+
+NO links, NO case study URLs, NO product mentions
+Goal: Earn the right to have a conversation
+Formula: Non-obvious insight or data point about their situation + genuine question
+The recipient should feel like they learned something or saw their own business differently just by reading the message
+Should feel like you'd want to grab coffee with this person
 
 Long messages (5-8) are INMAILS. They CAN include the pitch.
-- Include case study URL
-- Structure: Warm opener > Shared problem > What you learned > Soft CTA
-- Should feel like a peer reaching out, not a vendor selling
 
-**Connection request examples:**
+Include case study URL
+Structure: Warm opener > Shared problem > What you learned > Soft CTA
+Should feel like a peer reaching out, not a vendor selling
+MUST include at least one specific, quantified result from the case study in the message body (not just behind the link). People don't click links from strangers; the proof needs to be visible before the click.
 
+Persuasion principles (apply throughout all messages):
+Every message should activate at least 2-3 of these. Don't force all of them into every message, but be intentional about which ones you're using and why.
+
+Reciprocity (HIGHEST PRIORITY for connection requests): Give before you ask. Lead with something valuable: a non-obvious insight, a data point about their market, a pattern you've observed across similar firms. The recipient should feel they received something just by reading. Bad: asking a question without giving anything first. Good: sharing an observation that reframes how they see their own situation, then asking a question.
+Social proof: Be specific, not vague. "We work with firms like yours" is weak. "3 PI firms in SoCal running 5+ offices" is strong. Pull at least one quantified result from the case study into InMail body text. Name mutual clients where approved. Reference the prospect's own peer group or market.
+Authority: Demonstrate expertise through discovered insights, not credentials or product features. Show you've been deep in this problem space. A specific failure mode you've seen, a counterintuitive pattern in the data, a number that surprises people. Neha especially should anchor authority this way.
+Liking: Reference specific, researched details from their bio, interviews, or firm history. Use their own words back to them when powerful. Find genuine common ground. This is necessary but not sufficient on its own.
+Unity (shared identity): Establish "we are the same tribe." Pranav should explicitly reference being a founder when writing to founders. If the prospect self-funded, scaled from nothing, or built something entrepreneurial, Pranav should draw the parallel. Neha should establish identity as someone who lives in their problem space daily, not as an outsider.
+Scarcity/competitive pressure: Especially for PI firms, activate the competitive reality they already feel. PI leads contact 3-4 firms and sign with whoever calls first. Don't teach them this; reference it as shared knowledge. Frame it as "you already know this" not "let me tell you." For InMails, soft real scarcity is acceptable if true (e.g., "we onboard one firm per metro" or "we're taking on 3 firms this quarter"). Never fabricate scarcity.
+Commitment/consistency: Ask easy, low-friction questions that lead to engagement. Ego-friendly questions work well ("how did you solve X" implies they're competent). Frame CTAs as micro-commitments, not big asks.
+
+Connection request examples:
 BAD (too salesy):
 "Managing intake across 3 offices takes serious coordination. We work with Precise Imaging on exactly this. Would love to connect."
+BAD (warm but gives nothing, all question):
+"Victor, saw you've been at the firm for 10 years. Curious what's changed the most."
+GOOD (insight + question, gives before asking):
+"Victor, saw you switched from 24 years as Deputy City Attorney to plaintiff work. That's a big shift. Curious what made you make the jump."
+GOOD (data point + question, reciprocity-first):
+"Daniel, the Munoz settlement was all over the news. $18.85M for a single plaintiff is remarkable. Did the documentation side go smoothly, or was it a battle?"
+GOOD (non-obvious observation + question):
+"Nima, PI firms running 5+ offices in California lose roughly 40% of after-hours web leads to whoever calls back first. With 7 locations from Irvine to Novato, curious if that matches what you see."
 
-GOOD (warm, curious):
-"Victor - saw you switched from 24 years as Deputy City Attorney to plaintiff work. That's a big shift. Curious what made you make the jump."
+Research first:
 
-GOOD (specific, human):
-"Daniel - the Munoz settlement was all over the news. $18.85M for a single plaintiff is remarkable. Did the documentation side go smoothly, or was it a battle?"
+Read the case study URL provided
+If available, also check for industry-specific case studies (e.g., /law-case-study for law firms)
+Search for and find the LinkedIn profile URL for each leader (include the link in your output)
+Identify which of our solutions is MOST relevant to this firm's likely pain points
 
-**Research first:**
-- Read the case study URL provided
-- If available, also check for industry-specific case studies (e.g., /law-case-study for law firms)
-- Search for and find the LinkedIn profile URL for each leader (include the link in your output)
-- Identify which of our solutions is MOST relevant to this firm's likely pain points
+Personalization requirements:
 
-**Personalization requirements:**
-- Reference something specific from their bio (not just "20 years of experience"; dig deeper)
-- For solo practitioners: focus on time savings, missed opportunities, after-hours coverage
-- For larger firms: focus on staff efficiency, cost savings, scalability
-- Avoid generic claims like "your clients may have visited"; find a stronger connection or don't force one
-- Reference specific details from their operation (office locations by name, team size, practice areas)
+Reference something specific from their bio (not just "20 years of experience"; dig deeper)
+Look for interviews, press features, or quotes from the prospect. Using their own words back to them is powerful (Liking principle)
+For solo practitioners: focus on time savings, missed opportunities, after-hours coverage
+For larger firms: focus on staff efficiency, cost savings, scalability, and the competitive pressure of leads going to faster firms
+Avoid generic claims like "your clients may have visited"; find a stronger connection or don't force one
+Reference specific details from their operation (office locations by name, team size, practice areas)
 
-**Mutual client connections (HIGHEST PRIORITY):**
+Mutual client connections (HIGHEST PRIORITY):
 If a mutual client relationship exists:
-- Lead with the connection in subject lines and opening sentences
-- Name the mutual client explicitly (if approved)
-- Explain the business relationship between prospect and mutual client
-- Connect case study results to how it benefits the prospect's workflow
-- Use subject lines like "[Client Name] asked me to reach out" or "From the team behind [Client Name]'s system" (only if client approved the outreach)
-- If client didn't explicitly approve, use softer framing: "We work with [Client Name]" or "Your [partner/vendor]'s AI system"
 
-**Message structure (IMPORTANT):**
-- Lead with THEIR pain or situation, not our solution
-- Structure: Pain point > Validation > Proof > Soft CTA
-- Bad: "We helped an imaging center save 670 hours..."
-- Good: "With 7 offices across California, I'm curious how you handle intake when your team's offline. We helped..."
+Lead with the connection in subject lines and opening sentences
+Name the mutual client explicitly (if approved)
+Explain the business relationship between prospect and mutual client
+Connect case study results to how it benefits the prospect's workflow
+Use subject lines like "[Client Name] asked me to reach out" or "From the team behind [Client Name]'s system" (only if client approved the outreach)
+If client didn't explicitly approve, use softer framing: "We work with [Client Name]" or "Your [partner/vendor]'s AI system"
+Mutual clients create natural Unity (shared ecosystem) and Social Proof (someone they trust chose you). Lean into both.
 
-**Case study bridging:**
-- If case study is from a different industry, explicitly bridge the relevance
-- Bad: Showing healthcare results to a law firm without explanation
-- Good: "Different industry, same problem: high volume, multiple locations, leads slipping through"
-- Better: If mutual client exists, no bridge needed; the connection speaks for itself
-- For PI firms specifically: highlight lien document handling, records requests, attorney communication speed
+Message structure (IMPORTANT):
 
-**Subject line rules:**
-- Keep under 6 words
-- Be specific to the prospect (name, company, location, or something from their bio)
-- Create curiosity or warmth, not intrigue about your product
-- Warm > clever
+Lead with THEIR pain or situation, not our solution
+Structure: Pain point > Validation > Proof > Soft CTA
+Bad: "We helped an imaging center save 670 hours..."
+Good: "With 7 offices across California, I'm curious how you handle intake when your team's offline. We helped..."
+Better: Lead with a data point or insight about their situation, THEN bridge to proof
+
+Case study bridging:
+
+If case study is from a different industry, explicitly bridge the relevance
+Bad: Showing healthcare results to a law firm without explanation
+Good: "Different industry, same problem: high volume, multiple locations, leads slipping through"
+Better: If mutual client exists, no bridge needed; the connection speaks for itself
+For PI firms specifically: highlight lien document handling, records requests, attorney communication speed
+When referencing case study results, pull at least one hard number into the message body. Don't make them click to see proof.
+
+Subject line rules:
+
+Keep under 6 words
+Be specific to the prospect (name, company, location, or something from their bio)
+Create curiosity or warmth, not intrigue about your product
+Warm > clever
 
 Good subject lines:
-- "Quick question, Victor"
-- "The Munoz case"
-- "Encino to Turlock"
-- "Thunderhead Ranch"
-- "Fellow motorcycle person"
+
+"Quick question, Victor"
+"The Munoz case"
+"Encino to Turlock"
+"Thunderhead Ranch"
+"Fellow motorcycle person"
 
 Bad subject lines:
-- "How we automated 24/7 intake" (about you, not them)
-- "Lien processing at ALG" (boring, sounds like spam)
-- "Partnership opportunity" (spam trigger)
-- "Intake automation specs" (sounds like a brochure)
 
-**Tone & Differentiation (CRITICAL):**
+"How we automated 24/7 intake" (about you, not them)
+"Lien processing at ALG" (boring, sounds like spam)
+"Partnership opportunity" (spam trigger)
+"Intake automation specs" (sounds like a brochure)
 
+Tone & Differentiation (CRITICAL):
 The #1 goal: Sound like a human who's genuinely curious, not a vendor with a pitch.
+Pranav (Founder):
 
-**Pranav (Founder):**
-- Peer-to-peer, business owner to business leader
-- Focuses on operational challenges, growth, scaling
-- Voice: "I've been thinking about..." / "Curious how you handle..." / "We ran into this with..."
-- Empathetic, shares what he's learned
+Peer-to-peer, business owner to business leader
+Focuses on operational challenges, growth, scaling
+Voice: "I've been thinking about..." / "Curious how you handle..." / "We ran into this with..."
+Empathetic, shares what he's learned
+IMPORTANT: When writing to founders or co-founders, Pranav should explicitly establish founder-to-founder identity. Reference being a founder himself. If the prospect self-funded, scaled from nothing, or built something entrepreneurial, draw the parallel. This creates Unity. Example: "We self-funded too, so I know what the jump from 1 to 7 offices actually costs." Don't brag; just acknowledge the shared experience.
+Pranav's connection requests should give an insight or observation about their business/market before asking a question (Reciprocity). Not just a compliment + question.
 
-**Neha (Engineer):**
-- Curious problem-solver, genuinely interested in how things work
-- Focuses on workflows, systems, the "how" behind operations
-- Voice: "I'm always curious how..." / "The tricky part we found was..." / "One thing that surprised us..."
-- Asks questions about their current process
+Neha (Engineer):
 
-**IMPORTANT: They must take DIFFERENT angles, not the same message with different depth.**
+Curious problem-solver, genuinely interested in how things work
+Focuses on workflows, systems, the "how" behind operations
+Voice: "I'm always curious how..." / "The tricky part we found was..." / "One thing that surprised us..."
+Asks questions about their current process
+IMPORTANT: Neha must anchor her authority with at least one "discovered insight" per message. Something she could only know from hands-on experience building in this problem space. Not a product feature. A specific failure mode, a surprising pattern, a counterintuitive number. This establishes authority through demonstrated expertise.
+Neha's connection requests should lead with a discovered insight that reframes how the prospect sees their workflow (Reciprocity + Authority), then ask a question.
 
+IMPORTANT: They must take DIFFERENT angles, not the same message with different depth.
 Example for someone who switched from defense to plaintiff:
-- Pranav angle: Using insider knowledge to win, what adjusters look for
-- Neha angle: Documentation standards on defense side vs. what plaintiff firms actually produce
 
-**Neha's technical details should feel discovered, not marketed:**
+Pranav angle: Using insider knowledge to win, what adjusters look for
+Neha angle: Documentation standards on defense side vs. what plaintiff firms actually produce
 
+Neha's technical details should feel discovered, not marketed:
 BAD: "We built AI with sub-3-second voice latency, OCR for document extraction, and signature detection."
+GOOD: "One thing that surprised us, when we started reading liens automatically, about 12% had some kind of alteration. Strikethroughs, whiteout, weird formatting. Now the system flags those before they cause problems."
+Use contractions and natural speech:
 
-GOOD: "One thing that surprised us - when we started reading liens automatically, about 12% had some kind of alteration. Strikethroughs, whiteout, weird formatting. Now the system flags those before they cause problems."
+"I'm" not "I am"
+"we've" not "we have"
+"you're" not "you are"
+Occasional incomplete sentences are fine
 
-**Use contractions and natural speech:**
-- "I'm" not "I am"
-- "we've" not "we have"
-- "you're" not "you are"
-- Occasional incomplete sentences are fine
+Case study link requirement:
 
-**Case study link requirement:**
-- ONLY long messages (InMails) include the case study URL
-- Connection requests (short messages) must NOT include any links
-- In InMails, weave the URL naturally: "documented what we learned here: [URL]" or "wrote up the results: [URL]"
+ONLY long messages (InMails) include the case study URL
+Connection requests (short messages) must NOT include any links
+In InMails, weave the URL naturally: "documented what we learned here: [URL]" or "wrote up the results: [URL]"
 
-**CTA variations:**
-
+CTA variations:
 For connection requests (no hard CTA needed):
-- End with a genuine question
-- Or just end with an observation
-- Don't ask for anything
+
+End with a genuine question
+Or just end with an observation
+Don't ask for anything
+Optionally, offer something specific and free that creates reciprocity: "I pulled together speed-to-lead benchmarks for multi-office PI firms in SoCal. Happy to share if useful." This gives them a reason to accept beyond curiosity. Only use if you can describe something specific and believable.
 
 For InMails (soft, gives them an easy out):
-- "Happy to share what we learned if it's useful"
-- "Curious if you've run into this"
-- "No pressure, just thought it might resonate"
-- "Let me know if this lands"
-- "If you've already solved this, I'd love to hear how"
-- "Either way, good to connect"
 
-**What to avoid:**
-- Generic subject lines that could apply to anyone or reusing the same subject line across messages
-- Forcing a "mutual connection" that doesn't really exist
-- Metrics that don't resonate with their firm size
-- Focusing on what WE did vs. what THEY struggle with
-- Using healthcare case studies for law firms without bridging relevance (unless mutual client)
-- Omitting the case study URL from InMail messages
-- Using em dashes anywhere. Use commas, periods, or semicolons instead
-- Leading with "We helped..." instead of their situation
-- Vague technical claims for Neha (e.g., "smart AI" without specifics)
-- Subject lines over 6 words
-- Abrupt transitions from personalization to pitch
-- Including links in connection requests (short messages)
-- Pitching the product in connection requests
-- The phrase "I'd love to connect" (everyone says this)
-- Starting with "I hope this message finds you well"
-- Ending with "Looking forward to hearing from you"
-- Empty compliments ("Impressive background!")
-- Sounding like a LinkedIn automation tool wrote it
-- Being too formal or stiff
+"Happy to share what we learned if it's useful"
+"Curious if you've run into this"
+"No pressure, just thought it might resonate"
+"Let me know if this lands"
+"If you've already solved this, I'd love to hear how"
+"Either way, good to connect"
 
----
+What to avoid:
 
-### Context:
-- Case study URL (primary): ${outgenCaseStudyUrl}${mutualClientSection}
-${outgenInstructions ? `\n### Additional Instructions:\n${outgenInstructions}\n` : ""}
----
+Generic subject lines that could apply to anyone or reusing the same subject line across messages
+Forcing a "mutual connection" that doesn't really exist
+Metrics that don't resonate with their firm size
+Focusing on what WE did vs. what THEY struggle with
+Using healthcare case studies for law firms without bridging relevance (unless mutual client)
+Omitting the case study URL from InMail messages
+Using em dashes anywhere. Use commas, periods, or semicolons instead
+Leading with "We helped..." instead of their situation
+Vague technical claims for Neha (e.g., "smart AI" without specifics)
+Subject lines over 6 words
+Abrupt transitions from personalization to pitch
+Including links in connection requests (short messages)
+Pitching the product in connection requests
+The phrase "I'd love to connect" (everyone says this)
+Starting with "I hope this message finds you well"
+Ending with "Looking forward to hearing from you"
+Empty compliments ("Impressive background!")
+Sounding like a LinkedIn automation tool wrote it
+Being too formal or stiff
+Connection requests that are all question, no value given (violates Reciprocity)
+Vague social proof ("firms like yours") instead of specific proof ("3 PI firms in SoCal with 5+ offices")
+Claiming authority through credentials instead of demonstrated expertise
+Teaching the prospect something they already know (e.g., explaining what speed-to-lead is to a PI attorney). Reference shared knowledge; don't lecture.
+Fake urgency or fabricated scarcity
 
-### Firm Information:
+
+Context:
+
+Case study URL (primary): ${outgenCaseStudyUrl}${mutualClientSection}
+${outgenInstructions ? `\nAdditional Instructions:\n${outgenInstructions}\n` : ""}
+
+Firm Information:
 ${firmInfo}
 
-### Target Person:
+Target Person:
 ${leaderInfo}`;
 
       return { name: leader.name, prompt };

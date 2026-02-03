@@ -274,12 +274,12 @@ DECISION GUIDELINES:
 - The new topic deserves its own conversation thread for proper tracking
 
 EXAMPLES OF SPLIT SCENARIOS:
-- Current: "Scheduling > Schedule Request" → New message about billing charges → SPLIT to "Accounts Receivable > Billing"
-- Current: "Medical Records & Images > CD Requests" → New message about appointment → SPLIT to "Scheduling > Schedule Request"
+- Current: "Scheduling > Scheduling request" → New message about billing charges → SPLIT to "Accounts Receivable > Billing"
+- Current: "Medical Records & Images > CD Requests" → New message about appointment → SPLIT to "Scheduling > Scheduling request"
 - Current: "Accounts Receivable > Billing" → New message about lien → SPLIT to "Accounts Receivable > Liens"
 
 EXAMPLES OF CONTINUE SCENARIOS:
-- Current: "Scheduling > Schedule Request" → New message confirming appointment details → CONTINUE
+- Current: "Scheduling > Scheduling request" → New message confirming appointment details → CONTINUE
 - Current: "Accounts Receivable > Billing" → New message asking about payment options → CONTINUE
 - Current: "Medical Records & Images > Image Request" → New message asking when images will be ready → CONTINUE
 
@@ -463,7 +463,7 @@ def get_all_leaf_tags_from_tree(tag_tree: Dict[str, Any], parent_path: str = "")
         parent_path: Current path from root (for building full tag paths)
 
     Returns:
-        List of full tag paths for all leaf nodes (e.g., ["Scheduling > Schedule Request > Schedule Request"])
+        List of full tag paths for all leaf nodes (e.g., ["Scheduling > Scheduling request > Scheduling request"])
     """
     leaf_tags = []
 

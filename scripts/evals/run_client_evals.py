@@ -82,7 +82,7 @@ def get_scenario_type(scenario: Dict[str, Any]) -> str:
         return "apt_status"
 
     # Check for Scheduling
-    if "Schedule Request" in tags_set:
+    if "Scheduling request" in tags_set:
         return "scheduling"
 
     # Check for Payment issues

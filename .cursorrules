@@ -36,8 +36,8 @@ Email_Categories
 │   │   └── Cancel Request
 │   ├── Reschedule Request
 │   │   └── Reschedule Request
-│   ├── Schedule Request
-│   │   └── Schedule Request
+│   ├── Scheduling request
+│   │   └── Scheduling request
 │   └── Will contact patient
 │       └── Will contact patient
 ├── Medical Records & Images
