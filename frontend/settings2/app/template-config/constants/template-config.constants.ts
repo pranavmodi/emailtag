@@ -177,6 +177,30 @@ export const DUMMY_CALL_LOG_TABLE = `<table border="1" cellpadding="8" cellspaci
 </tbody>
 </table>`;
 
+// Dummy data for text log table preview
+export const DUMMY_TEXT_LOG_TABLE = `<table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 14px; margin-top: 10px;">
+<thead>
+<tr style="background-color: #f2f2f2;">
+<th style="text-align: left; padding: 10px; border: 1px solid #ddd;">Date/Time</th>
+<th style="text-align: left; padding: 10px; border: 1px solid #ddd;">Message Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="padding: 8px; border: 1px solid #ddd;">12/22/2025 07:50 AM</td>
+<td style="padding: 8px; border: 1px solid #ddd;">Appointment Reminder</td>
+</tr>
+<tr>
+<td style="padding: 8px; border: 1px solid #ddd;">12/20/2025 11:18 AM</td>
+<td style="padding: 8px; border: 1px solid #ddd;">Automated Message</td>
+</tr>
+<tr>
+<td style="padding: 8px; border: 1px solid #ddd;">12/18/2025 07:51 AM</td>
+<td style="padding: 8px; border: 1px solid #ddd;">Appointment Reminder</td>
+</tr>
+</tbody>
+</table>`;
+
 // ============================================================================
 // APT STATUS REQ TEMPLATES
 // ============================================================================

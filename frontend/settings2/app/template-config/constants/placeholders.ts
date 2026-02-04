@@ -57,6 +57,11 @@ export const TEMPLATE_PLACEHOLDERS: PlaceholderSet = {
       key: "{call_log_table}",
       description: "HTML table of patient call history (Date/Time, Phone #, Inbound/Outbound, Disposition)",
       example: "<table>...</table>"
+    },
+    {
+      key: "{text_log_table}",
+      description: "HTML table of patient text message history (Date/Time, Message Type)",
+      example: "<table>...</table>"
     }
   ],
 

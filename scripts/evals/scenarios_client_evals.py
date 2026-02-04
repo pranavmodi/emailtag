@@ -660,7 +660,7 @@ Test ID: {UNIQUE_TEST_ID}"""
         "expected_tags": ["Reports Request"]
     },
     "32": {
-        "description": "Cherie Roedel - ASL Lien - Both RAD and TECH liens attached in same email for processing",
+        "description": "Cherie Roedel - ASL Lien - Two TC lien attachments (NOTE: RAD file has wrong TC barcode, tests deduplication)",
         "subject": "Cherie Roedel - Signed Lien Documents",
         "body_html": (
             "<p>Hello Precise Imaging,</p>"
@@ -682,7 +682,7 @@ Test ID: {UNIQUE_TEST_ID}"""
                 "content_type": "application/pdf"
             }
         ],
-        "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
+        "expected_tags": ["ASL", "Tech Lien"]
     },
     "33": {
         "description": "Kathleen Neeck - RAD Signed Lien - Single RAD lien attachment for processing",
