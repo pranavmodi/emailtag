@@ -2200,224 +2200,216 @@ function OutgenTab({
       researchData?.awards_recognition?.length ? `Awards & Recognition: ${researchData.awards_recognition.join("; ")}` : null,
     ].filter(Boolean).join("\n");
 
+    const mutualClientTier = outgenMutualApproved ? "1" : "2"; // Tier 3 (N/A) would require additional UI state
     const mutualClientSection = `
 - Mutual client: Precise Imaging
-- Mutual client relationship: PI firms send their clients to Precise Imaging, and Precise works on a lien basis, so they send back signed liens
+- Mutual client relationship: PI firms send their clients to Precise Imaging for diagnostic imaging. Precise works on a lien basis and sends back signed liens, records, and documentation to the firm.
 - Did mutual client approve outreach reference? ${outgenMutualApproved ? "YES" : "NO"}
-- Specific results mutual client experienced that benefit prospect: Faster records responses, automated lien handling, cleaner documentation back to attorneys`;
+- Mutual client tier: ${mutualClientTier}`;
 
     return leaders.map((leader) => {
       const leaderInfo = formatLeaderInfo(leader);
 
       const prompt = `Generate LinkedIn outreach messages for the following person.
-Create 8 outputs (a unique subject line for each message):
 
-Subject line for short Pranav message - Warm, curiosity-driven (under 6 words)
-Short message from Pranav Modi (founder) - Connection request, under 300 characters, NO links, NO pitch, just genuine curiosity
-Subject line for short Neha message - Warm, hints at shared problem (under 6 words)
-Short message from Neha Pipada (engineer) - Connection request, under 300 characters, NO links, NO pitch, curious about their workflow
-Subject line for long Pranav message - Personalized, conversational (under 6 words)
-Long message from Pranav Modi - InMail, under 450 characters, warm opener, includes case study link, soft CTA
-Subject line for long Neha message - Personalized, problem-focused (under 6 words)
-Long message from Neha Pipada - InMail, under 450 characters, technical credibility, includes case study link, soft CTA
+=== PRE-GENERATION CHECKLIST ===
+Before writing any messages, answer these questions internally (do not output them except in the rationale section):
 
+1. What is this person's most likely daily operational frustration?
+   (Not "running a law firm" — something specific: managing intake volume? chasing medical records? losing leads to faster competitors? coordinating across offices?)
 
-Guidelines:
-CRITICAL: Connection Requests vs. InMails
-Short messages (1-4) are CONNECTION REQUESTS. They are NOT mini-pitches.
+2. What is the single strongest angle for this prospect?
+   Choose ONE:
+   a. Mutual client connection (if Tier 1 or Tier 2)
+   b. Career transition or unusual background
+   c. Firm growth stage (new offices, recent hires, recently founded)
+   d. Competitive pressure (saturated market, losing leads)
+   e. Workflow inefficiency (signs of manual processes)
+   f. Something specific from their public content
 
-NO links, NO case study URLs, NO product mentions
-Goal: Earn the right to have a conversation
-Formula: Non-obvious insight or data point about their situation + genuine question
-The recipient should feel like they learned something or saw their own business differently just by reading the message
-Should feel like you'd want to grab coffee with this person
+3. Which 2 Cialdini principles are the strongest fit?
+   Pick exactly 2. Using all of them in a 300-character message produces garbage.
 
-Long messages (5-8) are INMAILS. They CAN include the pitch.
+4. What would make this person stop scrolling?
+   Something specific: a number they haven't seen, a question about something they care about, a reference only someone paying attention would know.
 
-Include case study URL
-Structure: Warm opener > Shared problem > What you learned > Soft CTA
-Should feel like a peer reaching out, not a vendor selling
-MUST include at least one specific, quantified result from the case study in the message body (not just behind the link). People don't click links from strangers; the proof needs to be visible before the click.
+5. What is the Pranav angle vs. the Neha angle?
+   They must be different. Write one sentence for each:
+   - Pranav will approach from: [angle]
+   - Neha will approach from: [angle]
+   If both angles are the same, choose a new one for Neha.
 
-Persuasion principles (apply throughout all messages):
-Every message should activate at least 2-3 of these. Don't force all of them into every message, but be intentional about which ones you're using and why.
+6. Mutual client tier: [1 / 2 / 3] based on context section.
 
-Reciprocity (HIGHEST PRIORITY for connection requests): Give before you ask. Lead with something valuable: a non-obvious insight, a data point about their market, a pattern you've observed across similar firms. The recipient should feel they received something just by reading. Bad: asking a question without giving anything first. Good: sharing an observation that reframes how they see their own situation, then asking a question.
-Social proof: Be specific, not vague. "We work with firms like yours" is weak. "3 PI firms in SoCal running 5+ offices" is strong. Pull at least one quantified result from the case study into InMail body text. Name mutual clients where approved. Reference the prospect's own peer group or market.
-Authority: Demonstrate expertise through discovered insights, not credentials or product features. Show you've been deep in this problem space. A specific failure mode you've seen, a counterintuitive pattern in the data, a number that surprises people. Neha especially should anchor authority this way.
-Liking: Reference specific, researched details from their bio, interviews, or firm history. Use their own words back to them when powerful. Find genuine common ground. This is necessary but not sufficient on its own.
-Unity (shared identity): Establish "we are the same tribe." Pranav should explicitly reference being a founder when writing to founders. If the prospect self-funded, scaled from nothing, or built something entrepreneurial, Pranav should draw the parallel. Neha should establish identity as someone who lives in their problem space daily, not as an outsider.
-Scarcity/competitive pressure: Especially for PI firms, activate the competitive reality they already feel. PI leads contact 3-4 firms and sign with whoever calls first. Don't teach them this; reference it as shared knowledge. Frame it as "you already know this" not "let me tell you." For InMails, soft real scarcity is acceptable if true (e.g., "we onboard one firm per metro" or "we're taking on 3 firms this quarter"). Never fabricate scarcity.
-Commitment/consistency: Ask easy, low-friction questions that lead to engagement. Ego-friendly questions work well ("how did you solve X" implies they're competent). Frame CTAs as micro-commitments, not big asks.
+These answers should guide every word of every message.
 
-Connection request examples:
-BAD (too salesy):
-"Managing intake across 3 offices takes serious coordination. We work with Precise Imaging on exactly this. Would love to connect."
-BAD (warm but gives nothing, all question):
-"Victor, saw you've been at the firm for 10 years. Curious what's changed the most."
-GOOD (insight + question, gives before asking):
+=== DISQUALIFICATION CHECK ===
+Before generating, check for these signals. If any are present, output: "DISQUALIFICATION FLAG: [reason]. Recommend skipping or adjusting approach." Then generate messages anyway.
+
+- Prospect has publicly posted negative content about AI, automation, or cold outreach in the last 6 months
+- Firm is 1-2 people total (solution economics likely don't work)
+- Prospect is retired, transitioning out, or has "former" in their title
+- Firm does not practice personal injury
+- Prospect recently posted about a competitor's product
+- Profile shows no activity in 12+ months
+
+=== OUTPUT FORMAT ===
+
+**Phase 1 (internal, do not output):**
+- Complete the pre-generation checklist
+- Identify the single strongest angle
+- Select 2 Cialdini principles
+
+**Phase 2 (output these 6 messages):**
+1. Connection request from Pranav (under 300 characters) + subject line (under 6 words)
+2. Connection request from Neha (under 300 characters) + subject line (under 6 words)
+3. InMail from Pranav (under 450 characters) + subject line (under 6 words)
+4. InMail from Neha (under 450 characters) + subject line (under 6 words)
+5. Follow-up from Pranav after connection acceptance (under 300 characters)
+6. Follow-up from Neha after connection acceptance (under 300 characters)
+
+**Phase 3 (output):**
+Brief rationale: For each message, one sentence explaining the angle chosen and the primary Cialdini principle used.
+
+=== CHARACTER LIMITS ===
+
+**300 characters is 2-3 short sentences. Here's exactly what 300 characters looks like:**
+"Victor, saw you switched from 24 years as Deputy City Attorney to plaintiff work. That's a rare path. Curious what made you make the jump, and whether the documentation standards feel different on this side."
+
+**450 characters is 3-4 short sentences. Here's exactly what 450 characters looks like:**
+"Daniel, the Munoz settlement was all over the news. $18.85M for a single plaintiff is remarkable. We've been working with imaging centers on the lien side of PI cases, and the documentation quality coming back to attorneys varies wildly. About 12% of liens we process have some kind of alteration. Curious if that matches what you see on big cases. Wrote up what we learned here: [URL]"
+
+**Before outputting each message, count its characters. If a message exceeds its limit, shorten it. Do not compress by removing spaces, using abbreviations, or making text harder to read. Cut content instead.**
+
+=== CONNECTION REQUESTS VS INMAILS ===
+
+**Connection requests (messages 1, 2, 5, 6):**
+- NO links, NO case study URLs, NO product mentions
+- Goal: Earn the right to have a conversation
+- Formula: Non-obvious insight about their situation + genuine question
+- The recipient should feel they learned something just by reading
+
+**InMails (messages 3, 4):**
+- Include case study URL
+- Structure: Warm opener > Shared problem > What you learned > Soft CTA
+- MUST include at least one specific, quantified result in the message body (not just behind the link)
+
+=== MUTUAL CLIENT TIERS ===
+Read the "Did mutual client approve outreach reference?" field in context FIRST. This determines which tier to use.
+
+**Tier 1 — Client approved (context says "YES"):**
+- Name Precise Imaging in subject lines and opening sentences
+- Lead with the relationship: "Precise Imaging is how we got into this space"
+- Use their name freely throughout
+
+**Tier 2 — Client exists but did NOT approve (context says "NO"):**
+- Never name the client
+- Reference the ecosystem: "imaging centers that work with PI firms on liens," "the lien workflow between firms and imaging partners"
+- Reference patterns without attribution: "we've seen about 12% of lien documents have some kind of alteration"
+- Signal insider knowledge without naming anyone
+
+**Tier 3 — No mutual client (context says "N/A"):**
+- Skip mutual client framing entirely
+- Do not fabricate a connection
+- Use other angles: competitive pressure, workflow observation, career/background research
+
+=== CASE STUDY BRIDGE (healthcare to law firm) ===
+The connection is the lien workflow. PI firms and imaging centers are on opposite ends of the same pipeline:
+1. PI firm sends client to imaging center for diagnostic work
+2. Imaging center does work on lien basis
+3. Imaging center sends back signed liens, records, documentation to firm
+4. Firm uses documents for case progression, demand packages, settlements
+
+What we learned on the imaging center side directly affects what the PI firm receives.
+
+**Bridge language (adapt, don't copy verbatim):**
+- "We built our systems on the imaging center side of the PI workflow. The documentation improvements flow directly to the firms they work with."
+- "We started by automating lien handling for imaging centers. The patterns we found in document quality are the same ones that slow down case progression on the firm side."
+
+For InMails: Use a bridge sentence BEFORE the case study link. For connection requests: No link, so no bridge needed.
+
+=== NEHA'S INSIGHT LIBRARY ===
+For each prospect, select 1-2 insights most relevant to their situation. Do not use all of them. Rotate across prospects.
+
+1. **Lien document quality:** "When we started reading liens automatically, about 12% had some kind of alteration. Strikethroughs, whiteout, missing signatures, formatting that would cause problems if nobody caught it."
+
+2. **After-hours lead decay:** "We tracked what happens to PI leads that come in after 6pm. About 35-40% contact at least one other firm before the original firm calls back the next morning."
+
+3. **Response time cliff:** "There's a cliff in PI lead conversion around the 5-minute mark. Under 5 minutes, conversion rates are 3-4x higher than at 30 minutes. Most firms average 45 minutes to 2 hours for web leads."
+
+4. **Bilingual intake gap:** "Firms that advertise 'se habla español' but only have bilingual staff during business hours see a measurable drop in Spanish-language lead conversion after 5pm."
+
+5. **Form abandonment:** "About 60% of people who start a PI intake form don't finish it. They get to the second or third question and leave."
+
+=== CIALDINI PRINCIPLES (pick 2 per message) ===
+
+- **Reciprocity:** Give before you ask. Lead with a non-obvious insight or data point. The recipient should feel they received something just by reading.
+- **Social proof:** Be specific. "3 PI firms in SoCal running 5+ offices" is strong. "Firms like yours" is weak.
+- **Authority:** Demonstrate expertise through discovered insights, not credentials. A specific failure mode, a counterintuitive pattern.
+- **Liking:** Reference specific, researched details from their bio or interviews. Use their own words back to them.
+- **Unity:** Establish shared identity. Pranav should reference being a founder when writing to founders.
+- **Commitment/consistency:** Ask easy, ego-friendly questions that lead to engagement.
+
+=== PRANAV VS NEHA ===
+
+**Pranav (Founder):**
+- Peer-to-peer, business owner to business leader
+- Focuses on operational challenges, growth, scaling
+- Voice: "I've been thinking about..." / "Curious how you handle..."
+- When writing to founders: explicitly establish founder-to-founder identity
+
+**Neha (Engineer):**
+- Curious problem-solver, interested in how things work
+- Focuses on workflows, systems, the "how" behind operations
+- Voice: "One thing that surprised us..." / "The tricky part we found was..."
+- MUST anchor authority with at least one "discovered insight" per message from the library above
+
+**CRITICAL:** After generating both connection requests, check: if you swapped the sender names, would the messages still make sense? If yes, the angles aren't different enough. Rewrite.
+
+=== EXAMPLES ===
+
+**Good connection request (insight + question):**
 "Victor, saw you switched from 24 years as Deputy City Attorney to plaintiff work. That's a big shift. Curious what made you make the jump."
-GOOD (data point + question, reciprocity-first):
+
+**Good connection request (data point + question):**
 "Daniel, the Munoz settlement was all over the news. $18.85M for a single plaintiff is remarkable. Did the documentation side go smoothly, or was it a battle?"
-GOOD (non-obvious observation + question):
-"Nima, PI firms running 5+ offices in California lose roughly 40% of after-hours web leads to whoever calls back first. With 7 locations from Irvine to Novato, curious if that matches what you see."
 
-Research first:
+**Bad connection request (too salesy):**
+"Managing intake across 3 offices takes serious coordination. We work with Precise Imaging on exactly this. Would love to connect."
 
-Read the case study URL provided
-If available, also check for industry-specific case studies (e.g., /law-case-study for law firms)
-Search for and find the LinkedIn profile URL for each leader (include the link in your output)
-Identify which of our solutions is MOST relevant to this firm's likely pain points
+**Bad connection request (all question, no value):**
+"Victor, saw you've been at the firm for 10 years. Curious what's changed the most."
 
-Personalization requirements:
+**Good subject lines:** "Quick question, Victor" / "The Munoz case" / "Encino to Turlock"
+**Bad subject lines:** "How we automated 24/7 intake" / "Partnership opportunity"
 
-Reference something specific from their bio (not just "20 years of experience"; dig deeper)
-Look for interviews, press features, or quotes from the prospect. Using their own words back to them is powerful (Liking principle)
-For solo practitioners: focus on time savings, missed opportunities, after-hours coverage
-For larger firms: focus on staff efficiency, cost savings, scalability, and the competitive pressure of leads going to faster firms
-Avoid generic claims like "your clients may have visited"; find a stronger connection or don't force one
-Reference specific details from their operation (office locations by name, team size, practice areas)
+=== FOLLOW-UP MESSAGES (outputs 5 and 6) ===
+After connection acceptance, wait 24-48 hours. The follow-up should:
 
-Mutual client connections (HIGHEST PRIORITY):
-If a mutual client relationship exists:
+- Thank them for connecting (one short sentence, not effusive)
+- Reference something specific from their recent activity (a post, comment, firm update, case result)
+- Make one soft offer: share something specific and useful. Not "let's chat" but "I put together [specific resource] for [their situation]. Happy to send it over."
+- Under 300 characters
+- NOT include a case study link (that comes in message 3 if conversation continues)
 
-Lead with the connection in subject lines and opening sentences
-Name the mutual client explicitly (if approved)
-Explain the business relationship between prospect and mutual client
-Connect case study results to how it benefits the prospect's workflow
-Use subject lines like "[Client Name] asked me to reach out" or "From the team behind [Client Name]'s system" (only if client approved the outreach)
-If client didn't explicitly approve, use softer framing: "We work with [Client Name]" or "Your [partner/vendor]'s AI system"
-Mutual clients create natural Unity (shared ecosystem) and Social Proof (someone they trust chose you). Lean into both.
+If the original connection request referenced a question, gently re-ask: "Curious if you ever figured out [the thing I asked about]."
 
-Message structure (IMPORTANT):
+=== WHAT TO AVOID ===
+1. Including links in connection requests
+2. Generic subject lines that could apply to anyone
+3. Leading with "We helped..." instead of their situation
+4. Using em dashes (use commas, periods, semicolons)
+5. Connection requests that are all question, no value given
+6. Vague social proof ("firms like yours")
+7. Teaching the prospect something they already know
+8. The phrase "I'd love to connect"
+9. InMails without a case study URL
+10. Pranav and Neha taking the same angle
 
-Lead with THEIR pain or situation, not our solution
-Structure: Pain point > Validation > Proof > Soft CTA
-Bad: "We helped an imaging center save 670 hours..."
-Good: "With 7 offices across California, I'm curious how you handle intake when your team's offline. We helped..."
-Better: Lead with a data point or insight about their situation, THEN bridge to proof
+=== CONTEXT ===
 
-Case study bridging:
-
-If case study is from a different industry, explicitly bridge the relevance
-Bad: Showing healthcare results to a law firm without explanation
-Good: "Different industry, same problem: high volume, multiple locations, leads slipping through"
-Better: If mutual client exists, no bridge needed; the connection speaks for itself
-For PI firms specifically: highlight lien document handling, records requests, attorney communication speed
-When referencing case study results, pull at least one hard number into the message body. Don't make them click to see proof.
-
-Subject line rules:
-
-Keep under 6 words
-Be specific to the prospect (name, company, location, or something from their bio)
-Create curiosity or warmth, not intrigue about your product
-Warm > clever
-
-Good subject lines:
-
-"Quick question, Victor"
-"The Munoz case"
-"Encino to Turlock"
-"Thunderhead Ranch"
-"Fellow motorcycle person"
-
-Bad subject lines:
-
-"How we automated 24/7 intake" (about you, not them)
-"Lien processing at ALG" (boring, sounds like spam)
-"Partnership opportunity" (spam trigger)
-"Intake automation specs" (sounds like a brochure)
-
-Tone & Differentiation (CRITICAL):
-The #1 goal: Sound like a human who's genuinely curious, not a vendor with a pitch.
-Pranav (Founder):
-
-Peer-to-peer, business owner to business leader
-Focuses on operational challenges, growth, scaling
-Voice: "I've been thinking about..." / "Curious how you handle..." / "We ran into this with..."
-Empathetic, shares what he's learned
-IMPORTANT: When writing to founders or co-founders, Pranav should explicitly establish founder-to-founder identity. Reference being a founder himself. If the prospect self-funded, scaled from nothing, or built something entrepreneurial, draw the parallel. This creates Unity. Example: "We self-funded too, so I know what the jump from 1 to 7 offices actually costs." Don't brag; just acknowledge the shared experience.
-Pranav's connection requests should give an insight or observation about their business/market before asking a question (Reciprocity). Not just a compliment + question.
-
-Neha (Engineer):
-
-Curious problem-solver, genuinely interested in how things work
-Focuses on workflows, systems, the "how" behind operations
-Voice: "I'm always curious how..." / "The tricky part we found was..." / "One thing that surprised us..."
-Asks questions about their current process
-IMPORTANT: Neha must anchor her authority with at least one "discovered insight" per message. Something she could only know from hands-on experience building in this problem space. Not a product feature. A specific failure mode, a surprising pattern, a counterintuitive number. This establishes authority through demonstrated expertise.
-Neha's connection requests should lead with a discovered insight that reframes how the prospect sees their workflow (Reciprocity + Authority), then ask a question.
-
-IMPORTANT: They must take DIFFERENT angles, not the same message with different depth.
-Example for someone who switched from defense to plaintiff:
-
-Pranav angle: Using insider knowledge to win, what adjusters look for
-Neha angle: Documentation standards on defense side vs. what plaintiff firms actually produce
-
-Neha's technical details should feel discovered, not marketed:
-BAD: "We built AI with sub-3-second voice latency, OCR for document extraction, and signature detection."
-GOOD: "One thing that surprised us, when we started reading liens automatically, about 12% had some kind of alteration. Strikethroughs, whiteout, weird formatting. Now the system flags those before they cause problems."
-Use contractions and natural speech:
-
-"I'm" not "I am"
-"we've" not "we have"
-"you're" not "you are"
-Occasional incomplete sentences are fine
-
-Case study link requirement:
-
-ONLY long messages (InMails) include the case study URL
-Connection requests (short messages) must NOT include any links
-In InMails, weave the URL naturally: "documented what we learned here: [URL]" or "wrote up the results: [URL]"
-
-CTA variations:
-For connection requests (no hard CTA needed):
-
-End with a genuine question
-Or just end with an observation
-Don't ask for anything
-Optionally, offer something specific and free that creates reciprocity: "I pulled together speed-to-lead benchmarks for multi-office PI firms in SoCal. Happy to share if useful." This gives them a reason to accept beyond curiosity. Only use if you can describe something specific and believable.
-
-For InMails (soft, gives them an easy out):
-
-"Happy to share what we learned if it's useful"
-"Curious if you've run into this"
-"No pressure, just thought it might resonate"
-"Let me know if this lands"
-"If you've already solved this, I'd love to hear how"
-"Either way, good to connect"
-
-What to avoid:
-
-Generic subject lines that could apply to anyone or reusing the same subject line across messages
-Forcing a "mutual connection" that doesn't really exist
-Metrics that don't resonate with their firm size
-Focusing on what WE did vs. what THEY struggle with
-Using healthcare case studies for law firms without bridging relevance (unless mutual client)
-Omitting the case study URL from InMail messages
-Using em dashes anywhere. Use commas, periods, or semicolons instead
-Leading with "We helped..." instead of their situation
-Vague technical claims for Neha (e.g., "smart AI" without specifics)
-Subject lines over 6 words
-Abrupt transitions from personalization to pitch
-Including links in connection requests (short messages)
-Pitching the product in connection requests
-The phrase "I'd love to connect" (everyone says this)
-Starting with "I hope this message finds you well"
-Ending with "Looking forward to hearing from you"
-Empty compliments ("Impressive background!")
-Sounding like a LinkedIn automation tool wrote it
-Being too formal or stiff
-Connection requests that are all question, no value given (violates Reciprocity)
-Vague social proof ("firms like yours") instead of specific proof ("3 PI firms in SoCal with 5+ offices")
-Claiming authority through credentials instead of demonstrated expertise
-Teaching the prospect something they already know (e.g., explaining what speed-to-lead is to a PI attorney). Reference shared knowledge; don't lecture.
-Fake urgency or fabricated scarcity
-
-
-Context:
-
-Case study URL (primary): ${outgenCaseStudyUrl}${mutualClientSection}
+Case study URL (primary): ${outgenCaseStudyUrl}
+${mutualClientSection}
 ${outgenInstructions ? `\nAdditional Instructions:\n${outgenInstructions}\n` : ""}
 
 Firm Information:
