@@ -68,6 +68,21 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
         else:
             _handle_final_document_processing_failure(email_uuid, attachment_url, f"Download failed after 4 attempts: {exc}")
         return
+    except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.NetworkError) as exc:
+        # Network connectivity errors (DNS failures, connection refused, timeouts)
+        error_msg = str(exc)
+        logger.error(f"Network error downloading attachment {attachment_url} for email {email_id}: {error_msg}")
+        if self.request.retries < self.max_retries:
+            retry_delay = get_retry_delay(self.request.retries)
+            logger.warning(f"🔄 Retrying download in {retry_delay}s due to network error (attempt {self.request.retries + 1}/{self.max_retries + 1}): {error_msg}")
+            try:
+                self.retry(exc=exc, countdown=retry_delay)
+            except self.MaxRetriesExceededError:
+                logger.error(f"Max retries exceeded for network error: {error_msg}")
+                _handle_final_document_processing_failure(email_uuid, attachment_url, f"Network error after {self.max_retries + 1} attempts: {error_msg}")
+        else:
+            _handle_final_document_processing_failure(email_uuid, attachment_url, f"Network error after {self.max_retries + 1} attempts: {error_msg}")
+        return
     except Exception as exc:
         logger.exception(f"Unexpected error downloading attachment {attachment_url} for email {email_id}: {exc}")
         _handle_final_document_processing_failure(email_uuid, attachment_url, f"Unexpected download error: {exc}")

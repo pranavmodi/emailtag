@@ -93,15 +93,45 @@ class PDFSplitter:
                         continue
 
                     # Create new PDF with selected pages
-                    pdf_writer = PdfWriter()
-                    for page_num in valid_pages:
-                        pdf_writer.add_page(pdf_reader.pages[page_num])
+                    pdf_bytes = None
+                    try:
+                        pdf_writer = PdfWriter()
+                        for page_num in valid_pages:
+                            pdf_writer.add_page(pdf_reader.pages[page_num])
 
-                    # Write to bytes
-                    output_buffer = io.BytesIO()
-                    pdf_writer.write(output_buffer)
-                    pdf_bytes = output_buffer.getvalue()
-                    output_buffer.close()
+                        # Write to bytes
+                        output_buffer = io.BytesIO()
+                        pdf_writer.write(output_buffer)
+                        pdf_bytes = output_buffer.getvalue()
+                        output_buffer.close()
+                    except (TypeError, ValueError, KeyError) as clone_error:
+                        # Handle corrupted PDFs that fail during page cloning
+                        # Common errors: NullObject, invalid streams, malformed structures
+                        logger.warning(
+                            f"📄 PDF SPLIT: Page cloning failed for group {group_idx} due to corrupted PDF: {clone_error}. "
+                            f"Attempting fallback..."
+                        )
+
+                        # Fallback: If this is the entire document (all pages in one group),
+                        # use original PDF bytes
+                        if len(valid_pages) == total_pages and total_pages > 0:
+                            logger.info(f"📄 PDF SPLIT: Using original PDF bytes as fallback (all {total_pages} pages)")
+                            pdf_bytes = pdf_content
+                        elif total_pages == 1:
+                            # Single page document - use original bytes
+                            logger.info(f"📄 PDF SPLIT: Using original PDF bytes for single-page document")
+                            pdf_bytes = pdf_content
+                        else:
+                            # Multi-page document with partial selection - cannot safely fallback
+                            logger.error(
+                                f"📄 PDF SPLIT: Cannot split corrupted multi-page PDF for group {group_idx}. "
+                                f"Requested pages {valid_pages} of {total_pages} total."
+                            )
+                            continue
+
+                    if pdf_bytes is None:
+                        logger.error(f"📄 PDF SPLIT: Failed to create PDF bytes for group {group_idx}")
+                        continue
 
                     if page_type == "patient_demo":
                         logger.info(

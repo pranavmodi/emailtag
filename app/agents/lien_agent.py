@@ -365,9 +365,68 @@ def _check_duplicate_barcodes(document_analysis_results: List[Dict[str, Any]]) -
 
     return False
 
+
+def _score_split_document(split_doc: Dict[str, Any], signature_type: str = "ASL") -> int:
+    """
+    Score a split document based on quality indicators.
+
+    Higher score = better quality document. Used for deduplication to keep
+    the best copy when multiple identical liens exist.
+
+    Scoring criteria:
+    - Signature placement valid: +20 points
+    - No placement issues: +10 points (minus 5 per issue)
+    - Required signature present: +15 points
+    - Signature inside box: +10 points
+    - Has signature data at all: +5 points
+
+    Args:
+        split_doc: Split document dictionary with signature_data
+        signature_type: "ASL" or "PSL" to determine which signature to check
+
+    Returns:
+        Integer score (higher is better)
+    """
+    score = 0
+    signature_data = split_doc.get("signature_data", {})
+
+    # No signature data = lowest priority
+    if not signature_data:
+        return score
+
+    # Has signature data
+    score += 5
+
+    # Signature placement validity (+20 if valid)
+    if signature_data.get("placement_valid", False):
+        score += 20
+
+    # Placement issues (start with +10, subtract 5 per issue)
+    placement_issues = signature_data.get("placement_issues", [])
+    issue_penalty = len(placement_issues) * 5
+    score += max(0, 10 - issue_penalty)
+
+    # Check for required signature based on type
+    if signature_type.upper() == "ASL":
+        # Attorney Signed Lien - need attorney signature
+        if signature_data.get("attorney_signature_present", False):
+            score += 15
+        if signature_data.get("attorney_signature_inside_box", False):
+            score += 10
+    else:
+        # Patient Signed Lien - need patient signature
+        if signature_data.get("patient_signature_present", False):
+            score += 15
+        if signature_data.get("patient_signature_inside_box", False):
+            score += 10
+
+    return score
+
+
 async def _regenerate_split_documents(
     attachment_url: str,
-    split_metadata: List[Dict[str, Any]]
+    split_metadata: List[Dict[str, Any]],
+    max_retries: int = 3
 ) -> List[Dict[str, Any]]:
     """
     Download attachment and regenerate split PDFs from saved metadata.
@@ -375,6 +434,7 @@ async def _regenerate_split_documents(
     Args:
         attachment_url: Front API URL to download the attachment
         split_metadata: List of split document metadata (without pdf_bytes)
+        max_retries: Maximum number of retry attempts for network errors
 
     Returns:
         List of split documents with pdf_bytes populated
@@ -382,12 +442,33 @@ async def _regenerate_split_documents(
     try:
         logger.info(f"🔄 Downloading attachment to regenerate {len(split_metadata)} splits: {attachment_url}")
 
-        # Download original attachment
+        # Download original attachment with retry logic for network errors
         headers = {"Authorization": f"Bearer {app_settings_instance.FRONT_AUTH_TOKEN}"}
-        async with httpx.AsyncClient(follow_redirects=True, verify=False) as client:
-            response = await client.get(attachment_url, headers=headers, timeout=120.0)
-            response.raise_for_status()
-            original_pdf_bytes = response.content
+        original_pdf_bytes = None
+        last_error = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                async with httpx.AsyncClient(follow_redirects=True, verify=False) as client:
+                    response = await client.get(attachment_url, headers=headers, timeout=120.0)
+                    response.raise_for_status()
+                    original_pdf_bytes = response.content
+                    break  # Success, exit retry loop
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.NetworkError) as e:
+                last_error = e
+                if attempt < max_retries:
+                    retry_delay = 5 * (2 ** attempt)  # 5s, 10s, 20s exponential backoff
+                    logger.warning(
+                        f"🔄 Network error downloading attachment (attempt {attempt + 1}/{max_retries + 1}): {e}. "
+                        f"Retrying in {retry_delay}s..."
+                    )
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger.error(f"❌ Network error after {max_retries + 1} attempts: {e}")
+                    raise
+
+        if original_pdf_bytes is None:
+            raise last_error or Exception("Failed to download attachment")
 
         logger.info(f"✅ Downloaded {len(original_pdf_bytes)} bytes from {attachment_url}")
 
@@ -401,6 +482,8 @@ async def _regenerate_split_documents(
                 "pages": split_meta.get("original_pages", []),
                 "patient_id": split_meta.get("patient_id", ""),
                 "lien_type": split_meta.get("lien_type", ""),
+                "page_type": split_meta.get("page_type", "lien"),  # Preserve page_type for patient_demo
+                "doc_type_id": split_meta.get("doc_type_id", ""),  # Preserve doc_type_id for patient_demo
                 "signature_type": split_meta.get("signature_type", ""),
                 "signature_data": split_meta.get("signature_data", {})
             })
@@ -1355,6 +1438,64 @@ async def handle_lien_request(
 
             logger.info(f"📄 {signature_type} AGENT: Successfully regenerated {len(all_split_documents)} split documents with pdf_bytes")
 
+        # Deduplicate split documents by (patient_id, page_type, lien_type, doc_type_id)
+        # When duplicates exist, keep the one with the highest quality score
+        # This prevents uploading the same lien multiple times and ensures we keep the best copy
+        if all_split_documents:
+            # Group splits by their dedup key
+            splits_by_key: Dict[tuple, List[Dict[str, Any]]] = {}
+
+            for split_doc in all_split_documents:
+                patient_id = split_doc.get("patient_id", "")
+                page_type = split_doc.get("page_type", "lien")
+                lien_type = split_doc.get("lien_type", "")
+                doc_type_id = split_doc.get("doc_type_id", "")
+
+                dedup_key = (patient_id, page_type, lien_type, doc_type_id)
+
+                if dedup_key not in splits_by_key:
+                    splits_by_key[dedup_key] = []
+                splits_by_key[dedup_key].append(split_doc)
+
+            # For each group, keep the best quality document
+            deduplicated_splits = []
+            duplicates_removed = 0
+
+            for dedup_key, split_group in splits_by_key.items():
+                patient_id, page_type, lien_type, doc_type_id = dedup_key
+
+                if len(split_group) == 1:
+                    # No duplicates for this key
+                    deduplicated_splits.append(split_group[0])
+                else:
+                    # Multiple copies - score each and keep the best
+                    scored_splits = [
+                        (split_doc, _score_split_document(split_doc, signature_type))
+                        for split_doc in split_group
+                    ]
+                    # Sort by score descending
+                    scored_splits.sort(key=lambda x: x[1], reverse=True)
+
+                    best_split, best_score = scored_splits[0]
+                    deduplicated_splits.append(best_split)
+                    duplicates_removed += len(split_group) - 1
+
+                    # Log the selection
+                    all_scores = [s[1] for s in scored_splits]
+                    logger.info(
+                        f"📄 {signature_type} AGENT: Found {len(split_group)} copies of "
+                        f"Patient={patient_id}, PageType={page_type}, LienType={lien_type or 'N/A'} — "
+                        f"scores={all_scores}, keeping best (score={best_score})"
+                    )
+
+            if duplicates_removed > 0:
+                logger.info(
+                    f"📄 {signature_type} AGENT: Deduplication removed {duplicates_removed} duplicate(s), "
+                    f"{len(deduplicated_splits)} unique split(s) remaining"
+                )
+
+            all_split_documents = deduplicated_splits
+
         # Process all split documents (from all attachments)
         upload_results = []
         has_patient_demo = False
@@ -1362,7 +1503,7 @@ async def handle_lien_request(
         all_unique_patient_ids = set()
 
         if all_split_documents:
-            logger.info(f"📄 {signature_type} AGENT: Processing {len(all_split_documents)} total split documents across all attachments")
+            logger.info(f"📄 {signature_type} AGENT: Processing {len(all_split_documents)} unique split documents")
 
             # Import upload services for split documents
             from app.services.lien_upload_service import upload_lien_pdf_bytes_to_radflow, upload_patient_demo_to_radflow

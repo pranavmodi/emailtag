@@ -10,7 +10,7 @@ from typing import Dict, Any, List
 
 from .barcode_detector import BarcodeDetector
 from .signature_detector import SignatureDetector
-from .document_converter import DocumentConverter
+from .document_converter import DocumentConverter, ALTERNATE_DPIS, DEFAULT_DPI
 from .pdf_splitter import PDFSplitter
 from .cover_letter_detector import CoverLetterDetector
 from .company_detector import CompanyDetector
@@ -131,6 +131,13 @@ class EnhancedLienService:
                 )
                 results.append(page_result)
 
+            # Retry barcode detection at alternate DPIs for lien pages without barcodes
+            # This handles cases where the default DPI falls into a "dead zone" for certain barcodes
+            results = self._retry_barcode_detection_at_alternate_dpis(results, file_content, filename)
+
+            # Log summary table showing each page's classification and upload status
+            self._log_page_summary_table(results, filename)
+
             # Holistic company detection after all pages are processed
             # Skipped automatically if a PRE barcode is found on any page
             company_result = await self._run_holistic_company_detection(results, images, filename)
@@ -202,7 +209,194 @@ class EnhancedLienService:
                 "error": str(e),
                 "success": False
             }
-    
+
+    def _retry_barcode_detection_at_alternate_dpis(
+        self,
+        page_results: List[Dict],
+        file_content: bytes,
+        filename: str
+    ) -> List[Dict]:
+        """
+        Retry barcode detection at alternate DPIs for pages classified as lien pages
+        but where no barcode was found.
+
+        This handles cases where the barcode's bar widths don't align well with pixel
+        boundaries at the default DPI (a "dead zone" effect in pyzbar).
+
+        Args:
+            page_results: List of results from initial page processing
+            file_content: Original PDF file content for reconversion
+            filename: Original filename for logging
+
+        Returns:
+            Updated page_results list with any newly found barcodes
+        """
+        # Identify pages that need retry: classified as LIEN_CORE but no barcode found
+        pages_to_retry = []
+
+        for page_idx, page in enumerate(page_results):
+            if not page.get("success"):
+                continue
+
+            # Check if barcode was already found
+            barcode_found = page.get("barcode_detection", {}).get("barcode_found", False)
+            if barcode_found:
+                continue
+
+            # Check if LLM classified this as a lien page (LIEN_CORE)
+            cover_analysis = page.get("cover_letter_analysis", {})
+            page_classification = cover_analysis.get("page_classification", "OTHER")
+
+            if page_classification == "LIEN_CORE":
+                pages_to_retry.append(page_idx)
+                logger.info(
+                    f"🔄 BARCODE RETRY: Page {page_idx + 1} classified as LIEN_CORE but no barcode found"
+                )
+
+        if not pages_to_retry:
+            return page_results
+
+        # Filter out the default DPI since we already tried it
+        dpis_to_try = [dpi for dpi in ALTERNATE_DPIS if dpi != DEFAULT_DPI]
+
+        logger.info(
+            f"🔄 BARCODE RETRY: Will retry {len(pages_to_retry)} page(s) at alternate DPIs: {dpis_to_try}"
+        )
+
+        # Try each page at alternate DPIs
+        for page_idx in pages_to_retry:
+            page_name = f"{filename}_page_{page_idx + 1}"
+            barcode_found = False
+
+            for dpi in dpis_to_try:
+                logger.info(f"🔄 BARCODE RETRY: Trying page {page_idx + 1} at {dpi} DPI...")
+
+                # Convert just this page at the alternate DPI
+                page_image = self.document_converter.convert_single_page(
+                    file_content,
+                    page_idx,
+                    dpi
+                )
+
+                if page_image is None:
+                    logger.warning(f"🔄 BARCODE RETRY: Failed to convert page {page_idx + 1} at {dpi} DPI")
+                    continue
+
+                # Try barcode detection at this DPI
+                barcode_result = self.barcode_detector.detect_and_parse_barcodes(
+                    page_image,
+                    f"{page_name}_retry_dpi{dpi}"
+                )
+
+                if barcode_result.get("barcode_found"):
+                    logger.info(
+                        f"✅ BARCODE RETRY SUCCESS: Found barcode on page {page_idx + 1} at {dpi} DPI"
+                    )
+
+                    # Log what was found
+                    if "all_barcodes_parsed" in barcode_result:
+                        for bc in barcode_result["all_barcodes_parsed"]:
+                            raw_value = bc.get("raw_value", "?")
+                            logger.info(f"   Found: {raw_value}")
+
+                    # Update the page result with the successful barcode detection
+                    page_results[page_idx]["barcode_detection"] = barcode_result
+                    page_results[page_idx]["barcode_retry_dpi"] = dpi
+                    barcode_found = True
+                    break
+
+            if not barcode_found:
+                logger.warning(
+                    f"❌ BARCODE RETRY FAILED: Page {page_idx + 1} - no barcode found at any DPI"
+                )
+
+        return page_results
+
+    def _log_page_summary_table(self, page_results: List[Dict], filename: str) -> None:
+        """
+        Log a summary table showing classification and upload status for each page.
+
+        This helps with debugging by providing a clear overview of how each page
+        was processed and whether it will be included in the final output.
+
+        Args:
+            page_results: List of results from each page
+            filename: Original filename for the log header
+        """
+        logger.info(f"\n{'═'*80}")
+        logger.info(f"📊 PAGE SUMMARY TABLE: {filename}")
+        logger.info(f"{'═'*80}")
+        logger.info(f"{'Page':<6} {'Classification':<15} {'Barcode':<25} {'Signature':<10} {'Action':<20}")
+        logger.info(f"{'-'*80}")
+
+        for page_idx, page in enumerate(page_results):
+            page_num = page_idx + 1
+
+            if not page.get("success"):
+                logger.info(f"{page_num:<6} {'FAILED':<15} {'-':<25} {'-':<10} {'Skip (error)':<20}")
+                continue
+
+            # Get classification
+            cover_analysis = page.get("cover_letter_analysis", {})
+            classification = cover_analysis.get("page_classification", "UNKNOWN")
+
+            # Get barcode info
+            barcode_detection = page.get("barcode_detection", {})
+            barcode_found = barcode_detection.get("barcode_found", False)
+
+            barcode_info = "-"
+            if barcode_found:
+                combined_data = barcode_detection.get("combined_data", {})
+                patient_ids = combined_data.get("PatientIDs", [])
+                lien_types = combined_data.get("LienTypes", [])
+                patient_demo_ids = combined_data.get("patient_demo_patient_ids", [])
+
+                if patient_demo_ids:
+                    doc_type_ids = combined_data.get("doc_type_ids", ["019"])
+                    barcode_info = f"DEMO:{patient_demo_ids[0][:10]}"
+                elif lien_types:
+                    barcode_info = f"{lien_types[0]}:{patient_ids[0][:10] if patient_ids else '?'}"
+                elif patient_ids:
+                    barcode_info = f"ID:{patient_ids[0][:10]}"
+                else:
+                    # Try raw value
+                    raw = barcode_detection.get("raw_value", "found")
+                    barcode_info = raw[:20] if len(raw) > 20 else raw
+
+            # Get signature info
+            sig_detection = page.get("signature_detection", {})
+            sig_data = sig_detection.get("signature_data", {})
+            sig_type = sig_data.get("lien_signature_type", "UNKNOWN")
+            if sig_type == "UNKNOWN":
+                sig_type = "-"
+
+            # Determine action
+            action = "Skip (no barcode)"
+            if barcode_found:
+                combined_data = barcode_detection.get("combined_data", {})
+                patient_demo_ids = combined_data.get("patient_demo_patient_ids", [])
+                lien_types = combined_data.get("LienTypes", [])
+
+                if patient_demo_ids:
+                    action = "→ Upload Demo"
+                elif lien_types:
+                    action = f"→ Upload {lien_types[0]} Lien"
+                else:
+                    action = "Skip (no lien type)"
+            elif classification == "COVER_LETTER":
+                action = "Skip (cover letter)"
+            elif classification == "OTHER":
+                action = "Skip (other)"
+
+            # Check if retry was used
+            retry_dpi = page.get("barcode_retry_dpi")
+            if retry_dpi:
+                barcode_info += f" @{retry_dpi}"
+
+            logger.info(f"{page_num:<6} {classification:<15} {barcode_info:<25} {sig_type:<10} {action:<20}")
+
+        logger.info(f"{'═'*80}\n")
+
     def _consolidate_page_results(self, page_results: List[Dict], filename: str) -> Dict[str, Any]:
         """
         Consolidate results from multiple pages into final lien analysis.
@@ -741,6 +935,13 @@ class EnhancedLienService:
                 logger.info(f"📄 PAGE {i+1}/{len(images)}: Processing...")
                 page_result = await self._process_single_page(image_data, f"{filename}_page_{i+1}")
                 page_results.append(page_result)
+
+            # Retry barcode detection at alternate DPIs for lien pages without barcodes
+            # This handles cases where the default DPI falls into a "dead zone" for certain barcodes
+            page_results = self._retry_barcode_detection_at_alternate_dpis(page_results, file_content, filename)
+
+            # Log summary table showing each page's classification and upload status
+            self._log_page_summary_table(page_results, filename)
 
             # Holistic company detection after all pages are processed
             # Skipped automatically if a PRE barcode is found on any page

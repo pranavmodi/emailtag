@@ -1532,5 +1532,30 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["Lien Modified", "AI: Human review required"]
+    },
+    "79": {
+        "description": "PRE1142903 - PSL Combined Lien + Patient Demo - SimonMed 5-page document with cover, patient demo (019), TC lien, and RAD lien pages (should split and upload separately)",
+        "subject": "Signed Lien Documents - SimonMed Patient PRE1142903",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>Please find attached the signed lien documents for patient PRE1142903 from SimonMed.</p>"
+            "<p>The attachment includes:</p>"
+            "<p>- Patient demographic information<br>"
+            "- Technologist lien (TC)<br>"
+            "- Radiologist lien (RAD)</p>"
+            "<p>All documents have been signed by the patient. Please process and upload to the patient file accordingly.</p>"
+            "<p>Thank you for your prompt attention.</p>"
+            "<p>Best regards,<br>"
+            "SimonMed Imaging</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "simonmed-lien.pdf",
+                "filepath": "data/documents/lientest/simonmed-lien.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["PSL", "Rad Lien", "Tech Lien", "Patient Demo"]
     }
 }
