@@ -1004,33 +1004,12 @@ async def handle_lien_request(
             # Add human review tag and lien modified tag
             frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED, TAG_LIEN_MODIFIED])
 
-            # Send reply if template is configured
-            # Use specific email conditional template if available, otherwise fall back to modified template
-            template_to_use = templates.get("email_conditional") or templates.get("modified")
-
-            if template_to_use:
-                # Format detected phrases for inclusion in message
-                phrases_text = ""
-                if conditional_phrases:
-                    phrases_list = "\n".join([f"  • {phrase}" for phrase in conditional_phrases[:3]])  # Show up to 3 phrases
-                    phrases_text = f"\n\nDetected language:\n{phrases_list}"
-
-                # Create response text with detected phrases
-                response_text = _safe_format_template(template_to_use, **rejection_placeholders)
-                # Append detected phrases if using the generic modified template
-                if not templates.get("email_conditional") and phrases_text:
-                    response_text += f"<br/><br/><em>Specifically, we detected conditional language in the email message.{phrases_text.replace(chr(10), '<br/>')}</em>"
-
-                await send_or_save_response(
-                    conversation_id=front_conversation_id,
-                    response_text=response_text,
-                    tags_to_add=None,
-                    test_mode=test_mode,
-                    lien_type=lien_type,
-                    signature_type=signature_type
-                )
-            else:
-                logger.warning(f"No suitable template configured for email conditional language. No autoresponse sent.")
+            # Add comment to conversation describing the modification (no autorespond)
+            comment_text = "Lien modification detected: The email body contains conditional language regarding the lien. This lien requires human review before processing."
+            if conditional_phrases:
+                phrases_list = ", ".join(conditional_phrases[:3])
+                comment_text += f" Detected phrases: {phrases_list}"
+            frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
 
             return {
                 "agent_handled": True,
@@ -1066,33 +1045,12 @@ async def handle_lien_request(
             # Add human review tag and lien modified tag
             frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED, TAG_LIEN_MODIFIED])
 
-            # Send reply if template is configured
-            # Use specific cover letter conditional template if available, otherwise fall back to modified template
-            template_to_use = templates.get("cover_letter_conditional") or templates.get("modified")
-
-            if template_to_use:
-                # Format detected phrases for inclusion in message
-                phrases_text = ""
-                if cover_letter_phrases:
-                    phrases_list = "\n".join([f"  • {phrase}" for phrase in cover_letter_phrases[:3]])  # Show up to 3 phrases
-                    phrases_text = f"\n\nDetected language:\n{phrases_list}"
-
-                # Create response text with detected phrases
-                response_text = _safe_format_template(template_to_use, **rejection_placeholders)
-                # Append detected phrases if using the generic modified template
-                if not templates.get("cover_letter_conditional") and phrases_text:
-                    response_text += f"<br/><br/><em>Specifically, we detected conditional language in the cover letter.{phrases_text.replace(chr(10), '<br/>')}</em>"
-
-                await send_or_save_response(
-                    conversation_id=front_conversation_id,
-                    response_text=response_text,
-                    tags_to_add=None,
-                    test_mode=test_mode,
-                    lien_type=lien_type,
-                    signature_type=signature_type
-                )
-            else:
-                logger.warning(f"No suitable template configured for cover letter conditional language. No autoresponse sent.")
+            # Add comment to conversation describing the modification (no autorespond)
+            comment_text = "Lien modification detected: The attached cover letter contains conditional language. This lien requires human review before processing."
+            if cover_letter_phrases:
+                phrases_list = ", ".join(cover_letter_phrases[:3])
+                comment_text += f" Detected phrases: {phrases_list}"
+            frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
 
             return {
                 "agent_handled": True,
@@ -1167,18 +1125,25 @@ async def handle_lien_request(
 
             frontapp_service.add_conversation_tags(front_conversation_id, tags_to_add)
 
-            # Send reply if template is configured
-            if templates.get("modified"):
-                await send_or_save_response(
-                    conversation_id=front_conversation_id,
-                    response_text=_safe_format_template(templates["modified"], **rejection_placeholders),
-                    tags_to_add=None,
-                    test_mode=test_mode,
-                    lien_type=lien_type,
-                    signature_type=signature_type
-                )
-            else:
-                logger.warning(f"Modified lien template not configured for tag '{tag_name}'. No autoresponse sent.")
+            # Add comment to conversation describing the modification (no autorespond)
+            # Build a descriptive comment from the modification results if available
+            comment_text = "Lien modification detected: The attached document appears to contain strikethroughs, crossed-out text, or other modifications. This lien requires human review before processing."
+            if hasattr(email_obj, 'lien_modification_results') and email_obj.lien_modification_results:
+                for mod_result in email_obj.lien_modification_results:
+                    if mod_result.get("modifications_detected"):
+                        strikethrough_data = mod_result.get("strikethrough_data", {})
+                        instances = strikethrough_data.get("strikethrough_text", [])
+                        if instances:
+                            details = []
+                            for inst in instances:
+                                text = inst.get("text", "").strip()
+                                if text and len(text.split()) >= 4:
+                                    details.append(text)
+                            if details:
+                                detail_text = "; ".join(details[:3])
+                                comment_text += f" Struck-through text found: {detail_text}"
+                        break
+            frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
 
             return {
                 "agent_handled": True,
