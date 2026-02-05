@@ -2212,6 +2212,13 @@ function OutgenTab({
 
       const prompt = `Generate LinkedIn outreach messages for the following person.
 
+=== RESEARCH FIRST ===
+Before completing the checklist, do this research:
+- Read the case study URL provided in the context section
+- Search for the prospect's LinkedIn profile URL (include it in your output)
+- Look for interviews, press mentions, published quotes, or notable case results featuring the prospect
+- Identify which insights from Neha's library are most relevant to this firm's situation
+
 === PRE-GENERATION CHECKLIST ===
 Before writing any messages, answer these questions internally (do not output them except in the rationale section):
 
@@ -2253,6 +2260,10 @@ Before generating, check for these signals. If any are present, output: "DISQUAL
 - Prospect recently posted about a competitor's product
 - Profile shows no activity in 12+ months
 
+=== FIRM SIZE HEURISTIC ===
+For firms under 5 people: emphasize time savings, after-hours coverage, and missed opportunities.
+For firms over 10 people: emphasize staff efficiency, lead velocity, scalability, and competitive pressure from faster firms.
+
 === OUTPUT FORMAT ===
 
 **Phase 1 (internal, do not output):**
@@ -2293,6 +2304,12 @@ Brief rationale: For each message, one sentence explaining the angle chosen and 
 - Include case study URL
 - Structure: Warm opener > Shared problem > What you learned > Soft CTA
 - MUST include at least one specific, quantified result in the message body (not just behind the link)
+- Use soft CTAs that give them an easy out:
+  - "Happy to share what we learned if it's useful"
+  - "Curious if you've run into this"
+  - "No pressure, just thought it might resonate"
+  - "If you've already solved this, I'd love to hear how"
+  - "Either way, good to connect"
 
 === MUTUAL CLIENT TIERS ===
 Read the "Did mutual client approve outreach reference?" field in context FIRST. This determines which tier to use.
