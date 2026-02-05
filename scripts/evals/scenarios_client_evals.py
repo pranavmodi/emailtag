@@ -1557,5 +1557,28 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["PSL", "Rad Lien", "Tech Lien", "Patient Demo"]
+    },
+    "80": {
+        "description": "Blanca Garcia PRE1167514 - Spanish/bilingual lien - ASL lien document with English+Spanish copies of TC and RAD liens (should deduplicate, keep English, tag as ASL)",
+        "subject": "Signed Lien Documents - Blanca Garcia PRE1167514",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>Please find attached the signed lien documents for patient Blanca Garcia, PRE1167514.</p>"
+            "<p>The attachment includes both English and Spanish copies of the lien agreements "
+            "for Technical (Imaging) and Radiologist services.</p>"
+            "<p>Both liens have been signed by the patient and the attorney, Jake D. Finkel.</p>"
+            "<p>Please process accordingly.</p>"
+            "<p>Thank you,<br>"
+            "Finkel Firm</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "spanish-lien.pdf",
+                "filepath": "data/documents/lientest/spanish-lien.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
     }
 }

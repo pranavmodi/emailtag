@@ -5,7 +5,7 @@ This module provides functionality to fetch and format patient text message hist
 into an HTML table for use in email templates.
 
 API Details (see docs/RADFLOW_API.md):
-- Endpoint: POST https://staging-app.radflow360.com/chatbotapi/Patient/textlog?patientId={patientId}
+- Endpoint: POST https://app.radflow360.com/chatbotapi/Patient/textlog?patientId={patientId}
 - Auth: Basic auth (RADFLOW_CONTACT_VERIFY_AUTH env var)
 - Headers: Content-Length: 0
 """
@@ -53,8 +53,7 @@ async def generate_text_log_table(patient_id: str) -> str:
             return _get_no_text_activity_message()
 
         # Build the API URL
-        # Use staging URL base from the contact verify URL or default to staging
-        base_url = "https://staging-app.radflow360.com/chatbotapi/Patient/textlog"
+        base_url = "https://app.radflow360.com/chatbotapi/Patient/textlog"
         url = f"{base_url}?patientId={patient_id}"
 
         # Make the API call

@@ -347,7 +347,7 @@ def _check_document_quality(email_obj: Any) -> Tuple[bool, str]:
     logger.info("📄 QUALITY: All documents assessed as readable (GOOD or BLURRY)")
     return (True, "GOOD")
 
-def _check_duplicate_barcodes(document_analysis_results: List[Dict[str, Any]]) -> bool:
+def _check_duplicate_barcodes(document_analysis_results: List[Dict[str, Any]]) -> Tuple[bool, bool]:
     """
     Check if duplicate barcodes were detected across multiple pages.
 
@@ -355,20 +355,23 @@ def _check_duplicate_barcodes(document_analysis_results: List[Dict[str, Any]]) -
         document_analysis_results: List of document analysis results
 
     Returns:
-        True if duplicate barcodes detected, False otherwise
+        Tuple of (has_duplicate_barcodes, duplicates_are_spanish_copies)
     """
     if not document_analysis_results:
-        return False
+        return False, False
 
     for doc_result in document_analysis_results:
         enhanced_lien_data = doc_result.get("enhanced_lien_processing", {})
         has_duplicate_barcodes = enhanced_lien_data.get("has_duplicate_barcodes", False)
 
         if has_duplicate_barcodes:
+            duplicates_are_spanish_copies = enhanced_lien_data.get("duplicates_are_spanish_copies", False)
             logger.warning("⚠️ DUPLICATE BARCODES: Same barcode found on multiple pages")
-            return True
+            if duplicates_are_spanish_copies:
+                logger.info("📄 DUPLICATE BARCODES: Duplicates are English+Spanish lien copies")
+            return True, duplicates_are_spanish_copies
 
-    return False
+    return False, False
 
 
 def _score_split_document(split_doc: Dict[str, Any], signature_type: str = "ASL") -> int:
@@ -1230,37 +1233,47 @@ async def handle_lien_request(
             return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to handle poor document quality: {e}"}}
 
     # Check for duplicate barcodes
-    has_duplicate_barcodes = _check_duplicate_barcodes(document_analysis_results)
+    has_duplicate_barcodes, duplicates_are_spanish_copies = _check_duplicate_barcodes(document_analysis_results)
     if has_duplicate_barcodes:
-        logger.info(f"Duplicate barcodes detected for conversation {front_conversation_id}. Tagging for human review.")
-
-        try:
-            # Add human review tag
-            frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
-
-            # Send autoresponse (or save to sandbox in test mode)
-            response_text = "Barcodes are the same on multiple pages. Please review and handle accordingly."
-            await send_or_save_response(
-                conversation_id=front_conversation_id,
-                response_text=response_text,
-                tags_to_add=None,
-                test_mode=test_mode,
-                lien_type=lien_type,
-                signature_type=signature_type
+        # For ASL liens, allow processing when duplicates are just English+Spanish copies
+        # of the same lien. The dedup logic already prefers the English page, so the
+        # Spanish copy is dropped and only the English version gets uploaded.
+        if duplicates_are_spanish_copies and signature_type == "ASL":
+            logger.info(
+                f"📄 SPANISH COPY BYPASS: Duplicate barcodes are English+Spanish copies for ASL lien "
+                f"in conversation {front_conversation_id}. Allowing normal processing — "
+                f"dedup will select the English version for upload."
             )
+        else:
+            logger.info(f"Duplicate barcodes detected for conversation {front_conversation_id}. Tagging for human review.")
 
-            return {
-                "agent_handled": True,
-                "processed_flag": True,
-                "details": {
-                    "action": "tagged_for_human_review_duplicate_barcodes",
-                    "lien_type": lien_type,
-                    "signature_type": signature_type
+            try:
+                # Add human review tag
+                frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
+
+                # Send autoresponse (or save to sandbox in test mode)
+                response_text = "Barcodes are the same on multiple pages. Please review and handle accordingly."
+                await send_or_save_response(
+                    conversation_id=front_conversation_id,
+                    response_text=response_text,
+                    tags_to_add=None,
+                    test_mode=test_mode,
+                    lien_type=lien_type,
+                    signature_type=signature_type
+                )
+
+                return {
+                    "agent_handled": True,
+                    "processed_flag": True,
+                    "details": {
+                        "action": "tagged_for_human_review_duplicate_barcodes",
+                        "lien_type": lien_type,
+                        "signature_type": signature_type
+                    }
                 }
-            }
-        except Exception as e:
-            logger.error(f"Failed to handle duplicate barcodes: {e}")
-            return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to handle duplicate barcodes: {e}"}}
+            except Exception as e:
+                logger.error(f"Failed to handle duplicate barcodes: {e}")
+                return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to handle duplicate barcodes: {e}"}}
 
     # NOTE: _check_lien_readability is DISABLED as of 2026-01-15
     # Reason: Redundant with _check_document_quality() which uses AI vision to assess quality.

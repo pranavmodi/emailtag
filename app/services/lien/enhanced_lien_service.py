@@ -135,6 +135,9 @@ class EnhancedLienService:
             # This handles cases where the default DPI falls into a "dead zone" for certain barcodes
             results = self._retry_barcode_detection_at_alternate_dpis(results, file_content, filename)
 
+            # Flag pages where a barcode was expected (Precise Imaging lien) but unreadable
+            results = self._flag_unreadable_barcodes(results, filename)
+
             # Log summary table showing each page's classification and upload status
             self._log_page_summary_table(results, filename)
 
@@ -190,6 +193,22 @@ class EnhancedLienService:
                 has_barcode=has_barcode
             )
 
+            # Step 4: Barcode Expectation Detection via gpt-5.2
+            # Only run if no barcode was found — skip the expensive 2-step GPT call when barcode already detected
+            if has_barcode:
+                barcode_expectation_result = {
+                    "lien_subtype": barcode_result.get("lien_types", ["UNKNOWN"])[0] if barcode_result.get("lien_types") else "UNKNOWN",
+                    "expects_barcode": True,
+                    "extracted_text": "",
+                    "explanation": "Barcode already detected, skipping expectation analysis",
+                    "success": True
+                }
+            else:
+                barcode_expectation_result = await self.cover_letter_detector.analyze_barcode_expectation(
+                    image_data,
+                    page_name
+                )
+
             # Note: Company detection is NOT done per-page.
             # It runs holistically after ALL pages are processed, and only when
             # no PRE barcode is found (a PRE barcode confirms the lien is ours).
@@ -199,6 +218,7 @@ class EnhancedLienService:
                 "barcode_detection": barcode_result,
                 "signature_detection": signature_result,
                 "cover_letter_analysis": cover_letter_result,
+                "barcode_expectation": barcode_expectation_result,
                 "success": True
             }
 
@@ -312,6 +332,39 @@ class EnhancedLienService:
 
         return page_results
 
+    def _flag_unreadable_barcodes(
+        self,
+        page_results: List[Dict],
+        filename: str
+    ) -> List[Dict]:
+        """
+        Flag pages where the barcode expectation detector determined a barcode should
+        exist (expects_barcode=True) but none could be read after all DPI retries.
+
+        Args:
+            page_results: List of results from page processing (after DPI retry)
+            filename: Original filename for logging
+
+        Returns:
+            Updated page_results with barcode_unreadable flag set where applicable
+        """
+        for page_idx, page in enumerate(page_results):
+            if not page.get("success"):
+                continue
+            barcode_expectation = page.get("barcode_expectation", {})
+            expects_barcode = barcode_expectation.get("expects_barcode", False)
+            barcode_found = page.get("barcode_detection", {}).get("barcode_found", False)
+
+            if expects_barcode and not barcode_found:
+                lien_subtype = barcode_expectation.get("lien_subtype", "UNKNOWN")
+                page_results[page_idx]["barcode_unreadable"] = True
+                logger.warning(
+                    f"⚠️ BARCODE UNREADABLE: Page {page_idx + 1} is a {lien_subtype} lien "
+                    f"that should have a barcode but none could be read"
+                )
+
+        return page_results
+
     def _log_page_summary_table(self, page_results: List[Dict], filename: str) -> None:
         """
         Log a summary table showing classification and upload status for each page.
@@ -372,7 +425,9 @@ class EnhancedLienService:
 
             # Determine action
             action = "Skip (no barcode)"
-            if barcode_found:
+            if page.get("barcode_unreadable"):
+                action = "⚠ Unreadable barcode"
+            elif barcode_found:
                 combined_data = barcode_detection.get("combined_data", {})
                 patient_demo_ids = combined_data.get("patient_demo_patient_ids", [])
                 lien_types = combined_data.get("LienTypes", [])
@@ -664,6 +719,13 @@ class EnhancedLienService:
             page = page_results[page_idx]
             score = 0
 
+            # Check document language (+20 for English, 0 for other languages)
+            # This ensures English pages are preferred over Spanish copies of the same lien
+            cover_analysis = page.get("cover_letter_analysis", {})
+            page_language = cover_analysis.get("document_language", "English")
+            if page_language.lower() == "english":
+                score += 20
+
             # Check signature quality (+10 for valid signature)
             sig_data = page.get("signature_detection", {}).get("signature_data", {})
             sig_type = sig_data.get("lien_signature_type", "UNKNOWN")
@@ -671,7 +733,6 @@ class EnhancedLienService:
                 score += 10
 
             # Check for conditional language (-5 if present, so +5 if absent)
-            cover_analysis = page.get("cover_letter_analysis", {})
             if not cover_analysis.get("has_conditional_language", False):
                 score += 5
 
@@ -687,7 +748,7 @@ class EnhancedLienService:
                 score += 2
 
             scored_pages.append((page_idx, score, sig_type))
-            logger.info(f"📄 DEDUP SCORE: Page {page_idx} = {score} points (signature={sig_type})")
+            logger.info(f"📄 DEDUP SCORE: Page {page_idx} = {score} points (signature={sig_type}, language={page_language})")
 
         # Sort by score descending, return best
         scored_pages.sort(key=lambda x: x[1], reverse=True)
@@ -728,6 +789,9 @@ class EnhancedLienService:
         # Track barcodes per page for duplicate detection
         page_barcodes = {}  # {page_idx: barcode_string}
 
+        # Track page languages for Spanish lien copy detection
+        page_languages = {}  # {page_idx: language_string}
+
         # Build a mapping of (patient_id, lien_type or page_type) -> list of page indices
         groupings_map = {}
 
@@ -735,6 +799,11 @@ class EnhancedLienService:
             if not page.get("success"):
                 logger.warning(f"📄 GROUPING: Page {page_idx} failed processing, skipping")
                 continue
+
+            # Track page language for Spanish lien copy detection
+            cover_analysis = page.get("cover_letter_analysis", {})
+            page_language = cover_analysis.get("document_language", "English")
+            page_languages[page_idx] = page_language
 
             # Extract barcode data
             barcode_detection = page.get("barcode_detection", {})
@@ -883,13 +952,37 @@ class EnhancedLienService:
         }
 
         has_duplicate_barcodes = False
+        duplicates_are_spanish_copies = False
+        spanish_page_indices = [idx for idx, lang in page_languages.items() if lang.lower() == "spanish"]
+
         if duplicate_barcodes:
             has_duplicate_barcodes = True
             logger.warning(f"⚠️ DUPLICATE BARCODES DETECTED: Same barcode found on multiple pages")
             for barcode, pages in duplicate_barcodes.items():
                 logger.warning(f"   Barcode '{barcode}' appears on pages: {pages}")
 
-        return page_groupings, has_duplicate_barcodes
+            # Check if ALL duplicate sets are English+Spanish pairs
+            # (i.e., every duplicate barcode has at least one English and one Spanish page)
+            all_duplicates_are_bilingual = True
+            for barcode, pages in duplicate_barcodes.items():
+                page_langs = [page_languages.get(p, "English").lower() for p in pages]
+                has_english = any(lang == "english" for lang in page_langs)
+                has_spanish = any(lang == "spanish" for lang in page_langs)
+                if not (has_english and has_spanish):
+                    all_duplicates_are_bilingual = False
+                    break
+
+            if all_duplicates_are_bilingual:
+                duplicates_are_spanish_copies = True
+                logger.info(
+                    f"📄 BILINGUAL LIEN DETECTED: All duplicate barcodes are English+Spanish pairs. "
+                    f"Spanish pages: {spanish_page_indices}"
+                )
+
+        if spanish_page_indices:
+            logger.info(f"📄 LANGUAGE: Spanish pages detected at indices: {spanish_page_indices}")
+
+        return page_groupings, has_duplicate_barcodes, spanish_page_indices, duplicates_are_spanish_copies
 
     async def process_lien_document_with_splits(self, file_content: bytes, filename: str) -> Dict[str, Any]:
         """
@@ -940,6 +1033,9 @@ class EnhancedLienService:
             # This handles cases where the default DPI falls into a "dead zone" for certain barcodes
             page_results = self._retry_barcode_detection_at_alternate_dpis(page_results, file_content, filename)
 
+            # Flag pages where a barcode was expected (Precise Imaging lien) but unreadable
+            page_results = self._flag_unreadable_barcodes(page_results, filename)
+
             # Log summary table showing each page's classification and upload status
             self._log_page_summary_table(page_results, filename)
 
@@ -970,7 +1066,7 @@ class EnhancedLienService:
                 }
 
             # Generate page groupings based on patient ID + lien type
-            page_groupings, has_duplicate_barcodes = self._generate_page_groupings(page_results)
+            page_groupings, has_duplicate_barcodes, spanish_page_indices, duplicates_are_spanish_copies = self._generate_page_groupings(page_results)
 
             if not page_groupings:
                 logger.warning(f"📄 ENHANCED LIEN SPLIT: No valid page groupings found for {filename}")
@@ -981,6 +1077,8 @@ class EnhancedLienService:
                     "total_splits": 0,
                     "processing_status": "no_valid_groupings",
                     "has_duplicate_barcodes": has_duplicate_barcodes,
+                    "spanish_page_indices": spanish_page_indices,
+                    "duplicates_are_spanish_copies": duplicates_are_spanish_copies,
                     "error": "No valid barcode data found to create splits",
                     # Company detection already passed at this point (lien is ours)
                     "other_company_detected": False,
@@ -1025,6 +1123,8 @@ class EnhancedLienService:
                 "processing_status": "completed",
                 "pages_processed": len(page_results),
                 "has_duplicate_barcodes": has_duplicate_barcodes,
+                "spanish_page_indices": spanish_page_indices,
+                "duplicates_are_spanish_copies": duplicates_are_spanish_copies,
                 "has_cover_letter_with_conditions": has_cover_letter_with_conditions,
                 "conditional_phrases_found": all_conditional_phrases,
                 "cover_letter_pages": cover_letter_pages,
