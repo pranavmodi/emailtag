@@ -146,6 +146,11 @@ class PDFSplitter:
                             f"Pages={valid_pages}, Size={len(pdf_bytes)} bytes"
                         )
 
+                    # Include bilingual duplicate metadata if present
+                    is_bilingual_duplicate = group.get("is_bilingual_duplicate", False)
+                    english_pages = group.get("english_pages", [])
+                    spanish_pages = group.get("spanish_pages", [])
+
                     split_documents.append({
                         "pdf_bytes": pdf_bytes,
                         "patient_id": patient_id,
@@ -155,7 +160,10 @@ class PDFSplitter:
                         "signature_type": signature_type,
                         "signature_data": signature_data,  # Include signature placement data
                         "page_count": len(valid_pages),
-                        "original_pages": valid_pages
+                        "original_pages": valid_pages,
+                        "is_bilingual_duplicate": is_bilingual_duplicate,
+                        "english_pages": english_pages,
+                        "spanish_pages": spanish_pages
                     })
 
                 except Exception as e:

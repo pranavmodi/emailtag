@@ -892,29 +892,64 @@ class EnhancedLienService:
                     logger.info(f"📄 GROUPING: Page {page_idx} → Patient {patient_id}, PageType=lien, LienType={lien_type.upper()}")
 
         # Deduplicate: For lien groups with multiple pages, select the best one
+        # Exception: bilingual duplicates (English+Spanish) are kept for PSL merging
         for group_key, group_data in groupings_map.items():
+            # Initialize bilingual flag
+            group_data["is_bilingual_duplicate"] = False
+
             if group_data["page_type"] == "lien" and len(group_data["pages"]) > 1:
                 logger.info(
                     f"📄 DEDUP: Multiple pages detected for {group_key}: {group_data['pages']}"
                 )
-                best_page = self._select_best_lien_page(
-                    group_data["pages"],
-                    page_results
-                )
-                # Update group to only include the best page
-                dropped_pages = [p for p in group_data["pages"] if p != best_page]
-                group_data["pages"] = [best_page]
 
-                # Update signature info from the selected best page
-                best_page_result = page_results[best_page]
-                sig_data = best_page_result.get("signature_detection", {}).get("signature_data", {})
-                group_data["signature_type"] = sig_data.get("lien_signature_type", "UNKNOWN")
-                group_data["signature_data"] = sig_data
+                # Check if this is a bilingual duplicate (English + Spanish pages)
+                group_page_langs = [page_languages.get(p, "English").lower() for p in group_data["pages"]]
+                has_english = any(lang == "english" for lang in group_page_langs)
+                has_spanish = any(lang == "spanish" for lang in group_page_langs)
+                is_bilingual = has_english and has_spanish
 
-                logger.info(
-                    f"📄 DEDUP: Kept page {best_page}, dropped {dropped_pages} for "
-                    f"Patient={group_data['patient_id']}, LienType={group_data['lien_type']}"
-                )
+                if is_bilingual:
+                    # Mark as bilingual duplicate - don't dedup, keep all pages for PSL merging
+                    # (Lien agent will handle ASL vs PSL: ASL filters to English only, PSL keeps all)
+                    group_data["is_bilingual_duplicate"] = True
+                    english_pages = [p for p, lang in zip(group_data["pages"], group_page_langs) if lang == "english"]
+                    spanish_pages = [p for p, lang in zip(group_data["pages"], group_page_langs) if lang == "spanish"]
+                    group_data["english_pages"] = english_pages
+                    group_data["spanish_pages"] = spanish_pages
+
+                    # Get signature from English pages (attorney signs English)
+                    for eng_page in english_pages:
+                        sig_data = page_results[eng_page].get("signature_detection", {}).get("signature_data", {})
+                        if sig_data.get("lien_signature_type", "UNKNOWN") != "UNKNOWN":
+                            group_data["signature_type"] = sig_data.get("lien_signature_type", "UNKNOWN")
+                            group_data["signature_data"] = sig_data
+                            break
+
+                    logger.info(
+                        f"📄 BILINGUAL: Keeping all pages for {group_key} — "
+                        f"English: {english_pages}, Spanish: {spanish_pages}. "
+                        f"Lien agent will handle ASL (filter) vs PSL (merge)."
+                    )
+                else:
+                    # Not bilingual — normal dedup behavior
+                    best_page = self._select_best_lien_page(
+                        group_data["pages"],
+                        page_results
+                    )
+                    # Update group to only include the best page
+                    dropped_pages = [p for p in group_data["pages"] if p != best_page]
+                    group_data["pages"] = [best_page]
+
+                    # Update signature info from the selected best page
+                    best_page_result = page_results[best_page]
+                    sig_data = best_page_result.get("signature_detection", {}).get("signature_data", {})
+                    group_data["signature_type"] = sig_data.get("lien_signature_type", "UNKNOWN")
+                    group_data["signature_data"] = sig_data
+
+                    logger.info(
+                        f"📄 DEDUP: Kept page {best_page}, dropped {dropped_pages} for "
+                        f"Patient={group_data['patient_id']}, LienType={group_data['lien_type']}"
+                    )
 
         # Convert map to list
         page_groupings = list(groupings_map.values())

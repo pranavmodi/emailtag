@@ -366,9 +366,10 @@ def _check_duplicate_barcodes(document_analysis_results: List[Dict[str, Any]]) -
 
         if has_duplicate_barcodes:
             duplicates_are_spanish_copies = enhanced_lien_data.get("duplicates_are_spanish_copies", False)
+            spanish_page_indices = enhanced_lien_data.get("spanish_page_indices", [])
             logger.warning("⚠️ DUPLICATE BARCODES: Same barcode found on multiple pages")
             if duplicates_are_spanish_copies:
-                logger.info("📄 DUPLICATE BARCODES: Duplicates are English+Spanish lien copies")
+                logger.info(f"📄 DUPLICATE BARCODES: Duplicates are English+Spanish lien copies (Spanish pages: {spanish_page_indices})")
             return True, duplicates_are_spanish_copies
 
     return False, False
@@ -493,7 +494,11 @@ async def _regenerate_split_documents(
                 "page_type": split_meta.get("page_type", "lien"),  # Preserve page_type for patient_demo
                 "doc_type_id": split_meta.get("doc_type_id", ""),  # Preserve doc_type_id for patient_demo
                 "signature_type": split_meta.get("signature_type", ""),
-                "signature_data": split_meta.get("signature_data", {})
+                "signature_data": split_meta.get("signature_data", {}),
+                # Bilingual duplicate metadata for Spanish lien handling
+                "is_bilingual_duplicate": split_meta.get("is_bilingual_duplicate", False),
+                "english_pages": split_meta.get("english_pages", []),
+                "spanish_pages": split_meta.get("spanish_pages", [])
             })
 
         # Re-split the PDF
@@ -948,7 +953,12 @@ async def handle_lien_request(
     Returns:
         Dictionary with agent handling results
     """
-    logger.info(f"Initiating {signature_type} Lien agent for conv ID: {front_conversation_id}, tags: {applied_tags}")
+    logger.info(f"═══════════════════════════════════════════════════════════════════════════════")
+    logger.info(f"📋 {signature_type} LIEN AGENT START: Conversation {front_conversation_id}")
+    logger.info(f"   Tags: {applied_tags}")
+    logger.info(f"   Test Mode: {test_mode}")
+    logger.info(f"   Document Analysis Results: {len(document_analysis_results) if document_analysis_results else 0} document(s)")
+    logger.info(f"═══════════════════════════════════════════════════════════════════════════════")
 
     # Step 1: Analyze email content for conditional language
     # DISABLED: Email conditional language check disabled per user request
@@ -1266,6 +1276,7 @@ async def handle_lien_request(
 
     # Check for duplicate barcodes
     has_duplicate_barcodes, duplicates_are_spanish_copies = _check_duplicate_barcodes(document_analysis_results)
+    logger.info(f"📄 DUPLICATE CHECK: has_duplicate_barcodes={has_duplicate_barcodes}, duplicates_are_spanish_copies={duplicates_are_spanish_copies}")
     if has_duplicate_barcodes:
         # For ASL liens, allow processing when duplicates are just English+Spanish copies
         # of the same lien. The dedup logic already prefers the English page, so the
@@ -1452,6 +1463,71 @@ async def handle_lien_request(
                 all_split_documents.extend(regenerated_splits)
 
             logger.info(f"📄 {signature_type} AGENT: Successfully regenerated {len(all_split_documents)} split documents with pdf_bytes")
+
+        # Handle bilingual duplicates (English + Spanish pages with same barcode)
+        # ASL: Filter to English pages only (attorney only signs English)
+        # PSL: Keep all pages merged into single PDF (patient may sign both)
+        if all_split_documents:
+            from app.services.lien.pdf_splitter import PDFSplitter
+
+            processed_splits = []
+            for split_doc in all_split_documents:
+                is_bilingual = split_doc.get("is_bilingual_duplicate", False)
+
+                if is_bilingual and signature_type == "ASL":
+                    # ASL: Re-split to only include English pages
+                    english_pages = split_doc.get("english_pages", [])
+                    if english_pages:
+                        logger.info(
+                            f"📄 ASL BILINGUAL: Filtering to English pages only for "
+                            f"Patient={split_doc.get('patient_id')}, LienType={split_doc.get('lien_type')}. "
+                            f"Keeping pages {english_pages}, dropping Spanish pages {split_doc.get('spanish_pages', [])}"
+                        )
+                        # Re-extract only English pages from the PDF
+                        splitter = PDFSplitter()
+                        # Map original page indices to current PDF page indices
+                        # The pdf_bytes contains pages at indices corresponding to original_pages
+                        original_pages = split_doc.get("original_pages", [])
+                        # Find which indices in the current PDF correspond to English pages
+                        english_indices_in_split = [
+                            i for i, orig_page in enumerate(original_pages)
+                            if orig_page in english_pages
+                        ]
+                        if english_indices_in_split:
+                            english_only_bytes = splitter.extract_pages(
+                                split_doc.get("pdf_bytes", b""),
+                                english_indices_in_split
+                            )
+                            split_doc["pdf_bytes"] = english_only_bytes
+                            split_doc["original_pages"] = english_pages
+                            split_doc["page_count"] = len(english_pages)
+                            split_doc["is_bilingual_duplicate"] = False  # No longer bilingual after filtering
+                            processed_splits.append(split_doc)
+                        else:
+                            logger.warning(f"📄 ASL BILINGUAL: No English pages found, skipping split")
+                    else:
+                        logger.warning(
+                            f"📄 ASL BILINGUAL: No english_pages metadata, keeping original split for "
+                            f"Patient={split_doc.get('patient_id')}"
+                        )
+                        processed_splits.append(split_doc)
+                elif is_bilingual and signature_type == "PSL":
+                    # PSL: Keep all pages merged (English + Spanish in single PDF)
+                    logger.info(
+                        f"📄 PSL BILINGUAL: Keeping merged English+Spanish PDF for "
+                        f"Patient={split_doc.get('patient_id')}, LienType={split_doc.get('lien_type')}. "
+                        f"Pages: English={split_doc.get('english_pages', [])}, Spanish={split_doc.get('spanish_pages', [])}"
+                    )
+                    processed_splits.append(split_doc)
+                else:
+                    # Not bilingual, keep as-is
+                    processed_splits.append(split_doc)
+
+            all_split_documents = processed_splits
+
+            # Log summary of bilingual processing
+            bilingual_count = sum(1 for s in all_split_documents if s.get("is_bilingual_duplicate", False))
+            logger.info(f"📄 BILINGUAL PROCESSING COMPLETE: {len(all_split_documents)} splits after processing, {bilingual_count} still marked bilingual")
 
         # Deduplicate split documents by (patient_id, page_type, lien_type, doc_type_id)
         # When duplicates exist, keep the one with the highest quality score

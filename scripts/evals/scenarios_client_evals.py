@@ -1456,5 +1456,95 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
+    },
+    "81": {
+        "description": "Bella Maria Farias PRE1161958 - ASL Combined Lien (Spanish patient name) - 2-page document with Tech and Rad liens signed by attorney from Montgomery Steele",
+        "subject": "Signed Lien Documents - Bella Maria Farias PRE1161958",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>Please find attached the signed lien documents for our client Bella Maria Farias (PRE1161958).</p>"
+            "<p>Both the Technical (Imaging) Lien and Radiologist Lien have been signed.</p>"
+            "<p>Date of Injury: 11/18/2025</p>"
+            "<p>Please process and upload to the patient file accordingly.</p>"
+            "<p>Thank you,<br>"
+            "Montgomery Steele<br>"
+            "517 N Mountain Ave Ste 210<br>"
+            "Upland, CA 91786</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "Bella Maria Lien.pdf",
+                "filepath": "data/documents/Bella Maria Lien.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
+    },
+    "82": {
+        "description": "Aracely Fuentes PRE1156104 - Spanish/bilingual Tech lien - 4-page ASL with English Tech+Rad liens (signed) and Spanish copies (patient signed only)",
+        "subject": "Signed Technical Lien Documents - Aracely Fuentes PRE1156104",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>Please find attached the signed technical lien documents for patient Aracely Fuentes, PRE1156104.</p>"
+            "<p>The attachment includes both English and Spanish copies of the Technical (Imaging) lien.</p>"
+            "<p>Date of Injury: 11/03/2025</p>"
+            "<p>Attorney: BD&J, 11175 Santa Monica Boulevard, Los Angeles, CA 90025</p>"
+            "<p>Please process accordingly.</p>"
+            "<p>Thank you.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "spanish Technical.pdf",
+                "filepath": "data/documents/lientest/spanish Technical.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
+    },
+    "83": {
+        "description": "Aracely Fuentes PRE1156104 - Spanish/bilingual Professional (Rad) lien - 4-page ASL with English Tech+Rad liens and Spanish copies",
+        "subject": "Signed Professional Lien Documents - Aracely Fuentes PRE1156104",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>Please find attached the signed professional (radiologist) lien documents for patient Aracely Fuentes, PRE1156104.</p>"
+            "<p>The attachment includes both English and Spanish copies of the lien agreements.</p>"
+            "<p>Date of Injury: 11/03/2025</p>"
+            "<p>Attorney: BD&J, 11175 Santa Monica Boulevard, Los Angeles, CA 90025</p>"
+            "<p>Please process accordingly.</p>"
+            "<p>Thank you.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "spanish Professional.pdf",
+                "filepath": "data/documents/lientest/spanish Professional.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
+    },
+    "84": {
+        "description": "Camila Isabel Rodriguez PRE1173096 - Spanish/bilingual ASL - 4-page document with English Tech+Rad liens (attorney signed) and Spanish copies (unsigned)",
+        "subject": "Signed Lien Documents - Camila Isabel Rodriguez PRE1173096",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>Please find attached the signed lien documents for patient Camila Isabel Rodriguez, PRE1173096.</p>"
+            "<p>The attachment includes both English and Spanish copies of the Technical (Imaging) and Radiologist liens.</p>"
+            "<p>Date of Injury: 10/02/2025</p>"
+            "<p>Attorney: Omega Law, 269 S Beverly Dr. #1045, Beverly Hills, CA 90212</p>"
+            "<p>Please process and upload to the patient file accordingly.</p>"
+            "<p>Thank you.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "spanish2.pdf",
+                "filepath": "data/documents/lientest/spanish2.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
     }
 }
