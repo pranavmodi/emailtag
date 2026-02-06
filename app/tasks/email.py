@@ -8,6 +8,7 @@ from typing import Dict, List, Any, Optional
 from uuid import UUID
 from datetime import datetime
 import asyncio # Add asyncio import
+from contextlib import contextmanager
 
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,6 +33,34 @@ from app.schemas.email import EmailUpdate # Added for type hinting
 from app.services.archiving_service import check_and_archive_conversation # Import the new archiving service
 from app.services.trace_service import create_tracer
 from app.models.processing_trace import StepTypes, TraceSteps, TraceStatus
+
+# Conversation log context imports
+from app.core.log_context import set_conversation_context, clear_conversation_context
+from app.services.conversation_log_service import flush_conversation_logs
+
+
+@contextmanager
+def log_context_for_conversation(front_conversation_id: str, email_id: Optional[str] = None):
+    """Context manager to capture logs for a conversation.
+
+    Sets up the log context at entry and flushes logs to the database on exit.
+    This ensures all logs emitted during task execution are captured and stored.
+
+    Args:
+        front_conversation_id: The Front conversation ID.
+        email_id: Optional email UUID as string.
+
+    Yields:
+        The LogContext instance for the conversation.
+    """
+    ctx = set_conversation_context(front_conversation_id, email_id)
+    try:
+        yield ctx
+    finally:
+        # Clear and flush logs to database
+        ctx = clear_conversation_context()
+        if ctx:
+            flush_conversation_logs(ctx)
 
 # Import document processing task from separate module
 from app.tasks.document_processing import send_attachment_to_document_processing
@@ -164,15 +193,22 @@ def process_email(email_id: str) -> Dict:
 
     db = SessionLocal()
     tracer = None
+    front_conversation_id = None
     try:
         email_obj = email_crud_sync.get(db, id=email_uuid)
         if not email_obj:
             logger.error(f"Email {email_id} not found in process_email task.")
             return {"status": "error", "message": "Email not found"}
-        
+
+        front_conversation_id = email_obj.front_conversation_id
+
+        # Set up log context for capturing logs to database
+        # This must be outside the with block so we can flush on exit
+        log_ctx = set_conversation_context(front_conversation_id, email_id)
+
         # Create tracer for this conversation
         tracer = create_tracer(
-            front_conversation_id=email_obj.front_conversation_id,
+            front_conversation_id=front_conversation_id,
             email_id=email_id
         )
 
@@ -277,6 +313,10 @@ def process_email(email_id: str) -> Dict:
         # Optionally update email status to an error state here
         return {"status": "error", "message": str(e)}
     finally:
+        # Flush captured logs to database
+        ctx = clear_conversation_context()
+        if ctx:
+            flush_conversation_logs(ctx)
         if db.is_active:
             db.close()
 
@@ -310,6 +350,9 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
             # Mark as processed with an error or a specific status
             email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="orchestration_failed_no_front_id", is_processed=True))
             return {"status": "error", "message": "Missing Front conversation ID for orchestration"}
+
+        # Set up log context for capturing logs to database
+        log_ctx = set_conversation_context(front_conversation_id, email_id)
 
         # Create tracer for this conversation
         tracer = create_tracer(
@@ -636,6 +679,10 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
             logger.error(f"Failed to log orchestration failure trace for {email_id}")
         return {"status": "error", "message": str(e)}
     finally:
+        # Flush captured logs to database
+        ctx = clear_conversation_context()
+        if ctx:
+            flush_conversation_logs(ctx)
         if db.is_active:
             db.close()
 
@@ -675,6 +722,9 @@ def perform_tagging_task(self, email_id: str) -> Dict:
             logger.error(f"Email {email_id} has no Front conversation ID for tagging.")
             email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="tagging_failed_no_front_id", is_processed=True))
             return {"status": "error", "message": "Missing Front conversation ID for tagging"}
+
+        # Set up log context for capturing logs to database
+        log_ctx = set_conversation_context(front_conversation_id, email_id)
 
         # Fetch conversation text for classification (Adapted from tag_email)
         conversation_data = get_conversation_text(front_conversation_id)
@@ -1189,6 +1239,10 @@ def perform_tagging_task(self, email_id: str) -> Dict:
             pass
         return {"status": "error", "message": str(e)}
     finally:
+        # Flush captured logs to database
+        ctx = clear_conversation_context()
+        if ctx:
+            flush_conversation_logs(ctx)
         if db.is_active:
             db.close()
 

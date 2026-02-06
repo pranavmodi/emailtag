@@ -16,6 +16,10 @@ from app.schemas.email import EmailUpdate
 from app.tasks.worker import celery_app
 from app.services.frontapp_service import add_conversation_tags, get_conversation_text
 
+# Conversation log context imports
+from app.core.log_context import set_conversation_context, clear_conversation_context
+from app.services.conversation_log_service import flush_conversation_logs
+
 # Agent imports
 from app.agents.apt_status_req_agent import handle_apt_status_request_agent_sdk
 from app.agents.release_records_autorespond import handle_release_of_records_request
@@ -132,6 +136,9 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             logger.error(f"Email {email_id} has no Front conversation ID for auto-response.")
             email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status="autorespond_failed_no_front_id", is_processed=True))
             return {"status": "error", "message": "Missing Front conversation ID for auto-response"}
+
+        # Set up log context for capturing logs to database
+        log_ctx = set_conversation_context(front_conversation_id, email_id)
 
         current_email_content = email_obj.content_text or email_obj.content_html or ""
         
@@ -864,5 +871,9 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             db.rollback()
         return {"status": "error", "message": str(e)}
     finally:
+        # Flush captured logs to database
+        ctx = clear_conversation_context()
+        if ctx:
+            flush_conversation_logs(ctx)
         if db.is_active:
-            db.close() 
+            db.close()

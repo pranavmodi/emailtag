@@ -987,3 +987,87 @@ Keep the summary concise but thorough. Use bullet points. If a section has no re
     except Exception as e:
         logger.error(f"Error summarizing traces for {conversation_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error generating summary: {str(e)}")
+
+
+@router.get("/classification-traces/api/logs")
+async def get_conversation_logs_endpoint(
+    conversation_id: str = Query(..., description="Front conversation ID"),
+    level: Optional[str] = Query(None, description="Filter by log level: INFO, WARNING, ERROR"),
+    search: Optional[str] = Query(None, description="Search string to filter messages"),
+    limit: int = Query(500, description="Maximum number of entries to return"),
+    offset: int = Query(0, description="Number of entries to skip"),
+    is_authenticated: bool = Depends(check_authenticated)
+):
+    """API endpoint to get captured worker logs for a conversation.
+
+    Returns log entries that were captured during email processing tasks.
+    Logs include timestamp, level, module, function, line number, and message.
+    """
+    if not is_authenticated:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        from app.models.conversation_log import ConversationLog
+
+        db = SessionLocal()
+        try:
+            logs_data = db.query(ConversationLog).filter(
+                ConversationLog.front_conversation_id == conversation_id
+            ).first()
+
+            if not logs_data:
+                return JSONResponse(content={
+                    "conversation_id": conversation_id,
+                    "email_id": None,
+                    "log_entries": [],
+                    "total_entries": 0,
+                    "filtered_entries": 0,
+                    "returned_entries": 0,
+                    "error_count": 0,
+                    "warning_count": 0,
+                    "first_log_at": None,
+                    "last_log_at": None,
+                })
+
+            entries = logs_data.log_entries or []
+
+            # Apply level filter
+            if level:
+                level_upper = level.upper()
+                if level_upper == "ERROR":
+                    entries = [e for e in entries if e.get("level") == "ERROR"]
+                elif level_upper == "WARNING":
+                    entries = [e for e in entries if e.get("level") in ("WARNING", "ERROR")]
+                elif level_upper == "INFO":
+                    entries = [e for e in entries if e.get("level") in ("INFO", "WARNING", "ERROR")]
+
+            # Apply search filter
+            if search:
+                search_lower = search.lower()
+                entries = [
+                    e for e in entries
+                    if search_lower in e.get("message", "").lower()
+                    or search_lower in e.get("module", "").lower()
+                ]
+
+            total_filtered = len(entries)
+            entries = entries[offset:offset + limit]
+
+            return JSONResponse(content={
+                "conversation_id": conversation_id,
+                "email_id": str(logs_data.email_id) if logs_data.email_id else None,
+                "log_entries": entries,
+                "total_entries": logs_data.total_entries,
+                "filtered_entries": total_filtered,
+                "returned_entries": len(entries),
+                "error_count": logs_data.error_count,
+                "warning_count": logs_data.warning_count,
+                "first_log_at": logs_data.first_log_at.isoformat() if logs_data.first_log_at else None,
+                "last_log_at": logs_data.last_log_at.isoformat() if logs_data.last_log_at else None,
+            })
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Error fetching conversation logs for {conversation_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error fetching logs: {str(e)}")

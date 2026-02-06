@@ -11,11 +11,20 @@ logger = logging.getLogger(__name__)
 # Define a handler for the after_setup_logger signal
 @after_setup_logger.connect
 def setup_celery_logging(logger, **kwargs):
-    """Configure Celery worker logging levels."""
+    """Configure Celery worker logging levels and add conversation log handler."""
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("openai").setLevel(logging.WARNING)
     # You can add other loggers here if needed
-    # logger.info("Celery worker logging configured: httpx and openai set to WARNING.")
+
+    # Add the ConversationLogHandler to capture logs for database storage
+    # This handler buffers logs when a conversation context is active
+    try:
+        from app.core.conversation_log_handler import ConversationLogHandler
+        conversation_handler = ConversationLogHandler(level=logging.INFO)
+        logging.getLogger().addHandler(conversation_handler)
+    except Exception as e:
+        # Don't fail worker startup if handler can't be added
+        logging.getLogger(__name__).warning(f"Failed to add ConversationLogHandler: {e}")
 
 celery_app = Celery(
     "worker",

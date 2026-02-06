@@ -21,9 +21,11 @@ import {
   CheckCircle,
   XCircle,
   Sparkles,
+  ScrollText,
+  Filter,
 } from "lucide-react";
 
-import { ApiError, ClassificationTracesApi, SettingsApi, type FullTracesResponse } from "@/lib/api";
+import { ApiError, ClassificationTracesApi, SettingsApi, type FullTracesResponse, type ConversationLogsResponse, type LogEntry } from "@/lib/api";
 import type { RecentConversation, ClassificationTrace } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -604,6 +606,14 @@ function ClassificationTracesContent() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
 
+  // Logs state
+  const [logsData, setLogsData] = useState<ConversationLogsResponse | null>(null);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsError, setLogsError] = useState<string | null>(null);
+  const [logsExpanded, setLogsExpanded] = useState(false);
+  const [logsLevelFilter, setLogsLevelFilter] = useState<string>("ALL");
+  const [logsSearchInput, setLogsSearchInput] = useState<string>("");
+
   useEffect(() => {
     let mounted = true;
 
@@ -742,6 +752,93 @@ function ClassificationTracesContent() {
     }
   };
 
+  const handleViewLogs = async () => {
+    if (!conversationIdParam) return;
+
+    // Toggle panel if already loaded
+    if (logsData && !logsLoading) {
+      setLogsExpanded(!logsExpanded);
+      return;
+    }
+
+    setLogsLoading(true);
+    setLogsError(null);
+    setLogsExpanded(true);
+    try {
+      const levelParam = logsLevelFilter === "ALL" ? undefined : logsLevelFilter;
+      const searchParam = logsSearchInput.trim() || undefined;
+      const result = await ClassificationTracesApi.getLogs(conversationIdParam, levelParam, searchParam, 500);
+      setLogsData(result);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setLogsError(err.message);
+      } else {
+        setLogsError("Failed to load logs");
+      }
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  const handleLogsFilterChange = async (newLevel: string) => {
+    setLogsLevelFilter(newLevel);
+    if (!conversationIdParam || !logsExpanded) return;
+
+    setLogsLoading(true);
+    setLogsError(null);
+    try {
+      const levelParam = newLevel === "ALL" ? undefined : newLevel;
+      const searchParam = logsSearchInput.trim() || undefined;
+      const result = await ClassificationTracesApi.getLogs(conversationIdParam, levelParam, searchParam, 500);
+      setLogsData(result);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setLogsError(err.message);
+      } else {
+        setLogsError("Failed to load logs");
+      }
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  const handleLogsSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!conversationIdParam || !logsExpanded) return;
+
+    setLogsLoading(true);
+    setLogsError(null);
+    try {
+      const levelParam = logsLevelFilter === "ALL" ? undefined : logsLevelFilter;
+      const searchParam = logsSearchInput.trim() || undefined;
+      const result = await ClassificationTracesApi.getLogs(conversationIdParam, levelParam, searchParam, 500);
+      setLogsData(result);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setLogsError(err.message);
+      } else {
+        setLogsError("Failed to load logs");
+      }
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  const getLogLevelColor = (level: string) => {
+    switch (level.toUpperCase()) {
+      case "ERROR":
+        return "text-rose-600 bg-rose-50";
+      case "WARNING":
+        return "text-amber-600 bg-amber-50";
+      case "INFO":
+        return "text-slate-600 bg-slate-50";
+      case "DEBUG":
+        return "text-sky-600 bg-sky-50";
+      default:
+        return "text-slate-500 bg-slate-50";
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
       <Header user={user} currentPage={{ label: "Traces", icon: "🔍" }} />
@@ -865,19 +962,34 @@ function ClassificationTracesContent() {
               <Card className="mb-6 bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white border-0">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="text-xl">Decision Summary</CardTitle>
-                  <Button
-                    onClick={handleSummarize}
-                    disabled={summaryLoading}
-                    variant="ghost"
-                    className="text-white hover:bg-white/20 gap-2"
-                  >
-                    {summaryLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-4 w-4" />
-                    )}
-                    {summaryLoading ? "Summarizing..." : "Summarize"}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleViewLogs}
+                      disabled={logsLoading}
+                      variant="ghost"
+                      className="text-white hover:bg-white/20 gap-2"
+                    >
+                      {logsLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ScrollText className="h-4 w-4" />
+                      )}
+                      {logsLoading ? "Loading..." : logsExpanded ? "Hide Logs" : "View Logs"}
+                    </Button>
+                    <Button
+                      onClick={handleSummarize}
+                      disabled={summaryLoading}
+                      variant="ghost"
+                      className="text-white hover:bg-white/20 gap-2"
+                    >
+                      {summaryLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                      {summaryLoading ? "Summarizing..." : "Summarize"}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -908,6 +1020,122 @@ function ClassificationTracesContent() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Worker Logs Panel */}
+              <AnimatePresence>
+                {logsExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="mb-6"
+                  >
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <ScrollText className="h-5 w-5 text-cyan-600" />
+                            Worker Logs
+                            {logsData && (
+                              <span className="text-sm font-normal text-slate-500 ml-2">
+                                ({logsData.filtered_entries} entries
+                                {logsData.error_count > 0 && (
+                                  <span className="text-rose-600 ml-1">
+                                    {logsData.error_count} errors
+                                  </span>
+                                )}
+                                {logsData.warning_count > 0 && (
+                                  <span className="text-amber-600 ml-1">
+                                    {logsData.warning_count} warnings
+                                  </span>
+                                )})
+                              </span>
+                            )}
+                          </CardTitle>
+                          <Button
+                            variant="ghost"
+                            onClick={() => setLogsExpanded(false)}
+                            className="p-2"
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        {/* Filters */}
+                        <div className="flex items-center gap-4 mt-3">
+                          <div className="flex items-center gap-2">
+                            <Filter className="h-4 w-4 text-slate-400" />
+                            <select
+                              value={logsLevelFilter}
+                              onChange={(e) => handleLogsFilterChange(e.target.value)}
+                              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            >
+                              <option value="ALL">All Levels</option>
+                              <option value="ERROR">Errors Only</option>
+                              <option value="WARNING">Warnings+</option>
+                              <option value="INFO">Info+</option>
+                            </select>
+                          </div>
+                          <form onSubmit={handleLogsSearch} className="flex-1 max-w-xs">
+                            <div className="relative">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                              <input
+                                type="text"
+                                value={logsSearchInput}
+                                onChange={(e) => setLogsSearchInput(e.target.value)}
+                                placeholder="Search logs..."
+                                className="w-full rounded-md border border-slate-300 bg-white pl-9 pr-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                              />
+                            </div>
+                          </form>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        {logsLoading && (
+                          <div className="flex items-center justify-center py-8">
+                            <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                          </div>
+                        )}
+                        {logsError && (
+                          <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-700">
+                            <p className="text-sm">{logsError}</p>
+                          </div>
+                        )}
+                        {!logsLoading && logsData && logsData.log_entries.length === 0 && (
+                          <div className="py-8 text-center text-slate-500">
+                            <ScrollText className="mx-auto h-8 w-8 text-slate-300 mb-2" />
+                            <p className="text-sm">No logs found for this conversation.</p>
+                          </div>
+                        )}
+                        {!logsLoading && logsData && logsData.log_entries.length > 0 && (
+                          <div className="max-h-96 overflow-y-auto rounded-lg bg-slate-900 p-4 font-mono text-xs">
+                            {logsData.log_entries.map((log, idx) => (
+                              <div key={idx} className="flex gap-2 py-1 hover:bg-slate-800/50 rounded px-1">
+                                <span className="text-slate-500 shrink-0 w-20">
+                                  {new Date(log.timestamp).toLocaleTimeString()}
+                                </span>
+                                <span className={`shrink-0 w-16 px-1 rounded text-center ${getLogLevelColor(log.level)}`}>
+                                  {log.level}
+                                </span>
+                                <span className="text-slate-400 shrink-0 w-28 truncate" title={log.module}>
+                                  {log.module}
+                                </span>
+                                <span className={`flex-1 ${
+                                  log.level === "ERROR" ? "text-rose-300" :
+                                  log.level === "WARNING" ? "text-amber-300" :
+                                  "text-slate-200"
+                                }`}>
+                                  {log.message}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* AI Summary */}
               {summaryError && (
