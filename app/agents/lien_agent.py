@@ -1005,7 +1005,8 @@ async def handle_lien_request(
 
         try:
             # Add human review tag and lien modified tag
-            frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED, TAG_LIEN_MODIFIED])
+            tags_to_add = [TAG_AI_HUMAN_REVIEW_REQUIRED, TAG_LIEN_MODIFIED]
+            frontapp_service.add_conversation_tags(front_conversation_id, tags_to_add)
 
             # Add comment to conversation describing the modification (no autorespond)
             comment_text = "Lien modification detected: The email body contains conditional language regarding the lien. This lien requires human review before processing."
@@ -1013,6 +1014,16 @@ async def handle_lien_request(
                 phrases_list = ", ".join(conditional_phrases[:3])
                 comment_text += f" Detected phrases: {phrases_list}"
             frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
+
+            # In test mode, save to sandbox so the conversation appears in the sandbox UI
+            if test_mode:
+                await save_test_mode_response(
+                    conversation_id=front_conversation_id,
+                    response_text=comment_text,
+                    tags_to_add=tags_to_add,
+                    lien_type=lien_type,
+                    signature_type=signature_type
+                )
 
             return {
                 "agent_handled": True,
@@ -1046,7 +1057,8 @@ async def handle_lien_request(
 
         try:
             # Add human review tag and lien modified tag
-            frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED, TAG_LIEN_MODIFIED])
+            tags_to_add = [TAG_AI_HUMAN_REVIEW_REQUIRED, TAG_LIEN_MODIFIED]
+            frontapp_service.add_conversation_tags(front_conversation_id, tags_to_add)
 
             # Add comment to conversation describing the modification (no autorespond)
             comment_text = "Lien modification detected: The attached cover letter contains conditional language. This lien requires human review before processing."
@@ -1054,6 +1066,16 @@ async def handle_lien_request(
                 phrases_list = ", ".join(cover_letter_phrases[:3])
                 comment_text += f" Detected phrases: {phrases_list}"
             frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
+
+            # In test mode, save to sandbox so the conversation appears in the sandbox UI
+            if test_mode:
+                await save_test_mode_response(
+                    conversation_id=front_conversation_id,
+                    response_text=comment_text,
+                    tags_to_add=tags_to_add,
+                    lien_type=lien_type,
+                    signature_type=signature_type
+                )
 
             return {
                 "agent_handled": True,
@@ -1147,6 +1169,16 @@ async def handle_lien_request(
                                 comment_text += f" Struck-through text found: {detail_text}"
                         break
             frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
+
+            # In test mode, save to sandbox so the conversation appears in the sandbox UI
+            if test_mode:
+                await save_test_mode_response(
+                    conversation_id=front_conversation_id,
+                    response_text=comment_text,
+                    tags_to_add=tags_to_add,
+                    lien_type=lien_type,
+                    signature_type=signature_type
+                )
 
             return {
                 "agent_handled": True,
@@ -1741,8 +1773,11 @@ async def handle_lien_request(
             else:
                 logger.warning(f"FRONT_BOT_TEAMMATE_ID not configured — cannot assign conversation {front_conversation_id} during RadFlow wait")
 
-            logger.info(f"⏳ Waiting 5 minutes for RadFlow to update signature status for {len(unique_patient_ids)} patient(s)...")
-            await asyncio.sleep(300)  # 5 minutes = 300 seconds
+            if test_mode:
+                logger.info(f"⏳ Skipping 5-minute RadFlow wait (test/sandbox mode) for {len(unique_patient_ids)} patient(s)")
+            else:
+                logger.info(f"⏳ Waiting 5 minutes for RadFlow to update signature status for {len(unique_patient_ids)} patient(s)...")
+                await asyncio.sleep(300)  # 5 minutes = 300 seconds
 
         # Generate consolidated response for multiple patients
         if len(unique_patient_ids) > 1:

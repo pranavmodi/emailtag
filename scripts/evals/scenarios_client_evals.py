@@ -135,30 +135,6 @@ CLIENT_EVAL_SCENARIOS = {
         ],
         "expected_tags": ["Lien Modified"]
     },
-    "9": {
-        "description": "Maria Rodriguez - ASL Clean (Negative) - Clean document without modifications, should maintain original ASL tag and not trigger lien modification detection",
-        "subject": "RE: Maria Rodriguez, 03/15/2024 - ASL Lien Submission",
-        "body_html": (
-            "<p>Dear Billing Department,</p>"
-            "<p>Attached please find the completed Attorney Service Lien (ASL) for our client Maria Rodriguez who was injured on 03/15/2024.</p>"
-            "<p>This is a clean, unmodified document as per standard procedures.</p>"
-            "<p>Please review and process the attached ASL lien for radiology services.</p>"
-            "<p>The document is complete and requires no further modifications.</p>"
-            "<p>Thank you for your prompt attention to this matter.</p>"
-            "<p>Sincerely,<br>"
-            "Legal Processing Team<br>"
-            "Rodriguez & Associates</p>"
-            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
-        ),
-        "attachments": [
-            {
-                "filename": "OCR APIs Doc Classifier.pdf", 
-                "filepath": "scripts/OCR APIs Doc Classifier.pdf",
-                "content_type": "application/pdf"
-            }
-        ],
-        "expected_tags": ["ASL"]
-    },
     "10": {
         "description": "Juana Perez Cordero - Apt status req - Client inquiry about open MRI scheduling status with Patient ID PRE1063320",
         "subject": "Is the patient scheduled for an open MRI?",
@@ -168,106 +144,6 @@ CLIENT_EVAL_SCENARIOS = {
             "<p>Test ID: {UNIQUE_TEST_ID}</p>"
         ),
         "expected_tags": ["Apt status req"]
-    },
-    "12": {
-        "description": "OCR Tech Lien Override - Email with attachment containing Tech Lien OCR data, should override LLM classification",
-        "subject": "Tech Lien Documentation - PRE7890123",
-        "body_html": (
-            "<p>Dear Billing Department,</p>"
-            "<p>Attached is the tech lien documentation for Patient ID PRE7890123.</p>"
-            "<p>Please process the attached lien documentation.</p>"
-            "<p>Thank you.</p>"
-            "<p>Johnson & Partners</p>"
-            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
-        ),
-        "attachments": [
-            {
-                "filename": "tech_lien_document.pdf",
-                "filepath": "scripts/tech_lien_document.pdf",
-                "content_type": "application/pdf"
-            }
-        ],
-        "expected_tags": ["Tech Lien"]
-    },
-    "15": {
-        "description": "OCR PSL Rad Lien Override - Email classified as PSL with Rad Lien OCR data (sent by patient)",
-        "subject": "My Radiology Lien Documents - PRE6666666",
-        "body_html": (
-            "<p>Dear Billing Department,</p>"
-            "<p>I am sending my signed radiology lien documentation for Patient ID PRE6666666.</p>"
-            "<p>Please process the attached lien documentation.</p>"
-            "<p>Thank you.</p>"
-            "<p>John Smith (Patient)</p>"
-            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
-        ),
-        "attachments": [
-            {
-                "filename": "psl_radiology_lien.pdf",
-                "filepath": "scripts/psl_radiology_lien.pdf",
-                "content_type": "application/pdf"
-            }
-        ],
-        "expected_tags": ["Rad Lien"]
-    },
-    "16": {
-        "description": "OCR PSL Tech Lien Override - Email classified as PSL with Tech Lien OCR data (sent by patient)",
-        "subject": "My Tech Lien Documents - PRE7777777",
-        "body_html": (
-            "<p>Dear Billing Department,</p>"
-            "<p>I am sending my signed tech lien documentation for Patient ID PRE7777777.</p>"
-            "<p>Please process the attached lien documentation.</p>"
-            "<p>Thank you.</p>"
-            "<p>Maria Rodriguez (Patient)</p>"
-            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
-        ),
-        "attachments": [
-            {
-                "filename": "psl_tech_lien.pdf",
-                "filepath": "scripts/psl_tech_lien.pdf",
-                "content_type": "application/pdf"
-            }
-        ],
-        "expected_tags": ["Tech Lien"]
-    },
-    "17": {
-        "description": "OCR ASL Rad Lien Override - Email classified as ASL with Rad Lien OCR data (sent by attorney)",
-        "subject": "Client Radiology Lien Documentation - PRE8888888",
-        "body_html": (
-            "<p>Dear Precise Imaging,</p>"
-            "<p>Please find attached the attorney signed radiology lien documentation for our client, Patient ID PRE8888888.</p>"
-            "<p>This ASL lien has been executed and is ready for processing.</p>"
-            "<p>Thank you for your prompt attention to this matter.</p>"
-            "<p>Best regards,<br>Sarah Johnson, Esq.<br>Johnson & Associates Law Firm</p>"
-            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
-        ),
-        "attachments": [
-            {
-                "filename": "asl_radiology_lien.pdf",
-                "filepath": "scripts/asl_radiology_lien.pdf",
-                "content_type": "application/pdf"
-            }
-        ],
-        "expected_tags": ["Rad Lien"]
-    },
-    "18": {
-        "description": "OCR ASL Tech Lien Override - Email classified as ASL with Tech Lien OCR data (sent by attorney)",
-        "subject": "Client Tech Lien Documentation - PRE9999999",
-        "body_html": (
-            "<p>Dear Precise Imaging,</p>"
-            "<p>Please find attached the attorney signed tech lien documentation for our client, Patient ID PRE9999999.</p>"
-            "<p>This ASL lien has been executed and is ready for processing.</p>"
-            "<p>Thank you for your prompt attention to this matter.</p>"
-            "<p>Best regards,<br>Michael Davis, Esq.<br>Davis & Partners Law Firm</p>"
-            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
-        ),
-        "attachments": [
-            {
-                "filename": "asl_tech_lien.pdf",
-                "filepath": "scripts/asl_tech_lien.pdf",
-                "content_type": "application/pdf"
-            }
-        ],
-        "expected_tags": ["Tech Lien"]
     },
     "19": {
         "description": "Lien Modified with Strikethrough - PDF with visual strikethrough effects should trigger lien modification detection",

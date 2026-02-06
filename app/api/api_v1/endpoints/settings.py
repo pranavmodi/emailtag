@@ -790,8 +790,20 @@ async def list_lien_test_uploads(db: AsyncSession = Depends(get_db)):
                     "latest_upload_time": latest_file_time,
                     "subject": None,
                     "sender": None,
-                    "email_count": 0
+                    "email_count": 0,
+                    "tags": [],
                 }
+
+                # Read tags from response.json if it exists
+                response_file = conv_dir / "response.json"
+                if response_file.exists():
+                    try:
+                        import json
+                        with open(response_file, "r") as f:
+                            response_data = json.load(f)
+                        conv_info["tags"] = response_data.get("tags_to_add", [])
+                    except Exception:
+                        pass
 
                 # Try to fetch email details from database
                 try:

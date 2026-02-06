@@ -42,6 +42,7 @@ type ConversationUpload = {
   sender?: string;
   email_count?: number;
   latest_upload_time?: number;
+  tags?: string[];
 };
 
 type FileDetail = {
@@ -385,7 +386,8 @@ export default function SandboxPage() {
     return (
       conv.conversation_id.toLowerCase().includes(query) ||
       (conv.subject?.toLowerCase().includes(query) ?? false) ||
-      (conv.sender?.toLowerCase().includes(query) ?? false)
+      (conv.sender?.toLowerCase().includes(query) ?? false) ||
+      (conv.tags?.some(tag => tag.toLowerCase().includes(query)) ?? false)
     );
   });
 
@@ -606,7 +608,7 @@ export default function SandboxPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
         <input
           type="text"
-          placeholder="Search by conversation ID, subject, sender, or patient ID..."
+          placeholder="Search by conversation ID, subject, sender, patient ID, or tag..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 placeholder-slate-400 outline-none transition-all focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
@@ -799,6 +801,17 @@ export default function SandboxPage() {
                                   {formatDate(conversation.latest_upload_time)}
                                 </div>
                               )}
+                              {conversation.tags && conversation.tags.length > 0 && (
+                                conversation.tags.map((tag, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-50 border border-violet-200 text-violet-700 text-xs font-medium"
+                                  >
+                                    <Tag className="h-3 w-3" />
+                                    {tag}
+                                  </span>
+                                ))
+                              )}
                             </div>
                           </div>
                         </div>
@@ -937,7 +950,7 @@ export default function SandboxPage() {
                           <div>
                             <h4 className="text-sm font-semibold text-slate-900 mb-3">Uploaded Files</h4>
                             {fileDetails.length === 0 && !fileError && (
-                              <p className="text-sm text-slate-500 text-center py-4">No files found</p>
+                              <p className="text-sm text-slate-500 text-center py-4">No uploaded files for this conversation</p>
                             )}
                           {fileDetails.map((file, fileIndex) => (
                             <motion.div
