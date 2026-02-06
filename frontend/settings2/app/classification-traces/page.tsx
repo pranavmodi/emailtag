@@ -725,6 +725,11 @@ function ClassificationTracesContent() {
     window.open(`/settings/classification-traces?conversation_id=${encodeURIComponent(conversationId)}`, '_blank');
   };
 
+  const handleViewLogsNewTab = (conversationId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering the row click
+    window.open(`/settings/classification-traces/logs?conversation_id=${encodeURIComponent(conversationId)}`, '_blank');
+  };
+
   const handleBackToList = () => {
     router.push("/classification-traces");
   };
@@ -1261,6 +1266,15 @@ function ClassificationTracesContent() {
                                 {conv.total_tokens.toLocaleString()} tokens
                               </span>
                             )}
+                            <Button
+                              variant="ghost"
+                              onClick={(e) => handleViewLogsNewTab(conv.conversation_id, e)}
+                              className="gap-1 text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50 px-2 py-1 text-sm"
+                              title="View worker logs"
+                            >
+                              <ScrollText className="h-4 w-4" />
+                              Logs
+                            </Button>
                             <ChevronRight className="h-4 w-4 text-slate-400" />
                           </div>
                         </div>
