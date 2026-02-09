@@ -1148,6 +1148,10 @@ async def handle_lien_request(
             # Add human review tag and unassign (no autoresponse for errors)
             _tag_for_human_review(front_conversation_id)
 
+            # Add comment explaining why human review is needed
+            comment_text = f"Other company lien detected: This lien appears to be from '{detected_company_name}', not Precise Imaging. Please review and handle accordingly."
+            frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
+
             return {
                 "agent_handled": True,
                 "processed_flag": True,
@@ -1226,6 +1230,10 @@ async def handle_lien_request(
             # Add human review tag and unassign
             _tag_for_human_review(front_conversation_id)
 
+            # Add comment explaining why human review is needed
+            comment_text = f"Invalid signature placement: The {signature_type} {lien_type} lien signature does not appear to be in the correct location. Please review the document and verify signature placement."
+            frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
+
             # Send reply if template is configured
             if templates.get("invalid_signature"):
                 await send_or_save_response(
@@ -1260,6 +1268,10 @@ async def handle_lien_request(
         try:
             # Add human review tag and unassign
             _tag_for_human_review(front_conversation_id)
+
+            # Add comment explaining why human review is needed
+            comment_text = f"Poor document quality: The attached lien document is {quality_status.lower()}. A clearer scan may be needed."
+            frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
 
             # Send unreadable template
             if templates.get("unreadable"):
@@ -1307,6 +1319,10 @@ async def handle_lien_request(
             try:
                 # Add human review tag and unassign (no autoresponse for errors)
                 _tag_for_human_review(front_conversation_id)
+
+                # Add comment explaining why human review is needed
+                comment_text = f"Duplicate barcodes detected: Multiple lien documents with the same barcode were found in this email. Please review to determine which document should be processed."
+                frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
 
                 return {
                     "agent_handled": True,
@@ -1777,6 +1793,10 @@ async def handle_lien_request(
             try:
                 _tag_for_human_review(front_conversation_id)
 
+                # Add comment explaining why human review is needed
+                comment_text = f"Upload failed: Failed to upload {signature_type} {lien_type} lien to patient file (Patient ID: {patient_id}). The RadFlow upload API returned an error. Please manually upload the lien document."
+                frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
+
                 return {
                     "agent_handled": True,
                     "processed_flag": True,
@@ -2058,6 +2078,10 @@ async def handle_lien_request(
         # Tag for human review and unassign on processing error (no autoresponse for errors)
         try:
             _tag_for_human_review(front_conversation_id)
+
+            # Add comment explaining the error
+            comment_text = f"Processing error: An unexpected error occurred while processing this {signature_type} {lien_type} lien. Error: {str(e)[:200]}"
+            frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
         except Exception as tag_error:
             logger.error(f"Failed to add human review tag: {tag_error}")
         return {"agent_handled": False, "processed_flag": True, "details": {"reason": f"Unexpected processing error: {e}"}}
