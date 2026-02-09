@@ -37,6 +37,33 @@ TECH_LIEN_TAG = "Tech Lien"
 LIEN_TEST_UPLOAD_DIR = "/tmp/lien_test_uploads"
 # --- END: Test Mode Constants ---
 
+
+def _tag_for_human_review(conversation_id: str, additional_tags: List[str] = None) -> bool:
+    """
+    Tag conversation for human review and unassign it.
+
+    Args:
+        conversation_id: The Front conversation ID
+        additional_tags: Optional list of additional tags to add alongside the human review tag
+
+    Returns:
+        bool: True if both operations succeeded, False otherwise
+    """
+    tags_to_add = [TAG_AI_HUMAN_REVIEW_REQUIRED]
+    if additional_tags:
+        tags_to_add.extend(additional_tags)
+
+    tag_success = frontapp_service.add_conversation_tags(conversation_id, tags_to_add)
+    unassign_success = frontapp_service.unassign_conversation(conversation_id)
+
+    if not tag_success:
+        logger.warning(f"Failed to add human review tag to conversation {conversation_id}")
+    if not unassign_success:
+        logger.warning(f"Failed to unassign conversation {conversation_id}")
+
+    return tag_success and unassign_success
+
+
 # --- NOTE: All lien response templates are now managed via /settings/template-config ---
 # Templates are fetched from database via _fetch_lien_templates_from_db()
 
@@ -1014,9 +1041,9 @@ async def handle_lien_request(
         logger.warning(f"   Conditional phrases: {conditional_phrases}")
 
         try:
-            # Add human review tag and lien modified tag
+            # Add human review tag, lien modified tag, and unassign
             tags_to_add = [TAG_AI_HUMAN_REVIEW_REQUIRED, TAG_LIEN_MODIFIED]
-            frontapp_service.add_conversation_tags(front_conversation_id, tags_to_add)
+            _tag_for_human_review(front_conversation_id, additional_tags=[TAG_LIEN_MODIFIED])
 
             # Add comment to conversation describing the modification (no autorespond)
             comment_text = "Lien modification detected: The email body contains conditional language regarding the lien. This lien requires human review before processing."
@@ -1066,9 +1093,9 @@ async def handle_lien_request(
         logger.warning(f"   Conditional phrases: {cover_letter_phrases}")
 
         try:
-            # Add human review tag and lien modified tag
+            # Add human review tag, lien modified tag, and unassign
             tags_to_add = [TAG_AI_HUMAN_REVIEW_REQUIRED, TAG_LIEN_MODIFIED]
-            frontapp_service.add_conversation_tags(front_conversation_id, tags_to_add)
+            _tag_for_human_review(front_conversation_id, additional_tags=[TAG_LIEN_MODIFIED])
 
             # Add comment to conversation describing the modification (no autorespond)
             comment_text = "Lien modification detected: The attached cover letter contains conditional language. This lien requires human review before processing."
@@ -1118,19 +1145,8 @@ async def handle_lien_request(
         logger.warning(f"⚠️ OTHER COMPANY LIEN: Detected lien from '{detected_company_name}' for conversation {front_conversation_id}")
 
         try:
-            # Add human review tag
-            frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
-
-            # Send autoresponse (or save to sandbox in test mode)
-            response_text = f"This lien appears to belong to another company: {detected_company_name}. Please review manually."
-            await send_or_save_response(
-                conversation_id=front_conversation_id,
-                response_text=response_text,
-                tags_to_add=None,
-                test_mode=test_mode,
-                lien_type=lien_type,
-                signature_type=signature_type
-            )
+            # Add human review tag and unassign (no autoresponse for errors)
+            _tag_for_human_review(front_conversation_id)
 
             return {
                 "agent_handled": True,
@@ -1153,12 +1169,10 @@ async def handle_lien_request(
         logger.info(f"Lien modifications detected for conversation {front_conversation_id}. Tagging for human review.")
 
         try:
-            # Add human review tag and lien modified tag if not already present
-            tags_to_add = [TAG_AI_HUMAN_REVIEW_REQUIRED]
-            if not _has_lien_modified_tag(applied_tags):
-                tags_to_add.append(TAG_LIEN_MODIFIED)
-
-            frontapp_service.add_conversation_tags(front_conversation_id, tags_to_add)
+            # Add human review tag, lien modified tag if not already present, and unassign
+            additional_tags = [TAG_LIEN_MODIFIED] if not _has_lien_modified_tag(applied_tags) else None
+            tags_to_add = [TAG_AI_HUMAN_REVIEW_REQUIRED] + (additional_tags or [])
+            _tag_for_human_review(front_conversation_id, additional_tags=additional_tags)
 
             # Add comment to conversation describing the modification (no autorespond)
             # Build a descriptive comment from the modification results if available
@@ -1209,8 +1223,8 @@ async def handle_lien_request(
         logger.info(f"Signature placement invalid for conversation {front_conversation_id}. Requesting properly signed lien.")
 
         try:
-            # Add human review tag
-            frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
+            # Add human review tag and unassign
+            _tag_for_human_review(front_conversation_id)
 
             # Send reply if template is configured
             if templates.get("invalid_signature"):
@@ -1244,8 +1258,8 @@ async def handle_lien_request(
         logger.info(f"Document quality poor ({quality_status}) for conversation {front_conversation_id}. Requesting clearer scan.")
 
         try:
-            # Add human review tag
-            frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
+            # Add human review tag and unassign
+            _tag_for_human_review(front_conversation_id)
 
             # Send unreadable template
             if templates.get("unreadable"):
@@ -1291,19 +1305,8 @@ async def handle_lien_request(
             logger.info(f"Duplicate barcodes detected for conversation {front_conversation_id}. Tagging for human review.")
 
             try:
-                # Add human review tag
-                frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
-
-                # Send autoresponse (or save to sandbox in test mode)
-                response_text = "Barcodes are the same on multiple pages. Please review and handle accordingly."
-                await send_or_save_response(
-                    conversation_id=front_conversation_id,
-                    response_text=response_text,
-                    tags_to_add=None,
-                    test_mode=test_mode,
-                    lien_type=lien_type,
-                    signature_type=signature_type
-                )
+                # Add human review tag and unassign (no autoresponse for errors)
+                _tag_for_human_review(front_conversation_id)
 
                 return {
                     "agent_handled": True,
@@ -1366,7 +1369,7 @@ async def handle_lien_request(
         logger.info(f"Patient ID not found for conversation {front_conversation_id}. Tagging for human review.")
 
         try:
-            frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
+            _tag_for_human_review(front_conversation_id)
 
             # Send reply if template is configured
             if templates.get("patient_not_found"):
@@ -1404,8 +1407,8 @@ async def handle_lien_request(
             logger.info(f"Duplicate lien type detected for conversation {front_conversation_id}. {duplicate_reason}. Tagging for human review.")
 
             try:
-                # Add human review tag
-                frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
+                # Add human review tag and unassign
+                _tag_for_human_review(front_conversation_id)
 
                 # Add comment to Front conversation
                 comment_text = f"{duplicate_reason}. Please review and handle accordingly."
@@ -1767,20 +1770,12 @@ async def handle_lien_request(
                 all_uploads_success = all(result["success"] for result in upload_results)
                 upload_success = all_uploads_success
 
-        # If upload failed, tag for human review and notify
+        # If upload failed, tag for human review and unassign (no autoresponse for errors)
         if not upload_success:
             logger.warning(f"File upload failed for patient {patient_id}. Tagging for human review.")
 
             try:
-                frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
-                await send_or_save_response(
-                    conversation_id=front_conversation_id,
-                    response_text=f"We encountered an error uploading your {lien_type} to the patient file. A team member will review your submission and complete the upload manually. Thank you for your patience.",
-                    tags_to_add=None,
-                    test_mode=test_mode,
-                    lien_type=lien_type,
-                    signature_type=signature_type
-                )
+                _tag_for_human_review(front_conversation_id)
 
                 return {
                     "agent_handled": True,
@@ -2060,17 +2055,9 @@ async def handle_lien_request(
 
     except Exception as e:
         logger.error(f"Unexpected error processing {signature_type} lien for patient {patient_id}: {e}", exc_info=True)
-        # Tag for human review on processing error
+        # Tag for human review and unassign on processing error (no autoresponse for errors)
         try:
-            frontapp_service.add_conversation_tags(front_conversation_id, [TAG_AI_HUMAN_REVIEW_REQUIRED])
-            await send_or_save_response(
-                conversation_id=front_conversation_id,
-                response_text=f"We encountered an error processing your {lien_type}. A team member will review your submission and get back to you shortly.",
-                tags_to_add=None,
-                test_mode=test_mode,
-                lien_type=lien_type,
-                signature_type=signature_type
-            )
+            _tag_for_human_review(front_conversation_id)
         except Exception as tag_error:
             logger.error(f"Failed to add human review tag: {tag_error}")
         return {"agent_handled": False, "processed_flag": True, "details": {"reason": f"Unexpected processing error: {e}"}}

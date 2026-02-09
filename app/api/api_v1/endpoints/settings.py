@@ -16,9 +16,18 @@ from app.schemas.system_settings import (
     AutorespondToggleRequest
 )
 from app.services.frontapp_service import get_conversation_tags_async
+from app.services import test_email_service
+from pydantic import BaseModel
+from typing import List, Optional
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class SendTestEmailRequest(BaseModel):
+    """Request model for sending test emails."""
+    scenario_keys: List[str]
+    recipient_email: Optional[str] = None
 
 # Lien test uploads directory
 LIEN_TEST_UPLOAD_DIR = "/tmp/lien_test_uploads"
@@ -1520,3 +1529,85 @@ async def remove_no_action_item(
         )
 
 # --- END: Workspace Settings Endpoints ---
+
+
+# --- BEGIN: Test Email Endpoints ---
+
+@router.get("/test-email-scenarios")
+async def get_test_email_scenarios():
+    """
+    Get all available test email scenarios grouped by type.
+
+    Returns:
+        Dict with scenarios grouped by type, type labels, and SMTP config status
+    """
+    try:
+        scenarios_data = test_email_service.get_scenarios_by_type()
+        smtp_config = test_email_service.check_smtp_config()
+
+        return {
+            "scenarios": scenarios_data["scenarios"],
+            "types": scenarios_data["types"],
+            "smtp_configured": smtp_config["smtp_configured"],
+            "recipient_email": smtp_config["recipient_email"],
+        }
+    except Exception as e:
+        logger.error(f"Error fetching test email scenarios: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch test email scenarios: {str(e)}"
+        )
+
+
+@router.get("/test-email-config")
+async def get_test_email_config():
+    """
+    Get SMTP configuration status (not credentials).
+
+    Returns:
+        Dict with SMTP configuration status
+    """
+    try:
+        config = test_email_service.check_smtp_config()
+        return config
+    except Exception as e:
+        logger.error(f"Error checking SMTP config: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to check SMTP config: {str(e)}"
+        )
+
+
+@router.post("/test-email-scenarios/send")
+async def send_test_emails(request: SendTestEmailRequest):
+    """
+    Send one or more test email scenarios.
+
+    Args:
+        request: SendTestEmailRequest with scenario_keys and optional recipient_email
+
+    Returns:
+        Dict with results for each scenario
+    """
+    try:
+        results = []
+        for scenario_key in request.scenario_keys:
+            result = test_email_service.send_test_email(
+                scenario_key=scenario_key,
+                recipient_email=request.recipient_email
+            )
+            results.append(result)
+
+        # Log summary
+        success_count = sum(1 for r in results if r["status"] == "success")
+        logger.info(f"Sent {success_count}/{len(results)} test emails successfully")
+
+        return {"results": results}
+    except Exception as e:
+        logger.error(f"Error sending test emails: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send test emails: {str(e)}"
+        )
+
+# --- END: Test Email Endpoints ---

@@ -505,6 +505,49 @@ def assign_conversation(conversation_id: str, assignee_id: str) -> bool:
             return False
 
 
+def unassign_conversation(conversation_id: str) -> bool:
+    """
+    Unassigns a conversation in Front (removes the current assignee).
+
+    Args:
+        conversation_id: The ID of the conversation to unassign.
+
+    Returns:
+        bool: True if unassignment was successful, False otherwise.
+    """
+    if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL:
+        logger.error("Missing required Front configuration for unassigning conversation.")
+        return False
+
+    auth_header = f"Bearer {settings.FRONT_AUTH_TOKEN}"
+    url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}"
+    headers = {
+        "Authorization": auth_header,
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    payload = {"assignee_id": None}
+
+    with httpx.Client(verify=False) as client:
+        try:
+            logger.info(f"Unassigning conversation {conversation_id} in Front via API: {url}")
+            response = client.patch(url, headers=headers, json=payload)
+
+            if response.status_code == 204:
+                logger.info(f"Successfully unassigned conversation {conversation_id}. Status: {response.status_code}")
+                return True
+            else:
+                try:
+                    error_details = response.json()
+                except json.JSONDecodeError:
+                    error_details = response.text
+                logger.error(f"Failed to unassign conversation {conversation_id}. Status: {response.status_code}, Details: {error_details}")
+                return False
+        except Exception as e:
+            logger.error(f"Exception while unassigning conversation {conversation_id}: {e}", exc_info=True)
+            return False
+
+
 def archive_conversation_in_front(conversation_id: str) -> bool:
     """
     Archives a conversation in Front.

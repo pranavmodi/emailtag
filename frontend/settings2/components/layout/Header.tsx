@@ -64,6 +64,13 @@ export const MENU_ITEMS: MenuItem[] = [
     primary: false,
   },
   {
+    href: "/test-emails",
+    label: "Test Emails",
+    description: "Send test email scenarios",
+    icon: "📧",
+    primary: false,
+  },
+  {
     href: "/reprocess",
     label: "Reprocess",
     description: "Trigger conversation processing",
