@@ -1,72 +1,142 @@
 version: '3.8'
 
 services:
+  # ───────────────────────────────────────────────
+  # Nginx reverse proxy - single entry point
+  # ───────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - web
+      - frontend
+      - flower
+    restart: unless-stopped
+
+  # ───────────────────────────────────────────────
+  # FastAPI backend (port 8444 to match existing setup)
+  # ───────────────────────────────────────────────
   web:
     build: .
-    ports:
-      - "8444:8444"  # HTTPS port
-    volumes:
-      - .:/app
-      - ./certs:/app/certs  # Mount SSL certificates
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/emailtag
+      - ASYNC_DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/emailtag
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - CELERY_RESULT_BACKEND=db+postgresql://postgres:postgres@db:5432/emailtag
+      - SSL_ENABLED=False
+      - FORCE_HTTPS=False
+      - PORT=8444
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8444
     depends_on:
-      - db
-      - rabbitmq
-    command: >
-      bash -c "
-      if [ -f \"$$SSL_CERT_FILE\" ] && [ -f \"$$SSL_KEY_FILE\" ]; then
-        uvicorn app.main:app --host 0.0.0.0 --port $$PORT --ssl-keyfile $$SSL_KEY_FILE --ssl-certfile $$SSL_CERT_FILE;
-      else
-        uvicorn app.main:app --host 0.0.0.0 --port $$PORT;
-      fi
-      "
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8444/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
+  # ───────────────────────────────────────────────
+  # Next.js settings frontend
+  # ───────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend/settings2
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - web
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/settings"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ───────────────────────────────────────────────
+  # Celery worker: all queues (emails, tagging, processing, ocr)
+  # ───────────────────────────────────────────────
   worker:
     build: .
-    volumes:
-      - .:/app
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/emailtag
+      - ASYNC_DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/emailtag
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - CELERY_RESULT_BACKEND=db+postgresql://postgres:postgres@db:5432/emailtag
     depends_on:
-      - db
-      - rabbitmq
-    command: celery -A app.tasks.worker worker -l info -Q emails,tagging
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    command: celery -A app.tasks.worker worker -l info -Q emails,tagging,processing,ocr
+    restart: unless-stopped
 
+  # ───────────────────────────────────────────────
+  # Flower - Celery monitoring dashboard
+  # ───────────────────────────────────────────────
   flower:
     build: .
-    volumes:
-      - .:/app
     env_file:
       - .env
-    ports:
-      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - CELERY_RESULT_BACKEND=db+postgresql://postgres:postgres@db:5432/emailtag
     depends_on:
-      - rabbitmq
-      - worker
-    command: celery -A app.tasks.worker flower --port=5555
+      rabbitmq:
+        condition: service_healthy
+    command: celery -A app.tasks.worker flower --port=5555 --url_prefix=flower
+    restart: unless-stopped
 
+  # ───────────────────────────────────────────────
+  # PostgreSQL database
+  # ───────────────────────────────────────────────
   db:
     image: postgres:15
     volumes:
       - postgres_data:/var/lib/postgresql/data/
-    env_file:
-      - .env
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=emailtag
-    ports:
-      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+  # ───────────────────────────────────────────────
+  # RabbitMQ message broker
+  # ───────────────────────────────────────────────
   rabbitmq:
     image: rabbitmq:3-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
     environment:
       - RABBITMQ_DEFAULT_USER=guest
       - RABBITMQ_DEFAULT_PASS=guest
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  postgres_data: 
+  postgres_data:
+  rabbitmq_data:
