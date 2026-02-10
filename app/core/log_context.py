@@ -98,6 +98,31 @@ def add_log_to_context(entry: Dict[str, Any]) -> bool:
     return True
 
 
+def add_delimiter_to_context(task_name: str, email_id: Optional[str] = None) -> bool:
+    """Inject a DELIMITER log entry to visually separate processing runs.
+
+    Call this right after set_conversation_context() in each Celery task
+    so that the trace viewer can render a separator bar between runs.
+
+    Args:
+        task_name: The Celery task name (e.g. "process_email").
+        email_id: Optional email UUID as string.
+
+    Returns:
+        True if the delimiter was added, False if no context is active.
+    """
+    email_label = email_id or "unknown"
+    entry = create_log_entry(
+        level="DELIMITER",
+        message=f"\u2550\u2550 {task_name} | email: {email_label} \u2550\u2550",
+        module="log_context",
+        func_name="",
+        line_no=0,
+        extra={"task_name": task_name, "email_id": email_label},
+    )
+    return add_log_to_context(entry)
+
+
 def create_log_entry(
     level: str,
     message: str,

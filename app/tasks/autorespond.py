@@ -17,7 +17,7 @@ from app.tasks.worker import celery_app
 from app.services.frontapp_service import add_conversation_tags, get_conversation_text
 
 # Conversation log context imports
-from app.core.log_context import set_conversation_context, clear_conversation_context
+from app.core.log_context import set_conversation_context, clear_conversation_context, add_delimiter_to_context
 from app.services.conversation_log_service import flush_conversation_logs
 
 # Agent imports
@@ -139,6 +139,7 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
 
         # Set up log context for capturing logs to database
         log_ctx = set_conversation_context(front_conversation_id, email_id)
+        add_delimiter_to_context("perform_autorespond_task", email_id)
 
         current_email_content = email_obj.content_text or email_obj.content_html or ""
         

@@ -839,6 +839,8 @@ function ClassificationTracesContent() {
         return "text-slate-600 bg-slate-50";
       case "DEBUG":
         return "text-sky-600 bg-sky-50";
+      case "DELIMITER":
+        return "text-cyan-400 bg-cyan-950";
       default:
         return "text-slate-500 bg-slate-50";
     }
@@ -1114,7 +1116,16 @@ function ClassificationTracesContent() {
                         )}
                         {!logsLoading && logsData && logsData.log_entries.length > 0 && (
                           <div className="max-h-96 overflow-y-auto rounded-lg bg-slate-900 p-4 font-mono text-xs">
-                            {logsData.log_entries.map((log, idx) => (
+                            {logsData.log_entries.map((log, idx) =>
+                              log.level === "DELIMITER" ? (
+                                <div key={idx} className="flex items-center gap-2 py-2 my-1">
+                                  <div className="flex-1 border-t border-cyan-600" />
+                                  <span className="shrink-0 text-cyan-400 text-[11px] font-semibold tracking-wide uppercase px-2">
+                                    {log.message}
+                                  </span>
+                                  <div className="flex-1 border-t border-cyan-600" />
+                                </div>
+                              ) : (
                               <div key={idx} className="flex gap-2 py-1 hover:bg-slate-800/50 rounded px-1">
                                 <span className="text-slate-500 shrink-0 w-20">
                                   {new Date(log.timestamp).toLocaleTimeString()}
@@ -1133,7 +1144,8 @@ function ClassificationTracesContent() {
                                   {log.message}
                                 </span>
                               </div>
-                            ))}
+                              )
+                            )}
                           </div>
                         )}
                       </CardContent>

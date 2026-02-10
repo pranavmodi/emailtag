@@ -35,7 +35,7 @@ from app.services.trace_service import create_tracer
 from app.models.processing_trace import StepTypes, TraceSteps, TraceStatus
 
 # Conversation log context imports
-from app.core.log_context import set_conversation_context, clear_conversation_context
+from app.core.log_context import set_conversation_context, clear_conversation_context, add_delimiter_to_context
 from app.services.conversation_log_service import flush_conversation_logs
 
 
@@ -205,6 +205,7 @@ def process_email(email_id: str) -> Dict:
         # Set up log context for capturing logs to database
         # This must be outside the with block so we can flush on exit
         log_ctx = set_conversation_context(front_conversation_id, email_id)
+        add_delimiter_to_context("process_email", email_id)
 
         # Create tracer for this conversation
         tracer = create_tracer(
@@ -353,6 +354,7 @@ def orchestrate_post_ocr_processing(email_id: str) -> Dict:
 
         # Set up log context for capturing logs to database
         log_ctx = set_conversation_context(front_conversation_id, email_id)
+        add_delimiter_to_context("orchestrate_post_ocr_processing", email_id)
 
         # Create tracer for this conversation
         tracer = create_tracer(
@@ -725,6 +727,7 @@ def perform_tagging_task(self, email_id: str) -> Dict:
 
         # Set up log context for capturing logs to database
         log_ctx = set_conversation_context(front_conversation_id, email_id)
+        add_delimiter_to_context("perform_tagging_task", email_id)
 
         # Fetch conversation text for classification (Adapted from tag_email)
         conversation_data = get_conversation_text(front_conversation_id)
