@@ -6,6 +6,7 @@ by analyzing letterheads, logos, and legal entity names on lien documents.
 All lien pages are analyzed together in a single holistic API call.
 """
 
+import asyncio
 import logging
 import base64
 import httpx
@@ -41,6 +42,40 @@ class CompanyDetector:
         ]
 
         logger.info(f"Company detector initialized with model: {self.model}")
+
+    async def _post_with_retry(
+        self,
+        url: str,
+        headers: Dict[str, str],
+        payload: Dict[str, Any],
+        timeout: float = 60.0,
+        max_retries: int = 3,
+    ) -> httpx.Response:
+        """Make an HTTP POST with retries on 5xx server errors and 429 rate limits."""
+        retry_delays = [2, 5, 10]
+        last_response = None
+
+        for attempt in range(max_retries + 1):
+            async with httpx.AsyncClient(timeout=timeout, verify=False) as client:
+                response = await client.post(url, headers=headers, json=payload)
+
+            if response.status_code < 500 and response.status_code != 429:
+                return response
+
+            last_response = response
+            if attempt < max_retries:
+                delay = retry_delays[min(attempt, len(retry_delays) - 1)]
+                logger.warning(
+                    f"OpenAI API error {response.status_code} (attempt {attempt + 1}/{max_retries + 1}). "
+                    f"Retrying in {delay}s..."
+                )
+                await asyncio.sleep(delay)
+            else:
+                logger.error(
+                    f"OpenAI API error {response.status_code} after {max_retries + 1} attempts. Giving up."
+                )
+
+        return last_response
 
     def _prepare_holistic_prompt(self, page_count: int) -> str:
         """Prepare the prompt for holistic company analysis across all pages."""
@@ -164,48 +199,47 @@ If no clear company name is visible on any page, return company_name as null."""
             else:
                 payload["max_tokens"] = 500
 
-            async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
-                logger.info(f"COMPANY DETECTION: Analyzing {len(page_images)} page(s) holistically for {document_name}")
-                response = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers=headers,
-                    json=payload
-                )
+            logger.info(f"COMPANY DETECTION: Analyzing {len(page_images)} page(s) holistically for {document_name}")
+            response = await self._post_with_retry(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                payload=payload,
+            )
 
-                if response.status_code != 200:
-                    logger.error(f"OpenAI API error {response.status_code}: {response.text}")
-                    return self._error_response(f"API error: {response.status_code}")
+            if response.status_code != 200:
+                logger.error(f"OpenAI API error {response.status_code}: {response.text}")
+                return self._error_response(f"API error: {response.status_code}")
 
-                result_data = response.json()
+            result_data = response.json()
 
-                # Extract JSON from response
-                message_content = result_data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
-                analysis = json.loads(message_content)
+            # Extract JSON from response
+            message_content = result_data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+            analysis = json.loads(message_content)
 
-                company_name = analysis.get("company_name")
-                confidence = analysis.get("confidence", 0.0)
-                location_found = analysis.get("location_found", "")
-                explanation = analysis.get("explanation", "")
+            company_name = analysis.get("company_name")
+            confidence = analysis.get("confidence", 0.0)
+            location_found = analysis.get("location_found", "")
+            explanation = analysis.get("explanation", "")
 
-                # Determine if this is our company
-                is_ours = self._is_our_company(company_name)
+            # Determine if this is our company
+            is_ours = self._is_our_company(company_name)
 
-                if company_name:
-                    if is_ours:
-                        logger.info(f"COMPANY DETECTION: {document_name} - Detected OUR company: {company_name}")
-                    else:
-                        logger.warning(f"COMPANY DETECTION: {document_name} - Detected OTHER company: {company_name}")
+            if company_name:
+                if is_ours:
+                    logger.info(f"COMPANY DETECTION: {document_name} - Detected OUR company: {company_name}")
                 else:
-                    logger.info(f"COMPANY DETECTION: {document_name} - No company name detected")
+                    logger.warning(f"COMPANY DETECTION: {document_name} - Detected OTHER company: {company_name}")
+            else:
+                logger.info(f"COMPANY DETECTION: {document_name} - No company name detected")
 
-                return {
-                    "company_detected": company_name,
-                    "is_our_company": is_ours,
-                    "confidence": confidence,
-                    "location_found": location_found,
-                    "explanation": explanation,
-                    "success": True
-                }
+            return {
+                "company_detected": company_name,
+                "is_our_company": is_ours,
+                "confidence": confidence,
+                "location_found": location_found,
+                "explanation": explanation,
+                "success": True
+            }
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse company detection response for {document_name}: {e}")

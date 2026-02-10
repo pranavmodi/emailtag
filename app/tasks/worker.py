@@ -2,7 +2,7 @@
 
 import logging
 from celery import Celery
-from celery.signals import after_setup_logger
+from celery.signals import after_setup_logger, after_setup_task_logger
 
 from app.core.config import settings
 
@@ -22,9 +22,39 @@ def setup_celery_logging(logger, **kwargs):
         from app.core.conversation_log_handler import ConversationLogHandler
         conversation_handler = ConversationLogHandler(level=logging.INFO)
         logging.getLogger().addHandler(conversation_handler)
+        # Also add to celery.task logger — modules using get_task_logger() log under
+        # this hierarchy and Celery's worker logging setup may prevent propagation
+        # to the root logger, causing task/agent logs to be silently dropped.
+        logging.getLogger("celery.task").addHandler(conversation_handler)
     except Exception as e:
         # Don't fail worker startup if handler can't be added
         logging.getLogger(__name__).warning(f"Failed to add ConversationLogHandler: {e}")
+
+
+@after_setup_task_logger.connect
+def setup_celery_task_logging(logger, **kwargs):
+    """Ensure task loggers propagate to root and have ConversationLogHandler.
+
+    Celery configures task loggers (celery.task.*) with propagate=False,
+    which prevents logs from reaching the root logger's console handler.
+    Combined with worker_hijack_root_logger=False, this means task logger
+    output (from get_task_logger) is silently dropped from console output.
+
+    Fix: Enable propagation so task logs reach the root logger's handlers
+    (console output), and also attach ConversationLogHandler directly for
+    database capture.
+    """
+    # Enable propagation so task logs appear in console via root logger
+    logger.propagate = True
+
+    try:
+        from app.core.conversation_log_handler import ConversationLogHandler
+        # Avoid adding duplicate handlers
+        if not any(isinstance(h, ConversationLogHandler) for h in logger.handlers):
+            conversation_handler = ConversationLogHandler(level=logging.INFO)
+            logger.addHandler(conversation_handler)
+    except Exception:
+        pass
 
 celery_app = Celery(
     "worker",

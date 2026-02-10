@@ -5,6 +5,7 @@ This service detects cover letters in lien submissions and analyzes them for
 conditional language or modifications to standard lien terms.
 """
 
+import asyncio
 import logging
 import base64
 import httpx
@@ -28,6 +29,40 @@ class CoverLetterDetector:
             logger.error("OPENAI_API_KEY not found in settings. Cover letter detection will not work.")
 
         logger.info(f"📧 COVER LETTER DETECTOR: Initialized with model: {self.model}")
+
+    async def _post_with_retry(
+        self,
+        url: str,
+        headers: Dict[str, str],
+        payload: Dict[str, Any],
+        timeout: float = 60.0,
+        max_retries: int = 3,
+    ) -> httpx.Response:
+        """Make an HTTP POST with retries on 5xx server errors and 429 rate limits."""
+        retry_delays = [2, 5, 10]
+        last_response = None
+
+        for attempt in range(max_retries + 1):
+            async with httpx.AsyncClient(timeout=timeout, verify=False) as client:
+                response = await client.post(url, headers=headers, json=payload)
+
+            if response.status_code < 500 and response.status_code != 429:
+                return response
+
+            last_response = response
+            if attempt < max_retries:
+                delay = retry_delays[min(attempt, len(retry_delays) - 1)]
+                logger.warning(
+                    f"OpenAI API error {response.status_code} (attempt {attempt + 1}/{max_retries + 1}). "
+                    f"Retrying in {delay}s..."
+                )
+                await asyncio.sleep(delay)
+            else:
+                logger.error(
+                    f"OpenAI API error {response.status_code} after {max_retries + 1} attempts. Giving up."
+                )
+
+        return last_response
 
     def _prepare_analysis_prompt(self) -> str:
         """Prepare the prompt for analyzing cover letter content."""
@@ -172,61 +207,60 @@ Be strict: Only flag language that was clearly added by or favors the attorney a
             else:
                 payload["max_tokens"] = 1000
 
-            async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
-                logger.info(f"📄 COVER LETTER: Analyzing page {page_name} for cover letter and conditional language")
-                response = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers=headers,
-                    json=payload
-                )
+            logger.info(f"📄 COVER LETTER: Analyzing page {page_name} for cover letter and conditional language")
+            response = await self._post_with_retry(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                payload=payload,
+            )
 
-                if response.status_code != 200:
-                    logger.error(f"OpenAI API error {response.status_code}: {response.text}")
-                    return self._error_response(f"API error: {response.status_code}")
+            if response.status_code != 200:
+                logger.error(f"OpenAI API error {response.status_code}: {response.text}")
+                return self._error_response(f"API error: {response.status_code}")
 
-                result_data = response.json()
+            result_data = response.json()
 
-                # Extract JSON from response
-                import json
-                message_content = result_data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
-                analysis = json.loads(message_content)
+            # Extract JSON from response
+            import json
+            message_content = result_data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+            analysis = json.loads(message_content)
 
-                # Log findings
-                is_cover = analysis.get("is_cover_letter", False)
-                has_conditional = analysis.get("has_conditional_language", False)
-                page_class = analysis.get("page_classification", "OTHER")
-                document_language = analysis.get("document_language", "English")
+            # Log findings
+            is_cover = analysis.get("is_cover_letter", False)
+            has_conditional = analysis.get("has_conditional_language", False)
+            page_class = analysis.get("page_classification", "OTHER")
+            document_language = analysis.get("document_language", "English")
 
-                # A page with a barcode is never a cover letter, but may still
-                # contain conditional language added by the attorney.
-                if has_barcode:
-                    is_cover = False
-                    page_class = "LIEN_CORE"
+            # A page with a barcode is never a cover letter, but may still
+            # contain conditional language added by the attorney.
+            if has_barcode:
+                is_cover = False
+                page_class = "LIEN_CORE"
 
-                if is_cover:
-                    logger.info(f"📄 COVER LETTER: Page {page_name} identified as cover letter")
+            if is_cover:
+                logger.info(f"📄 COVER LETTER: Page {page_name} identified as cover letter")
 
-                if has_conditional:
-                    phrases = analysis.get("conditional_phrases_found", [])
-                    logger.warning(f"⚠️ CONDITIONAL LANGUAGE: Found on page {page_name}")
-                    logger.warning(f"   Phrases: {phrases}")
+            if has_conditional:
+                phrases = analysis.get("conditional_phrases_found", [])
+                logger.warning(f"⚠️ CONDITIONAL LANGUAGE: Found on page {page_name}")
+                logger.warning(f"   Phrases: {phrases}")
 
-                if document_language.lower() != "english":
-                    logger.info(f"📄 LANGUAGE: Page {page_name} detected as '{document_language}'")
+            if document_language.lower() != "english":
+                logger.info(f"📄 LANGUAGE: Page {page_name} detected as '{document_language}'")
 
-                logger.info(f"📄 CLASSIFICATION: Page {page_name} → {page_class}")
+            logger.info(f"📄 CLASSIFICATION: Page {page_name} → {page_class}")
 
-                return {
-                    "is_cover_letter": is_cover,
-                    "cover_letter_confidence": analysis.get("cover_letter_confidence", 0.0),
-                    "has_conditional_language": has_conditional,
-                    "conditional_language_confidence": analysis.get("conditional_language_confidence", 0.0),
-                    "conditional_phrases_found": analysis.get("conditional_phrases_found", []),
-                    "page_classification": page_class,
-                    "document_language": document_language,
-                    "explanation": analysis.get("explanation", ""),
-                    "success": True
-                }
+            return {
+                "is_cover_letter": is_cover,
+                "cover_letter_confidence": analysis.get("cover_letter_confidence", 0.0),
+                "has_conditional_language": has_conditional,
+                "conditional_language_confidence": analysis.get("conditional_language_confidence", 0.0),
+                "conditional_phrases_found": analysis.get("conditional_phrases_found", []),
+                "page_classification": page_class,
+                "document_language": document_language,
+                "explanation": analysis.get("explanation", ""),
+                "success": True
+            }
 
         except Exception as e:
             logger.error(f"Error analyzing page {page_name} for cover letter: {e}", exc_info=True)
@@ -302,41 +336,40 @@ Email content to analyze:
             else:
                 payload["max_tokens"] = 800
 
-            async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
-                logger.info("📧 EMAIL ANALYSIS: Analyzing email content for conditional language")
-                response = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers=headers,
-                    json=payload
-                )
+            logger.info("📧 EMAIL ANALYSIS: Analyzing email content for conditional language")
+            response = await self._post_with_retry(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                payload=payload,
+            )
 
-                if response.status_code != 200:
-                    logger.error(f"OpenAI API error {response.status_code}: {response.text}")
-                    return self._error_response(f"API error: {response.status_code}")
+            if response.status_code != 200:
+                logger.error(f"OpenAI API error {response.status_code}: {response.text}")
+                return self._error_response(f"API error: {response.status_code}")
 
-                result_data = response.json()
+            result_data = response.json()
 
-                # Extract JSON from response
-                import json
-                message_content = result_data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
-                analysis = json.loads(message_content)
+            # Extract JSON from response
+            import json
+            message_content = result_data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+            analysis = json.loads(message_content)
 
-                has_conditional = analysis.get("has_conditional_language", False)
+            has_conditional = analysis.get("has_conditional_language", False)
 
-                if has_conditional:
-                    phrases = analysis.get("conditional_phrases_found", [])
-                    logger.warning(f"⚠️ CONDITIONAL LANGUAGE IN EMAIL: Found conditional language")
-                    logger.warning(f"   Phrases: {phrases}")
-                else:
-                    logger.info("✅ EMAIL ANALYSIS: No conditional language detected")
+            if has_conditional:
+                phrases = analysis.get("conditional_phrases_found", [])
+                logger.warning(f"⚠️ CONDITIONAL LANGUAGE IN EMAIL: Found conditional language")
+                logger.warning(f"   Phrases: {phrases}")
+            else:
+                logger.info("✅ EMAIL ANALYSIS: No conditional language detected")
 
-                return {
-                    "has_conditional_language": has_conditional,
-                    "confidence": analysis.get("confidence", 0.0),
-                    "conditional_phrases_found": analysis.get("conditional_phrases_found", []),
-                    "explanation": analysis.get("explanation", ""),
-                    "success": True
-                }
+            return {
+                "has_conditional_language": has_conditional,
+                "confidence": analysis.get("confidence", 0.0),
+                "conditional_phrases_found": analysis.get("conditional_phrases_found", []),
+                "explanation": analysis.get("explanation", ""),
+                "success": True
+            }
 
         except Exception as e:
             logger.error(f"Error analyzing email content: {e}", exc_info=True)
@@ -395,29 +428,29 @@ Email content to analyze:
             "max_completion_tokens": 4000
         }
 
-        async with httpx.AsyncClient(timeout=120.0, verify=False) as client:
-            logger.info(f"🔍 BARCODE EXPECTATION: Step 1 — extracting text from {page_name} with gpt-5-mini")
-            response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers=headers,
-                json=payload
-            )
+        logger.info(f"🔍 BARCODE EXPECTATION: Step 1 — extracting text from {page_name} with gpt-5-mini")
+        response = await self._post_with_retry(
+            "https://api.openai.com/v1/chat/completions",
+            headers=headers,
+            payload=payload,
+            timeout=120.0,
+        )
 
-            if response.status_code != 200:
-                logger.error(f"Text extraction API error {response.status_code}: {response.text}")
-                return ""
+        if response.status_code != 200:
+            logger.error(f"Text extraction API error {response.status_code}: {response.text}")
+            return ""
 
-            result_data = response.json()
-            extracted_text = (
-                result_data.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content", "")
-            )
+        result_data = response.json()
+        extracted_text = (
+            result_data.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+        )
 
-            logger.info(
-                f"🔍 BARCODE EXPECTATION: Step 1 complete — extracted {len(extracted_text)} chars from {page_name}"
-            )
-            return extracted_text
+        logger.info(
+            f"🔍 BARCODE EXPECTATION: Step 1 complete — extracted {len(extracted_text)} chars from {page_name}"
+        )
+        return extracted_text
 
     async def _reason_barcode_expectation(self, extracted_text: str, page_name: str) -> Dict[str, Any]:
         """
@@ -500,36 +533,36 @@ Set expects_barcode to false for:
             "max_output_tokens": 500
         }
 
-        async with httpx.AsyncClient(timeout=120.0, verify=False) as client:
-            logger.info(f"🔍 BARCODE EXPECTATION: Step 2 — reasoning over text for {page_name} with gpt-5.2")
-            response = await client.post(
-                "https://api.openai.com/v1/responses",
-                headers=headers,
-                json=payload
-            )
+        logger.info(f"🔍 BARCODE EXPECTATION: Step 2 — reasoning over text for {page_name} with gpt-5.2")
+        response = await self._post_with_retry(
+            "https://api.openai.com/v1/responses",
+            headers=headers,
+            payload=payload,
+            timeout=120.0,
+        )
 
-            if response.status_code != 200:
-                logger.error(f"OpenAI Responses API error {response.status_code}: {response.text}")
-                return {
-                    "lien_subtype": None,
-                    "expects_barcode": False,
-                    "explanation": f"API error: {response.status_code}"
-                }
+        if response.status_code != 200:
+            logger.error(f"OpenAI Responses API error {response.status_code}: {response.text}")
+            return {
+                "lien_subtype": None,
+                "expects_barcode": False,
+                "explanation": f"API error: {response.status_code}"
+            }
 
-            result_data = response.json()
+        result_data = response.json()
 
-            # Extract text from Responses API nested output structure
-            import json
-            output_text = "{}"
-            for item in result_data.get("output", []):
-                if item.get("type") == "message":
-                    for content_block in item.get("content", []):
-                        if content_block.get("type") == "output_text":
-                            output_text = content_block.get("text", "{}")
-                            break
-                    break
+        # Extract text from Responses API nested output structure
+        import json
+        output_text = "{}"
+        for item in result_data.get("output", []):
+            if item.get("type") == "message":
+                for content_block in item.get("content", []):
+                    if content_block.get("type") == "output_text":
+                        output_text = content_block.get("text", "{}")
+                        break
+                break
 
-            return json.loads(output_text)
+        return json.loads(output_text)
 
     async def analyze_barcode_expectation(
         self,

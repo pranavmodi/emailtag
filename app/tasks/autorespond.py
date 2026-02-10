@@ -430,6 +430,18 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                     auto_response_details = {"reason": "Agent orchestrator call failed or returned None."}
 
         elif any(tag in applied_tag_names for tag in MEDICAL_RECORDS_TAGS):
+            # Warn if lien tags are also present — the lien agent (which uploads to RadFlow) won't run
+            # because the Medical Records branch takes priority in this elif chain
+            lien_tags_present = {tag for tag in applied_tag_names if tag in {ASL_TAG_NAME, PSL_TAG_NAME, RAD_LIEN_TAG_NAME, TECH_LIEN_TAG_NAME}}
+            if lien_tags_present:
+                matched_medical_tags = [tag for tag in applied_tag_names if tag in MEDICAL_RECORDS_TAGS]
+                logger.warning(
+                    f"⚠️ LIEN UPLOAD SKIPPED: Conversation {front_conversation_id} has BOTH Medical Records tags {matched_medical_tags} "
+                    f"AND lien tags {sorted(lien_tags_present)}. The Medical Records agent will handle this conversation, "
+                    f"but the lien agent (which uploads liens to RadFlow) will NOT run. "
+                    f"Lien documents will NOT be uploaded to RadFlow automatically."
+                )
+
             # Check if medical_records autorespond is enabled
             if not asyncio.run(_check_autorespond_enabled("autorespond_medical_records")):
                 logger.info(f"📴 Medical Records autorespond DISABLED - Skipping agent for email {email_id}")
@@ -648,6 +660,13 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
         # --- END: Case Updates Agent Branch ---
 
         # --- BEGIN: PSL Lien Agent Branch ---
+        elif PSL_TAG_NAME in applied_tag_names and (RAD_LIEN_TAG_NAME in applied_tag_names or TECH_LIEN_TAG_NAME in applied_tag_names) and agent_handled_response:
+            lien_tags = [tag for tag in [PSL_TAG_NAME, RAD_LIEN_TAG_NAME, TECH_LIEN_TAG_NAME] if tag in applied_tag_names]
+            logger.warning(
+                f"⚠️ PSL LIEN AGENT SKIPPED: Conversation {front_conversation_id} has lien tags {lien_tags} but a previous agent "
+                f"already handled the response. Lien documents will NOT be uploaded to RadFlow. "
+                f"Previous agent: {agent_name_for_status or 'unknown'}"
+            )
         elif not agent_handled_response and PSL_TAG_NAME in applied_tag_names and (RAD_LIEN_TAG_NAME in applied_tag_names or TECH_LIEN_TAG_NAME in applied_tag_names):
             has_rad_lien = RAD_LIEN_TAG_NAME in applied_tag_names
             has_tech_lien = TECH_LIEN_TAG_NAME in applied_tag_names
@@ -707,6 +726,13 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
         # --- END: PSL Lien Agent Branch ---
 
         # --- BEGIN: ASL Lien Agent Branch ---
+        elif ASL_TAG_NAME in applied_tag_names and (RAD_LIEN_TAG_NAME in applied_tag_names or TECH_LIEN_TAG_NAME in applied_tag_names) and agent_handled_response:
+            lien_tags = [tag for tag in [ASL_TAG_NAME, RAD_LIEN_TAG_NAME, TECH_LIEN_TAG_NAME] if tag in applied_tag_names]
+            logger.warning(
+                f"⚠️ ASL LIEN AGENT SKIPPED: Conversation {front_conversation_id} has lien tags {lien_tags} but a previous agent "
+                f"already handled the response. Lien documents will NOT be uploaded to RadFlow. "
+                f"Previous agent: {agent_name_for_status or 'unknown'}"
+            )
         elif not agent_handled_response and ASL_TAG_NAME in applied_tag_names and (RAD_LIEN_TAG_NAME in applied_tag_names or TECH_LIEN_TAG_NAME in applied_tag_names):
             has_rad_lien = RAD_LIEN_TAG_NAME in applied_tag_names
             has_tech_lien = TECH_LIEN_TAG_NAME in applied_tag_names
@@ -766,6 +792,13 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
         # --- END: ASL Lien Agent Branch ---
 
         # --- BEGIN: Unknown Signature Lien Agent Branch (Rad Lien or Tech Lien without ASL/PSL) ---
+        elif (RAD_LIEN_TAG_NAME in applied_tag_names or TECH_LIEN_TAG_NAME in applied_tag_names) and ASL_TAG_NAME not in applied_tag_names and PSL_TAG_NAME not in applied_tag_names and agent_handled_response:
+            lien_tags = [tag for tag in [RAD_LIEN_TAG_NAME, TECH_LIEN_TAG_NAME] if tag in applied_tag_names]
+            logger.warning(
+                f"⚠️ UNKNOWN SIGNATURE LIEN AGENT SKIPPED: Conversation {front_conversation_id} has lien tags {lien_tags} "
+                f"(no ASL/PSL) but a previous agent already handled the response. Lien documents will NOT be uploaded to RadFlow. "
+                f"Previous agent: {agent_name_for_status or 'unknown'}"
+            )
         elif not agent_handled_response and (RAD_LIEN_TAG_NAME in applied_tag_names or TECH_LIEN_TAG_NAME in applied_tag_names) and ASL_TAG_NAME not in applied_tag_names and PSL_TAG_NAME not in applied_tag_names:
             has_rad_lien = RAD_LIEN_TAG_NAME in applied_tag_names
             has_tech_lien = TECH_LIEN_TAG_NAME in applied_tag_names
