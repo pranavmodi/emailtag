@@ -1858,11 +1858,15 @@ async def handle_lien_request(
         # RadFlow needs approximately 5 minutes to process uploaded documents and update signature status
         if unique_patient_ids:
             # Assign conversation to AI bot during the wait so human agents don't pick it up
-            from app.core.config import settings as app_settings
-            if app_settings.FRONT_BOT_TEAMMATE_ID:
-                frontapp_service.assign_conversation(front_conversation_id, app_settings.FRONT_BOT_TEAMMATE_ID)
+            # Only assign in production mode — sandbox should not touch conversation assignment
+            if test_mode:
+                logger.info(f"🧪 SANDBOX: Skipping bot assignment for conversation {front_conversation_id} (test/sandbox mode)")
             else:
-                logger.warning(f"FRONT_BOT_TEAMMATE_ID not configured — cannot assign conversation {front_conversation_id} during RadFlow wait")
+                from app.core.config import settings as app_settings
+                if app_settings.FRONT_BOT_TEAMMATE_ID:
+                    frontapp_service.assign_conversation(front_conversation_id, app_settings.FRONT_BOT_TEAMMATE_ID)
+                else:
+                    logger.warning(f"FRONT_BOT_TEAMMATE_ID not configured — cannot assign conversation {front_conversation_id} during RadFlow wait")
 
             if test_mode:
                 logger.info(f"⏳ Skipping 5-minute RadFlow wait (test/sandbox mode) for {len(unique_patient_ids)} patient(s)")

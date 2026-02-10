@@ -141,6 +141,28 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
         log_ctx = set_conversation_context(front_conversation_id, email_id)
         add_delimiter_to_context("perform_autorespond_task", email_id)
 
+        # Log sandbox/production mode status for all agent types upfront
+        async def _fetch_all_test_modes():
+            async with AsyncSessionLocal() as async_db:
+                lien = await system_settings_crud.get_setting_value(async_db, "lien_test_mode", default=False)
+                bill_balance = await system_settings_crud.get_setting_value(async_db, "bill_balance_test_mode", default=False)
+                apt_status = await system_settings_crud.get_setting_value(async_db, "apt_status_test_mode", default=False)
+                return lien, bill_balance, apt_status
+
+        _lien_mode, _bill_balance_mode, _apt_status_mode = asyncio.run(_fetch_all_test_modes())
+        sandbox_modes = []
+        if _lien_mode:
+            sandbox_modes.append("lien")
+        if _bill_balance_mode:
+            sandbox_modes.append("bill_balance")
+        if _apt_status_mode:
+            sandbox_modes.append("apt_status")
+
+        if sandbox_modes:
+            logger.info(f"🧪 AUTORESPOND MODE: SANDBOX for [{', '.join(sandbox_modes)}] | PRODUCTION for others | Conversation {front_conversation_id}")
+        else:
+            logger.info(f"🚀 AUTORESPOND MODE: PRODUCTION (all agents) | Conversation {front_conversation_id}")
+
         current_email_content = email_obj.content_text or email_obj.content_html or ""
         
         # # DEBUG: Log email content extraction details
