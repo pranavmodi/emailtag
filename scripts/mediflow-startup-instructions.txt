@@ -1,0 +1,23 @@
+Emailtag Startup Instructions
+
+After rebooting the mediflow server, SSH in and create 6 screen sessions. Run each command inside its own screen.
+
+1. emailtag (Backend API)
+   screen -S emailtag
+   cd /home/fret/work/emailtag && source emailtag/bin/activate && uvicorn app.main:app --reload --port 8444 --ssl-keyfile certs/privkey.pem --ssl-certfile certs/fullchain.pem
+
+2. celery (Task Worker)
+   screen -S celery
+   cd /home/fret/work/emailtag && source emailtag/bin/activate && celery -A app.tasks.worker worker -l info -Q emails,tagging,processing,ocr
+
+3. emailUI (Frontend)
+   screen -S emailUI
+   cd /home/fret/work/emailtag/frontend/settings2 && npm run dev
+
+5. scripts (Dev Shell)
+   screen -S scripts
+   cd /home/fret/work/emailtag && source emailtag/bin/activate
+
+6. mcp (MCP Server)
+   screen -S mcp
+   cd /home/fret/work/precisemcp && PORT=8001 uv run python3 server.py

@@ -1546,5 +1546,50 @@ Test ID: {UNIQUE_TEST_ID}"""
             }
         ],
         "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
+    },
+    "85": {
+        "description": "Ernest Garcia - Multi-email: Attorney requests bills/records, then sends signed ASL lien (from cnv_1gbxt2xe)",
+        "is_multi_step": True,
+        "expected_tags": ["ASL", "Tech Lien", "Rad Lien"],
+        "steps": [
+            {
+                "subject": "EXTERNAL: Ernest Garcia DOL 11/11/25",
+                "body_html": (
+                    "<p>I am requesting bills and records for my client Ernest Garcia DOL 11/11/25</p>"
+                    "<p>CONFIDENTIALITY NOTICE: This electronic transmission and any documents accompanying this "
+                    "electronic transmission are intended by LA City Law for the use of the named addressee(s) to "
+                    "which it is directed and may contain information that is privileged or otherwise confidential. "
+                    "It is not intended for transmission to, or receipt by, anyone other than the named addressee(s) "
+                    "(or a person authorized to deliver it to the named addressee(s)). It should not be copied or "
+                    "forwarded to any unauthorized persons. If you have received this electronic message in error, "
+                    "please delete it from your system without copying or forwarding it, and notify the sender of "
+                    "the error by reply email so that our address record can be corrected.</p>"
+                    "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+                )
+            },
+            {
+                "subject": "Re: EXTERNAL: Ernest Garcia DOL 11/11/25",
+                "body_html": (
+                    "<p>Here's the signed form.</p>"
+                    "<p>CONFIDENTIALITY NOTICE: This electronic transmission and any documents accompanying this "
+                    "electronic transmission are intended by LA City Law for the use of the named addressee(s) to "
+                    "which it is directed and may contain information that is privileged or otherwise confidential. "
+                    "It is not intended for transmission to, or receipt by, anyone other than the named addressee(s) "
+                    "(or a person authorized to deliver it to the named addressee(s)). It should not be copied or "
+                    "forwarded to any unauthorized persons. If you have received this electronic message in error, "
+                    "please delete it from your system without copying or forwarding it, and notify the sender of "
+                    "the error by reply email so that our address record can be corrected.</p>"
+                    "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+                ),
+                "attachments": [
+                    {
+                        "filename": "ESIGN_PRE1161868_ASL.pdf",
+                        "filepath": "data/documents/ESIGN_PRE1161868_ASL.pdf",
+                        "content_type": "application/pdf"
+                    }
+                ],
+                "wait_for_user_input": True
+            }
+        ]
     }
 }
