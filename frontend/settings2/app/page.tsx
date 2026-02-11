@@ -130,7 +130,9 @@ export default function Settings2Page() {
   const [statusError, setStatusError] = useState<string | null>(null);
   const [autorespondError, setAutorespondError] = useState<string | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [credentialScreeningEnabled, setCredentialScreeningEnabled] = useState<boolean>(true);
   const [internalDomainsError, setInternalDomainsError] = useState<string | null>(null);
+  const [credentialScreeningError, setCredentialScreeningError] = useState<string | null>(null);
   const [lienModeError, setLienModeError] = useState<string | null>(null);
   const [billBalanceModeError, setBillBalanceModeError] = useState<string | null>(null);
   const [aptStatusModeError, setAptStatusModeError] = useState<string | null>(null);
@@ -158,11 +160,12 @@ export default function Settings2Page() {
         if (!mounted) return;
         setUser(auth.username ?? "Admin");
 
-        const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, lienTestModePayload, billBalanceTestModePayload, aptStatusTestModePayload, noActionPayload] = await Promise.all([
+        const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, credentialScreeningPayload, lienTestModePayload, billBalanceTestModePayload, aptStatusTestModePayload, noActionPayload] = await Promise.all([
           SettingsApi.getProcessingStatus(),
           SettingsApi.getAutorespondSettings(),
           SettingsApi.getWorkspaceSettings(),
           SettingsApi.getSkipInternalDomainsStatus(),
+          SettingsApi.getCredentialScreeningStatus(),
           SettingsApi.getLienTestModeStatus(),
           SettingsApi.getBillBalanceTestModeStatus(),
           SettingsApi.getAptStatusTestModeStatus(),
@@ -173,6 +176,7 @@ export default function Settings2Page() {
         setAutorespond(autorespondPayload);
         setSenderVerificationEnabled(workspacePayload.enable_sender_verification);
         setSkipInternalDomains(internalDomainsPayload.skip_internal_domains);
+        setCredentialScreeningEnabled(credentialScreeningPayload.credential_screening_enabled);
         // Derive lienMode from two backend settings
         const liensEnabled = autorespondPayload.liens?.enabled ?? false;
         const lienTestMode = lienTestModePayload.lien_test_mode ?? false;
@@ -209,6 +213,7 @@ export default function Settings2Page() {
         setSettingTimestamps({
           email_processing: processingPayload.last_updated,
           skip_internal_domains: internalDomainsPayload.last_updated,
+          credential_screening: credentialScreeningPayload.last_updated,
           lien_test_mode: lienTestModePayload.last_updated,
           bill_balance_test_mode: billBalanceTestModePayload.last_updated,
           apt_status_test_mode: aptStatusTestModePayload.last_updated,
@@ -217,6 +222,7 @@ export default function Settings2Page() {
         setAutorespondError(null);
         setWorkspaceError(null);
         setInternalDomainsError(null);
+        setCredentialScreeningError(null);
         setLienModeError(null);
         setBillBalanceModeError(null);
         setAptStatusModeError(null);
@@ -246,11 +252,12 @@ export default function Settings2Page() {
   // Re-fetch all settings when the tab becomes visible again (handles stale state)
   const refreshSettings = useCallback(async () => {
     try {
-      const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, lienTestModePayload, billBalanceTestModePayload, aptStatusTestModePayload, noActionPayload] = await Promise.all([
+      const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, credentialScreeningPayload, lienTestModePayload, billBalanceTestModePayload, aptStatusTestModePayload, noActionPayload] = await Promise.all([
         SettingsApi.getProcessingStatus(),
         SettingsApi.getAutorespondSettings(),
         SettingsApi.getWorkspaceSettings(),
         SettingsApi.getSkipInternalDomainsStatus(),
+        SettingsApi.getCredentialScreeningStatus(),
         SettingsApi.getLienTestModeStatus(),
         SettingsApi.getBillBalanceTestModeStatus(),
         SettingsApi.getAptStatusTestModeStatus(),
@@ -260,6 +267,7 @@ export default function Settings2Page() {
       setAutorespond(autorespondPayload);
       setSenderVerificationEnabled(workspacePayload.enable_sender_verification);
       setSkipInternalDomains(internalDomainsPayload.skip_internal_domains);
+      setCredentialScreeningEnabled(credentialScreeningPayload.credential_screening_enabled);
       const liensEnabled = autorespondPayload.liens?.enabled ?? false;
       const lienTestMode = lienTestModePayload.lien_test_mode ?? false;
       setLienMode(!liensEnabled ? "off" : lienTestMode ? "sandbox" : "production");
@@ -273,6 +281,7 @@ export default function Settings2Page() {
       setSettingTimestamps({
         email_processing: processingPayload.last_updated,
         skip_internal_domains: internalDomainsPayload.last_updated,
+        credential_screening: credentialScreeningPayload.last_updated,
         lien_test_mode: lienTestModePayload.last_updated,
         bill_balance_test_mode: billBalanceTestModePayload.last_updated,
         apt_status_test_mode: aptStatusTestModePayload.last_updated,
@@ -421,6 +430,36 @@ export default function Settings2Page() {
       trackError(message, "skip_internal_domains_toggle");
     } finally {
       setBusyFlag("skip_internal_domains", false);
+    }
+  };
+
+  const handleCredentialScreeningToggle = async (enabled: boolean) => {
+    setBusyFlag("credential_screening", true);
+    try {
+      const payload = await SettingsApi.toggleCredentialScreening(enabled, settingTimestamps.credential_screening);
+      setCredentialScreeningEnabled(payload.credential_screening_enabled);
+      setSettingTimestamps((prev) => ({ ...prev, credential_screening: payload.last_updated }));
+      setCredentialScreeningError(null);
+      setConflictMessage(null);
+      trackToggle("credential_screening", enabled);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      if (error instanceof ApiError && error.status === 409) {
+        setConflictMessage(error.message);
+        await refreshSettings();
+        return;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to update credential screening";
+      setCredentialScreeningError(message);
+      trackError(message, "credential_screening_toggle");
+    } finally {
+      setBusyFlag("credential_screening", false);
     }
   };
 
@@ -893,6 +932,39 @@ export default function Settings2Page() {
                 <strong>Testing Mode (OFF):</strong> All emails are processed regardless of sender domain. ⚠️ Use only for testing!
               </div>
               {internalDomainsError && <ErrorBanner message={internalDomainsError} />}
+
+              <hr className="border-amber-200" />
+
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-slate-900">RX Credential Screening</p>
+                  <Badge
+                    className={
+                      credentialScreeningEnabled
+                        ? "bg-green-50 text-green-700 border-green-200"
+                        : "bg-amber-50 text-amber-700 border-amber-200"
+                    }
+                  >
+                    {credentialScreeningEnabled ? "Enabled" : "Disabled"}
+                  </Badge>
+                  <p className="text-xs text-slate-500">
+                    {credentialScreeningEnabled
+                      ? "RX referrals are screened for unauthorized provider credentials"
+                      : "Credential screening is disabled — all RX referrals proceed without review"}
+                  </p>
+                </div>
+                <ToggleRail
+                  checked={credentialScreeningEnabled}
+                  disabled={busy.credential_screening}
+                  onCheckedChange={handleCredentialScreeningToggle}
+                />
+              </div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
+                <strong>Enabled (ON):</strong> RX documents are screened for provider credentials. Disallowed providers (e.g., PT, LCSW) trigger a &quot;credential review&quot; tag to prevent auto-scheduling.
+                <br /><br />
+                <strong>Disabled (OFF):</strong> All RX referrals are processed without credential checks.
+              </div>
+              {credentialScreeningError && <ErrorBanner message={credentialScreeningError} />}
             </CardContent>
           </Card>
         </motion.section>

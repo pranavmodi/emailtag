@@ -166,6 +166,13 @@ class CRUDSystemSettings:
                     "(/tmp/apt_status_test_outputs/{conversation_id}/) instead of sending via Front API. "
                     "Use this for testing apt status processing without affecting production data."
                 )
+            elif setting_key == "credential_screening_enabled":
+                description = (
+                    "Global kill switch for RX provider credential screening. "
+                    "When enabled (default), RX documents are screened for provider credentials "
+                    "against allowed/disallowed lists. When disabled, credential screening is "
+                    "skipped entirely and no 'credential review' tags are applied."
+                )
 
             setting = SystemSetting(
                 setting_key=setting_key,

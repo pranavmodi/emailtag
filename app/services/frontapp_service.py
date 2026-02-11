@@ -1463,6 +1463,87 @@ def send_conversation_reply(conversation_id: str, text: str) -> bool:
             logger.error(f"Unexpected error sending reply to {conversation_id}: {str(e)}", exc_info=True)
             return False
 
+def send_conversation_reply_to_recipients(
+    conversation_id: str,
+    text: str,
+    to: List[str],
+    cc: List[str] = None
+) -> bool:
+    """Send a reply to a conversation in Front to explicit recipients (instead of reply-all).
+
+    Used for cases like Westfax liens where the reply should go to the attorney
+    on file rather than back to the Westfax sender.
+
+    Args:
+        conversation_id: The Front conversation ID
+        text: The HTML body of the reply
+        to: List of recipient email addresses
+        cc: Optional list of CC email addresses
+    """
+    if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL or not settings.FRONT_CHANNEL_ID or not settings.FRONT_BOT_TEAMMATE_ID:
+        logger.error("Missing required Front configuration for sending reply (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL, FRONT_CHANNEL_ID, FRONT_BOT_TEAMMATE_ID)")
+        return False
+
+    if not to:
+        logger.error(f"No recipients provided for conversation {conversation_id}")
+        return False
+
+    logger.info(f"📧 DIRECTED REPLY RECIPIENTS for conversation {conversation_id}: to={to}, cc={cc}")
+
+    # Append invisible marker to detect our autorespond emails
+    invisible_marker = settings.AUTORESPOND_INVISIBLE_MARKER
+    html_body = f"{text}{invisible_marker}"
+
+    headers = {
+        "Authorization": f"Bearer {settings.FRONT_AUTH_TOKEN}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+    data = {
+        "body": html_body,
+        "channel_id": settings.FRONT_CHANNEL_ID,
+        "author_id": settings.FRONT_BOT_TEAMMATE_ID,
+        "body_format": "html",
+        "type": "message",
+        "to": to
+    }
+    if cc:
+        data["cc"] = cc
+
+    url = f"{settings.FRONT_API_BASE_URL}/conversations/{conversation_id}/messages"
+
+    logger.info(f"Sending directed reply to conversation {conversation_id}")
+
+    with httpx.Client(verify=False) as client:
+        try:
+            response = client.post(url, headers=headers, json=data)
+            logger.info(f"Response status from Front for send_conversation_reply_to_recipients: {response.status_code}")
+
+            response_data = {}
+            try:
+                response_data = response.json()
+            except json.JSONDecodeError:
+                logger.warning(f"Could not decode JSON response from Front for send_conversation_reply_to_recipients. Raw text: {response.text[:200]}")
+
+            is_draft = response_data.get('is_draft', False)
+            draft_mode = response_data.get('draft_mode')
+
+            if 200 <= response.status_code < 300:
+                if is_draft:
+                    logger.warning(f"Hey Gofo! Directed reply to {conversation_id} created as a DRAFT (mode: {draft_mode}) according to API response {response.status_code}, but Front might send it anyway.")
+                logger.info(f"Successfully sent directed reply for conversation {conversation_id} to {to} (cc: {cc}).")
+                return True
+            else:
+                logger.error(f"Error sending directed reply to {conversation_id}: {response.status_code} - {response.text}")
+                return False
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error sending directed reply to {conversation_id}: {e.response.status_code} - {e.response.text}", exc_info=True)
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error sending directed reply to {conversation_id}: {str(e)}", exc_info=True)
+            return False
+
+
 def list_teammates() -> List[Dict[str, Any]]:
     """List all teammates in the company.
 

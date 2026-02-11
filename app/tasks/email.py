@@ -1027,6 +1027,87 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                         logger.info(f"Continuing with original tags due to modification detection error: {new_tags}")
             # --- END LIEN MODIFICATION DETECTION ---
 
+            # --- RX CREDENTIAL SCREENING ---
+            # If email is tagged as RX and has OCR results, screen provider credentials
+            if "RX" in new_tags and email_obj.ocr_results:
+                try:
+                    from app.services.credential_screening_service import check_rx_provider_credentials
+                    from app.crud.system_settings import system_settings_crud
+                    from app.db.session import AsyncSessionLocal
+
+                    async def _run_credential_screening_async():
+                        async with AsyncSessionLocal() as async_db:
+                            # Check system-level kill switch first
+                            screening_enabled = await system_settings_crud.get_setting_value(
+                                async_db, "credential_screening_enabled", default=True
+                            )
+                            if not screening_enabled:
+                                logger.info(f"RX credential screening disabled via system setting for email {email_id}")
+                                return None
+
+                            return await check_rx_provider_credentials(
+                                email_obj.ocr_results, async_db
+                            )
+
+                    screening_result = asyncio.run(_run_credential_screening_async())
+
+                    if screening_result and screening_result.get("requires_review"):
+                        new_tags.append("credential review")
+                        logger.info(
+                            f"Applied 'credential review' tag for email {email_id}: "
+                            f"disallowed={screening_result.get('disallowed_found', [])}, "
+                            f"unknown={screening_result.get('unknown_found', [])}, "
+                            f"provider={screening_result.get('provider_info', {}).get('provider_name', 'unknown')}"
+                        )
+                        # Post comment with credential details
+                        try:
+                            from app.services.frontapp_service import add_conversation_comment
+                            provider_name = screening_result.get("provider_info", {}).get("provider_name", "Unknown")
+                            raw_creds = screening_result.get("raw_credentials", [])
+                            disallowed = screening_result.get("disallowed_found", [])
+                            unknown = screening_result.get("unknown_found", [])
+                            cred_display = ", ".join(raw_creds) if raw_creds else "none found"
+                            parts = []
+                            if disallowed:
+                                parts.append(f"Disallowed: {', '.join(disallowed)}")
+                            if unknown:
+                                parts.append(f"Unknown: {', '.join(unknown)}")
+                            screening_detail = "; ".join(parts) if parts else "no allowed credentials found"
+                            comment = (
+                                f"Credential review required — "
+                                f"Provider: {provider_name} ({cred_display}). "
+                                f"{screening_detail}. "
+                                f"This referral has been held from auto-scheduling."
+                            )
+                            add_conversation_comment(front_conversation_id, comment)
+                        except Exception as comment_err:
+                            logger.error(f"Failed to add credential screening comment for {front_conversation_id}: {comment_err}")
+                    elif screening_result:
+                        logger.info(
+                            f"RX credential screening passed for email {email_id}: "
+                            f"allowed={screening_result.get('allowed_found', [])}"
+                        )
+                        # Post comment confirming credentials are valid
+                        try:
+                            from app.services.frontapp_service import add_conversation_comment
+                            provider_name = screening_result.get("provider_info", {}).get("provider_name", "Unknown")
+                            raw_creds = screening_result.get("raw_credentials", [])
+                            allowed = screening_result.get("allowed_found", [])
+                            cred_display = ", ".join(raw_creds) if raw_creds else "none found"
+                            comment = (
+                                f"Credential screening passed — "
+                                f"Provider: {provider_name} ({cred_display}). "
+                                f"Allowed credentials found: {', '.join(allowed)}."
+                            )
+                            add_conversation_comment(front_conversation_id, comment)
+                        except Exception as comment_err:
+                            logger.error(f"Failed to add credential screening comment for {front_conversation_id}: {comment_err}")
+
+                except Exception as e:
+                    logger.error(f"Error during RX credential screening for email {email_id}: {e}", exc_info=True)
+                    logger.info(f"Continuing with original tags due to credential screening error: {new_tags}")
+            # --- END RX CREDENTIAL SCREENING ---
+
         applied_tags_to_front = False
         final_tagging_status = "tagging_error_unknown" # Default status for logging if something unexpected happens
 

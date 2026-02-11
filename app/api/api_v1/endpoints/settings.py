@@ -1611,3 +1611,95 @@ async def send_test_emails(request: SendTestEmailRequest):
         )
 
 # --- END: Test Email Endpoints ---
+
+
+# --- START: Credential Screening Endpoints ---
+
+@router.get("/credential-screening-status")
+async def get_credential_screening_status(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get the current status of the RX credential screening setting.
+
+    When enabled (default), RX documents are screened for provider credentials
+    against allowed/disallowed lists. When disabled, credential screening is skipped.
+
+    Returns:
+        Dict with current status and metadata
+    """
+    try:
+        setting = await system_settings_crud.get_by_key(db, "credential_screening_enabled")
+
+        if setting:
+            return {
+                "credential_screening_enabled": setting.setting_value,
+                "description": setting.description or "Screen RX provider credentials against allowed/disallowed lists",
+                "last_updated": setting.updated_at,
+                "updated_by": setting.updated_by
+            }
+        else:
+            return {
+                "credential_screening_enabled": True,
+                "description": "Screen RX provider credentials against allowed/disallowed lists",
+                "last_updated": None,
+                "updated_by": None
+            }
+    except Exception as e:
+        logger.error(f"Error fetching credential screening status: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch credential screening status: {str(e)}"
+        )
+
+
+@router.post("/credential-screening-toggle")
+async def toggle_credential_screening(
+    update: SystemSettingUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Toggle the RX credential screening setting.
+
+    When enabled: RX documents are screened and 'credential review' tag is applied for disallowed providers
+    When disabled: Credential screening is skipped entirely
+
+    Args:
+        update: SystemSettingUpdate with the new enabled/disabled state and optional user
+
+    Returns:
+        Dict with updated status
+    """
+    try:
+        setting = await system_settings_crud.update_setting(
+            db,
+            "credential_screening_enabled",
+            update.setting_value,
+            updated_by=update.updated_by,
+            expected_updated_at=update.expected_updated_at
+        )
+
+        action = "ENABLED" if update.setting_value else "DISABLED"
+        logger.warning(
+            f"RX CREDENTIAL SCREENING {action} by {update.updated_by or 'unknown user'}"
+        )
+
+        return {
+            "credential_screening_enabled": setting.setting_value,
+            "description": setting.description or "Screen RX provider credentials against allowed/disallowed lists",
+            "last_updated": setting.updated_at,
+            "updated_by": setting.updated_by
+        }
+    except StaleUpdateError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This setting was modified by {e.updated_by or 'another user'} at {e.current_updated_at}. Please refresh and try again."
+        )
+    except Exception as e:
+        logger.error(f"Error toggling credential screening: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to toggle credential screening: {str(e)}"
+        )
+
+# --- END: Credential Screening Endpoints ---

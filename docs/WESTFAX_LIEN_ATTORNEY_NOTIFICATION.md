@@ -1,25 +1,37 @@
-# Westfax Lien - Attorney Notification Requirement
+# Westfax Lien - Attorney Notification
+
+## Status: IMPLEMENTED
 
 ## Overview
 
-When a lien is received via Westfax, the system needs to look up the attorney on file and reply to the attorney's email for lien notifications. Additionally, if "notify case manager" is enabled, the case manager's email should be included in the reply.
+When a lien is received via Westfax (`westfaxff@westfax.com`), the system detects the Westfax sender and redirects the lien notification reply to the **attorney on file** (from RadFlow study participants API) instead of replying back to Westfax. If `notifyCaseManager` is enabled in the API response, the **case manager** is CC'd.
 
-## Requirements
+## Behavior
 
-1. **Attorney Lookup on Westfax Lien Receipt**
-   - When a lien is received from Westfax, look up the attorney on file for the associated case/study.
-   - Reply to the attorney's email address with lien notifications.
+1. **Westfax Detection**: The lien agent checks if `email_obj.sender` matches `westfaxff@westfax.com`.
+2. **Attorney Lookup**: After successful lien upload, the system calls `get_patient_and_study_info()` and `compile_study_participants()` to find participants with an "attorney" role.
+3. **Directed Reply**: The success notification is sent to the attorney's email (via `send_conversation_reply_to_recipients()`) instead of the default reply-all to Westfax.
+4. **Case Manager CC**: If `notifyCaseManager` is `true` and `caseManagerEmail` is present (on the participant or study level), the case manager is added as CC.
+5. **Fallback**: If no attorney email is found in study participants, the conversation is tagged for human review with a comment explaining the situation. The lien upload still succeeds.
 
-2. **Case Manager Notification (Conditional)**
-   - If "notify case manager" is set to `true`, add the case manager's email to the reply as well.
-   - This requires both the case manager's name and email to be available.
+## Multi-Patient Handling
 
-## Open Items / Dependencies
+For Westfax liens containing multiple patients, the system looks up attorneys for each patient and consolidates the recipient list (deduplicating emails). All found attorney emails are added to the `to` field, and all case manager emails to `cc`.
 
-- **Notify Case Manager Flag**: The "notify case manager" information is not currently available from any existing API endpoint.
-- **Action Taken**: Pranav Modi has reached out to the RadFlow team to request that the "notify case manager" flag, along with case manager name and email, be added to the study participants endpoint.
-- **Blocked Until**: RadFlow team confirms availability of the notify case manager data in the study participants API response.
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `app/services/frontapp_service.py` | Added `send_conversation_reply_to_recipients()` for explicit recipient replies |
+| `app/agents/lien_agent.py` | Added Westfax detection, `fetch_attorney_and_case_manager_from_participants()`, recipient override in `send_or_save_response()` |
+
+## API Fields (from Malhar Shah's RadFlow update)
+
+- `notifyCaseManager` (bool) - Whether to notify the case manager
+- `caseManagerEmail` (str) - The case manager's email address
+
+These fields are checked on both individual participant objects and at the study level.
 
 ## Source
 
-Conversation between Danny Rackow and Pranav Modi (captured Feb 2026).
+Original requirement from conversation between Danny Rackow and Pranav Modi (Feb 2026). RadFlow API updated by Malhar Shah.

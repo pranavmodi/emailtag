@@ -575,7 +575,16 @@ ANALYSIS REQUIREMENTS:
                 logger.error(f"❌ ENHANCED LIEN PROCESSING FAILED for {filename}: {e}", exc_info=True)
         else:
             logger.info(f"🔍 LIEN PROCESSING SKIPPED for {filename} - not a lien document or processing failed")
-        
+
+        # --- RX PROVIDER CREDENTIAL EXTRACTION ---
+        if doc_type == "rx":
+            try:
+                result = await self._extract_rx_provider_credentials(file_content, filename, result)
+                logger.info(f"✅ RX CREDENTIAL EXTRACTION COMPLETED for {filename}")
+            except Exception as e:
+                logger.error(f"❌ RX CREDENTIAL EXTRACTION FAILED for {filename}: {e}", exc_info=True)
+        # --- END RX PROVIDER CREDENTIAL EXTRACTION ---
+
         # Add processing metadata
         result.update({
             "detected_type": doc_type,
@@ -688,6 +697,226 @@ ANALYSIS REQUIREMENTS:
             basic_result["enhanced_lien_error"] = str(e)
             return basic_result
     
+    async def _extract_rx_provider_credentials(
+        self, file_content: bytes, filename: str, result: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Extract provider credentials from an RX document via a second-pass Vision API call.
+
+        Uses the same page images already produced during initial classification to send
+        a focused prompt asking for provider name, prefix, suffix, and credentials.
+
+        Args:
+            file_content: Document content as bytes
+            filename: Original filename
+            result: Existing processing result from initial classification
+
+        Returns:
+            Updated result dict with provider_credential_analysis key added
+        """
+        import json
+
+        try:
+            # --- Build page images (same logic as _analyze_document_with_structured_output) ---
+            file_ext = Path(filename).suffix.lower()
+            if not file_ext:
+                if file_content.startswith(b'%PDF-'):
+                    file_ext = '.pdf'
+                elif file_content.startswith(b'\x89PNG'):
+                    file_ext = '.png'
+                elif file_content.startswith(b'\xff\xd8\xff'):
+                    file_ext = '.jpg'
+
+            all_pages_content = []
+
+            if file_ext == '.pdf':
+                from pdf2image import convert_from_bytes
+                import io
+                pages = convert_from_bytes(file_content, dpi=200)
+                # Only use first 3 pages — credentials are on the first page of an RX
+                for i, page in enumerate(pages[:3]):
+                    img_buffer = io.BytesIO()
+                    page.save(img_buffer, format='JPEG', quality=75)
+                    img_bytes = img_buffer.getvalue()
+                    page_base64 = base64.b64encode(img_bytes).decode('utf-8')
+                    all_pages_content.append({
+                        "type": "input_image",
+                        "image_url": f"data:image/jpeg;base64,{page_base64}",
+                    })
+            elif file_ext in ['.png', '.jpg', '.jpeg', '.gif']:
+                mime_type = "image/jpeg" if file_ext in ['.jpg', '.jpeg'] else f"image/{file_ext[1:]}"
+                encoded = base64.b64encode(file_content).decode('utf-8')
+                all_pages_content.append({
+                    "type": "input_image",
+                    "image_url": f"data:{mime_type};base64,{encoded}",
+                })
+            else:
+                logger.info(f"RX credential extraction: unsupported file type {file_ext} for {filename}")
+                return result
+
+            if not all_pages_content:
+                logger.info(f"RX credential extraction: no page images for {filename}")
+                return result
+
+            # --- Vision API call for credential extraction ---
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+            }
+
+            schema = {
+                "type": "object",
+                "properties": {
+                    "provider_name": {
+                        "type": ["string", "null"],
+                        "description": "Full name of the referring/ordering provider",
+                    },
+                    "nameprefix": {
+                        "type": ["string", "null"],
+                        "description": "Name prefix (e.g., Dr.)",
+                    },
+                    "namesuffix": {
+                        "type": ["string", "null"],
+                        "description": "Name suffix (e.g., Jr., III)",
+                    },
+                    "credentials": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of professional credentials/degrees found (e.g., MD, DO, PT, DPT, LCSW, NP, PA-C)",
+                    },
+                },
+                "required": ["provider_name", "nameprefix", "namesuffix", "credentials"],
+                "additionalProperties": False,
+            }
+
+            model_name = (
+                getattr(settings, "DOCUMENT_ANALYSIS_MODEL", None)
+                or os.getenv("DOCUMENT_ANALYSIS_MODEL")
+                or "gpt-4o"
+            )
+
+            payload = {
+                "model": model_name,
+                "input": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are an expert medical document reader for Precise Imaging. "
+                            "Your task is to extract the REFERRING or ORDERING provider's credentials "
+                            "from this prescription/referral (RX) document.\n\n"
+                            "INSTRUCTIONS:\n"
+                            "1. Identify the REFERRING/ORDERING provider — the doctor or practitioner "
+                            "who wrote this prescription or referral order.\n"
+                            "2. Extract their full name, name prefix (Dr., etc.), and name suffix (Jr., etc.).\n"
+                            "3. Extract ALL professional credentials and degrees listed after their name "
+                            "(e.g., MD, DO, NP, PA-C, PT, DPT, LCSW, DC, OD, PhD, etc.).\n"
+                            "4. Look for credentials in: the provider's signature line, printed name, "
+                            "letterhead, stamp, or NPI block.\n"
+                            "5. Return credentials exactly as written on the document.\n"
+                            "6. If no credentials are visible, return an empty array.\n"
+                            "7. Do NOT include facility names, NPI numbers, or addresses as credentials.\n"
+                            "8. Do NOT confuse the patient with the provider."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "input_text",
+                                "text": (
+                                    f"Extract the referring/ordering provider's credentials from this "
+                                    f"RX document (filename: {filename}). "
+                                    f"This document has {len(all_pages_content)} page(s)."
+                                ),
+                            }
+                        ] + all_pages_content,
+                    },
+                ],
+                "text": {
+                    "format": {
+                        "type": "json_schema",
+                        "name": "rx_provider_credentials",
+                        "strict": True,
+                        "schema": schema,
+                    }
+                },
+                "temperature": 0,
+                "max_output_tokens": 500,
+            }
+
+            async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
+                response = await client.post(
+                    "https://api.openai.com/v1/responses",
+                    headers=headers,
+                    json=payload,
+                )
+
+                if response.status_code != 200:
+                    logger.error(
+                        f"RX credential extraction API error {response.status_code}: {response.text}"
+                    )
+                    return result
+
+                result_data = response.json()
+
+                # Parse structured output (same extraction logic as _analyze_document_with_structured_output)
+                text_content = None
+                if isinstance(result_data.get("output_text"), str):
+                    text_content = result_data.get("output_text")
+
+                if text_content is None:
+                    output_items = result_data.get("output", []) or result_data.get("response", {}).get("output", [])
+                    if output_items:
+                        for item in output_items:
+                            if isinstance(item, dict) and isinstance(item.get("text"), str):
+                                text_content = item.get("text")
+                                break
+                            content_list = item.get("content", []) if isinstance(item, dict) else []
+                            for part in content_list:
+                                if part.get("type") in ("output_text", "text") and isinstance(part.get("text"), str):
+                                    text_content = part["text"]
+                                    break
+                            if text_content:
+                                break
+
+                if text_content is None:
+                    parsed = result_data.get("parsed") or result_data.get("result")
+                    if isinstance(parsed, dict):
+                        cred_data = parsed
+                    else:
+                        logger.error(f"RX credential extraction: unable to parse response for {filename}")
+                        return result
+                else:
+                    cred_data = json.loads(text_content)
+
+            # Normalize credentials for downstream screening
+            from app.services.credential_screening_service import normalize_credential
+
+            raw_credentials = cred_data.get("credentials", [])
+            normalized_credentials = [normalize_credential(c) for c in raw_credentials if c]
+
+            # Store in result under provider_credential_analysis
+            result["provider_credential_analysis"] = {
+                "provider_name": cred_data.get("provider_name") or "",
+                "nameprefix": cred_data.get("nameprefix") or "",
+                "namesuffix": cred_data.get("namesuffix") or "",
+                "raw_credentials": raw_credentials,
+                "normalized_credentials": normalized_credentials,
+            }
+
+            logger.info(
+                f"RX credential extraction for {filename}: "
+                f"provider={cred_data.get('provider_name')}, "
+                f"credentials={raw_credentials}, "
+                f"normalized={normalized_credentials}"
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error in RX credential extraction for {filename}: {e}", exc_info=True)
+            return result
+
     async def process_multiple_documents(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Process multiple documents and return structured results.

@@ -17,7 +17,13 @@ from datetime import datetime
 from celery.utils.log import get_task_logger
 from app.core.config import settings as app_settings_instance
 from app.services import frontapp_service
-from app.agents.agent_helpers import send_reply_to_front_direct, extract_patient_id_from_email_logic
+from app.agents.agent_helpers import (
+    send_reply_to_front_direct,
+    extract_patient_id_from_email_logic,
+    get_patient_and_study_info,
+    compile_study_participants,
+    _append_autoresponse_signature,
+)
 from app.mcp import call_mcp_tool
 from collections import defaultdict
 
@@ -32,6 +38,10 @@ TAG_PATIENT_DEMO = "Patient Demo"  # Tag for patient demographic documents
 RAD_LIEN_TAG = "Rad Lien"
 TECH_LIEN_TAG = "Tech Lien"
 # --- END: Tag Constants ---
+
+# --- BEGIN: Westfax Constants ---
+WESTFAX_SENDER_EMAIL = "westfaxff@westfax.com"
+# --- END: Westfax Constants ---
 
 # --- BEGIN: Test Mode Constants ---
 LIEN_TEST_UPLOAD_DIR = "/tmp/lien_test_uploads"
@@ -905,13 +915,105 @@ async def save_test_mode_response(
         }
 
 
+async def fetch_attorney_and_case_manager_from_participants(patient_id: str) -> Dict[str, Any]:
+    """
+    Fetches study participants for a patient and extracts the attorney email
+    and case manager notification preferences.
+
+    Args:
+        patient_id: The patient ID (e.g., "PRE123456")
+
+    Returns:
+        Dictionary with:
+            attorney_email: str or None
+            notify_case_manager: bool
+            case_manager_email: str or None
+    """
+    result = {
+        "attorney_email": None,
+        "notify_case_manager": False,
+        "case_manager_email": None
+    }
+
+    try:
+        # Get patient and study info
+        patient_study_info = await get_patient_and_study_info(patient_id)
+
+        study_result = patient_study_info.get("study_result", {})
+        if not study_result.get("success", False):
+            logger.warning(f"Failed to fetch study info for patient {patient_id}: {study_result.get('error', 'Unknown')}")
+            return result
+
+        # Extract studies list from the response
+        studies = []
+        study_data = study_result.get("data", {})
+        if isinstance(study_data, dict):
+            studies = study_data.get("studies", []) or study_data.get("result", [])
+        elif isinstance(study_data, list):
+            studies = study_data
+
+        if not studies:
+            logger.warning(f"No studies found for patient {patient_id}")
+            return result
+
+        # Compile participants across all studies
+        participants_result = await compile_study_participants(patient_id, studies)
+
+        if not participants_result.get("success") or not participants_result.get("participants"):
+            logger.warning(f"No participants found for patient {patient_id}")
+            return result
+
+        participants = participants_result["participants"]
+        logger.info(f"🔍 WESTFAX: Found {len(participants)} participants for patient {patient_id}")
+
+        # Log raw participant data for debugging new fields
+        for p in participants:
+            logger.info(f"🔍 WESTFAX PARTICIPANT: role={p.get('role')}, email={p.get('email')}, "
+                        f"notifyCaseManager={p.get('notifyCaseManager', 'N/A')}, "
+                        f"caseManagerEmail={p.get('caseManagerEmail', 'N/A')}")
+
+        # Find attorney participant
+        for participant in participants:
+            role = (participant.get("role") or "").lower()
+            if "attorney" in role and participant.get("email"):
+                result["attorney_email"] = participant["email"]
+                logger.info(f"✅ WESTFAX: Found attorney email: {result['attorney_email']} (role: {role})")
+
+                # Check for case manager fields on the participant
+                if participant.get("notifyCaseManager"):
+                    result["notify_case_manager"] = True
+                    result["case_manager_email"] = participant.get("caseManagerEmail")
+                break
+
+        # Also check at the study/response level for case manager fields
+        # (in case Malhar added them at the study level rather than participant level)
+        if result["attorney_email"] and not result["notify_case_manager"]:
+            for study in studies:
+                if study.get("notifyCaseManager"):
+                    result["notify_case_manager"] = True
+                    result["case_manager_email"] = study.get("caseManagerEmail")
+                    logger.info(f"✅ WESTFAX: Found case manager info at study level: "
+                                f"notify={result['notify_case_manager']}, email={result['case_manager_email']}")
+                    break
+
+        if not result["attorney_email"]:
+            logger.warning(f"⚠️ WESTFAX: No attorney found in participants for patient {patient_id}")
+
+    except Exception as e:
+        logger.error(f"Error fetching attorney/case manager for patient {patient_id}: {e}", exc_info=True)
+
+    return result
+
+
 async def send_or_save_response(
     conversation_id: str,
     response_text: str,
     tags_to_add: Optional[List[str]] = None,
     test_mode: bool = False,
     lien_type: str = None,
-    signature_type: str = None
+    signature_type: str = None,
+    to_recipients: Optional[List[str]] = None,
+    cc_recipients: Optional[List[str]] = None
 ) -> None:
     """
     Either sends the response via Front API or saves to file based on test_mode.
@@ -923,9 +1025,11 @@ async def send_or_save_response(
         test_mode: If True, save to file instead of sending
         lien_type: "Rad Lien" or "Tech Lien" (for test mode metadata)
         signature_type: "ASL" or "PSL" (for test mode metadata)
+        to_recipients: Optional explicit recipient list (overrides default reply-all)
+        cc_recipients: Optional CC recipient list (used with to_recipients)
     """
     if test_mode:
-        # Test mode: save to file
+        # Test mode: save to file (include recipient override info in metadata)
         await save_test_mode_response(
             conversation_id=conversation_id,
             response_text=response_text,
@@ -933,8 +1037,35 @@ async def send_or_save_response(
             lien_type=lien_type,
             signature_type=signature_type
         )
+        if to_recipients:
+            logger.info(f"🧪 TEST MODE: Would send to {to_recipients} (cc: {cc_recipients}) instead of default reply-all")
+    elif to_recipients:
+        # Directed reply mode: send to explicit recipients
+        logger.info(f"📧 Sending directed reply for {conversation_id} to {to_recipients} (cc: {cc_recipients})")
+        final_reply_text = _append_autoresponse_signature(response_text)
+
+        reply_sent = await asyncio.to_thread(
+            frontapp_service.send_conversation_reply_to_recipients,
+            conversation_id,
+            final_reply_text,
+            to_recipients,
+            cc_recipients
+        )
+
+        if not reply_sent:
+            logger.error(f"Failed to send directed reply for conversation {conversation_id}")
+            return
+
+        # Add tags (same as send_reply_to_front_direct)
+        if tags_to_add is None:
+            tags_to_add = []
+        else:
+            tags_to_add = list(tags_to_add)
+        if "AI handled" not in tags_to_add:
+            tags_to_add.append("AI handled")
+        await asyncio.to_thread(frontapp_service.add_conversation_tags, conversation_id, tags_to_add)
     else:
-        # Normal mode: send via Front API
+        # Normal mode: send via Front API (reply-all)
         await send_reply_to_front_direct(
             conversation_id=conversation_id,
             reply_text=response_text,
@@ -986,6 +1117,14 @@ async def handle_lien_request(
     logger.info(f"   Test Mode: {test_mode}")
     logger.info(f"   Document Analysis Results: {len(document_analysis_results) if document_analysis_results else 0} document(s)")
     logger.info(f"═══════════════════════════════════════════════════════════════════════════════")
+
+    # Detect Westfax sender - liens from Westfax should reply to the attorney, not back to Westfax
+    is_westfax_sender = (
+        email_obj.sender
+        and email_obj.sender.lower().strip() == WESTFAX_SENDER_EMAIL
+    )
+    if is_westfax_sender:
+        logger.info(f"📠 WESTFAX DETECTED: Sender is {email_obj.sender} - will look up attorney for reply")
 
     # Step 1: Analyze email content for conditional language
     # DISABLED: Email conditional language check disabled per user request
@@ -1944,6 +2083,30 @@ async def handle_lien_request(
 
             reply_body = header + "<hr>" + consolidated_body
 
+            # For Westfax liens, look up attorney for each patient and collect recipients
+            westfax_to = None
+            westfax_cc = None
+            if is_westfax_sender:
+                logger.info(f"📠 WESTFAX MULTI-PATIENT: Looking up attorneys for {len(unique_patient_ids)} patients")
+                all_attorney_emails = set()
+                all_cm_emails = set()
+                for pid in unique_patient_ids:
+                    atty_info = await fetch_attorney_and_case_manager_from_participants(pid)
+                    if atty_info["attorney_email"]:
+                        all_attorney_emails.add(atty_info["attorney_email"])
+                    if atty_info["notify_case_manager"] and atty_info["case_manager_email"]:
+                        all_cm_emails.add(atty_info["case_manager_email"])
+
+                if all_attorney_emails:
+                    westfax_to = list(all_attorney_emails)
+                    westfax_cc = list(all_cm_emails) if all_cm_emails else None
+                    logger.info(f"📠 WESTFAX MULTI-PATIENT: Directing reply to attorneys: {westfax_to}, cc: {westfax_cc}")
+                else:
+                    logger.warning(f"⚠️ WESTFAX MULTI-PATIENT: No attorney emails found for any patient. Tagging for human review.")
+                    _tag_for_human_review(front_conversation_id)
+                    comment_text = "Westfax lien processed and uploaded successfully, but no attorney email was found in study participants. Please manually notify the appropriate attorney."
+                    frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
+
             # Send the consolidated response
             await send_or_save_response(
                 conversation_id=front_conversation_id,
@@ -1951,7 +2114,9 @@ async def handle_lien_request(
                 tags_to_add=None,
                 test_mode=test_mode,
                 lien_type=lien_type,
-                signature_type=signature_type
+                signature_type=signature_type,
+                to_recipients=westfax_to,
+                cc_recipients=westfax_cc
             )
 
             logger.info(f"Successfully processed {lien_type} for {len(unique_patient_ids)} patients in conversation {front_conversation_id}")
@@ -2051,6 +2216,23 @@ async def handle_lien_request(
         if has_patient_demo:
             reply_body += "<br/><p><em>Note: Patient demographic documents have also been uploaded.</em></p>"
 
+        # For Westfax liens, look up attorney to direct the reply
+        westfax_to = None
+        westfax_cc = None
+        if is_westfax_sender:
+            logger.info(f"📠 WESTFAX SINGLE-PATIENT: Looking up attorney for patient {patient_id}")
+            atty_info = await fetch_attorney_and_case_manager_from_participants(patient_id)
+            if atty_info["attorney_email"]:
+                westfax_to = [atty_info["attorney_email"]]
+                if atty_info["notify_case_manager"] and atty_info["case_manager_email"]:
+                    westfax_cc = [atty_info["case_manager_email"]]
+                logger.info(f"📠 WESTFAX SINGLE-PATIENT: Directing reply to attorney: {westfax_to}, cc: {westfax_cc}")
+            else:
+                logger.warning(f"⚠️ WESTFAX SINGLE-PATIENT: No attorney email found for patient {patient_id}. Tagging for human review.")
+                _tag_for_human_review(front_conversation_id)
+                comment_text = f"Westfax lien processed and uploaded successfully for patient {patient_id}, but no attorney email was found in study participants. Please manually notify the appropriate attorney."
+                frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
+
         # Send the response
         await send_or_save_response(
             conversation_id=front_conversation_id,
@@ -2058,7 +2240,9 @@ async def handle_lien_request(
             tags_to_add=None,
             test_mode=test_mode,
             lien_type=lien_type,
-            signature_type=signature_type
+            signature_type=signature_type,
+            to_recipients=westfax_to,
+            cc_recipients=westfax_cc
         )
 
         logger.info(f"Successfully processed {lien_type} for patient {patient_id} in conversation {front_conversation_id}")
