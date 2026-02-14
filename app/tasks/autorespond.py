@@ -28,6 +28,8 @@ from app.agents.case_updates_agent import handle_case_update_request
 from app.agents.missing_lien_request_agent import handle_missing_lien_request
 # Unified lien agent (replaces separate ASL/PSL agents, but keeps backward compatibility wrappers)
 from app.agents.lien_agent import handle_asl_lien_request, handle_psl_lien_request
+# Original recipients registry for reply-all bug fix
+from app.agents.agent_helpers import register_original_recipients, clear_original_recipients
 from app.agents.agent_helpers import extract_patient_id_from_email_logic
 
 logger = get_task_logger(__name__)
@@ -120,6 +122,7 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
         logger.error(f"Invalid UUID format for email_id in perform_autorespond_task: {email_id}")
         return {"status": "error", "message": "Invalid email ID format"}
 
+    front_conversation_id = None
     db = SessionLocal()
     try:
         email_obj = email_crud_sync.get(db, id=email_uuid)
@@ -140,6 +143,11 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
         # Set up log context for capturing logs to database
         log_ctx = set_conversation_context(front_conversation_id, email_id)
         add_delimiter_to_context("perform_autorespond_task", email_id)
+
+        # Register original recipients from the triggering email so all reply
+        # paths use the correct recipient list (fixes reply-all CC drop bug)
+        if email_obj.recipients:
+            register_original_recipients(front_conversation_id, email_obj.recipients)
 
         # Log sandbox/production mode status for all agent types upfront
         async def _fetch_all_test_modes():
@@ -927,6 +935,9 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             db.rollback()
         return {"status": "error", "message": str(e)}
     finally:
+        # Clean up original recipients registry
+        if front_conversation_id:
+            clear_original_recipients(front_conversation_id)
         # Flush captured logs to database
         ctx = clear_conversation_context()
         if ctx:

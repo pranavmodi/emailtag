@@ -2102,10 +2102,7 @@ async def handle_lien_request(
                     westfax_cc = list(all_cm_emails) if all_cm_emails else None
                     logger.info(f"📠 WESTFAX MULTI-PATIENT: Directing reply to attorneys: {westfax_to}, cc: {westfax_cc}")
                 else:
-                    logger.warning(f"⚠️ WESTFAX MULTI-PATIENT: No attorney emails found for any patient. Tagging for human review.")
-                    _tag_for_human_review(front_conversation_id)
-                    comment_text = "Westfax lien processed and uploaded successfully, but no attorney email was found in study participants. Please manually notify the appropriate attorney."
-                    frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
+                    logger.info(f"📠 WESTFAX MULTI-PATIENT: No attorney emails found for any patient. Lien uploaded successfully, no notification will be sent.")
 
             # Send the consolidated response
             await send_or_save_response(
@@ -2228,10 +2225,7 @@ async def handle_lien_request(
                     westfax_cc = [atty_info["case_manager_email"]]
                 logger.info(f"📠 WESTFAX SINGLE-PATIENT: Directing reply to attorney: {westfax_to}, cc: {westfax_cc}")
             else:
-                logger.warning(f"⚠️ WESTFAX SINGLE-PATIENT: No attorney email found for patient {patient_id}. Tagging for human review.")
-                _tag_for_human_review(front_conversation_id)
-                comment_text = f"Westfax lien processed and uploaded successfully for patient {patient_id}, but no attorney email was found in study participants. Please manually notify the appropriate attorney."
-                frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
+                logger.info(f"📠 WESTFAX SINGLE-PATIENT: No attorney email found for patient {patient_id}. Lien uploaded successfully, no notification will be sent.")
 
         # Send the response
         await send_or_save_response(

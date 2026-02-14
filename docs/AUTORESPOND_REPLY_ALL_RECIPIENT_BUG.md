@@ -1,8 +1,10 @@
 # Autorespond Reply-All Recipient Bug
 
+## Status: FIXED
+
 ## Summary
 
-The `_build_reply_all_recipients()` function in `frontapp_service.py` builds the recipient list from the **latest message** in a conversation rather than the **first inbound message** (or all messages). This causes CC recipients from the original email to be dropped from autorespond replies.
+The `_build_reply_all_recipients()` function in `frontapp_service.py` builds the recipient list from the **latest message** in a conversation rather than the **first inbound message** (or all messages). This caused CC recipients from the original email to be dropped from autorespond replies.
 
 ## Affected Code
 
@@ -42,8 +44,29 @@ Autorespond replies should go to **all external participants** from the conversa
 
 After filtering out internal domains, the reply should include all remaining external addresses in `to` and/or `cc`.
 
+## Fix
+
+The system now uses `email_obj.recipients` — the recipients stored at webhook time from the **triggering message** — instead of fetching the latest message from the Front API.
+
+### How it works
+
+1. **`autorespond.py`**: When autorespond processing starts, the original recipients from the triggering email (`email_obj.recipients`) are registered in a module-level registry keyed by conversation ID.
+2. **`agent_helpers.py`**: All reply helper functions (`send_reply_to_front_direct`, `send_reply_to_front_with_attachment`, and the `@function_tool send_reply_to_front`) look up the registry and pass the original recipients to the Front API service.
+3. **`frontapp_service.py`**: `send_conversation_reply()` and `send_conversation_reply_with_attachment()` accept an optional `original_recipients` parameter. When provided, they filter those (removing internal domains) instead of calling `_build_reply_all_recipients()`.
+4. **Cleanup**: The registry entry is cleared in the `finally` block of `perform_autorespond_task()`.
+
+`_build_reply_all_recipients()` is preserved as a fallback for any edge case where original recipients are not available.
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `app/services/frontapp_service.py` | Extracted `_filter_external_recipients()`, added `original_recipients` param to `send_conversation_reply()` and `send_conversation_reply_with_attachment()` |
+| `app/agents/agent_helpers.py` | Added `_original_recipients_registry` with `register/get/clear` functions; all three reply functions now look up and pass original recipients |
+| `app/tasks/autorespond.py` | Registers `email_obj.recipients` before agents run; clears registry in `finally` block |
+
 ## Scope
 
-- `send_conversation_reply()` — affected (uses `_build_reply_all_recipients`)
-- `send_conversation_reply_with_attachment()` — affected (same)
+- `send_conversation_reply()` — fixed (uses original recipients when available)
+- `send_conversation_reply_with_attachment()` — fixed (same)
 - `send_conversation_reply_to_recipients()` — not affected (Westfax-only, uses explicit recipient override)

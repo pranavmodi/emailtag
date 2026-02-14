@@ -56,6 +56,31 @@ from app.models.processing_trace import StepTypes, TraceSteps
 logger = get_task_logger(__name__)
 
 
+# --- Original Recipients Registry ---
+# Maps conversation_id -> original recipients from the triggering email.
+# Set by perform_autorespond_task() before agents run, so that all reply
+# paths (including the @function_tool used by LLM agents) can access the
+# correct recipient list from the triggering message instead of relying on
+# the latest message in the conversation (which may differ).
+_original_recipients_registry: Dict[str, List[str]] = {}
+
+
+def register_original_recipients(conversation_id: str, recipients: List[str]):
+    """Register the original recipients from the triggering email for a conversation."""
+    _original_recipients_registry[conversation_id] = recipients
+    logger.info(f"Registered {len(recipients)} original recipient(s) for {conversation_id}: {recipients}")
+
+
+def get_original_recipients(conversation_id: str) -> Optional[List[str]]:
+    """Get the original recipients registered for a conversation, or None if not set."""
+    return _original_recipients_registry.get(conversation_id)
+
+
+def clear_original_recipients(conversation_id: str):
+    """Clean up the registry entry for a conversation after processing is complete."""
+    _original_recipients_registry.pop(conversation_id, None)
+
+
 def _append_autoresponse_signature(reply_text: str) -> str:
     """Append the configured autoresponse signature if one is set."""
     signature = app_settings_instance.AUTORESPONSE_SIGNATURE
@@ -354,12 +379,16 @@ async def send_reply_to_front_with_attachment(
     logger.info(f"Helper 'send_reply_to_front_with_attachment' called for conv_id {conversation_id}.")
     try:
         final_reply_text = _append_autoresponse_signature(reply_text)
-        
+
+        # Look up original recipients from registry (set by autorespond task)
+        original_recipients = get_original_recipients(conversation_id)
+
         reply_sent_successfully = await asyncio.to_thread(
             frontapp_service.send_conversation_reply_with_attachment,
             conversation_id,
             final_reply_text,
-            attachment_path
+            attachment_path,
+            original_recipients
         )
         if not reply_sent_successfully:
             return {"status": "error", "message": "Front API failed to send reply with attachment."}
@@ -401,11 +430,15 @@ async def send_reply_to_front_direct(
     logger.info(f"Helper 'send_reply_to_front_direct' called for conv_id {conversation_id}.")
     try:
         final_reply_text = _append_autoresponse_signature(reply_text)
-        
+
+        # Look up original recipients from registry (set by autorespond task)
+        original_recipients = get_original_recipients(conversation_id)
+
         reply_sent_successfully = await asyncio.to_thread(
             frontapp_service.send_conversation_reply,
             conversation_id,
-            final_reply_text
+            final_reply_text,
+            original_recipients
         )
         if not reply_sent_successfully:
             return {"status": "error", "message": "Front API failed to send reply."}
@@ -1418,11 +1451,15 @@ async def send_reply_to_front(
     logger.info(f"Tool 'send_reply_to_front' called for conv_id {conversation_id}.")
     try:
         final_reply_text = _append_autoresponse_signature(reply_text)
-        
+
+        # Look up original recipients from registry (set by autorespond task)
+        original_recipients = get_original_recipients(conversation_id)
+
         reply_sent_successfully = await asyncio.to_thread(
             frontapp_service.send_conversation_reply,
             conversation_id,
-            final_reply_text
+            final_reply_text,
+            original_recipients
         )
         if not reply_sent_successfully:
             result = {"status": "error", "message": "Front API failed to send reply."}
@@ -1526,7 +1563,9 @@ async def compile_study_participants(patient_id: str, studies: List[Dict[str, An
                         "phone": str,
                         "accession_number": str,
                         "study_id": str,
-                        "domain": str
+                        "domain": str,
+                        "notifyCaseManager": bool,
+                        "caseManagerEmail": str
                     },
                     ...
                 ],
@@ -1586,7 +1625,10 @@ async def compile_study_participants(patient_id: str, studies: List[Dict[str, An
                         "phone": participant.get("businessPhoneNumber") or "",
                         "accession_number": accession_number,
                         "study_id": study_id,
-                        "domain": email.split("@")[1].lower() if "@" in email else ""
+                        "domain": email.split("@")[1].lower() if "@" in email else "",
+                        # Westfax attorney notification fields (from RadFlow API)
+                        "notifyCaseManager": participant.get("notifyCaseManager", False),
+                        "caseManagerEmail": participant.get("caseManagerEmail") or ""
                     }
 
                     all_participants.append(participant_data)

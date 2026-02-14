@@ -1223,10 +1223,41 @@ def _plain_text_to_html(plain_text: str) -> str:
     return "".join(html_paragraphs)
 
 
+def _filter_external_recipients(recipients: List[str]) -> List[str]:
+    """
+    Filter a list of email addresses, removing internal domains and excluded emails.
+    Returns only external recipients.
+    """
+    internal_domains = ["@mediflow360.com", "@mediflow.com", "@preciseimaging.com", "@precisemri.com", "@radflow360.com"]
+    excluded_emails = ["holisticreadsai@gmail.com"]
+
+    logger.info(f"Recipients before filtering: {recipients}")
+
+    external_recipients = set()
+    for recipient in recipients:
+        recipient_lower = recipient.lower()
+        is_internal = any(domain in recipient_lower for domain in internal_domains)
+        is_excluded = recipient_lower in excluded_emails
+        if is_internal:
+            logger.info(f"  Removing internal recipient: {recipient}")
+        elif is_excluded:
+            logger.info(f"  Removing excluded recipient: {recipient}")
+        else:
+            logger.info(f"  Keeping external recipient: {recipient}")
+            external_recipients.add(recipient)
+
+    logger.info(f"Final recipients after filtering: {external_recipients}")
+    return list(external_recipients)
+
+
 def _build_reply_all_recipients(conversation_id: str) -> List[str]:
     """
     Build a reply-all recipient list (from/to/cc of latest message), excluding our alias.
     Falls back to the conversation recipient if nothing else is available.
+
+    NOTE: This is the FALLBACK path. When original_recipients from the triggering email
+    are available, those should be used instead (via _filter_external_recipients) to avoid
+    the bug where CC recipients are lost when the latest message differs from the trigger.
     """
     recipients: set[str] = set()
     alias_handle: Optional[str] = None
@@ -1273,37 +1304,16 @@ def _build_reply_all_recipients(conversation_id: str) -> List[str]:
     except Exception as e:
         logger.warning(f"Could not build reply-all recipients for {conversation_id}: {e}")
 
-    # Remove internal domain recipients (system emails) from the outbound list
-    # Use internal domains instead of alias to avoid misconfiguration issues
-    internal_domains = ["@mediflow360.com", "@mediflow.com", "@preciseimaging.com", "@precisemri.com", "@radflow360.com"]
-    # Specific email addresses that should never receive autoresponds
-    excluded_emails = ["holisticreadsai@gmail.com"]
-
-    logger.info(f"Recipients before filtering: {recipients}")
-
-    # Filter out internal recipients and excluded emails
-    external_recipients = set()
-    for recipient in recipients:
-        recipient_lower = recipient.lower()
-        is_internal = any(domain in recipient_lower for domain in internal_domains)
-        is_excluded = recipient_lower in excluded_emails
-        if is_internal:
-            logger.info(f"  Removing internal recipient: {recipient}")
-        elif is_excluded:
-            logger.info(f"  Removing excluded recipient: {recipient}")
-        else:
-            logger.info(f"  Keeping external recipient: {recipient}")
-            external_recipients.add(recipient)
+    filtered = _filter_external_recipients(list(recipients))
 
     # If no external recipients found, fall back to alias (backward compatibility)
-    if not external_recipients and alias_handle:
+    if not filtered and alias_handle:
         logger.info(f"No external recipients found, adding fallback: {alias_handle}")
-        external_recipients.add(alias_handle)
+        filtered.append(alias_handle)
 
-    logger.info(f"Final recipients after filtering: {external_recipients}")
-    return list(external_recipients)
+    return filtered
 
-def send_conversation_reply_with_attachment(conversation_id: str, text: str, attachment_path: str) -> bool:
+def send_conversation_reply_with_attachment(conversation_id: str, text: str, attachment_path: str, original_recipients: Optional[List[str]] = None) -> bool:
     """Send a reply to a conversation in Front with an attachment."""
     if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL or not settings.FRONT_CHANNEL_ID or not settings.FRONT_BOT_TEAMMATE_ID:
         logger.error("Missing required Front configuration for sending reply with attachment")
@@ -1315,7 +1325,13 @@ def send_conversation_reply_with_attachment(conversation_id: str, text: str, att
 
     # Get conversation details to extract recipients
     try:
-        recipients = _build_reply_all_recipients(conversation_id)
+        if original_recipients:
+            logger.info(f"Using original recipients from triggering email for {conversation_id}: {original_recipients}")
+            recipients = _filter_external_recipients(original_recipients)
+        else:
+            logger.info(f"No original recipients provided, falling back to latest message lookup for {conversation_id}")
+            recipients = _build_reply_all_recipients(conversation_id)
+
         if not recipients:
             logger.error(f"No recipients resolved for conversation {conversation_id}")
             return False
@@ -1393,7 +1409,7 @@ def send_conversation_reply_with_attachment(conversation_id: str, text: str, att
                 files['attachments'][1].close()
 
 
-def send_conversation_reply(conversation_id: str, text: str) -> bool:
+def send_conversation_reply(conversation_id: str, text: str, original_recipients: Optional[List[str]] = None) -> bool:
     """Send a reply to a conversation in Front as a specific teammate."""
     if not settings.FRONT_AUTH_TOKEN or not settings.FRONT_API_BASE_URL or not settings.FRONT_CHANNEL_ID or not settings.FRONT_BOT_TEAMMATE_ID:
         logger.error("Missing required Front configuration for sending reply (FRONT_AUTH_TOKEN, FRONT_API_BASE_URL, FRONT_CHANNEL_ID, FRONT_BOT_TEAMMATE_ID)")
@@ -1401,7 +1417,13 @@ def send_conversation_reply(conversation_id: str, text: str) -> bool:
 
     # Get conversation details to extract recipients
     try:
-        recipients = _build_reply_all_recipients(conversation_id)
+        if original_recipients:
+            logger.info(f"Using original recipients from triggering email for {conversation_id}: {original_recipients}")
+            recipients = _filter_external_recipients(original_recipients)
+        else:
+            logger.info(f"No original recipients provided, falling back to latest message lookup for {conversation_id}")
+            recipients = _build_reply_all_recipients(conversation_id)
+
         if not recipients:
             logger.error(f"No recipients resolved for conversation {conversation_id}")
             return False
