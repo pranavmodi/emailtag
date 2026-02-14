@@ -1754,4 +1754,47 @@ Test ID: {UNIQUE_TEST_ID}"""
         ],
         "expected_tags": ["RX", "credential review"]
     },
+
+    # --- Reply-All Recipient Validation Scenario ---
+    "94": {
+        "description": "Reply-All CC Recipients - Bill/balance request with CC recipients to verify autorespond is sent to all original recipients (not just sender)",
+        "subject": "Bill inquiry for patient Maria Torres",
+        "body_html": (
+            "<p>Hello,</p>"
+            "<p>We are writing to request the current balance and any outstanding bills for our client "
+            "Maria Torres (DOI: 03/15/2024). Please send all statements to our office.</p>"
+            "<p>Thank you,</p>"
+            "<p>Jessica Equihua<br>Gonzalez Law Group</p>"
+        ),
+        "cc_recipients": [
+            "pranav.modi@gmail.com",
+            "modipranav@yahoo.com"
+        ],
+        "expected_tags": ["Bill or balance Request"],
+        "expected_autorespond_recipients": [
+            "pranav.modi@gmail.com",
+            "modipranav@yahoo.com"
+        ]
+    },
+
+    "95": {
+        "description": "Reply-All CC Recipients - Apt status req with CC recipients to verify autorespond includes all original recipients",
+        "subject": "Following up on imaging status for Edy Posas-Valdes",
+        "body_html": (
+            "<p>Hello,</p>"
+            "<p>I am following up to see if our client got their imaging done.</p>"
+            "<p>Edy Posas-Valdes DOL: 04/07/2025</p>"
+            "<p>Thank you,</p>"
+            "<p>Jessica Equihua<br>Gonzalez Law Group</p>"
+        ),
+        "cc_recipients": [
+            "pranav.modi@gmail.com",
+            "modipranav@yahoo.com"
+        ],
+        "expected_tags": ["Apt status req"],
+        "expected_autorespond_recipients": [
+            "pranav.modi@gmail.com",
+            "modipranav@yahoo.com"
+        ]
+    },
 }

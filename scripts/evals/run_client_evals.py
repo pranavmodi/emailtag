@@ -20,9 +20,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 
 # Import test utilities
 from test_utils import (
-    send_smtp_email, 
-    find_front_conversation, 
-    get_front_conversation_tags, 
+    send_smtp_email,
+    find_front_conversation,
+    find_front_conversation_by_subject,
+    get_front_conversation_tags,
+    get_front_autorespond_recipients,
     set_verbose_mode,
     check_front_api_config
 )
@@ -717,6 +719,52 @@ def validate_tags_for_scenario(result: Dict[str, Any], verbose: bool = False) ->
     return result
 
 
+def validate_autorespond_recipients(result: Dict[str, Any], scenario_details: Dict[str, Any], verbose: bool = False) -> Dict[str, Any]:
+    """
+    Validate that the autorespond message was sent to the expected recipients.
+    Only runs for scenarios that define 'expected_autorespond_recipients'.
+    Searches for the conversation in Front by subject, then checks the outbound message recipients.
+    """
+    expected_recipients = scenario_details.get("expected_autorespond_recipients")
+    if not expected_recipients:
+        return result  # No recipient validation needed for this scenario
+
+    scenario_key = result["scenario_key"]
+    subject = scenario_details.get("subject", "")
+
+    # Find the conversation in Front by subject
+    conversation_id = find_front_conversation_by_subject(subject)
+    if not conversation_id:
+        print(f"  Scenario {scenario_key}: Could not find conversation for recipient validation.")
+        result["recipient_status"] = "SKIPPED (conversation not found)"
+        return result
+
+    # Get the autorespond message recipients
+    actual_recipients = get_front_autorespond_recipients(conversation_id)
+    if actual_recipients is None:
+        print(f"  Scenario {scenario_key}: No autorespond message found for recipient validation.")
+        result["recipient_status"] = "FAIL (no autorespond sent)"
+        return result
+
+    # Compare expected vs actual (case-insensitive)
+    expected_set = {r.lower() for r in expected_recipients}
+    actual_set = {r.lower() for r in actual_recipients}
+
+    missing = expected_set - actual_set
+    result["expected_autorespond_recipients"] = sorted(expected_set)
+    result["actual_autorespond_recipients"] = sorted(actual_set)
+    result["missing_recipients"] = sorted(missing)
+
+    if missing:
+        print(f"  Scenario {scenario_key}: RECIPIENT FAIL - missing: {sorted(missing)}")
+        result["recipient_status"] = "FAIL"
+    else:
+        print(f"  Scenario {scenario_key}: RECIPIENT PASS - all expected recipients received autorespond")
+        result["recipient_status"] = "PASS"
+
+    return result
+
+
 def print_test_summary(results: List[Dict[str, Any]]) -> None:
     """Print a summary of test results."""
     print("\n" + "=" * 80)
@@ -729,10 +777,17 @@ def print_test_summary(results: List[Dict[str, Any]]) -> None:
     email_failed_count = 0
     sent_only_count = 0
 
+    recipient_pass = 0
+    recipient_fail = 0
+
     for res in results:
         status = res['status']
-        print(f"Client Scenario {res['scenario_key']} ({res['description']}): {status}")
-        
+        recipient_status = res.get('recipient_status')
+        status_display = status
+        if recipient_status:
+            status_display += f" | Recipients: {recipient_status}"
+        print(f"Client Scenario {res['scenario_key']} ({res['description']}): {status_display}")
+
         if status == "PASS":
             passed_count += 1
         elif status == "SKIPPED (Front API config missing)":
@@ -749,7 +804,16 @@ def print_test_summary(results: List[Dict[str, Any]]) -> None:
                 print(f"  Missing Expected: {res['missing_tags']}")
             if "extra_tags" in res and res["extra_tags"]:
                 print(f"  Unexpected Extra: {res['extra_tags']}")
-    
+
+        # Recipient validation details
+        if recipient_status == "FAIL":
+            recipient_fail += 1
+            print(f"  Expected Recipients: {res.get('expected_autorespond_recipients')}")
+            print(f"  Actual Recipients:   {res.get('actual_autorespond_recipients')}")
+            print(f"  Missing Recipients:  {res.get('missing_recipients')}")
+        elif recipient_status == "PASS":
+            recipient_pass += 1
+
     print(f"\nTotal Client Scenarios Run: {len(results)}")
     print(f"Passed: {passed_count}")
     print(f"Failed (Tagging): {failed_count}")
@@ -758,7 +822,9 @@ def print_test_summary(results: List[Dict[str, Any]]) -> None:
         print(f"Sent (validation skipped): {sent_only_count}")
     if skipped_count > 0:
         print(f"Skipped (Front API config): {skipped_count}")
-    
+    if recipient_pass + recipient_fail > 0:
+        print(f"Recipient Validation: {recipient_pass} passed, {recipient_fail} failed")
+
     total_validated = passed_count + failed_count
     if total_validated > 0:
         success_rate = (passed_count / total_validated) * 100
@@ -916,6 +982,16 @@ async def main():
         for result in results:
             if result['status'] == 'EMAIL_SENT':
                 result['status'] = 'SENT_ONLY (validation skipped)'
+
+    # Validate autorespond recipients for scenarios that define expected_autorespond_recipients
+    if can_check_tags and not send_only:
+        recipient_scenarios = {k: v for k, v in scenarios_to_run.items() if v.get("expected_autorespond_recipients")}
+        if recipient_scenarios:
+            print(f"\nValidating autorespond recipients for {len(recipient_scenarios)} scenario(s)...")
+            for i, result in enumerate(results):
+                scenario = scenarios_to_run.get(result["scenario_key"])
+                if scenario and scenario.get("expected_autorespond_recipients"):
+                    results[i] = validate_autorespond_recipients(result, scenario, verbose)
 
     # Print summary
     print_test_summary(results)

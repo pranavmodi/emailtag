@@ -93,6 +93,13 @@ def send_smtp_email(scenario_details, choice_key, unique_id=None, in_reply_to=No
     msg['Subject'] = subject_with_id
     msg['From'] = SENDER_EMAIL
     msg['To'] = recipient_email
+    # Add CC recipients if specified in scenario (header only — not added to SMTP
+    # envelope, so only Front parses them; no actual delivery to CC addresses)
+    cc_recipients = scenario_details.get('cc_recipients', [])
+    if cc_recipients:
+        msg['Cc'] = ', '.join(cc_recipients)
+        if VERBOSE_MODE:
+            print(f"Added CC header recipients: {cc_recipients}")
     # Set threading headers so Front groups follow-up emails into the same conversation
     if in_reply_to:
         msg['In-Reply-To'] = in_reply_to
@@ -279,6 +286,42 @@ def find_front_conversation(unique_id: str, max_retries=5, delay_seconds=10) -> 
     return None
 
 
+def find_front_conversation_by_subject(subject: str, max_retries=5, delay_seconds=10) -> Optional[str]:
+    """
+    Search for a conversation in Front by matching the subject line.
+    Returns the conversation ID if found, otherwise None.
+    """
+    if not FRONT_API_BASE_URL or not FRONT_AUTH_TOKEN:
+        print("Error: FRONT_API_BASE_URL or FRONT_AUTH_TOKEN is not set.")
+        return None
+
+    conversations_url = f"{FRONT_API_BASE_URL}/conversations"
+    params = {'q[sort_by]': 'date', 'q[sort_order]': 'desc', 'limit': 50}
+    headers = {"Authorization": f"Bearer {FRONT_AUTH_TOKEN}", "Accept": "application/json"}
+
+    for attempt in range(max_retries):
+        if VERBOSE_MODE:
+            print(f"Searching for conversation with subject '{subject}' (attempt {attempt + 1}/{max_retries})...")
+        try:
+            resp = requests.get(conversations_url, headers=headers, params=params)
+            resp.raise_for_status()
+            for conv in resp.json().get("_results", []):
+                conv_subject = conv.get("subject", "")
+                conv_id = conv.get("id")
+                if conv_id and subject.lower() in conv_subject.lower():
+                    if VERBOSE_MODE:
+                        print(f"Found conversation {conv_id} matching subject.")
+                    return conv_id
+            if VERBOSE_MODE:
+                print(f"No match found. Retrying in {delay_seconds}s...")
+        except Exception as e:
+            print(f"Error searching for conversation by subject: {e}")
+        time.sleep(delay_seconds)
+
+    print(f"Could not find conversation with subject '{subject}' after {max_retries} retries.")
+    return None
+
+
 def get_front_conversation_tags(conversation_id: str) -> Optional[List[str]]:
     """
     Retrieves the tags for a given Front conversation ID by fetching the conversation object.
@@ -326,4 +369,59 @@ def get_front_conversation_tags(conversation_id: str) -> Optional[List[str]]:
 
 def check_front_api_config() -> bool:
     """Check if Front API configuration is available."""
-    return bool(FRONT_API_BASE_URL and FRONT_AUTH_TOKEN) 
+    return bool(FRONT_API_BASE_URL and FRONT_AUTH_TOKEN)
+
+
+def get_front_autorespond_recipients(conversation_id: str, max_retries: int = 8, delay_seconds: int = 15) -> Optional[List[str]]:
+    """
+    Find the outbound autorespond message in a Front conversation and return its recipients.
+    Retries with delay to wait for the autorespond to be sent.
+
+    Returns a list of recipient email addresses (to/cc from the outbound message),
+    or None if no outbound message is found or an error occurs.
+    """
+    if not FRONT_API_BASE_URL or not FRONT_AUTH_TOKEN:
+        print("Error: FRONT_API_BASE_URL or FRONT_AUTH_TOKEN is not set.")
+        return None
+
+    headers = {
+        "Authorization": f"Bearer {FRONT_AUTH_TOKEN}",
+        "Accept": "application/json",
+    }
+
+    for attempt in range(max_retries):
+        if VERBOSE_MODE:
+            print(f"Checking for autorespond message in {conversation_id} (attempt {attempt + 1}/{max_retries})...")
+        try:
+            url = f"{FRONT_API_BASE_URL}/conversations/{conversation_id}/messages"
+            resp = requests.get(url, headers=headers, timeout=30, verify=False)
+            resp.raise_for_status()
+            messages = resp.json().get("_results", [])
+
+            # Look for an outbound (non-inbound) message — that's the autorespond
+            for msg in messages:
+                is_outbound = msg.get("is_inbound") is False or msg.get("direction") == "outbound"
+                if is_outbound:
+                    # Collect all recipients from the outbound message
+                    recipients = []
+                    for rcpt in msg.get("recipients", []):
+                        handle = rcpt.get("handle", "")
+                        role = rcpt.get("role", "")
+                        # Skip the 'from' role (that's the sender/system)
+                        if role == "from":
+                            continue
+                        if handle and "@" in handle:
+                            recipients.append(handle.lower())
+                    if VERBOSE_MODE:
+                        print(f"Found outbound message with recipients: {recipients}")
+                    return recipients
+
+            if VERBOSE_MODE:
+                print(f"No outbound message found yet. Retrying in {delay_seconds}s...")
+        except Exception as e:
+            print(f"Error checking autorespond recipients for {conversation_id}: {e}")
+
+        time.sleep(delay_seconds)
+
+    print(f"No autorespond message found in {conversation_id} after {max_retries} retries.")
+    return None
