@@ -288,6 +288,10 @@ def _parse_document_processing_result(processing_result: Dict, attachment_url: s
 
             result_dict["enhanced_lien_processing"] = enhanced_clean
 
+        # Include provider credential analysis for RX documents
+        if "provider_credential_analysis" in processing_result:
+            result_dict["provider_credential_analysis"] = processing_result["provider_credential_analysis"]
+
         return result_dict
 
     except Exception as parse_error:

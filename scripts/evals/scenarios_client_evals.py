@@ -1591,5 +1591,167 @@ Test ID: {UNIQUE_TEST_ID}"""
                 "wait_for_user_input": True
             }
         ]
-    }
+    },
+
+    # ====================================================================
+    # RX CREDENTIAL SCREENING — Positive cases (allowed → no review tag)
+    # ====================================================================
+
+    "86": {
+        "description": "Credential Screening PASS - MD provider - Robert Chen M.D. orders MRI Lumbar Spine. Allowed credential, should NOT trigger credential review.",
+        "subject": "RX - Maria Lopez - MRI Lumbar Spine - Dr. Robert Chen",
+        "body_html": (
+            "<p>Hi,</p>"
+            "<p>Please find the attached referral for our patient Maria Lopez for an MRI of the Lumbar Spine.</p>"
+            "<p>Thank you,</p>"
+            "<p>Robert Chen, M.D.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "rx_eval_md_provider.pdf",
+                "filepath": "data/documents/credential_screening/rx_eval_md_provider.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["RX"]
+    },
+
+    "87": {
+        "description": "Credential Screening PASS - DO provider - James Wilson D.O. orders MRI Right Knee. Allowed credential, should NOT trigger credential review.",
+        "subject": "RX - Carlos Martinez - MRI Knee - Dr. James Wilson",
+        "body_html": (
+            "<p>Hello,</p>"
+            "<p>Attached is the prescription for Carlos Martinez for MRI Right Knee.</p>"
+            "<p>Regards,</p>"
+            "<p>James Wilson, D.O.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "rx_eval_do_provider.pdf",
+                "filepath": "data/documents/credential_screening/rx_eval_do_provider.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["RX"]
+    },
+
+    "88": {
+        "description": "Credential Screening PASS - NP provider - Emily Rodriguez NP, FNP-BC orders CT. Allowed credential (NP), should NOT trigger credential review.",
+        "subject": "RX - David Kim - CT Abdomen Pelvis - Emily Rodriguez NP",
+        "body_html": (
+            "<p>Hi Scheduling,</p>"
+            "<p>Please schedule a CT Abdomen and Pelvis with contrast for David Kim. RX attached.</p>"
+            "<p>Emily Rodriguez, NP, FNP-BC</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "rx_eval_np_provider.pdf",
+                "filepath": "data/documents/credential_screening/rx_eval_np_provider.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["RX"]
+    },
+
+    "89": {
+        "description": "Credential Screening PASS - PA-C provider - Michael Thompson PA-C orders X-ray. PA-C normalizes to PA (allowed), should NOT trigger credential review.",
+        "subject": "RX - Susan Wright - X-ray Shoulder - Michael Thompson PA",
+        "body_html": (
+            "<p>Hello,</p>"
+            "<p>Please see the attached referral for Susan Wright for X-ray Right Shoulder.</p>"
+            "<p>Michael Thompson, PA-C</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "rx_eval_pa_provider.pdf",
+                "filepath": "data/documents/credential_screening/rx_eval_pa_provider.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["RX"]
+    },
+
+    "90": {
+        "description": "Credential Screening PASS - DC provider - Daniel Brooks DC orders MRI Thoracic Spine. DC is allowed credential, should NOT trigger credential review.",
+        "subject": "RX - Jennifer Taylor - MRI Thoracic Spine - Dr. Daniel Brooks DC",
+        "body_html": (
+            "<p>Hi,</p>"
+            "<p>Please find the attached referral for Jennifer Taylor for MRI Thoracic Spine without contrast.</p>"
+            "<p>Daniel Brooks, DC</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "rx_eval_dc_provider.pdf",
+                "filepath": "data/documents/credential_screening/rx_eval_dc_provider.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["RX"]
+    },
+
+    # ====================================================================
+    # RX CREDENTIAL SCREENING — Negative cases (disallowed → credential review tag)
+    # ====================================================================
+
+    "91": {
+        "description": "Credential Screening FAIL - PT/DPT provider - Sarah Thompson PT, DPT orders MRI Cervical Spine. Physical therapist is disallowed, should trigger credential review.",
+        "subject": "RX - John Anderson - MRI Cervical Spine - Sarah Thompson PT",
+        "body_html": (
+            "<p>Hello,</p>"
+            "<p>Attached is the referral for my patient John Anderson for MRI Cervical Spine.</p>"
+            "<p>Sarah Thompson, PT, DPT</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "rx_eval_pt_provider.pdf",
+                "filepath": "data/documents/credential_screening/rx_eval_pt_provider.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["RX", "credential review"]
+    },
+
+    "92": {
+        "description": "Credential Screening FAIL - LCSW provider - Amanda Garcia LCSW orders MRI Brain. Licensed clinical social worker is disallowed, should trigger credential review.",
+        "subject": "RX - Patricia Brown - MRI Brain - Amanda Garcia LCSW",
+        "body_html": (
+            "<p>Hi,</p>"
+            "<p>Please schedule an MRI Brain for my patient Patricia Brown. Referral is attached.</p>"
+            "<p>Amanda Garcia, LCSW</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "rx_eval_lcsw_provider.pdf",
+                "filepath": "data/documents/credential_screening/rx_eval_lcsw_provider.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["RX", "credential review"]
+    },
+
+    "93": {
+        "description": "Credential Screening FAIL - OT provider - Lisa Patel OT orders MRI Left Wrist. Occupational therapist is disallowed, should trigger credential review.",
+        "subject": "RX - Robert Davis - MRI Wrist - Lisa Patel OT",
+        "body_html": (
+            "<p>Hello Precise Imaging,</p>"
+            "<p>I am referring Robert Davis for an MRI of the Left Wrist. Please see attached order.</p>"
+            "<p>Lisa Patel, OT, OTR/L</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "rx_eval_ot_provider.pdf",
+                "filepath": "data/documents/credential_screening/rx_eval_ot_provider.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["RX", "credential review"]
+    },
 }

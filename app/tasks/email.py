@@ -1082,7 +1082,7 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                             add_conversation_comment(front_conversation_id, comment)
                         except Exception as comment_err:
                             logger.error(f"Failed to add credential screening comment for {front_conversation_id}: {comment_err}")
-                    elif screening_result:
+                    elif screening_result and screening_result.get("allowed_found"):
                         logger.info(
                             f"RX credential screening passed for email {email_id}: "
                             f"allowed={screening_result.get('allowed_found', [])}"
@@ -1102,6 +1102,11 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                             add_conversation_comment(front_conversation_id, comment)
                         except Exception as comment_err:
                             logger.error(f"Failed to add credential screening comment for {front_conversation_id}: {comment_err}")
+                    elif screening_result:
+                        logger.info(
+                            f"RX credential screening: no credentials extracted for email {email_id} "
+                            f"(reason={screening_result.get('reason', 'unknown')})"
+                        )
 
                 except Exception as e:
                     logger.error(f"Error during RX credential screening for email {email_id}: {e}", exc_info=True)
