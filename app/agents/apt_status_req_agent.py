@@ -422,6 +422,12 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
         if patient_id != "N/A":
             text_log_table = await generate_text_log_table(patient_id)
 
+        # Generate billing status table
+        from app.helpers.billing_status_table import generate_billing_status_table
+        billing_status_table = ""
+        if patient_id != "N/A":
+            billing_status_table = await generate_billing_status_table(patient_id)
+
         # Prepare all placeholder variables for logging and formatting
         first_name = data.get("first_name", "N/A")
         last_name = data.get("last_name", "N/A")
@@ -446,7 +452,8 @@ async def _generate_response_from_template(scenario: str, data: Dict[str, Any]) 
             "appointment_table": table_html,  # NEW: Add table to placeholders
             "is_personal_injury_case": data.get("is_personal_injury_case", False),
             "call_log_table": call_log_table,
-            "text_log_table": text_log_table
+            "text_log_table": text_log_table,
+            "billing_status_table": billing_status_table
         }
 
         # Add all custom placeholders to placeholder_values

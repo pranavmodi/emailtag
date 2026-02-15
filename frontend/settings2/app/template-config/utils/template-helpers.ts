@@ -2,7 +2,7 @@
  * Helper functions for template configuration
  */
 
-import { TAG_OPTIONS, DEFAULT_TAG_SETTINGS, DUMMY_TABLE_DATA, DUMMY_LIEN_STATUS_TABLE, DUMMY_CALL_LOG_TABLE, DUMMY_TEXT_LOG_TABLE } from "../constants/template-config.constants";
+import { TAG_OPTIONS, DEFAULT_TAG_SETTINGS, DUMMY_TABLE_DATA, DUMMY_LIEN_STATUS_TABLE, DUMMY_CALL_LOG_TABLE, DUMMY_TEXT_LOG_TABLE, DUMMY_BILLING_STATUS_TABLE } from "../constants/template-config.constants";
 
 export const getTagLabel = (value: string) =>
   TAG_OPTIONS.find((option) => option.value === value)?.label ?? value;
@@ -93,6 +93,7 @@ export const getDummyPlaceholders = (): Record<string, string> => {
     "{lien_status_table}": DUMMY_LIEN_STATUS_TABLE,
     "{call_log_table}": DUMMY_CALL_LOG_TABLE,
     "{text_log_table}": DUMMY_TEXT_LOG_TABLE,
+    "{billing_status_table}": DUMMY_BILLING_STATUS_TABLE,
 
     // Lien-specific
     "{lien_type}": "Attorney Signed Lien (ASL)",

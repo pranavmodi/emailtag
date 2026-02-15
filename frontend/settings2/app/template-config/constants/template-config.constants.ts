@@ -201,6 +201,46 @@ export const DUMMY_TEXT_LOG_TABLE = `<table border="1" cellpadding="8" cellspaci
 </tbody>
 </table>`;
 
+// Dummy data for billing status table preview (6-column format with 3 billing scenarios)
+export const DUMMY_BILLING_STATUS_TABLE = `The patient's current bill balance is <b>$1,250.00</b>.<br/><br/><table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-family: Arial, sans-serif; margin: 10px 0; width: 100%;">
+<thead>
+<tr style="background-color: #f0f0f0; font-weight: bold;">
+<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Exam Description</th>
+<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Study Date</th>
+<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Exam Status</th>
+<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Images Available</th>
+<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Report Available</th>
+<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Billing Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="padding: 8px; border: 1px solid #ccc;">XRAY RIBS LT 2 VIEWS</td>
+<td style="padding: 8px; border: 1px solid #ccc;">11/18/2025</td>
+<td style="padding: 8px; border: 1px solid #ccc;">Signed</td>
+<td style="padding: 8px; border: 1px solid #ccc;">Yes</td>
+<td style="padding: 8px; border: 1px solid #ccc;">Yes</td>
+<td style="padding: 8px; border: 1px solid #ccc;">$375.00 - Billed on 12/01/2025</td>
+</tr>
+<tr>
+<td style="padding: 8px; border: 1px solid #ccc;">MRI KNEE W/O CONTRAST - RT</td>
+<td style="padding: 8px; border: 1px solid #ccc;">12/08/2025</td>
+<td style="padding: 8px; border: 1px solid #ccc;">Scheduled</td>
+<td style="padding: 8px; border: 1px solid #ccc;">No</td>
+<td style="padding: 8px; border: 1px solid #ccc;">No</td>
+<td style="padding: 8px; border: 1px solid #ccc;">Potential to be billed is $625.00</td>
+</tr>
+<tr>
+<td style="padding: 8px; border: 1px solid #ccc;">CT CHEST W/O CONTRAST</td>
+<td style="padding: 8px; border: 1px solid #ccc;">01/15/2026</td>
+<td style="padding: 8px; border: 1px solid #ccc;">Cancelled</td>
+<td style="padding: 8px; border: 1px solid #ccc;">No</td>
+<td style="padding: 8px; border: 1px solid #ccc;">No</td>
+<td style="padding: 8px; border: 1px solid #ccc;">Cancelled Study</td>
+</tr>
+</tbody>
+</table>`;
+
 // ============================================================================
 // APT STATUS REQ TEMPLATES
 // ============================================================================

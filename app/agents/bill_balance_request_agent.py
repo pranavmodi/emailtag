@@ -20,6 +20,7 @@ from celery.utils.log import get_task_logger
 from app.core.config import settings as app_settings_instance
 from app.services import frontapp_service
 from app.agents.agent_helpers import send_reply_to_front_direct, extract_patient_id_from_email_logic
+from app.helpers.billing_status_table import generate_billing_status_table
 # Import shared templates
 from app.agents.templates.shared_templates import (
     TEMPLATE_REQUEST_PATIENT_ID,
@@ -228,73 +229,6 @@ def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
     
     html_parts.append('</tbody>')
     html_parts.append('</table>')
-    
-    return ''.join(html_parts)
-
-def _create_billing_status_table(bill_balance: float, bill_status: Dict[str, Any], study_details: List[Dict[str, Any]]) -> str:
-    """Creates an HTML table for billing status with detailed study information."""
-
-    # Create the billing status header
-    if bill_balance is not None and bill_balance > 0:
-        billing_header = f"The patient's current bill balance is <b>${bill_balance:,.2f}</b>."
-    else:
-        billing_header = "No outstanding bill balance found."
-
-    # Start building the HTML table
-    html_parts = []
-    html_parts.append(f'{billing_header}<br/><br/>')
-    
-    if study_details:
-        html_parts.append('<table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-family: Arial, sans-serif; margin: 10px 0; width: 100%;">')
-        html_parts.append('<thead>')
-        html_parts.append('<tr style="background-color: #f0f0f0; font-weight: bold;">')
-        html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Study Description</th>')
-        html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Study Date</th>')
-        html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Exam Status</th>')
-        html_parts.append('<th style="text-align: left; padding: 8px; border: 1px solid #ccc;">Billing Status</th>')
-        html_parts.append('</tr>')
-        html_parts.append('</thead>')
-        html_parts.append('<tbody>')
-
-        for study in study_details:
-            study_description = study.get('studyDescription') or 'N/A'
-            study_date_time = study.get('studyDateTime')
-            # Extract just the date part if time is included
-            if study_date_time:
-                study_date = study_date_time.split(' ')[0] if ' ' in study_date_time else study_date_time
-            else:
-                study_date = 'N/A'
-
-            exam_status = study.get('examStatus') or 'N/A'
-            billing_status_raw = study.get('billingStatus') or ''
-            billing_amount = study.get('billingAmount')  # This can be None or 0
-
-            # Format combined billing status: "$2,200.00 - Billed on 04/22/2025"
-            if billing_amount is not None and billing_amount > 0:
-                amount_str = f"${billing_amount:,.2f}"
-                # Check if billed and include study date as billed date (only if date is available)
-                if billing_status_raw and 'BILLED' in billing_status_raw.upper() and study_date != 'N/A':
-                    billing_status_combined = f"{amount_str} - Billed on {study_date}"
-                elif billing_status_raw:
-                    billing_status_combined = f"{amount_str} - {billing_status_raw}"
-                else:
-                    billing_status_combined = amount_str
-            elif billing_status_raw:
-                billing_status_combined = billing_status_raw
-            else:
-                billing_status_combined = "N/A"
-
-            html_parts.append('<tr>')
-            html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{study_description}</td>')
-            html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{study_date}</td>')
-            html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{exam_status}</td>')
-            html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{billing_status_combined}</td>')
-            html_parts.append('</tr>')
-        
-        html_parts.append('</tbody>')
-        html_parts.append('</table>')
-    else:
-        html_parts.append('<p>No study details available.</p>')
     
     return ''.join(html_parts)
 
@@ -805,7 +739,7 @@ async def handle_bill_balance_request(
         attachments = []
 
         # Create sections for the comprehensive template
-        billing_status_table = _create_billing_status_table(patient_bill_balance, patient_bill_status, study_details_list)
+        billing_status_table = await generate_billing_status_table(patient_id, bill_balance_data=mcp_response)
         lien_status_table = _create_lien_status_table(lien_status_list)
 
         # Log generated HTML tables for debugging

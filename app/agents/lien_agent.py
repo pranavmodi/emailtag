@@ -144,6 +144,7 @@ async def _build_rejection_placeholder_values(
         "lien_status_table": "",
         "call_log_table": "",
         "text_log_table": "",
+        "billing_status_table": "",
     }
 
     if patient_id:
@@ -195,6 +196,10 @@ async def _build_rejection_placeholder_values(
             # Generate text log table
             from app.helpers.text_log_table import generate_text_log_table
             values["text_log_table"] = await generate_text_log_table(patient_id)
+
+            # Generate billing status table
+            from app.helpers.billing_status_table import generate_billing_status_table
+            values["billing_status_table"] = await generate_billing_status_table(patient_id)
 
         except Exception as e:
             logger.warning(f"Failed to fetch patient info for rejection template: {e}")
@@ -2189,6 +2194,10 @@ async def handle_lien_request(
         from app.helpers.text_log_table import generate_text_log_table
         text_log_table = await generate_text_log_table(patient_id)
 
+        # Generate billing status table
+        from app.helpers.billing_status_table import generate_billing_status_table
+        billing_status_table = await generate_billing_status_table(patient_id)
+
         # Prepare all placeholders for template formatting
         placeholder_values = {
             "lien_type": lien_type,
@@ -2198,7 +2207,8 @@ async def handle_lien_request(
             "doi": doi,
             "lien_status_table": lien_status_table,
             "call_log_table": call_log_table,
-            "text_log_table": text_log_table
+            "text_log_table": text_log_table,
+            "billing_status_table": billing_status_table
         }
 
         # Merge in custom placeholders from workspace settings

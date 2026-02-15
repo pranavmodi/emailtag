@@ -62,6 +62,11 @@ export const TEMPLATE_PLACEHOLDERS: PlaceholderSet = {
       key: "{text_log_table}",
       description: "HTML table of patient text message history (Date/Time, Message Type)",
       example: "<table>...</table>"
+    },
+    {
+      key: "{billing_status_table}",
+      description: "HTML table showing billing status per study (Exam Description, Study Date, Exam Status, Images Available, Report Available, Billing Status)",
+      example: "<table>...</table>"
     }
   ],
 
