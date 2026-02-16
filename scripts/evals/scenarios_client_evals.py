@@ -1797,4 +1797,17 @@ Test ID: {UNIQUE_TEST_ID}"""
             "modipranav@yahoo.com"
         ]
     },
+    "96": {
+        "description": "Guerra, Carlos - Bill or balance Request - Requesting bill for client with DOL 10/03/2025 to verify bill PDF attachment support",
+        "subject": "Bill Request - Guerra, Carlos DOL 10/03/2025",
+        "body_html": (
+            "<p>Hello,</p>"
+            "<p>Can you please send us the bills for our client listed below?</p>"
+            "<p>Patient: Guerra, Carlos<br>"
+            "Date of Loss: 10/03/2025</p>"
+            "<p>Thank you for your prompt attention to this matter.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "expected_tags": ["Bill or balance Request"]
+    },
 }

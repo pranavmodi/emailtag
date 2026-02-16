@@ -492,6 +492,34 @@ async def get_bill_balance_test_response(conversation_id: str):
         )
 
 
+@router.get("/bill-balance-test-outputs/{conversation_id}/attachment/{filename}")
+async def get_bill_balance_test_attachment(conversation_id: str, filename: str):
+    """Serve a bill PDF attachment from a bill balance test output directory."""
+    try:
+        file_path = Path(BILL_BALANCE_TEST_OUTPUT_DIR) / conversation_id / filename
+
+        # Security check - ensure path stays within test output directory
+        if not str(file_path.resolve()).startswith(str(Path(BILL_BALANCE_TEST_OUTPUT_DIR).resolve())):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail=f"Attachment not found: {filename}")
+
+        return FileResponse(
+            path=str(file_path),
+            filename=filename,
+            media_type="application/pdf"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving bill balance attachment {filename}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to serve attachment: {str(e)}"
+        )
+
+
 @router.delete("/bill-balance-test-outputs/{conversation_id}")
 async def delete_bill_balance_test_output(conversation_id: str):
     """Delete a specific bill balance test output directory."""

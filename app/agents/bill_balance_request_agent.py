@@ -5,9 +5,11 @@ This module will contain the logic for an AI agent that processes emails tagged
 as "Bill or balance Request".
 """
 import asyncio
+import base64
 import os
 import json
 import ast
+import shutil
 from typing import Optional, Dict, Any, List
 import re
 from pathlib import Path
@@ -19,7 +21,7 @@ from celery.utils.log import get_task_logger
 
 from app.core.config import settings as app_settings_instance
 from app.services import frontapp_service
-from app.agents.agent_helpers import send_reply_to_front_direct, extract_patient_id_from_email_logic
+from app.agents.agent_helpers import send_reply_to_front_direct, send_reply_to_front_with_attachment, extract_patient_id_from_email_logic
 from app.helpers.billing_status_table import generate_billing_status_table
 # Import shared templates
 from app.agents.templates.shared_templates import (
@@ -76,7 +78,8 @@ async def save_test_mode_response_bill_balance(
     response_text: str,
     patient_id: str = None,
     response_type: str = None,
-    details: Dict[str, Any] = None
+    details: Dict[str, Any] = None,
+    bill_attachment_path: str = None
 ) -> Dict[str, Any]:
     """
     Saves the generated bill balance response to file system for test mode.
@@ -88,6 +91,7 @@ async def save_test_mode_response_bill_balance(
         patient_id: Patient ID if found
         response_type: Type of response (e.g., "billing_info", "clarification_request", "not_found")
         details: Additional metadata about the response
+        bill_attachment_path: Path to a bill PDF file to copy into the test output dir
 
     Returns:
         Dict with status and file path
@@ -104,6 +108,14 @@ async def save_test_mode_response_bill_balance(
             timestamp_suffix = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
             response_file = test_dir / f"response_{timestamp_suffix}.json"
 
+        # Copy bill attachment PDF into the test output directory if provided
+        bill_attachment_filename = None
+        if bill_attachment_path and os.path.exists(bill_attachment_path):
+            bill_attachment_filename = f"bill_{patient_id}.pdf" if patient_id else os.path.basename(bill_attachment_path)
+            dest_path = test_dir / bill_attachment_filename
+            shutil.copy2(bill_attachment_path, dest_path)
+            logger.info(f"🧪 TEST MODE: Copied bill attachment to {dest_path}")
+
         response_data = {
             "timestamp": datetime.now().isoformat(),
             "conversation_id": conversation_id,
@@ -111,7 +123,8 @@ async def save_test_mode_response_bill_balance(
             "patient_id": patient_id,
             "response_type": response_type,
             "details": details or {},
-            "status": "test_mode_saved"
+            "status": "test_mode_saved",
+            "bill_attachment": bill_attachment_filename
         }
 
         with open(response_file, "w") as f:
@@ -139,7 +152,8 @@ async def send_or_save_response_bill_balance(
     test_mode: bool = False,
     patient_id: str = None,
     response_type: str = None,
-    details: Dict[str, Any] = None
+    details: Dict[str, Any] = None,
+    bill_attachment_path: str = None
 ) -> None:
     """
     Either sends the response via Front API or saves to file based on test_mode.
@@ -151,6 +165,7 @@ async def send_or_save_response_bill_balance(
         patient_id: Patient ID if found
         response_type: Type of response
         details: Additional metadata
+        bill_attachment_path: Path to a bill PDF file to attach
     """
     if test_mode:
         # Test mode: save to file
@@ -159,14 +174,28 @@ async def send_or_save_response_bill_balance(
             response_text=response_text,
             patient_id=patient_id,
             response_type=response_type,
-            details=details
+            details=details,
+            bill_attachment_path=bill_attachment_path
         )
     else:
         # Normal mode: send via Front API
-        await send_reply_to_front_direct(
-            conversation_id=conversation_id,
-            reply_text=response_text
-        )
+        if bill_attachment_path and os.path.exists(bill_attachment_path):
+            await send_reply_to_front_with_attachment(
+                conversation_id=conversation_id,
+                reply_text=response_text,
+                attachment_path=bill_attachment_path
+            )
+            # Clean up temp file after sending
+            try:
+                os.remove(bill_attachment_path)
+                logger.info(f"Cleaned up temp bill attachment: {bill_attachment_path}")
+            except OSError as e:
+                logger.warning(f"Failed to clean up temp bill attachment {bill_attachment_path}: {e}")
+        else:
+            await send_reply_to_front_direct(
+                conversation_id=conversation_id,
+                reply_text=response_text
+            )
 # --- END: Test Mode Support ---
 
 # NOTE: Old BILL_BALANCE_TEMPLATE and LIEN_REMINDER_TEMPLATE removed.
@@ -746,6 +775,28 @@ async def handle_bill_balance_request(
         logger.debug(f"Generated billing_status_table HTML for patient {patient_id}: {billing_status_table}")
         logger.debug(f"Generated lien_status_table HTML for patient {patient_id}: {lien_status_table}")
 
+        # Decode bill attachment if available (used for both response paths)
+        bill_attachment_path = None
+        if patient_bill_status.get("bill"):
+            try:
+                bill_b64 = patient_bill_status["bill"]
+                # Strip whitespace/newlines and fix padding (common with API responses)
+                bill_b64 = bill_b64.strip().replace("\n", "").replace("\r", "").replace(" ", "")
+                missing_padding = len(bill_b64) % 4
+                if missing_padding:
+                    bill_b64 += "=" * (4 - missing_padding)
+                bill_pdf_bytes = base64.b64decode(bill_b64, validate=True)
+                bill_tmp_dir = Path("/tmp/bill_attachments")
+                bill_tmp_dir.mkdir(parents=True, exist_ok=True)
+                bill_tmp_path = bill_tmp_dir / f"bill_{patient_id}.pdf"
+                with open(bill_tmp_path, "wb") as f:
+                    f.write(bill_pdf_bytes)
+                bill_attachment_path = str(bill_tmp_path)
+                logger.info(f"Decoded bill PDF for patient {patient_id}: {len(bill_pdf_bytes)} bytes -> {bill_attachment_path}")
+            except Exception as e:
+                logger.error(f"Failed to decode bill PDF for patient {patient_id}: {e}", exc_info=True)
+                bill_attachment_path = None
+
         if not all_liens_signed:
             # Generate Lien Reminder response - use DB template
             lien_reminder_template = templates.get("lien_reminder")
@@ -779,12 +830,6 @@ async def handle_bill_balance_request(
                 lien_status_table=lien_status_table
             )
             subject = f"Re: {patient_id} - Billing Information"
-            
-            # Add bill attachment if available
-            if patient_bill_status.get("bill"):
-                # TODO: Handle base64 bill attachment
-                # For now, we note that a bill is available but don't attach it
-                pass
 
         # TODO: Add report attachments if requested
         if include_reports:
@@ -803,7 +848,8 @@ async def handle_bill_balance_request(
                 "liens_signed": all_liens_signed,
                 "studies_found": len(study_details_list),
                 "template_used": "comprehensive" if all_liens_signed else "lien_reminder"
-            }
+            },
+            bill_attachment_path=bill_attachment_path
         )
 
         logger.info(f"Successfully sent comprehensive billing response for patient {patient_id} in conversation {front_conversation_id}")

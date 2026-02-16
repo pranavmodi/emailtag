@@ -6,6 +6,7 @@ import {
   Download,
   FileText,
   FolderOpen,
+  Paperclip,
   RefreshCw,
   Mail,
   Calendar,
@@ -89,6 +90,7 @@ type SingleBillBalanceResponse = {
   details?: Record<string, unknown>;
   status: string;
   _filename?: string;
+  bill_attachment?: string | null;
 };
 
 type BillBalanceResponseDetail = {
@@ -99,6 +101,7 @@ type BillBalanceResponseDetail = {
   response_type?: string;
   details?: Record<string, unknown>;
   status: string;
+  bill_attachment?: string | null;
   // Multi-patient support
   responses?: SingleBillBalanceResponse[];
   response_count?: number;
@@ -1664,6 +1667,42 @@ export default function SandboxPage() {
                                     )}
                                   </div>
                                 </div>
+
+                                {/* Bill PDF Attachment */}
+                                {response.bill_attachment && billBalanceResponse.conversation_id && (
+                                  <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-4 shadow-sm">
+                                    <div className="flex items-center gap-3">
+                                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
+                                        <Paperclip className="h-4 w-4" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-slate-700 truncate">
+                                          {response.bill_attachment}
+                                        </p>
+                                        <p className="text-xs text-slate-500">PDF Attachment</p>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <a
+                                          href={SettingsApi.getBillBalanceAttachmentUrl(billBalanceResponse.conversation_id, response.bill_attachment)}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1 rounded-md bg-white border border-sky-200 px-3 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100 transition-colors shadow-sm"
+                                        >
+                                          <ExternalLink className="h-3 w-3" />
+                                          View
+                                        </a>
+                                        <a
+                                          href={SettingsApi.getBillBalanceAttachmentUrl(billBalanceResponse.conversation_id, response.bill_attachment)}
+                                          download={response.bill_attachment}
+                                          className="inline-flex items-center gap-1 rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700 transition-colors shadow-sm"
+                                        >
+                                          <Download className="h-3 w-3" />
+                                          Download
+                                        </a>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </motion.div>
                             ))
                           ) : (
@@ -1723,6 +1762,42 @@ export default function SandboxPage() {
                                   )}
                                 </div>
                               </div>
+
+                              {/* Bill PDF Attachment */}
+                              {billBalanceResponse.bill_attachment && billBalanceResponse.conversation_id && (
+                                <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-4 shadow-sm">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
+                                      <Paperclip className="h-4 w-4" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium text-slate-700 truncate">
+                                        {billBalanceResponse.bill_attachment}
+                                      </p>
+                                      <p className="text-xs text-slate-500">PDF Attachment</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <a
+                                        href={SettingsApi.getBillBalanceAttachmentUrl(billBalanceResponse.conversation_id, billBalanceResponse.bill_attachment)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 rounded-md bg-white border border-sky-200 px-3 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100 transition-colors shadow-sm"
+                                      >
+                                        <ExternalLink className="h-3 w-3" />
+                                        View
+                                      </a>
+                                      <a
+                                        href={SettingsApi.getBillBalanceAttachmentUrl(billBalanceResponse.conversation_id, billBalanceResponse.bill_attachment)}
+                                        download={billBalanceResponse.bill_attachment}
+                                        className="inline-flex items-center gap-1 rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700 transition-colors shadow-sm"
+                                      >
+                                        <Download className="h-3 w-3" />
+                                        Download
+                                      </a>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </motion.div>
                           )}
                         </div>
