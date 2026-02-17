@@ -20,6 +20,10 @@ from app.services.frontapp_service import add_conversation_tags, get_conversatio
 from app.core.log_context import set_conversation_context, clear_conversation_context, add_delimiter_to_context
 from app.services.conversation_log_service import flush_conversation_logs
 
+# Trace service imports
+from app.services.trace_service import create_tracer
+from app.models.processing_trace import StepTypes, TraceSteps, TraceStatus
+
 # Agent imports
 from app.agents.apt_status_req_agent import handle_apt_status_request_agent_sdk
 from app.agents.release_records_autorespond import handle_release_of_records_request
@@ -123,6 +127,7 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
         return {"status": "error", "message": "Invalid email ID format"}
 
     front_conversation_id = None
+    tracer = None
     db = SessionLocal()
     try:
         email_obj = email_crud_sync.get(db, id=email_uuid)
@@ -133,7 +138,7 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
         # Debug subject tracking
         # logger.info(f"🔍 DEBUG AUTORESPOND: Retrieved email {email_id} from DB")
         # logger.info(f"🔍 DEBUG AUTORESPOND: email_obj.subject = '{email_obj.subject}' (type: {type(email_obj.subject)})")
-        
+
         front_conversation_id = email_obj.front_conversation_id
         if not front_conversation_id:
             logger.error(f"Email {email_id} has no Front conversation ID for auto-response.")
@@ -143,6 +148,26 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
         # Set up log context for capturing logs to database
         log_ctx = set_conversation_context(front_conversation_id, email_id)
         add_delimiter_to_context("perform_autorespond_task", email_id)
+
+        # Create tracer for autorespond processing
+        tracer = create_tracer(
+            front_conversation_id=front_conversation_id,
+            email_id=email_id
+        )
+
+        # Log autorespond started
+        tracer.log_step(
+            step_name=TraceSteps.AUTORESPOND_STARTED,
+            step_type=StepTypes.ENTRY_POINT,
+            status=TraceStatus.COMPLETED,
+            input_data={
+                "email_id": email_id,
+                "front_conversation_id": front_conversation_id,
+                "determined_tags": determined_tags,
+                "sender": email_obj.sender,
+                "has_recipients": bool(email_obj.recipients),
+            }
+        )
 
         # Register original recipients from the triggering email so all reply
         # paths use the correct recipient list (fixes reply-all CC drop bug)
@@ -170,6 +195,16 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             logger.info(f"🧪 AUTORESPOND MODE: SANDBOX for [{', '.join(sandbox_modes)}] | PRODUCTION for others | Conversation {front_conversation_id}")
         else:
             logger.info(f"🚀 AUTORESPOND MODE: PRODUCTION (all agents) | Conversation {front_conversation_id}")
+
+        tracer.log_step(
+            step_name=TraceSteps.AUTORESPOND_SETTINGS_CHECK,
+            step_type=StepTypes.BUSINESS_LOGIC,
+            status=TraceStatus.COMPLETED,
+            output_data={
+                "sandbox_modes": sandbox_modes,
+                "is_internal_sender": any(d in (email_obj.sender or "").lower() for d in ["@precisemri.com", "@preciseimaging.com", "@radflow360.com", "@mediflow360.com", "@mediflow.com"]),
+            }
+        )
 
         current_email_content = email_obj.content_text or email_obj.content_html or ""
         
@@ -301,6 +336,13 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
 
         if triggered_human_review_tags:
             logger.info(f"Email {email_id} requires human review due to tags: {triggered_human_review_tags}. Applying '{HUMAN_REVIEW_TAG_NAME}' tag.")
+            tracer.log_step(
+                step_name=TraceSteps.AGENT_SELECTED,
+                step_type=StepTypes.BUSINESS_LOGIC,
+                status=TraceStatus.COMPLETED,
+                input_data={"applied_tags": applied_tag_names},
+                output_data={"agent": "human_review", "triggered_tags": triggered_human_review_tags}
+            )
             final_status = ""
             try:
                 add_conversation_tags(front_conversation_id, [HUMAN_REVIEW_TAG_NAME])
@@ -309,8 +351,14 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             except Exception as e:
                 logger.error(f"Failed to apply '{HUMAN_REVIEW_TAG_NAME}' tag for email {email_id}: {e}", exc_info=True)
                 final_status = "processed_human_review_tag_failed"
-            
+
             email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_status, is_processed=True))
+            tracer.log_step(
+                step_name=TraceSteps.AUTORESPOND_COMPLETED,
+                step_type=StepTypes.BUSINESS_LOGIC,
+                status=TraceStatus.COMPLETED,
+                output_data={"final_status": final_status, "agent": "human_review", "response_sent": False}
+            )
             logger.info(f"Email {email_id} processing stopped after handling human review tag. Final status: {final_status}")
             return {
                 "status": "completed_autorespond_phase",
@@ -321,6 +369,33 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                 "agent_handled_response": False
             }
         # --- End Human Review Check ---
+
+        # Determine which agent will handle this email
+        _selected_agent = "none"
+        if APT_STATUS_REQ_TAG_NAME in applied_tag_names:
+            _selected_agent = "apt_status_req"
+        elif any(tag in applied_tag_names for tag in MEDICAL_RECORDS_TAGS):
+            _selected_agent = "medical_records"
+        elif BILL_OR_BALANCE_REQUEST_TAG_NAME in applied_tag_names:
+            _selected_agent = "bill_balance_request"
+        elif MISSING_LIEN_REQUEST_TAG_NAME in applied_tag_names:
+            _selected_agent = "missing_lien_request"
+        elif any(tag in applied_tag_names for tag in CASE_UPDATE_TAGS):
+            _selected_agent = "case_updates"
+        elif PSL_TAG_NAME in applied_tag_names and (RAD_LIEN_TAG_NAME in applied_tag_names or TECH_LIEN_TAG_NAME in applied_tag_names):
+            _selected_agent = "psl_lien"
+        elif ASL_TAG_NAME in applied_tag_names and (RAD_LIEN_TAG_NAME in applied_tag_names or TECH_LIEN_TAG_NAME in applied_tag_names):
+            _selected_agent = "asl_lien"
+        elif (RAD_LIEN_TAG_NAME in applied_tag_names or TECH_LIEN_TAG_NAME in applied_tag_names):
+            _selected_agent = "unknown_sig_lien"
+
+        tracer.log_step(
+            step_name=TraceSteps.AGENT_SELECTED,
+            step_type=StepTypes.BUSINESS_LOGIC,
+            status=TraceStatus.COMPLETED,
+            input_data={"applied_tags": applied_tag_names},
+            output_data={"agent": _selected_agent}
+        )
 
         if APT_STATUS_REQ_TAG_NAME in applied_tag_names:
             # Check if apt status test mode is enabled
@@ -894,6 +969,20 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                     auto_response_details = {"reason": "Unknown Signature Lien agent call failed or returned None."}
         # --- END: Unknown Signature Lien Agent Branch ---
 
+        # Log agent execution result
+        if agent_name_for_status != "none":
+            tracer.log_step(
+                step_name=TraceSteps.AGENT_EXECUTION,
+                step_type=StepTypes.AI_PROCESSING,
+                status=TraceStatus.COMPLETED if agent_handled_response else TraceStatus.FAILED,
+                input_data={"agent": agent_name_for_status},
+                output_data={
+                    "agent_handled": agent_handled_response,
+                    "response_sent": auto_response_processed_flag,
+                    "details": auto_response_details,
+                }
+            )
+
         current_status_from_tagging = email_obj.status
         final_email_status = "processed_unknown_state" # Default
 
@@ -903,7 +992,7 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
         else:
             # No agent response (either not tagged for an agent, or agent chose not to handle, or agent error)
             auto_response_processed_flag = False # Explicitly ensure this is false if agent didn't handle
-            
+
             reason_suffix = "no_agent_triggered"
             if agent_name_for_status != "none":
                 reason_suffix = f"agent_{agent_name_for_status}_did_not_handle"
@@ -916,13 +1005,25 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                  final_email_status = f"processed_tagged_frontfailed_no_autorespond_{reason_suffix}"
             else: # Other tagging statuses, or if tagging was skipped
                  final_email_status = f"processed_tag_status_({current_status_from_tagging})_no_autorespond_{reason_suffix}"
-                 
+
         logger.info(f"Setting final status for email {email_id} to: {final_email_status}. Original tagging status: {current_status_from_tagging}. Agent handled: {agent_handled_response}")
         email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_email_status, is_processed=True))
-        
+
+        tracer.log_step(
+            step_name=TraceSteps.AUTORESPOND_COMPLETED,
+            step_type=StepTypes.BUSINESS_LOGIC,
+            status=TraceStatus.COMPLETED,
+            output_data={
+                "final_status": final_email_status,
+                "agent": agent_name_for_status,
+                "agent_handled": agent_handled_response,
+                "response_sent": auto_response_processed_flag,
+            }
+        )
+
         return {
-            "status": "completed_autorespond_phase", 
-            "email_id": email_id, 
+            "status": "completed_autorespond_phase",
+            "email_id": email_id,
             "final_db_status": final_email_status,
             "auto_response_sent": auto_response_processed_flag,
             "auto_response_details": auto_response_details,
@@ -931,6 +1032,13 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
 
     except Exception as e:
         logger.exception(f"Critical error in perform_autorespond_task for {email_id}: {str(e)}")
+        if tracer:
+            tracer.log_step(
+                step_name=TraceSteps.AUTORESPOND_COMPLETED,
+                step_type=StepTypes.ERROR_HANDLING,
+                status=TraceStatus.FAILED,
+                error_data={"error_type": type(e).__name__, "error_message": str(e)}
+            )
         if db.is_active:
             db.rollback()
         return {"status": "error", "message": str(e)}

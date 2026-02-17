@@ -1810,4 +1810,20 @@ Test ID: {UNIQUE_TEST_ID}"""
         ),
         "expected_tags": ["Bill or balance Request"]
     },
+    "97": {
+        "description": "Brandon Ramirez Perez PRE1184039 - PSL Tech+Rad Lien + Patient Demo - WestFax fax with signed lien documents (from cnv_1gdjfc2a)",
+        "subject": "EXTERNAL: A fax has arrived from: '(909) 433-0647'",
+        "body_html": (
+            "<p>Please find attached the signed lien documents for our client.</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "2026-02-16T22-01-48.4881_10.pdf",
+                "filepath": "data/documents/lientest/2026-02-16T22-01-48.4881_10.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["PSL", "Tech Lien", "Rad Lien", "Patient Demo"]
+    },
 }

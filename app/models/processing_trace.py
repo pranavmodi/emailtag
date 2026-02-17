@@ -122,9 +122,13 @@ class TraceSteps:
     CONVERSATION_SPLIT = "conversation_split"
     
     # Autoresponse
+    AUTORESPOND_STARTED = "autorespond_started"
+    AUTORESPOND_SETTINGS_CHECK = "autorespond_settings_check"
     AGENT_SELECTED = "agent_selected"
+    AGENT_EXECUTION = "agent_execution"
     RESPONSE_GENERATED = "response_generated"
     RESPONSE_SENT = "response_sent"
+    AUTORESPOND_COMPLETED = "autorespond_completed"
     
     # Status updates
     STATUS_UPDATED = "status_updated"

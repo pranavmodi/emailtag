@@ -24,8 +24,8 @@ def _normalize_study_key(description: str, date_str: str) -> str:
     Used to match studies between fetch_study_details and billing data.
     """
     desc = re.sub(r'\s+', ' ', (description or '').strip().upper())
-    # Extract date portion only (strip time if present)
-    date_part = (date_str or '').split(' ')[0].split('T')[0].strip().upper()
+    # Use _format_date to normalize date to MM/DD/YYYY regardless of input format
+    date_part = _format_date(date_str)
     return f"{desc}|{date_part}"
 
 
@@ -33,9 +33,16 @@ def _format_date(date_str: str) -> str:
     """Format a date string to MM/DD/YYYY."""
     if not date_str:
         return 'N/A'
-    # Extract just the date portion
-    date_part = date_str.split(' ')[0].split('T')[0]
-    # Try common formats
+    date_str_stripped = date_str.strip()
+    # Try full datetime formats first (before splitting)
+    for fmt in ('%d %B %Y %I:%M %p', '%d %B %Y', '%m/%d/%Y %H:%M:%S', '%Y-%m-%dT%H:%M:%S',
+                '%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%m/%d/%Y', '%m/%d/%y'):
+        try:
+            return datetime.strptime(date_str_stripped, fmt).strftime('%m/%d/%Y')
+        except ValueError:
+            continue
+    # Fallback: extract date portion and try simpler formats
+    date_part = date_str_stripped.split(' ')[0].split('T')[0]
     for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%m/%d/%y'):
         try:
             return datetime.strptime(date_part, fmt).strftime('%m/%d/%Y')

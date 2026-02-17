@@ -1229,7 +1229,7 @@ def _filter_external_recipients(recipients: List[str]) -> List[str]:
     Returns only external recipients.
     """
     internal_domains = ["@mediflow360.com", "@mediflow.com", "@preciseimaging.com", "@precisemri.com", "@radflow360.com"]
-    excluded_emails = ["holisticreadsai@gmail.com"]
+    # excluded_emails = ["holisticreadsai@gmail.com"]
 
     logger.info(f"Recipients before filtering: {recipients}")
 
@@ -1237,11 +1237,11 @@ def _filter_external_recipients(recipients: List[str]) -> List[str]:
     for recipient in recipients:
         recipient_lower = recipient.lower()
         is_internal = any(domain in recipient_lower for domain in internal_domains)
-        is_excluded = recipient_lower in excluded_emails
+        # is_excluded = recipient_lower in excluded_emails
         if is_internal:
             logger.info(f"  Removing internal recipient: {recipient}")
-        elif is_excluded:
-            logger.info(f"  Removing excluded recipient: {recipient}")
+        # elif is_excluded:
+        #     logger.info(f"  Removing excluded recipient: {recipient}")
         else:
             logger.info(f"  Keeping external recipient: {recipient}")
             external_recipients.add(recipient)
