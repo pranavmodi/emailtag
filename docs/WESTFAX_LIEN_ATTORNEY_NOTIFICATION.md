@@ -9,10 +9,11 @@ When a lien is received via Westfax (`westfaxff@westfax.com`), the system detect
 ## Behavior
 
 1. **Westfax Detection**: The lien agent checks if `email_obj.sender` matches `westfaxff@westfax.com`.
-2. **Attorney Lookup**: After successful lien upload, the system calls `get_patient_and_study_info()` and `compile_study_participants()` to find participants with an "attorney" role.
-3. **Directed Reply**: The success notification is sent to the attorney's email (via `send_conversation_reply_to_recipients()`) instead of the default reply-all to Westfax.
-4. **Case Manager CC**: If `notifyCaseManager` is `true` and `caseManagerEmail` is present (on the participant or study level), the case manager is added as CC.
-5. **Fallback**: If no attorney email is found in study participants, the conversation is tagged for human review with a comment explaining the situation. The lien upload still succeeds.
+2. **PSL Liens**: No response is sent. The lien is uploaded to RadFlow and processing completes silently.
+3. **ASL Liens — Attorney Lookup**: After successful lien upload, the system calls `get_patient_and_study_info()` and `compile_study_participants()` to find participants with an "attorney" role.
+4. **ASL Liens — Directed Reply**: If an attorney is found, the success notification is sent to the attorney's email (via `send_conversation_reply_to_recipients()`) instead of the default reply-all to Westfax.
+5. **ASL Liens — Case Manager CC**: If `notifyCaseManager` is `true` and `caseManagerEmail` is present (on the participant or study level), the case manager is added as CC.
+6. **ASL Liens — No Recipients Found**: If no attorney email is found in study participants, no response is sent. The lien upload still succeeds.
 
 ## Multi-Patient Handling
 

@@ -2088,38 +2088,48 @@ async def handle_lien_request(
 
             reply_body = header + "<hr>" + consolidated_body
 
-            # For Westfax liens, look up attorney for each patient and collect recipients
+            # For Westfax liens, handle response routing based on signature type:
+            # - PSL: No response sent (lien upload is sufficient)
+            # - ASL: Send only if attorney/case manager found; otherwise skip
             westfax_to = None
             westfax_cc = None
+            skip_westfax_response = False
             if is_westfax_sender:
-                logger.info(f"📠 WESTFAX MULTI-PATIENT: Looking up attorneys for {len(unique_patient_ids)} patients")
-                all_attorney_emails = set()
-                all_cm_emails = set()
-                for pid in unique_patient_ids:
-                    atty_info = await fetch_attorney_and_case_manager_from_participants(pid)
-                    if atty_info["attorney_email"]:
-                        all_attorney_emails.add(atty_info["attorney_email"])
-                    if atty_info["notify_case_manager"] and atty_info["case_manager_email"]:
-                        all_cm_emails.add(atty_info["case_manager_email"])
-
-                if all_attorney_emails:
-                    westfax_to = list(all_attorney_emails)
-                    westfax_cc = list(all_cm_emails) if all_cm_emails else None
-                    logger.info(f"📠 WESTFAX MULTI-PATIENT: Directing reply to attorneys: {westfax_to}, cc: {westfax_cc}")
+                if signature_type == "PSL":
+                    logger.info(f"📠 WESTFAX MULTI-PATIENT PSL: No response needed for PSL Westfax liens. Lien uploaded successfully.")
+                    skip_westfax_response = True
                 else:
-                    logger.info(f"📠 WESTFAX MULTI-PATIENT: No attorney emails found for any patient. Lien uploaded successfully, no notification will be sent.")
+                    # ASL: look up attorney for each patient
+                    logger.info(f"📠 WESTFAX MULTI-PATIENT ASL: Looking up attorneys for {len(unique_patient_ids)} patients")
+                    all_attorney_emails = set()
+                    all_cm_emails = set()
+                    for pid in unique_patient_ids:
+                        atty_info = await fetch_attorney_and_case_manager_from_participants(pid)
+                        if atty_info["attorney_email"]:
+                            all_attorney_emails.add(atty_info["attorney_email"])
+                        if atty_info["notify_case_manager"] and atty_info["case_manager_email"]:
+                            all_cm_emails.add(atty_info["case_manager_email"])
 
-            # Send the consolidated response
-            await send_or_save_response(
-                conversation_id=front_conversation_id,
-                response_text=reply_body,
-                tags_to_add=None,
-                test_mode=test_mode,
-                lien_type=lien_type,
-                signature_type=signature_type,
-                to_recipients=westfax_to,
-                cc_recipients=westfax_cc
-            )
+                    if all_attorney_emails:
+                        westfax_to = list(all_attorney_emails)
+                        westfax_cc = list(all_cm_emails) if all_cm_emails else None
+                        logger.info(f"📠 WESTFAX MULTI-PATIENT ASL: Directing reply to attorneys: {westfax_to}, cc: {westfax_cc}")
+                    else:
+                        logger.info(f"📠 WESTFAX MULTI-PATIENT ASL: No attorney emails found for any patient. Lien uploaded successfully, no notification will be sent.")
+                        skip_westfax_response = True
+
+            # Send the consolidated response (skip for Westfax PSL or Westfax ASL with no recipients)
+            if not skip_westfax_response:
+                await send_or_save_response(
+                    conversation_id=front_conversation_id,
+                    response_text=reply_body,
+                    tags_to_add=None,
+                    test_mode=test_mode,
+                    lien_type=lien_type,
+                    signature_type=signature_type,
+                    to_recipients=westfax_to,
+                    cc_recipients=westfax_cc
+                )
 
             logger.info(f"Successfully processed {lien_type} for {len(unique_patient_ids)} patients in conversation {front_conversation_id}")
             return {
@@ -2223,31 +2233,41 @@ async def handle_lien_request(
         if has_patient_demo:
             reply_body += "<br/><p><em>Note: Patient demographic documents have also been uploaded.</em></p>"
 
-        # For Westfax liens, look up attorney to direct the reply
+        # For Westfax liens, handle response routing based on signature type:
+        # - PSL: No response sent (lien upload is sufficient)
+        # - ASL: Send only if attorney/case manager found; otherwise skip
         westfax_to = None
         westfax_cc = None
+        skip_westfax_response = False
         if is_westfax_sender:
-            logger.info(f"📠 WESTFAX SINGLE-PATIENT: Looking up attorney for patient {patient_id}")
-            atty_info = await fetch_attorney_and_case_manager_from_participants(patient_id)
-            if atty_info["attorney_email"]:
-                westfax_to = [atty_info["attorney_email"]]
-                if atty_info["notify_case_manager"] and atty_info["case_manager_email"]:
-                    westfax_cc = [atty_info["case_manager_email"]]
-                logger.info(f"📠 WESTFAX SINGLE-PATIENT: Directing reply to attorney: {westfax_to}, cc: {westfax_cc}")
+            if signature_type == "PSL":
+                logger.info(f"📠 WESTFAX SINGLE-PATIENT PSL: No response needed for PSL Westfax liens. Lien uploaded successfully.")
+                skip_westfax_response = True
             else:
-                logger.info(f"📠 WESTFAX SINGLE-PATIENT: No attorney email found for patient {patient_id}. Lien uploaded successfully, no notification will be sent.")
+                # ASL: look up attorney to direct the reply
+                logger.info(f"📠 WESTFAX SINGLE-PATIENT ASL: Looking up attorney for patient {patient_id}")
+                atty_info = await fetch_attorney_and_case_manager_from_participants(patient_id)
+                if atty_info["attorney_email"]:
+                    westfax_to = [atty_info["attorney_email"]]
+                    if atty_info["notify_case_manager"] and atty_info["case_manager_email"]:
+                        westfax_cc = [atty_info["case_manager_email"]]
+                    logger.info(f"📠 WESTFAX SINGLE-PATIENT ASL: Directing reply to attorney: {westfax_to}, cc: {westfax_cc}")
+                else:
+                    logger.info(f"📠 WESTFAX SINGLE-PATIENT ASL: No attorney email found for patient {patient_id}. Lien uploaded successfully, no notification will be sent.")
+                    skip_westfax_response = True
 
-        # Send the response
-        await send_or_save_response(
-            conversation_id=front_conversation_id,
-            response_text=reply_body,
-            tags_to_add=None,
-            test_mode=test_mode,
-            lien_type=lien_type,
-            signature_type=signature_type,
-            to_recipients=westfax_to,
-            cc_recipients=westfax_cc
-        )
+        # Send the response (skip for Westfax PSL or Westfax ASL with no recipients)
+        if not skip_westfax_response:
+            await send_or_save_response(
+                conversation_id=front_conversation_id,
+                response_text=reply_body,
+                tags_to_add=None,
+                test_mode=test_mode,
+                lien_type=lien_type,
+                signature_type=signature_type,
+                to_recipients=westfax_to,
+                cc_recipients=westfax_cc
+            )
 
         logger.info(f"Successfully processed {lien_type} for patient {patient_id} in conversation {front_conversation_id}")
         return {
