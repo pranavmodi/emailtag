@@ -17,6 +17,19 @@ from app.schemas.processing_trace import ProcessingTraceCreate, ProcessingTraceU
 logger = logging.getLogger(__name__)
 
 
+def _safe_error_details(e: Exception) -> dict:
+    """Extract JSON-serializable error details from an exception."""
+    details = {}
+    for key, value in getattr(e, '__dict__', {}).items():
+        try:
+            import json
+            json.dumps(value)
+            details[key] = value
+        except (TypeError, ValueError):
+            details[key] = str(value)
+    return details
+
+
 class TraceLogger:
     """Service class for logging email processing traces."""
     
@@ -238,7 +251,7 @@ class TraceLogger:
             error_data = {
                 "error_type": type(e).__name__,
                 "error_message": str(e),
-                "error_details": getattr(e, '__dict__', {})
+                "error_details": _safe_error_details(e)
             }
             
             if trace_id:
