@@ -1,10 +1,12 @@
 """API endpoints for message template and tag settings management."""
 import logging
+import re
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
+from typing import Any, Dict, List, Optional
 from app.db.session import get_db
 from app.core.exceptions import StaleUpdateError
 from app.crud.message_template import message_template_crud
@@ -353,6 +355,213 @@ async def delete_tag_settings(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete tag settings: {str(e)}"
+        )
+
+
+# ============================================================================
+# TABLE PREVIEW ENDPOINT
+# ============================================================================
+
+VALID_TABLE_TYPES = {
+    "appointment_table",
+    "billing_status_table",
+    "lien_status_table",
+    "call_log_table",
+    "text_log_table",
+}
+
+
+def _get_day_suffix(day: int) -> str:
+    """Returns the ordinal suffix for a day (st, nd, rd, th)."""
+    if 10 <= day % 100 <= 20:
+        suffix = 'th'
+    else:
+        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')
+    return suffix
+
+
+def _transform_studies_for_table(raw_studies: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Transform raw study data from MCP into the format expected by
+    _generate_appointment_table_html. Extracted from fetch_appointment_details_by_patient_id.
+    """
+    transformed = []
+    for study in raw_studies:
+        appointment_datetime_str = "N/A"
+        service_appt_time_str = study.get("study_date_time", "")
+        study_image_count = study.get("image_count", 0)
+
+        parsed_dt = None
+        if service_appt_time_str:
+            try:
+                if "T" in service_appt_time_str:
+                    parsed_dt = datetime.fromisoformat(service_appt_time_str.replace("Z", ""))
+                else:
+                    try:
+                        parsed_dt = datetime.strptime(service_appt_time_str, "%m/%d/%Y %I:%M:%S %p")
+                    except ValueError:
+                        try:
+                            parsed_time_obj = datetime.strptime(service_appt_time_str, "%I:%M %p").time()
+                            appointment_datetime_str = f"Date N/A @ {parsed_time_obj.strftime('%I:%M %p')}"
+                        except ValueError:
+                            additional_formats = [
+                                "%d %B %Y %I:%M %p", "%d %B %Y", "%Y-%m-%d %H:%M:%S",
+                                "%m/%d/%Y %H:%M", "%m/%d/%Y", "%Y-%m-%d",
+                                "%m/%d/%y %I:%M %p", "%Y-%m-%d %I:%M %p",
+                                "%B %d, %Y", "%d-%b-%Y", "%b %d, %Y", "%Y-%B-%d",
+                            ]
+                            for fmt in additional_formats:
+                                try:
+                                    parsed_dt = datetime.strptime(service_appt_time_str, fmt)
+                                    break
+                                except ValueError:
+                                    continue
+                            if not parsed_dt:
+                                appointment_datetime_str = f"{service_appt_time_str} (Could not parse)"
+
+                if parsed_dt:
+                    if parsed_dt.time() == datetime.min.time():
+                        day_name = parsed_dt.strftime('%A')
+                        month_name = parsed_dt.strftime('%B')
+                        day_num = parsed_dt.day
+                        year = parsed_dt.year
+                        day_suffix = _get_day_suffix(day_num)
+                        appointment_datetime_str = f"{day_name}, {month_name} {day_num}{day_suffix}, {year}<br/><br/>N/A"
+                    else:
+                        day_name = parsed_dt.strftime('%A')
+                        month_name = parsed_dt.strftime('%B')
+                        day_num = parsed_dt.day
+                        year = parsed_dt.year
+                        day_suffix = _get_day_suffix(day_num)
+                        time_str = parsed_dt.strftime('%I:%M %p').lstrip('0')
+                        appointment_datetime_str = f"{day_name}, {month_name} {day_num}{day_suffix}, {year}<br/><br/>{time_str}"
+
+            except ValueError:
+                appointment_datetime_str = f"{service_appt_time_str} (Unparseable)"
+
+        # Location display
+        facility_info = study.get("facility", {})
+        facility_address = facility_info.get('address', '').strip()
+        if not facility_address or facility_address in ['N/A', 'Not Available', 'Not Available in Database']:
+            location_display = "N/A"
+        else:
+            match = re.search(r'^(.*?)\s+([A-Za-z][A-Za-z\s]+?)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$', facility_address)
+            if match:
+                street = match.group(1).strip()
+                city = match.group(2).strip()
+                state = match.group(3)
+                zip_code = match.group(4)
+                location_display = f"{street}<br/>{city}, {state} {zip_code}"
+            else:
+                location_display = facility_address
+
+        images_available = "Yes" if study_image_count > 0 else "No"
+
+        # MRI type from resources
+        resources = study.get("resources", "")
+        mri_type = "N/A"
+        if resources:
+            resources_upper = resources.upper()
+            if "STAND" in resources_upper:
+                mri_type = "Stand Up"
+            elif "OPEN" in resources_upper:
+                mri_type = "Open"
+            elif "WIDE BORE" in resources_upper:
+                mri_type = "Wide Bore"
+            elif "CLOSED" in resources_upper:
+                mri_type = "Closed"
+
+        transformed.append({
+            "study_id": study.get("authorization_number", "N/A"),
+            "exam_description": study.get("study_description", "N/A"),
+            "status": study.get("ordered_status", "N/A"),
+            "appointment_datetime_str": appointment_datetime_str,
+            "location_name": location_display,
+            "mri_type": mri_type,
+            "images_available": images_available,
+            "report_available": "No",
+            "_sort_datetime": parsed_dt,
+        })
+
+    # Sort chronologically: earliest first, N/A at bottom
+    transformed.sort(
+        key=lambda x: (x.get("_sort_datetime") is None, x.get("_sort_datetime") or datetime.max)
+    )
+    return transformed
+
+
+@router.get("/preview-table")
+async def preview_table(
+    patient_id: str = Query(..., description="Patient ID to generate the table for"),
+    table_type: str = Query(..., description="Type of table to generate"),
+    signature_type: str = Query("ASL", description="Signature type for lien_status_table (ASL or PSL)"),
+):
+    """
+    Generate a live preview of a data table using real patient data from RadFlow.
+
+    Returns the same HTML tables that would be embedded in production autorespond emails.
+    """
+    if table_type not in VALID_TABLE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid table_type '{table_type}'. Must be one of: {', '.join(sorted(VALID_TABLE_TYPES))}"
+        )
+
+    if not patient_id.strip():
+        raise HTTPException(status_code=400, detail="patient_id is required")
+
+    patient_id = patient_id.strip()
+
+    try:
+        html = ""
+
+        if table_type == "billing_status_table":
+            from app.helpers.billing_status_table import generate_billing_status_table
+            html = await generate_billing_status_table(patient_id)
+
+        elif table_type == "call_log_table":
+            from app.helpers.call_log_table import generate_call_log_table
+            html = await generate_call_log_table(patient_id)
+
+        elif table_type == "text_log_table":
+            from app.helpers.text_log_table import generate_text_log_table
+            html = await generate_text_log_table(patient_id)
+
+        elif table_type == "lien_status_table":
+            from app.agents.lien_agent import _generate_lien_status_table
+            html = await _generate_lien_status_table(patient_id, [], signature_type)
+
+        elif table_type == "appointment_table":
+            from app.agents.agent_helpers import get_patient_and_study_info
+            from app.agents.apt_status_req_agent import _generate_appointment_table_html
+
+            info = await get_patient_and_study_info(patient_id)
+            studies_result = info.get("study_result", {})
+
+            if not isinstance(studies_result, dict) or not studies_result.get("success"):
+                error_msg = studies_result.get("error", "Failed to fetch study details") if isinstance(studies_result, dict) else "Invalid response from study service"
+                raise HTTPException(status_code=502, detail=str(error_msg))
+
+            raw_studies = studies_result.get("studies", [])
+            if not raw_studies:
+                html = "<p>No appointments found for this patient.</p>"
+            else:
+                transformed = _transform_studies_for_table(raw_studies)
+                html = _generate_appointment_table_html(transformed)
+
+        return {
+            "html": html,
+            "table_type": table_type,
+            "patient_id": patient_id,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"🔍 Error generating preview table (type={table_type}, patient={patient_id}): {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate {table_type} preview: {str(e)}"
         )
 
 

@@ -27,6 +27,7 @@ import { UnifiedTemplateEditor } from "./components/UnifiedTemplateEditor";
 import { AptStatusReqTemplatesEditor } from "./components/AptStatusReqTemplatesEditor";
 import PlaceholderSection from "./components/PlaceholderSection";
 import { DocumentAttachments } from "./components/DocumentAttachments";
+import { TablePreview } from "./components/TablePreview";
 import { useTagSettings, normalizeCustomPlaceholdersFromSettings } from "./hooks/useTagSettings";
 
 export default function TemplateConfigPage() {
@@ -284,6 +285,9 @@ export default function TemplateConfigPage() {
                   />
                 </>
               )}
+
+              {/* Live Table Preview */}
+              <TablePreview />
 
               {/* Metadata */}
               {tagMeta && (

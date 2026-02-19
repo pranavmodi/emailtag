@@ -1185,7 +1185,31 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                         logger.info(f"Added human review tag to conversation {front_conversation_id} due to Portal Requests tag")
                     else:
                         logger.warning(f"Failed to add human review tag to conversation {front_conversation_id} for Portal Requests")
-                
+
+                # Check for password-protected PDF attachments and flag for human review
+                if document_results:
+                    password_protected_files = []
+                    for doc_result in document_results:
+                        if isinstance(doc_result, dict) and not doc_result.get("document_analysis", {}).get("success"):
+                            error_msg = doc_result.get("document_analysis", {}).get("error", "")
+                            if error_msg and ('password' in error_msg.lower() or
+                                              'incorrect password' in error_msg.lower() or
+                                              'encrypted' in error_msg.lower()):
+                                password_protected_files.append(doc_result.get("filename", "Unknown"))
+                    if password_protected_files:
+                        human_review_success = add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+                        if human_review_success:
+                            logger.info(f"Added human review tag to conversation {front_conversation_id} due to password-protected attachments: {password_protected_files}")
+                        else:
+                            logger.warning(f"Failed to add human review tag to conversation {front_conversation_id} for password-protected attachments")
+                        try:
+                            from app.services.frontapp_service import add_conversation_comment
+                            filenames_str = ", ".join(password_protected_files)
+                            comment = f"Password-protected attachment(s) detected: {filenames_str}. These could not be analyzed. Please review manually."
+                            add_conversation_comment(front_conversation_id, comment)
+                        except Exception as e:
+                            logger.error(f"Failed to add password-protected PDF comment for {front_conversation_id}: {e}")
+
                 # --- INBOX ROUTING LOGIC ---
                 if settings.INBOX_ROUTING_ENABLED:
                     from app.services.frontapp_service import move_conversation_to_inbox, get_conversation
@@ -1262,7 +1286,31 @@ def perform_tagging_task(self, email_id: str) -> Dict:
                         logger.info(f"Added human review tag to conversation {front_conversation_id} due to Portal Requests tag (main tagging failed)")
                     else:
                         logger.warning(f"Failed to add human review tag to conversation {front_conversation_id} for Portal Requests (main tagging also failed)")
-        
+
+                # Check for password-protected PDF attachments and flag for human review (main tagging failed case)
+                if document_results:
+                    password_protected_files = []
+                    for doc_result in document_results:
+                        if isinstance(doc_result, dict) and not doc_result.get("document_analysis", {}).get("success"):
+                            error_msg = doc_result.get("document_analysis", {}).get("error", "")
+                            if error_msg and ('password' in error_msg.lower() or
+                                              'incorrect password' in error_msg.lower() or
+                                              'encrypted' in error_msg.lower()):
+                                password_protected_files.append(doc_result.get("filename", "Unknown"))
+                    if password_protected_files:
+                        human_review_success = add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+                        if human_review_success:
+                            logger.info(f"Added human review tag to conversation {front_conversation_id} due to password-protected attachments (main tagging failed): {password_protected_files}")
+                        else:
+                            logger.warning(f"Failed to add human review tag to conversation {front_conversation_id} for password-protected attachments (main tagging also failed)")
+                        try:
+                            from app.services.frontapp_service import add_conversation_comment
+                            filenames_str = ", ".join(password_protected_files)
+                            comment = f"Password-protected attachment(s) detected: {filenames_str}. These could not be analyzed. Please review manually."
+                            add_conversation_comment(front_conversation_id, comment)
+                        except Exception as e:
+                            logger.error(f"Failed to add password-protected PDF comment for {front_conversation_id}: {e}")
+
         # --- INBOX ROUTING (for failed main tagging case) ---
         # Attempt inbox routing even if main tag application failed, based on determined tags
         if not applied_tags_to_front and settings.INBOX_ROUTING_ENABLED and new_tags:

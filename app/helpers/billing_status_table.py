@@ -41,6 +41,15 @@ def _format_date(date_str: str) -> str:
             return datetime.strptime(date_str_stripped, fmt).strftime('%m/%d/%Y')
         except ValueError:
             continue
+    # Fallback: try extracting "DD Month YYYY" from the string (e.g. "11 February 2026 10:30:00 AM")
+    dmy_match = re.match(r'(\d{1,2})\s+(\w+)\s+(\d{4})', date_str_stripped)
+    if dmy_match:
+        for fmt in ('%d %B %Y', '%d %b %Y'):
+            try:
+                return datetime.strptime(f"{dmy_match.group(1)} {dmy_match.group(2)} {dmy_match.group(3)}", fmt).strftime('%m/%d/%Y')
+            except ValueError:
+                continue
+
     # Fallback: extract date portion and try simpler formats
     date_part = date_str_stripped.split(' ')[0].split('T')[0]
     for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%m/%d/%y'):
@@ -161,7 +170,6 @@ async def generate_billing_status_table(
             )
 
         # Extract billing details from bill_balance_data
-        bill_balance = 0
         billing_studies = []
         if bill_balance_data and isinstance(bill_balance_data, dict):
             # Navigate the nested response structure
@@ -174,7 +182,6 @@ async def generate_billing_status_table(
                     except Exception:
                         result = {}
                 if isinstance(result, dict):
-                    bill_balance = result.get('patientBillBalance', 0) or 0
                     billing_studies = result.get('patientStudyDetails', []) or []
             else:
                 # Try top-level result
@@ -185,7 +192,6 @@ async def generate_billing_status_table(
                     except Exception:
                         result = {}
                 if isinstance(result, dict):
-                    bill_balance = result.get('patientBillBalance', 0) or 0
                     billing_studies = result.get('patientStudyDetails', []) or []
 
         # Build billing lookup keyed by normalized description+date
@@ -198,6 +204,10 @@ async def generate_billing_status_table(
 
         # Track which billing entries are matched
         matched_billing_keys = set()
+
+        # Accumulators for billed vs potential amounts
+        total_billed = 0.0
+        total_potential = 0.0
 
         # Build table rows from study details, enriched with billing data
         table_rows: List[Dict[str, str]] = []
@@ -223,6 +233,16 @@ async def generate_billing_status_table(
                 ordered_status, billing_status_raw, billing_amount, study_date
             )
 
+            # Accumulate billed vs potential amounts
+            try:
+                amount = float(billing_amount) if billing_amount is not None else 0
+            except (ValueError, TypeError):
+                amount = 0
+            if amount > 0 and 'Potential' in billing_status:
+                total_potential += amount
+            elif amount > 0 and 'Billed' in billing_status:
+                total_billed += amount
+
             table_rows.append({
                 'exam_description': study_desc,
                 'study_date': study_date,
@@ -246,6 +266,16 @@ async def generate_billing_status_table(
                     exam_status, billing_status_raw, billing_amount, study_date
                 )
 
+                # Accumulate billed vs potential amounts
+                try:
+                    amount = float(billing_amount) if billing_amount is not None else 0
+                except (ValueError, TypeError):
+                    amount = 0
+                if amount > 0 and 'Potential' in billing_status:
+                    total_potential += amount
+                elif amount > 0 and 'Billed' in billing_status:
+                    total_billed += amount
+
                 table_rows.append({
                     'exam_description': desc,
                     'study_date': study_date,
@@ -255,11 +285,17 @@ async def generate_billing_status_table(
                     'billing_status': billing_status,
                 })
 
-        # Build billing summary header
-        if bill_balance is not None and bill_balance > 0:
-            billing_header = f"The patient's current bill balance is <b>${bill_balance:,.2f}</b>."
+        # Build billing summary header based on billed vs potential amounts
+        header_parts = []
+        if total_billed > 0:
+            header_parts.append(f"The patient's current bill balance is <b>${total_billed:,.2f}</b>.")
         else:
-            billing_header = "No outstanding bill balance found."
+            header_parts.append("The patient's current bill balance is <b>$0.00</b>.")
+        if total_potential > 0:
+            header_parts.append(f"There is <b>${total_potential:,.2f}</b> of pending exams to be billed.")
+        if total_billed == 0 and total_potential == 0:
+            header_parts = ["No outstanding bill balance found."]
+        billing_header = " ".join(header_parts)
 
         # Build final output
         if table_rows:
