@@ -656,6 +656,7 @@ ANALYSIS REQUIREMENTS:
                         "LienSignatureType": list(all_signature_types)[0] if all_signature_types else "UNKNOWN",
                         "barcode_found": total_splits > 0,
                         "total_splits": total_splits,
+                        "unreadable_barcode_pages": enhanced_analysis.get("unreadable_barcode_pages", []),
                         "split_documents_metadata": [
                             {
                                 "patient_id": doc.get("patient_id"),

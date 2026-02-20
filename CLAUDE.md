@@ -96,3 +96,7 @@ This ensures all dependencies and environment variables are properly loaded for 
 ## Settings UI
 
 The `/settings` endpoint serves a Next.js frontend application (located in `frontend/settings2/`) for managing email processing settings, autorespond templates, and tag configurations.
+
+## Email Processing Logs
+
+For guidance on accessing email processing logs (processing traces, classification traces, worker logs) given a conversation ID, see `skill.md` in the project root.

@@ -1071,6 +1071,16 @@ class EnhancedLienService:
             # Flag pages where a barcode was expected (Precise Imaging lien) but unreadable
             page_results = self._flag_unreadable_barcodes(page_results, filename)
 
+            # Collect info about pages with unreadable barcodes (expected but not found)
+            unreadable_barcode_pages = []
+            for page_idx, page in enumerate(page_results):
+                if page.get("barcode_unreadable"):
+                    barcode_expectation = page.get("barcode_expectation", {})
+                    unreadable_barcode_pages.append({
+                        "page_number": page_idx + 1,
+                        "lien_subtype": barcode_expectation.get("lien_subtype", "UNKNOWN")
+                    })
+
             # Log summary table showing each page's classification and upload status
             self._log_page_summary_table(page_results, filename)
 
@@ -1115,6 +1125,8 @@ class EnhancedLienService:
                     "spanish_page_indices": spanish_page_indices,
                     "duplicates_are_spanish_copies": duplicates_are_spanish_copies,
                     "error": "No valid barcode data found to create splits",
+                    # Pages where a barcode was expected but could not be read
+                    "unreadable_barcode_pages": unreadable_barcode_pages,
                     # Company detection already passed at this point (lien is ours)
                     "other_company_detected": False,
                     "detected_company_name": None,
@@ -1163,6 +1175,8 @@ class EnhancedLienService:
                 "has_cover_letter_with_conditions": has_cover_letter_with_conditions,
                 "conditional_phrases_found": all_conditional_phrases,
                 "cover_letter_pages": cover_letter_pages,
+                # Pages where a barcode was expected but could not be read
+                "unreadable_barcode_pages": unreadable_barcode_pages,
                 # Company detection already passed at this point (lien is ours)
                 "other_company_detected": False,
                 "detected_company_name": None,

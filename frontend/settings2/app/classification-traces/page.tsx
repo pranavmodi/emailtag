@@ -601,6 +601,8 @@ function ClassificationTracesContent() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState(conversationIdParam || "");
+  const [searchFilter, setSearchFilter] = useState<string>("");
+  const [searchLoading, setSearchLoading] = useState(false);
   const [expandedTraces, setExpandedTraces] = useState<Record<number, boolean>>({});
   const [summaryText, setSummaryText] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -714,10 +716,42 @@ function ClassificationTracesContent() {
     }
   };
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchInput.trim()) {
-      router.push(`/classification-traces?conversation_id=${encodeURIComponent(searchInput.trim())}`);
+    const query = searchInput.trim();
+    if (!query) return;
+    setSearchFilter(query);
+
+    // Check if any locally-loaded conversations match
+    const localMatches = conversations.filter((conv) =>
+      conv.conversation_id.toLowerCase().includes(query.toLowerCase())
+    );
+
+    // If no local matches, try to look up the conversation via API
+    if (localMatches.length === 0) {
+      setSearchLoading(true);
+      try {
+        const response = await ClassificationTracesApi.getFullTraces(query);
+        if (response && response.total_traces > 0) {
+          // Add this conversation to the list so it appears in search results
+          const found: RecentConversation = {
+            conversation_id: query,
+            last_trace_at: new Date().toISOString(),
+            classification_traces: response.classification_count,
+            archival_traces: response.archival_count,
+            total_tokens: response.total_tokens ?? 0,
+          };
+          setConversations((prev) => {
+            // Avoid duplicates
+            if (prev.some((c) => c.conversation_id === query)) return prev;
+            return [found, ...prev];
+          });
+        }
+      } catch {
+        // Conversation not found in API either — leave empty results
+      } finally {
+        setSearchLoading(false);
+      }
     }
   };
 
@@ -1223,7 +1257,13 @@ function ClassificationTracesContent() {
           )}
 
           {/* Recent Conversations List */}
-          {!loading && !conversationIdParam && (
+          {!loading && !conversationIdParam && (() => {
+            const filteredConversations = searchFilter
+              ? conversations.filter((conv) =>
+                  conv.conversation_id.toLowerCase().includes(searchFilter.toLowerCase())
+                )
+              : conversations;
+            return (
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1233,22 +1273,50 @@ function ClassificationTracesContent() {
                 <CardHeader>
                   <CardTitle className="text-xl flex items-center gap-3">
                     <Clock className="h-5 w-5 text-indigo-600" />
-                    Recent Conversations
+                    {searchFilter ? "Search Results" : "Recent Conversations"}
                   </CardTitle>
                   <CardDescription>
-                    {conversations.length} conversation{conversations.length !== 1 ? "s" : ""} with traces
+                    {searchFilter ? (
+                      <>
+                        {filteredConversations.length} result{filteredConversations.length !== 1 ? "s" : ""} matching &quot;{searchFilter}&quot;
+                        {" "}
+                        <button
+                          onClick={() => { setSearchFilter(""); setSearchInput(""); }}
+                          className="text-indigo-600 hover:text-indigo-800 underline"
+                        >
+                          Clear filter
+                        </button>
+                      </>
+                    ) : (
+                      <>{conversations.length} conversation{conversations.length !== 1 ? "s" : ""} with traces</>
+                    )}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {conversations.length === 0 ? (
+                  {searchLoading ? (
+                    <div className="flex flex-col items-center justify-center gap-3 py-12 text-slate-500">
+                      <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                      <p className="text-sm">Looking up conversation...</p>
+                    </div>
+                  ) : filteredConversations.length === 0 ? (
                     <div className="py-12 text-center">
                       <FileSearch className="mx-auto h-12 w-12 text-slate-300" />
-                      <p className="mt-4 text-sm text-slate-500">No conversations with traces found.</p>
-                      <p className="text-sm text-slate-400">Enter a conversation ID above to view its trace.</p>
+                      <p className="mt-4 text-sm text-slate-500">
+                        {searchFilter
+                          ? <>No conversations matching &quot;{searchFilter}&quot; found.</>
+                          : "No conversations with traces found."
+                        }
+                      </p>
+                      <p className="text-sm text-slate-400">
+                        {searchFilter
+                          ? "Try a different search term or clear the filter."
+                          : "Enter a conversation ID above to view its trace."
+                        }
+                      </p>
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {conversations.map((conv) => (
+                      {filteredConversations.map((conv) => (
                         <div
                           key={conv.conversation_id}
                           onClick={() => handleViewTrace(conv.conversation_id)}
@@ -1296,7 +1364,8 @@ function ClassificationTracesContent() {
                 </CardContent>
               </Card>
             </motion.div>
-          )}
+            );
+          })()}
         </motion.div>
       </main>
     </div>

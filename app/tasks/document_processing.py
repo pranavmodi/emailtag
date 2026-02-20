@@ -10,8 +10,10 @@ from sqlalchemy import text
 from celery.utils.log import get_task_logger
 
 from app.core.config import settings
+from app.core.log_context import set_conversation_context, clear_conversation_context, add_delimiter_to_context
 from app.crud.sync import email as email_crud_sync
 from app.db.session import SessionLocal
+from app.services.conversation_log_service import flush_conversation_logs
 from app.services.document_processing_service import DocumentProcessingService
 from app.schemas.email import EmailUpdate
 from app.tasks.worker import celery_app
@@ -30,16 +32,47 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
     Downloads an attachment, processes it with document processing service,
     and updates the email record directly.
     """
-    
+
     # Extract filename for clearer logging
     filename = attachment_url.split('/')[-1] if '/' in attachment_url else 'attachment'
     logger.info(f"🔄 DOCUMENT PROCESSING START: {filename} for email {email_id}")
-    
+
     try:
         email_uuid = UUID(email_id)
     except ValueError:
         logger.error(f"Invalid UUID format for email_id: {email_id}. Cannot proceed.")
         return
+
+    # Look up front_conversation_id for log capture
+    front_conversation_id = None
+    try:
+        db_lookup = SessionLocal()
+        try:
+            email_for_ctx = email_crud_sync.get(db_lookup, id=email_uuid)
+            if email_for_ctx:
+                front_conversation_id = email_for_ctx.front_conversation_id
+        finally:
+            db_lookup.close()
+    except Exception as ctx_exc:
+        logger.warning(f"⚠️ LOG CONTEXT SETUP FAILED for email {email_id}: {ctx_exc} — document processing logs will not be captured in trace")
+
+    # Set up conversation log context so all logs (including barcode detection) are captured
+    log_ctx = None
+    if front_conversation_id:
+        log_ctx = set_conversation_context(front_conversation_id, email_id)
+        add_delimiter_to_context(f"send_attachment_to_document_processing | email: {email_id}")
+
+    try:
+        _do_document_processing(self, email_id, email_uuid, attachment_url, filename)
+    finally:
+        if log_ctx:
+            log_ctx = clear_conversation_context()
+            if log_ctx:
+                flush_conversation_logs(log_ctx)
+
+
+def _do_document_processing(self, email_id: str, email_uuid: UUID, attachment_url: str, filename: str):
+    """Inner function containing the actual document processing logic."""
 
     # Calculate exponential backoff delay for retries
     def get_retry_delay(retry_count):
@@ -230,9 +263,38 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
                 except Exception as e:
                     logger.error(f"Failed to add document processing patient ID comments to conversation {updated_email.front_conversation_id}: {e}", exc_info=True)
 
+        # Check for unreadable barcodes that need human review
+        enhanced_lien_data = attachment_data.get('enhanced_lien_processing', {})
+        unreadable_barcode_pages = enhanced_lien_data.get('unreadable_barcode_pages', [])
+        if unreadable_barcode_pages and updated_email.front_conversation_id:
+            try:
+                from app.services.frontapp_service import add_conversation_tags, add_conversation_comment
+                # Build a human-readable comment describing which pages had unreadable barcodes
+                page_details = []
+                for page_info in unreadable_barcode_pages:
+                    page_num = page_info.get("page_number", "?")
+                    lien_subtype = page_info.get("lien_subtype", "UNKNOWN")
+                    page_details.append(f"Page {page_num} ({lien_subtype} lien)")
+                pages_str = ", ".join(page_details)
+                comment = (
+                    f"⚠️ Human review required: Barcode expected but could not be read on {pages_str} "
+                    f"in attachment {filename}. The affected page(s) could not be processed automatically."
+                )
+                add_conversation_comment(updated_email.front_conversation_id, comment)
+                add_conversation_tags(updated_email.front_conversation_id, ["AI: Human review required"])
+                logger.warning(
+                    f"⚠️ UNREADABLE BARCODE REVIEW: Flagged conversation {updated_email.front_conversation_id} "
+                    f"for human review - {pages_str} in {filename}"
+                )
+            except Exception as review_exc:
+                logger.error(
+                    f"Failed to flag unreadable barcode for human review on conversation "
+                    f"{updated_email.front_conversation_id}: {review_exc}"
+                )
+
         # Check if all attachments are processed and trigger orchestration if complete
         _check_document_processing_completion_and_trigger_orchestration(updated_email, completed_count, email_id, str(email_uuid))
-        
+
         logger.info(f"✅ DOCUMENT PROCESSING COMPLETE: {filename} for email {email_id}")
 
     except Exception as db_exc:
