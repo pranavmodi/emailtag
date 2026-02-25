@@ -1826,4 +1826,31 @@ Test ID: {UNIQUE_TEST_ID}"""
         ],
         "expected_tags": ["PSL", "Tech Lien", "Rad Lien", "Patient Demo"]
     },
+    "98": {
+        "description": "Multi-patient ASL - Two separate e-signed ASL lien packets for PRE1089351 and PRE1089354 in one email (should generate separate per-patient responses)",
+        "subject": "Signed Lien Documents - Multiple Patients",
+        "body_html": (
+            "<p>Dear Precise Imaging,</p>"
+            "<p>Please find attached the signed lien documents for two of our clients.</p>"
+            "<p>Both packets include the radiology and technologist liens.</p>"
+            "<p>Kindly process and upload to each patient's file.</p>"
+            "<p>Thank you for your prompt attention.</p>"
+            "<p>Best regards,<br>"
+            "Legal Processing Team</p>"
+            "<p>Test ID: {UNIQUE_TEST_ID}</p>"
+        ),
+        "attachments": [
+            {
+                "filename": "ESIGN_PRE1089351_ASL.pdf",
+                "filepath": "data/documents/ESIGN_PRE1089351_ASL.pdf",
+                "content_type": "application/pdf"
+            },
+            {
+                "filename": "ESIGN_PRE1089354_ASL.pdf",
+                "filepath": "data/documents/ESIGN_PRE1089354_ASL.pdf",
+                "content_type": "application/pdf"
+            }
+        ],
+        "expected_tags": ["ASL", "Rad Lien", "Tech Lien"]
+    },
 }

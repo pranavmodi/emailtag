@@ -1,5 +1,6 @@
 """PIF (Personal Injury Firm) information endpoints."""
 
+import asyncio
 import logging
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List
@@ -786,7 +787,9 @@ async def generate_outreach(
 
     logger.info(f"Generating outreach messages for {len(leaders)} leaders at {pif.firm_name}")
 
-    messages, errors = generate_outreach_messages(
+    # Run synchronous blocking function in a thread to avoid blocking the event loop
+    messages, errors = await asyncio.to_thread(
+        generate_outreach_messages,
         leaders=leaders,
         case_study_url=request.case_study_url,
         client_description=request.client_description,

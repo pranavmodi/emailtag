@@ -1229,7 +1229,8 @@ def _filter_external_recipients(recipients: List[str]) -> List[str]:
     Returns only external recipients.
     """
     internal_domains = ["@mediflow360.com", "@mediflow.com", "@preciseimaging.com", "@precisemri.com", "@radflow360.com"]
-    # excluded_emails = ["holisticreadsai@gmail.com"]
+    # Allowlisted internal addresses that should still receive autoresponses (e.g. for testing)
+    allowed_internal_emails = ["test123abc@mediflow360.com"]
 
     logger.info(f"Recipients before filtering: {recipients}")
 
@@ -1237,8 +1238,8 @@ def _filter_external_recipients(recipients: List[str]) -> List[str]:
     for recipient in recipients:
         recipient_lower = recipient.lower()
         is_internal = any(domain in recipient_lower for domain in internal_domains)
-        # is_excluded = recipient_lower in excluded_emails
-        if is_internal:
+        is_allowed = recipient_lower in allowed_internal_emails
+        if is_internal and not is_allowed:
             logger.info(f"  Removing internal recipient: {recipient}")
         # elif is_excluded:
         #     logger.info(f"  Removing excluded recipient: {recipient}")
