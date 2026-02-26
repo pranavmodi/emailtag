@@ -97,6 +97,10 @@ export const getDummyPlaceholders = (): Record<string, string> => {
 
     // Lien-specific
     "{lien_type}": "Attorney Signed Lien (ASL)",
+
+    // Multi-patient wrapper placeholders
+    "{patient_count}": "3",
+    "{patient_sections}": "<b>Patient: Jane Smith</b><br/>Patient ID: PRE1234567<br/>DOB: 05/12/1985<br/>DOI: 03/22/2024<br/><br/><hr/><br/><b>Patient: John Doe</b><br/>Patient ID: PRE7654321<br/>DOB: 08/15/1990<br/>DOI: 03/22/2024<br/><br/><hr/><br/><b>Patient: Maria Garcia</b><br/>Patient ID: PRE9876543<br/>DOB: 11/03/1978<br/>DOI: 03/22/2024",
   };
 };
 

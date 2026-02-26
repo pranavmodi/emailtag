@@ -266,7 +266,10 @@ async def _fetch_lien_templates_from_db(tag_name: str) -> Dict[str, str]:
                     "invalid_signature": settings.get("lien_reject_sig_not_valid_template", ""),
                     # New specific templates for conditional language
                     "cover_letter_conditional": settings.get("lien_reject_cover_letter_conditional_template", ""),
-                    "email_conditional": settings.get("lien_reject_email_conditional_template", "")
+                    "email_conditional": settings.get("lien_reject_email_conditional_template", ""),
+                    # Multi-patient consolidated response templates
+                    "multi_patient_wrapper": settings.get("lien_multi_patient_wrapper_template", ""),
+                    "multi_patient_section": settings.get("lien_multi_patient_section_template", "")
                 }
     except Exception as e:
         logger.error(f"Failed to fetch lien templates from database: {e}")
@@ -280,7 +283,9 @@ async def _fetch_lien_templates_from_db(tag_name: str) -> Dict[str, str]:
         "modified": "",
         "invalid_signature": "",
         "cover_letter_conditional": "",
-        "email_conditional": ""
+        "email_conditional": "",
+        "multi_patient_wrapper": "",
+        "multi_patient_section": ""
     }
 
 def _check_lien_readability(document_analysis_results: List[Dict[str, Any]]) -> bool:
@@ -2018,16 +2023,27 @@ async def handle_lien_request(
                 logger.info(f"⏳ Waiting 5 minutes for RadFlow to update signature status for {len(unique_patient_ids)} patient(s)...")
                 await asyncio.sleep(300)  # 5 minutes = 300 seconds
 
-        # Process each patient separately with individual templated responses
-        # (matching the pattern used by apt_status_req and bill_balance agents)
+        # Multi-patient consolidated response using wrapper + section templates
+        # Falls back to per-patient separate emails if templates are empty
         if len(unique_patient_ids) > 1:
-            logger.info(f"📄 {signature_type} AGENT: Processing {len(unique_patient_ids)} patients separately")
+            logger.info(f"📄 {signature_type} AGENT: Processing {len(unique_patient_ids)} patients for consolidated response")
 
             from app.helpers.call_log_table import generate_call_log_table
             from app.helpers.text_log_table import generate_text_log_table
             from app.helpers.billing_status_table import generate_billing_status_table
 
+            wrapper_template = templates.get("multi_patient_wrapper", "")
+            section_template = templates.get("multi_patient_section", "")
+            use_consolidated = bool(wrapper_template and section_template)
+
+            if not use_consolidated:
+                logger.info(f"📄 {signature_type} AGENT: Multi-patient wrapper/section templates empty — falling back to per-patient separate emails")
+
             per_patient_results = []
+            rendered_sections = []
+            all_westfax_to = set()
+            all_westfax_cc = set()
+            any_has_demo = False
 
             for idx, pid in enumerate(sorted(unique_patient_ids)):
                 logger.info(f"📄 {signature_type} AGENT: Generating response for patient {idx + 1}/{len(unique_patient_ids)}: {pid}")
@@ -2082,7 +2098,7 @@ async def handle_lien_request(
                 pid_text_log_table = await generate_text_log_table(pid)
                 pid_billing_status_table = await generate_billing_status_table(pid)
 
-                # Build placeholder values and format the success template
+                # Build placeholder values
                 pid_placeholder_values = {
                     "lien_type": lien_type,
                     "patient_id": pid,
@@ -2097,56 +2113,119 @@ async def handle_lien_request(
                 if custom_placeholders:
                     pid_placeholder_values.update(custom_placeholders)
 
-                pid_reply_body = _safe_format_template(templates["success"], **pid_placeholder_values)
-
-                # Add patient demo note if applicable
+                # Check for patient demo
                 pid_has_demo = any(r.get("patient_id") == pid and r.get("page_type") == "patient_demo" for r in upload_results)
                 if pid_has_demo:
-                    pid_reply_body += "<br/><p><em>Note: Patient demographic documents have also been uploaded.</em></p>"
+                    any_has_demo = True
 
-                # Handle Westfax routing per patient
-                pid_westfax_to = None
-                pid_westfax_cc = None
-                skip_pid_response = False
+                if use_consolidated:
+                    # Render the per-patient section template
+                    pid_section = _safe_format_template(section_template, **pid_placeholder_values)
+                    if pid_has_demo:
+                        pid_section += "<br/><p><em>Note: Patient demographic documents have also been uploaded.</em></p>"
+                    rendered_sections.append(pid_section)
+
+                    # Collect Westfax recipients across all patients
+                    if is_westfax_sender and signature_type == "ASL":
+                        atty_info = await fetch_attorney_and_case_manager_from_participants(pid)
+                        if atty_info["attorney_email"]:
+                            all_westfax_to.add(atty_info["attorney_email"])
+                            if atty_info["notify_case_manager"] and atty_info["case_manager_email"]:
+                                all_westfax_cc.add(atty_info["case_manager_email"])
+
+                    per_patient_results.append({
+                        "patient_id": pid,
+                        "response_sent": True,
+                        "skipped_westfax": False
+                    })
+                else:
+                    # Fallback: per-patient separate emails (original behavior)
+                    pid_reply_body = _safe_format_template(templates["success"], **pid_placeholder_values)
+                    if pid_has_demo:
+                        pid_reply_body += "<br/><p><em>Note: Patient demographic documents have also been uploaded.</em></p>"
+
+                    pid_westfax_to = None
+                    pid_westfax_cc = None
+                    skip_pid_response = False
+
+                    if is_westfax_sender:
+                        if signature_type == "PSL":
+                            logger.info(f"📠 WESTFAX MULTI-PATIENT PSL: No response needed for patient {pid}.")
+                            skip_pid_response = True
+                        else:
+                            atty_info = await fetch_attorney_and_case_manager_from_participants(pid)
+                            if atty_info["attorney_email"]:
+                                pid_westfax_to = [atty_info["attorney_email"]]
+                                if atty_info["notify_case_manager"] and atty_info["case_manager_email"]:
+                                    pid_westfax_cc = [atty_info["case_manager_email"]]
+                                logger.info(f"📠 WESTFAX MULTI-PATIENT ASL: Patient {pid} — reply to {pid_westfax_to}, cc: {pid_westfax_cc}")
+                            else:
+                                logger.info(f"📠 WESTFAX MULTI-PATIENT ASL: No attorney email found for patient {pid}. Skipping response.")
+                                skip_pid_response = True
+
+                    pid_sent = False
+                    if not skip_pid_response:
+                        await send_or_save_response(
+                            conversation_id=front_conversation_id,
+                            response_text=pid_reply_body,
+                            tags_to_add=None,
+                            test_mode=test_mode,
+                            lien_type=lien_type,
+                            signature_type=signature_type,
+                            to_recipients=pid_westfax_to,
+                            cc_recipients=pid_westfax_cc
+                        )
+                        pid_sent = True
+
+                    per_patient_results.append({
+                        "patient_id": pid,
+                        "response_sent": pid_sent,
+                        "skipped_westfax": skip_pid_response
+                    })
+
+                logger.info(f"📄 {signature_type} AGENT: Completed response for patient {idx + 1}/{len(unique_patient_ids)}: {pid}")
+
+            # Send consolidated email if using wrapper/section templates
+            if use_consolidated:
+                joined_sections = "<br/><hr/><br/>".join(rendered_sections)
+                consolidated_body = _safe_format_template(
+                    wrapper_template,
+                    patient_count=str(len(unique_patient_ids)),
+                    patient_sections=joined_sections,
+                    lien_type=lien_type,
+                    **(custom_placeholders or {})
+                )
+
+                # Determine Westfax routing for consolidated email
+                consolidated_to = None
+                consolidated_cc = None
+                skip_consolidated = False
 
                 if is_westfax_sender:
                     if signature_type == "PSL":
-                        logger.info(f"📠 WESTFAX MULTI-PATIENT PSL: No response needed for patient {pid}.")
-                        skip_pid_response = True
+                        logger.info(f"📠 WESTFAX MULTI-PATIENT PSL (consolidated): No response needed.")
+                        skip_consolidated = True
                     else:
-                        # ASL: look up attorney for this specific patient
-                        atty_info = await fetch_attorney_and_case_manager_from_participants(pid)
-                        if atty_info["attorney_email"]:
-                            pid_westfax_to = [atty_info["attorney_email"]]
-                            if atty_info["notify_case_manager"] and atty_info["case_manager_email"]:
-                                pid_westfax_cc = [atty_info["case_manager_email"]]
-                            logger.info(f"📠 WESTFAX MULTI-PATIENT ASL: Patient {pid} — reply to {pid_westfax_to}, cc: {pid_westfax_cc}")
+                        if all_westfax_to:
+                            consolidated_to = list(all_westfax_to)
+                            consolidated_cc = list(all_westfax_cc) if all_westfax_cc else None
+                            logger.info(f"📠 WESTFAX MULTI-PATIENT ASL (consolidated): reply to {consolidated_to}, cc: {consolidated_cc}")
                         else:
-                            logger.info(f"📠 WESTFAX MULTI-PATIENT ASL: No attorney email found for patient {pid}. Skipping response.")
-                            skip_pid_response = True
+                            logger.info(f"📠 WESTFAX MULTI-PATIENT ASL (consolidated): No attorney emails found. Skipping response.")
+                            skip_consolidated = True
 
-                # Send the response for this patient
-                pid_sent = False
-                if not skip_pid_response:
+                if not skip_consolidated:
                     await send_or_save_response(
                         conversation_id=front_conversation_id,
-                        response_text=pid_reply_body,
+                        response_text=consolidated_body,
                         tags_to_add=None,
                         test_mode=test_mode,
                         lien_type=lien_type,
                         signature_type=signature_type,
-                        to_recipients=pid_westfax_to,
-                        cc_recipients=pid_westfax_cc
+                        to_recipients=consolidated_to,
+                        cc_recipients=consolidated_cc
                     )
-                    pid_sent = True
-
-                per_patient_results.append({
-                    "patient_id": pid,
-                    "response_sent": pid_sent,
-                    "skipped_westfax": skip_pid_response
-                })
-
-                logger.info(f"📄 {signature_type} AGENT: Completed response for patient {idx + 1}/{len(unique_patient_ids)}: {pid}")
+                    logger.info(f"📄 {signature_type} AGENT: Sent consolidated response for {len(unique_patient_ids)} patients")
 
             logger.info(f"Successfully processed {lien_type} for {len(unique_patient_ids)} patients in conversation {front_conversation_id}")
             return {
@@ -2161,7 +2240,8 @@ async def handle_lien_request(
                     "upload_success": upload_success,
                     "total_splits": len(all_split_documents) if all_split_documents else 0,
                     "upload_results": upload_results,
-                    "per_patient_results": per_patient_results
+                    "per_patient_results": per_patient_results,
+                    "consolidated_response": use_consolidated
                 }
             }
 

@@ -14,7 +14,7 @@ interface LienTemplatesEditorProps {
   onReset: () => void;
 }
 
-type LienScenario = "success" | "patient_not_found" | "reject_no_changes" | "reject_not_readable" | "reject_sig_not_valid" | "reject_cover_letter_conditional" | "reject_email_conditional";
+type LienScenario = "success" | "patient_not_found" | "reject_no_changes" | "reject_not_readable" | "reject_sig_not_valid" | "reject_cover_letter_conditional" | "reject_email_conditional" | "multi_patient_wrapper" | "multi_patient_section";
 
 const SCENARIO_OPTIONS: Array<{ value: LienScenario; label: string; description: string; emoji: string; color: string }> = [
   { value: "success", label: "Success", description: "Patient found, lien uploaded", emoji: "✅", color: "green" },
@@ -24,11 +24,14 @@ const SCENARIO_OPTIONS: Array<{ value: LienScenario; label: string; description:
   { value: "reject_sig_not_valid", label: "Reply & Reject - Sig Not Valid", description: "Wrong box or outside designated area", emoji: "🖊️", color: "pink" },
   { value: "reject_cover_letter_conditional", label: "Reply & Reject - Cover Letter Conditional", description: "Conditional language in cover letter", emoji: "📄", color: "purple" },
   { value: "reject_email_conditional", label: "Reply & Reject - Email Conditional", description: "Conditional language in email body", emoji: "✉️", color: "blue" },
+  { value: "multi_patient_wrapper", label: "Multi-Patient Wrapper", description: "Outer envelope for consolidated multi-patient response", emoji: "📋", color: "purple" },
+  { value: "multi_patient_section", label: "Multi-Patient Section", description: "Per-patient section within consolidated response", emoji: "👤", color: "blue" },
 ];
 
 export function LienTemplatesEditor({ tagSettings, customPlaceholders, onFieldChange, onSave, onReset }: LienTemplatesEditorProps) {
   const [selectedScenario, setSelectedScenario] = useState<LienScenario>("success");
   const [showPreview, setShowPreview] = useState(true);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const getTemplateKey = (scenario: LienScenario): keyof typeof DEFAULT_TAG_SETTINGS => {
     const keyMap: Record<LienScenario, keyof typeof DEFAULT_TAG_SETTINGS> = {
@@ -39,6 +42,8 @@ export function LienTemplatesEditor({ tagSettings, customPlaceholders, onFieldCh
       reject_sig_not_valid: "lien_reject_sig_not_valid_template",
       reject_cover_letter_conditional: "lien_reject_cover_letter_conditional_template",
       reject_email_conditional: "lien_reject_email_conditional_template",
+      multi_patient_wrapper: "lien_multi_patient_wrapper_template",
+      multi_patient_section: "lien_multi_patient_section_template",
     };
     return keyMap[scenario];
   };
@@ -83,6 +88,17 @@ export function LienTemplatesEditor({ tagSettings, customPlaceholders, onFieldCh
     return preview;
   };
 
+  const handleSave = () => {
+    const wrapperKey = getTemplateKey("multi_patient_wrapper");
+    const wrapperValue = typeof tagSettings[wrapperKey] === 'string' ? tagSettings[wrapperKey] as string : "";
+    if (wrapperValue && !wrapperValue.includes("{patient_sections}")) {
+      setValidationError("The Multi-Patient Wrapper template must contain the {patient_sections} placeholder. Without it, individual patient details won't appear in the consolidated response.");
+      return;
+    }
+    setValidationError(null);
+    onSave();
+  };
+
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50 to-indigo-50 p-5">
@@ -90,7 +106,7 @@ export function LienTemplatesEditor({ tagSettings, customPlaceholders, onFieldCh
           <span className="text-lg">📄</span>
           Lien Response Templates
           <span className="ml-auto rounded-full bg-purple-600 px-2 py-0.5 text-xs text-white">
-            7 Scenarios
+            9 Scenarios
           </span>
         </h3>
         <p className="mb-6 text-xs text-slate-600">
@@ -126,7 +142,10 @@ export function LienTemplatesEditor({ tagSettings, customPlaceholders, onFieldCh
           </div>
           <textarea
             value={templateValue}
-            onChange={(event) => onFieldChange(templateKey, event.target.value)}
+            onChange={(event) => {
+              onFieldChange(templateKey, event.target.value);
+              if (validationError) setValidationError(null);
+            }}
             placeholder={`Template for ${selectedOption.label.toLowerCase()}...`}
             rows={12}
             className={`w-full rounded-lg border-2 ${colors.border} bg-white px-4 py-3 text-sm leading-relaxed text-slate-800 shadow-inner transition-all placeholder:text-slate-400 ${colors.focusBorder} focus:outline-none focus:ring-2 ${colors.focusRing}`}
@@ -163,6 +182,13 @@ export function LienTemplatesEditor({ tagSettings, customPlaceholders, onFieldCh
           )}
         </div>
 
+        {/* Validation Error */}
+        {validationError && (
+          <div className="mb-4 rounded-xl border-2 border-red-300 bg-red-50 p-4">
+            <p className="text-sm font-medium text-red-800">{validationError}</p>
+          </div>
+        )}
+
         {/* Save Button for Lien Templates */}
         <div className="mt-4 flex justify-end gap-2 border-t-2 border-purple-300 pt-4">
           <button
@@ -172,7 +198,7 @@ export function LienTemplatesEditor({ tagSettings, customPlaceholders, onFieldCh
             Reset
           </button>
           <button
-            onClick={onSave}
+            onClick={handleSave}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
           >
             Save Lien Templates

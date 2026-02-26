@@ -424,6 +424,30 @@ Thank you,
 Precise Imaging Billing Dept.
 www.PreciseMRI.com`,
 
+  // Multi-patient consolidated response templates
+  lien_multi_patient_wrapper_template: `Thank you for your lien submission covering {patient_count} patients.
+
+Below is a summary for each patient:
+
+{patient_sections}
+
+Thank you,
+Precise Imaging Billing Dept.
+www.PreciseMRI.com`,
+
+  lien_multi_patient_section_template: `<b>Patient: {patient_name}</b><br/>
+Patient ID: {patient_id}<br/>
+DOB: {dob}<br/>
+DOI: {doi}<br/>
+
+{lien_status_table}
+
+{call_log_table}
+
+{text_log_table}
+
+{billing_status_table}`,
+
   // Bill Balance templates
   bill_balance_found_template: `Dear {patient_name},
 
@@ -496,6 +520,8 @@ export const DEFAULT_TAG_SETTINGS = {
   lien_reject_sig_not_valid_template: DEFAULT_LIEN_TEMPLATES.lien_reject_sig_not_valid_template,
   lien_reject_cover_letter_conditional_template: DEFAULT_LIEN_TEMPLATES.lien_reject_cover_letter_conditional_template,
   lien_reject_email_conditional_template: DEFAULT_LIEN_TEMPLATES.lien_reject_email_conditional_template,
+  lien_multi_patient_wrapper_template: DEFAULT_LIEN_TEMPLATES.lien_multi_patient_wrapper_template,
+  lien_multi_patient_section_template: DEFAULT_LIEN_TEMPLATES.lien_multi_patient_section_template,
 
   // Bill Balance templates (multi-scenario tag)
   bill_balance_found_template: "",
