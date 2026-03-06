@@ -57,6 +57,36 @@ class PifInfoUpdate(BaseModel):
     extraction_notes: Optional[str] = None
 
 
+class BehavioralData(BaseModel):
+    """Behavioral email analysis data for a firm."""
+    total_email_count: int = 0
+    monthly_email_volume: List[int] = Field(default_factory=list, description="Last 3 months oldest first")
+    last_contact_date: Optional[str] = None
+    days_since_last_contact: Optional[int] = None
+    topic_distribution: Dict[str, int] = Field(default_factory=dict)
+    primary_pain_point: Optional[str] = None
+    sender_roles: Dict[str, int] = Field(default_factory=dict)
+    peak_contact_days: List[str] = Field(default_factory=list)
+    after_hours_ratio: float = 0.0
+    analyzed_at: Optional[str] = None
+
+
+class ScoreBreakdown(BaseModel):
+    """ICP score breakdown by category."""
+    email_volume_score: int = 0
+    email_volume_reason: str = ""
+    recency_score: int = 0
+    recency_reason: str = ""
+    pain_signals_score: int = 0
+    pain_signals_reason: str = ""
+    firm_size_score: int = 0
+    firm_size_reason: str = ""
+    completeness_score: int = 0
+    completeness_reason: str = ""
+    total: int = 0
+    scored_at: Optional[str] = None
+
+
 class PifInfoResponse(PifInfoBase):
     """Schema for PIF info response."""
     id: UUID
@@ -65,6 +95,12 @@ class PifInfoResponse(PifInfoBase):
     research_data: Optional[Dict[str, Any]] = Field(None, description="Additional research findings")
     research_status: Optional[str] = Field(None, description="Research status")
     last_researched_at: Optional[datetime] = Field(None, description="Last research timestamp")
+    # Behavioral intelligence
+    behavioral_data: Optional[Dict[str, Any]] = Field(None, description="Email behavior analysis")
+    icp_score: Optional[int] = Field(None, description="ICP score 0-100")
+    icp_tier: Optional[str] = Field(None, description="ICP tier: A/B/C/D")
+    score_breakdown: Optional[Dict[str, Any]] = Field(None, description="Score breakdown by category")
+    icp_scored_at: Optional[datetime] = Field(None, description="When last scored")
     created_at: datetime
     updated_at: datetime
 
@@ -205,3 +241,39 @@ class FirmLookupCreateResponse(BaseModel):
     is_new: bool
     task_id: Optional[str] = Field(None, description="Research task ID if research was started")
     message: str
+
+
+class AnalyzeBehaviorResponse(BaseModel):
+    """Schema for behavior analysis response."""
+    pif_id: UUID
+    firm_name: str
+    task_id: str
+    status: str = "queued"
+    message: str
+
+
+class BatchTaskResponse(BaseModel):
+    """Schema for batch task dispatch response."""
+    task_id: str
+    message: str
+    total: Optional[int] = None
+
+
+class ScoreResponse(BaseModel):
+    """Schema for synchronous ICP score response."""
+    pif_id: UUID
+    firm_name: str
+    icp_score: int
+    icp_tier: str
+    score_breakdown: Dict[str, Any]
+
+
+class AnalyticsSummaryResponse(BaseModel):
+    """Schema for analytics summary across all firms."""
+    total_firms_tracked: int
+    firms_by_tier: Dict[str, int]
+    top_pain_points: List[Dict[str, Any]]
+    avg_monthly_volume_by_tier: Dict[str, float]
+    pipeline_funnel: Dict[str, int]
+    firms_contacted_last_30_days: int
+    firms_needing_recontact: int

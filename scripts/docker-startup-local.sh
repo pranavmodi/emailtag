@@ -2,9 +2,18 @@
 
 # Script to kill screen sessions, rebuild and start docker containers locally,
 # then tail logs in separate named screen sessions.
-# Usage: ./docker-startup-local.sh
+# Usage: ./docker-startup-local.sh [--no-build|-n]
+#   --no-build / -n   Skip down+build, just reattach log screens to running containers
 
 COMPOSE_FILE="/home/fret/work/emailtag/docker-compose.yml"
+
+# Parse flags
+NO_BUILD=false
+for arg in "$@"; do
+    case $arg in
+        --no-build|-n) NO_BUILD=true ;;
+    esac
+done
 
 # Parallel arrays: screen session name -> docker compose service name
 SCREEN_NAMES=("emailtag" "celery" "emailUI" "mcp")
@@ -19,25 +28,30 @@ for s in emailtag celery emailUI claude scripts mcp; do
     fi
 done
 
-# Step 2: Bring down containers
-echo ""
-echo "Bringing down docker containers..."
-docker compose -f "$COMPOSE_FILE" down
-
-# Step 3: Rebuild and start containers, capturing output
-echo ""
-echo "Building and starting docker containers (this may take a while)..."
-docker compose -f "$COMPOSE_FILE" up -d --build
-BUILD_EXIT=$?
-
-if [ $BUILD_EXIT -ne 0 ]; then
+if $NO_BUILD; then
     echo ""
-    echo "ERROR: Docker build/startup failed (exit code $BUILD_EXIT). Log screens not created."
-    exit 1
-fi
+    echo "Skipping build (--no-build). Attaching log screens to running containers..."
+else
+    # Step 2: Bring down containers
+    echo ""
+    echo "Bringing down docker containers..."
+    docker compose -f "$COMPOSE_FILE" down
 
-echo ""
-echo "Docker containers started successfully."
+    # Step 3: Rebuild and start containers
+    echo ""
+    echo "Building and starting docker containers (this may take a while)..."
+    docker compose -f "$COMPOSE_FILE" up -d --build
+    BUILD_EXIT=$?
+
+    if [ $BUILD_EXIT -ne 0 ]; then
+        echo ""
+        echo "ERROR: Docker build/startup failed (exit code $BUILD_EXIT). Log screens not created."
+        exit 1
+    fi
+
+    echo ""
+    echo "Docker containers started successfully."
+fi
 
 # Brief pause to let containers initialize before tailing
 sleep 2

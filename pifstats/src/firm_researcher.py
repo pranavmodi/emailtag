@@ -632,6 +632,17 @@ Return your response as a JSON object with these exact keys:
 }"""
 
 
+PAIN_POINT_LABELS = {
+    "status_update_request": "staying on top of case status updates",
+    "billing_dispute": "resolving billing discrepancies",
+    "scheduling_request": "coordinating appointment scheduling",
+    "rush_request": "managing urgent/rush requests",
+    "lien_negotiation": "navigating lien negotiations",
+    "records_request": "requesting medical records and images",
+    "general_inquiry": "general communication",
+    "other": "general operational matters",
+}
+
 OUTREACH_USER_PROMPT = """Generate LinkedIn outreach messages for this contact:
 
 Name: {name}
@@ -646,6 +657,7 @@ Context:
 Generation Instructions (follow these closely):
 {client_description}
 
+{behavioral_context_section}
 
 Remember:
 - Short messages are CONNECTION REQUESTS: under 300 chars, NO links, NO pitch, just genuine curiosity about them
@@ -665,10 +677,52 @@ Return ONLY valid JSON with keys: subjectShortPranav, shortPranav, subjectShortN
 OPENAI_CHAT_API_URL = "https://api.openai.com/v1/chat/completions"
 
 
+def _build_behavioral_context_section(
+    behavioral_context: Optional[Dict[str, Any]],
+    research_context: Optional[Dict[str, Any]],
+) -> str:
+    """Build the behavioral intelligence section for the outreach prompt."""
+    if not behavioral_context:
+        return ""
+
+    lines = ["Behavioral Intelligence (from analyzing their email patterns with Precise Imaging):"]
+
+    primary_pain = behavioral_context.get("primary_pain_point")
+    if primary_pain:
+        label = PAIN_POINT_LABELS.get(primary_pain, primary_pain.replace("_", " "))
+        lines.append(f"- Primary operational pain: {label}")
+
+    topic_dist = behavioral_context.get("topic_distribution") or {}
+    total = sum(topic_dist.values()) or 1
+    top_topics = sorted(topic_dist.items(), key=lambda x: x[1], reverse=True)[:3]
+    if top_topics:
+        topic_strs = [
+            f"{k.replace('_', ' ')} ({round(v/total*100)}%)"
+            for k, v in top_topics
+        ]
+        lines.append(f"- Top email topics: {', '.join(topic_strs)}")
+
+    if research_context:
+        firm_size = research_context.get("firm_size")
+        if firm_size:
+            lines.append(f"- Firm size: {firm_size}")
+
+    days_since = behavioral_context.get("days_since_last_contact")
+    if days_since is not None:
+        lines.append(f"- Last contacted Precise Imaging: {days_since} days ago")
+
+    if len(lines) <= 1:
+        return ""
+
+    return "\n".join(lines)
+
+
 def generate_outreach_messages(
     leaders: List[Dict[str, Any]],
     case_study_url: str,
     client_description: str,
+    behavioral_context: Optional[Dict[str, Any]] = None,
+    research_context: Optional[Dict[str, Any]] = None,
 ) -> tuple[List[Dict[str, Any]], List[str]]:
     """
     Generate personalized LinkedIn outreach messages for each leadership member.
@@ -698,6 +752,10 @@ def generate_outreach_messages(
         bio = leader.get("bio") or "No bio available"
         first_name = name.split()[0] if name else "there"
 
+        behavioral_section = _build_behavioral_context_section(
+            behavioral_context, research_context
+        )
+
         user_prompt = OUTREACH_USER_PROMPT.format(
             name=name,
             title=title,
@@ -706,6 +764,7 @@ def generate_outreach_messages(
             case_study_url=case_study_url,
             client_description=client_description,
             first_name=first_name,
+            behavioral_context_section=behavioral_section,
         )
 
         payload = {

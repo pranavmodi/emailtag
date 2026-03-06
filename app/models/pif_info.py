@@ -4,9 +4,9 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import ARRAY, DateTime, String, Text
+from sqlalchemy import ARRAY, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -84,6 +84,37 @@ class PifInfo(Base):
     last_researched_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime, nullable=True,
         comment="Timestamp of last research"
+    )
+
+    # Behavioral intelligence fields
+    behavioral_data: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True,
+        comment="Email behavior analysis: volumes, topics, sender roles, etc."
+    )
+
+    icp_score: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, index=True,
+        comment="ICP score 0-100 from deterministic scoring"
+    )
+
+    icp_tier: Mapped[Optional[str]] = mapped_column(
+        String(10), nullable=True, index=True,
+        comment="ICP tier: A (75-100), B (50-74), C (25-49), D (0-24)"
+    )
+
+    score_breakdown: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True,
+        comment="Detailed score breakdown by category"
+    )
+
+    icp_scored_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True,
+        comment="Timestamp of last ICP scoring"
+    )
+
+    # Outreach pipeline relationship
+    outreach_pipeline: Mapped[List["PifOutreachPipeline"]] = relationship(  # type: ignore[name-defined]
+        "PifOutreachPipeline", back_populates="pif", cascade="all, delete-orphan"
     )
 
     created_at: Mapped[datetime] = mapped_column(

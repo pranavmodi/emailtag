@@ -219,6 +219,34 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
 
         return list(contacts_by_key.values())
 
+    async def get_all_ids(self, db: AsyncSession) -> List[UUID]:
+        """Get all PIF IDs for batch processing."""
+        result = await db.execute(select(PifInfo.id))
+        return [row[0] for row in result.fetchall()]
+
+    async def get_scored_sorted(
+        self,
+        db: AsyncSession,
+        *,
+        tier_filter: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> tuple[List[PifInfo], int]:
+        """Get firms sorted by ICP score descending, optionally filtered by tier."""
+        query = select(PifInfo).where(PifInfo.icp_score.is_not(None))
+        count_query = select(func.count(PifInfo.id)).where(PifInfo.icp_score.is_not(None))
+
+        if tier_filter:
+            query = query.where(PifInfo.icp_tier == tier_filter)
+            count_query = count_query.where(PifInfo.icp_tier == tier_filter)
+
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
+
+        query = query.order_by(PifInfo.icp_score.desc()).offset(skip).limit(limit)
+        result = await db.execute(query)
+        return result.scalars().all(), total
+
     async def add_conversation(
         self,
         db: AsyncSession,

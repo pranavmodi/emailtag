@@ -26,11 +26,14 @@ import {
   ArrowUpDown,
   Copy,
   Check,
+  BarChart2,
 } from "lucide-react";
 
 import { ApiError, PifApi } from "@/lib/api";
-import type { PifInfoResponse, PifInfoListResponse, ProcessDayResponse, ResearchStatusResponse, OutreachMessageResult, FirmLookupResponse, FirmLookupConversation, FirmLookupCreateResponse } from "@/lib/types";
+import type { PifInfoResponse, PifInfoListResponse, ProcessDayResponse, ResearchStatusResponse, OutreachMessageResult, FirmLookupResponse, FirmLookupConversation, FirmLookupCreateResponse, AnalyticsSummary } from "@/lib/types";
 import { ResearchModal } from "./ResearchModal";
+import { BehavioralSection } from "./BehavioralSection";
+import { PipelineSection } from "./PipelineSection";
 import {
   Card,
   CardContent,
@@ -77,7 +80,15 @@ export default function PifListPage() {
   const [pageSize] = useState(20);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<string>("updated_at");
+  const [tierFilter, setTierFilter] = useState<string>("");
   const [researchModalFirm, setResearchModalFirm] = useState<PifInfoResponse | null>(null);
+
+  // Analytics summary state
+  const [analyticsSummary, setAnalyticsSummary] = useState<AnalyticsSummary | null>(null);
+  const [analyticsExpanded, setAnalyticsExpanded] = useState(false);
+  const [isBatchAnalyzing, setIsBatchAnalyzing] = useState(false);
+  const [isBatchScoring, setIsBatchScoring] = useState(false);
+  const [batchMsg, setBatchMsg] = useState<string | null>(null);
 
   // Process day state
   const [processDate, setProcessDate] = useState(() => {
@@ -176,6 +187,15 @@ export default function PifListPage() {
     }
   }, []);
 
+  const fetchAnalytics = useCallback(async () => {
+    try {
+      const summary = await PifApi.getAnalyticsSummary();
+      setAnalyticsSummary(summary);
+    } catch {
+      // Analytics are optional — don't block the page
+    }
+  }, []);
+
   useEffect(() => {
     let mounted = true;
 
@@ -186,7 +206,7 @@ export default function PifListPage() {
       }
 
       try {
-        await Promise.all([fetchData(), fetchResearchedFirms()]);
+        await Promise.all([fetchData(), fetchResearchedFirms(), fetchAnalytics()]);
       } catch (err) {
         if (!mounted) return;
         const message = err instanceof Error ? err.message : "Unexpected error occurred";
@@ -217,6 +237,32 @@ export default function PifListPage() {
     e.preventDefault();
     setCurrentPage(1);
     fetchData();
+  };
+
+  const handleAnalyzeAll = async () => {
+    setIsBatchAnalyzing(true);
+    setBatchMsg(null);
+    try {
+      const result = await PifApi.analyzeBehaviorBatch();
+      setBatchMsg(`Batch analysis queued for ${result.total ?? "all"} firms (task: ${result.task_id})`);
+    } catch (err) {
+      setBatchMsg(err instanceof Error ? err.message : "Batch analyze failed");
+    } finally {
+      setIsBatchAnalyzing(false);
+    }
+  };
+
+  const handleScoreAll = async () => {
+    setIsBatchScoring(true);
+    setBatchMsg(null);
+    try {
+      const result = await PifApi.scoreBatch();
+      setBatchMsg(`Batch scoring queued (task: ${result.task_id})`);
+    } catch (err) {
+      setBatchMsg(err instanceof Error ? err.message : "Batch score failed");
+    } finally {
+      setIsBatchScoring(false);
+    }
   };
 
   const handleProcessDay = async () => {
@@ -419,6 +465,138 @@ export default function PifListPage() {
 
         {activeTab === "pif" && (
           <>
+            {/* Analytics Summary */}
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={easing}
+            >
+              <div className="rounded-2xl border border-slate-200/70 bg-white/90 px-5 py-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 text-sm font-medium text-slate-700"
+                    onClick={() => {
+                      setAnalyticsExpanded(!analyticsExpanded);
+                      if (!analyticsSummary) fetchAnalytics();
+                    }}
+                  >
+                    <BarChart2 className="h-4 w-4 text-indigo-500" />
+                    Analytics
+                    {analyticsExpanded ? (
+                      <ChevronUp className="h-4 w-4 text-slate-400" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-slate-400" />
+                    )}
+                  </button>
+
+                  {analyticsSummary && !analyticsExpanded && (
+                    <div className="flex flex-wrap gap-2">
+                      {(["A","B","C","D"] as const).map((tier) => {
+                        const count = analyticsSummary.firms_by_tier[tier] ?? 0;
+                        const colors = { A: "emerald", B: "indigo", C: "amber", D: "slate" };
+                        const c = colors[tier];
+                        return (
+                          <span key={tier} className={`rounded-full bg-${c}-100 text-${c}-700 px-2.5 py-0.5 text-xs font-medium`}>
+                            {tier}: {count}
+                          </span>
+                        );
+                      })}
+                      {analyticsSummary.firms_needing_recontact > 0 && (
+                        <span className="rounded-full bg-rose-100 text-rose-700 px-2.5 py-0.5 text-xs font-medium">
+                          {analyticsSummary.firms_needing_recontact} need recontact
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="ml-auto flex gap-2">
+                    <Button
+                      variant="ghost"
+                      onClick={handleAnalyzeAll}
+                      disabled={isBatchAnalyzing}
+                      className="h-8 text-xs text-indigo-600 hover:bg-indigo-50"
+                    >
+                      {isBatchAnalyzing ? (
+                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Analyzing...</>
+                      ) : "Analyze All"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={handleScoreAll}
+                      disabled={isBatchScoring}
+                      className="h-8 text-xs text-purple-600 hover:bg-purple-50"
+                    >
+                      {isBatchScoring ? (
+                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Scoring...</>
+                      ) : "Score All"}
+                    </Button>
+                  </div>
+                </div>
+
+                {batchMsg && (
+                  <div className="mt-2 text-xs text-emerald-600">{batchMsg}</div>
+                )}
+
+                {analyticsExpanded && analyticsSummary && (
+                  <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4 border-t border-slate-100 pt-4">
+                    <div>
+                      <p className="text-xs text-slate-500 mb-2">Firms by Tier</p>
+                      <div className="space-y-1">
+                        {(["A","B","C","D"] as const).map((tier) => {
+                          const count = analyticsSummary.firms_by_tier[tier] ?? 0;
+                          const colors = { A: "bg-emerald-400", B: "bg-indigo-400", C: "bg-amber-400", D: "bg-slate-400" };
+                          return (
+                            <div key={tier} className="flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full ${colors[tier]}`} />
+                              <span className="text-xs text-slate-700">Tier {tier}</span>
+                              <span className="ml-auto text-xs font-medium text-slate-600">{count}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 mb-2">Top Pain Points</p>
+                      <div className="space-y-1">
+                        {analyticsSummary.top_pain_points.slice(0, 3).map((p) => (
+                          <div key={p.pain_point} className="flex items-center gap-1">
+                            <span className="text-xs text-slate-600 truncate">{p.pain_point.replace(/_/g, " ")}</span>
+                            <span className="ml-auto text-xs text-slate-400">{p.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 mb-2">Pipeline Funnel</p>
+                      <div className="space-y-1">
+                        {Object.entries(analyticsSummary.pipeline_funnel).map(([status, count]) => (
+                          <div key={status} className="flex items-center gap-1">
+                            <span className="text-xs text-slate-600">{status.replace(/_/g, " ")}</span>
+                            <span className="ml-auto text-xs text-slate-400">{count}</span>
+                          </div>
+                        ))}
+                        {Object.keys(analyticsSummary.pipeline_funnel).length === 0 && (
+                          <span className="text-xs text-slate-400">No outreach yet</span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 mb-2">Activity</p>
+                      <div className="space-y-1">
+                        <div className="text-xs text-slate-600">
+                          Contacted last 30d: <span className="font-medium">{analyticsSummary.firms_contacted_last_30_days}</span>
+                        </div>
+                        <div className="text-xs text-rose-600">
+                          Need recontact: <span className="font-medium">{analyticsSummary.firms_needing_recontact}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.section>
+
             {/* Process Day Card */}
             <motion.section
               initial={{ opacity: 0, y: 24 }}
@@ -557,8 +735,22 @@ export default function PifListPage() {
                     <Button type="submit">Search</Button>
                   </form>
 
-                  {/* Sort Selector */}
+                  {/* Sort + Tier Filter */}
                   <div className="flex items-center gap-2">
+                    <select
+                      value={tierFilter}
+                      onChange={(e) => {
+                        setTierFilter(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">All Tiers</option>
+                      <option value="A">Tier A</option>
+                      <option value="B">Tier B</option>
+                      <option value="C">Tier C</option>
+                      <option value="D">Tier D</option>
+                    </select>
                     <ArrowUpDown className="h-4 w-4 text-slate-400" />
                     <select
                       value={sortBy}
@@ -812,6 +1004,14 @@ function FirmCard({
           <Badge className="bg-slate-100 text-slate-600">
             {firm.phones.length} phones
           </Badge>
+          {firm.icp_tier && (() => {
+            const tierColors: Record<string, string> = { A: "bg-emerald-100 text-emerald-700", B: "bg-indigo-100 text-indigo-700", C: "bg-amber-100 text-amber-700", D: "bg-slate-100 text-slate-600" };
+            return (
+              <Badge className={tierColors[firm.icp_tier] ?? "bg-slate-100 text-slate-600"}>
+                Tier {firm.icp_tier} · {firm.icp_score}
+              </Badge>
+            );
+          })()}
           {firm.leadership && firm.leadership.length > 0 && (
             <Badge className="bg-emerald-100 text-emerald-700">
               {firm.leadership.length} leaders
@@ -1016,6 +1216,17 @@ function FirmCard({
                 <div className="text-sm text-slate-600">{firm.extraction_notes}</div>
               </div>
             )}
+
+            {/* Behavioral Intelligence */}
+            <BehavioralSection
+              firm={firm}
+              onAnalyzeComplete={() => {
+                /* parent could refresh firm data here */
+              }}
+            />
+
+            {/* Outreach Pipeline */}
+            <PipelineSection pifId={firm.id} />
 
             {/* Leadership (from research) */}
             {firm.leadership && firm.leadership.length > 0 && (

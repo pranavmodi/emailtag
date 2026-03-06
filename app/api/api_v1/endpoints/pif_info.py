@@ -30,6 +30,10 @@ from app.schemas.pif_info import (
     FirmLookupResponse,
     FirmLookupCreateRequest,
     FirmLookupCreateResponse,
+    AnalyzeBehaviorResponse,
+    BatchTaskResponse,
+    ScoreResponse,
+    AnalyticsSummaryResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -793,6 +797,8 @@ async def generate_outreach(
         leaders=leaders,
         case_study_url=request.case_study_url,
         client_description=request.client_description,
+        behavioral_context=pif.behavioral_data,
+        research_context=pif.research_data,
     )
 
     return OutreachResponse(
@@ -800,4 +806,243 @@ async def generate_outreach(
         firm_name=pif.firm_name,
         messages=[OutreachMessageResult(**msg) for msg in messages],
         errors=errors,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Behavior Analysis & ICP Scoring Endpoints
+# ---------------------------------------------------------------------------
+
+@router.post("/{pif_id}/analyze-behavior", response_model=AnalyzeBehaviorResponse)
+async def analyze_firm_behavior(
+    pif_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> AnalyzeBehaviorResponse:
+    """
+    Queue behavior analysis and ICP scoring for a firm.
+
+    Dispatches an async Celery task that:
+    - Fetches all emails for the firm's conversation IDs
+    - Classifies them by topic using gpt-4o-mini
+    - Computes ICP score deterministically
+    - Updates the pif_info record
+
+    Returns immediately with task_id for polling.
+    """
+    pif = await pif_info_crud.get(db, id=pif_id)
+    if not pif:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PIF info not found")
+
+    from app.tasks.behavior_analysis import analyze_firm_behavior_task
+    task = analyze_firm_behavior_task.delay(str(pif_id))
+
+    logger.info(f"Behavior analysis task queued for {pif.firm_name}: {task.id}")
+
+    return AnalyzeBehaviorResponse(
+        pif_id=pif_id,
+        firm_name=pif.firm_name,
+        task_id=task.id,
+        status="queued",
+        message=f"Behavior analysis queued for '{pif.firm_name}'. Task ID: {task.id}",
+    )
+
+
+@router.post("/analyze-behavior/batch", response_model=BatchTaskResponse)
+async def analyze_behavior_batch(
+    db: AsyncSession = Depends(get_db),
+) -> BatchTaskResponse:
+    """
+    Queue behavior analysis for ALL firms in the database.
+
+    Dispatches analyze_all_firms_task which fans out individual tasks per firm.
+    """
+    from app.tasks.behavior_analysis import analyze_all_firms_task
+    task = analyze_all_firms_task.delay()
+
+    # Get total count for informational message
+    all_ids = await pif_info_crud.get_all_ids(db)
+
+    return BatchTaskResponse(
+        task_id=task.id,
+        message=f"Batch behavior analysis queued for {len(all_ids)} firms. Task ID: {task.id}",
+        total=len(all_ids),
+    )
+
+
+@router.post("/{pif_id}/score", response_model=ScoreResponse)
+async def score_firm_icp(
+    pif_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> ScoreResponse:
+    """
+    Run ICP scoring synchronously on a firm's existing behavioral_data.
+
+    No LLM call - pure deterministic scoring.
+    Updates and returns the score immediately.
+
+    Requires behavioral_data to be present (run analyze-behavior first).
+    """
+    import sys
+    import os
+    project_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    )
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+
+    from pifstats.src.icp_scorer import score_firm
+
+    pif = await pif_info_crud.get(db, id=pif_id)
+    if not pif:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PIF info not found")
+
+    if not pif.behavioral_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No behavioral data found. Run analyze-behavior first.",
+        )
+
+    pif_dict = {
+        "behavioral_data": pif.behavioral_data or {},
+        "research_data": pif.research_data or {},
+        "website": pif.website,
+        "leadership": pif.leadership or [],
+        "phones": pif.phones or [],
+    }
+
+    score_result = score_firm(pif_dict)
+
+    from datetime import datetime as dt
+    await pif_info_crud.update(
+        db,
+        db_obj=pif,
+        obj_in={
+            "icp_score": score_result["icp_score"],
+            "icp_tier": score_result["icp_tier"],
+            "score_breakdown": score_result["score_breakdown"],
+            "icp_scored_at": dt.utcnow(),
+        },
+    )
+
+    return ScoreResponse(
+        pif_id=pif_id,
+        firm_name=pif.firm_name,
+        icp_score=score_result["icp_score"],
+        icp_tier=score_result["icp_tier"],
+        score_breakdown=score_result["score_breakdown"],
+    )
+
+
+@router.post("/score/batch", response_model=BatchTaskResponse)
+async def score_batch(
+    db: AsyncSession = Depends(get_db),
+) -> BatchTaskResponse:
+    """
+    Re-score all firms that have behavioral_data (runs as a Celery task).
+    """
+    from app.tasks.behavior_analysis import score_all_firms_task
+    task = score_all_firms_task.delay()
+
+    return BatchTaskResponse(
+        task_id=task.id,
+        message=f"Batch ICP scoring queued. Task ID: {task.id}",
+    )
+
+
+@router.get("/analytics/summary", response_model=AnalyticsSummaryResponse)
+async def get_analytics_summary(
+    db: AsyncSession = Depends(get_db),
+) -> AnalyticsSummaryResponse:
+    """
+    Aggregate analytics across all tracked PIF firms.
+
+    Returns:
+    - Total firms and breakdown by tier
+    - Top pain points from behavioral data
+    - Average monthly email volume by tier
+    - Pipeline funnel counts by status
+    - Firms contacted in last 30 days
+    - High-priority firms needing recontact (tier A/B, last contact > 60 days)
+    """
+    from sqlalchemy import select, func, text
+    from app.models.pif_info import PifInfo
+    from app.crud.pif_pipeline import pif_pipeline as pipeline_crud
+    from collections import Counter
+    from datetime import datetime as dt
+
+    # Total firms
+    total_result = await db.execute(select(func.count(PifInfo.id)))
+    total_firms = total_result.scalar() or 0
+
+    # Firms by tier
+    tier_result = await db.execute(
+        select(PifInfo.icp_tier, func.count(PifInfo.id))
+        .group_by(PifInfo.icp_tier)
+    )
+    firms_by_tier: Dict[str, int] = {"A": 0, "B": 0, "C": 0, "D": 0, "unscored": 0}
+    for tier, count in tier_result.fetchall():
+        key = tier if tier in firms_by_tier else "unscored"
+        firms_by_tier[key] = count
+
+    # Load all firms with behavioral data for aggregation
+    all_pifs_result = await db.execute(
+        select(PifInfo).where(PifInfo.behavioral_data.is_not(None))
+    )
+    all_pifs = all_pifs_result.scalars().all()
+
+    # Top pain points
+    pain_counter: Counter = Counter()
+    for pif in all_pifs:
+        bd = pif.behavioral_data or {}
+        pp = bd.get("primary_pain_point")
+        if pp:
+            pain_counter[pp] += 1
+
+    top_pain_points = [
+        {"pain_point": k, "count": v}
+        for k, v in pain_counter.most_common(5)
+    ]
+
+    # Average monthly volume by tier
+    tier_volumes: Dict[str, List[float]] = {}
+    for pif in all_pifs:
+        if not pif.icp_tier:
+            continue
+        bd = pif.behavioral_data or {}
+        monthly = bd.get("monthly_email_volume") or []
+        if monthly:
+            avg = sum(monthly) / len(monthly)
+            tier_volumes.setdefault(pif.icp_tier, []).append(avg)
+
+    avg_monthly_volume_by_tier = {
+        tier: round(sum(vols) / len(vols), 1) if vols else 0.0
+        for tier, vols in tier_volumes.items()
+    }
+
+    # Pipeline funnel
+    pipeline_funnel = await pipeline_crud.get_status_counts(db)
+
+    # Firms contacted last 30 days
+    contacted_30 = sum(
+        1 for pif in all_pifs
+        if (pif.behavioral_data or {}).get("days_since_last_contact") is not None
+        and (pif.behavioral_data or {}).get("days_since_last_contact") <= 30
+    )
+
+    # Firms needing recontact: tier A or B and last contact > 60 days
+    needing_recontact = sum(
+        1 for pif in all_pifs
+        if pif.icp_tier in ("A", "B")
+        and (pif.behavioral_data or {}).get("days_since_last_contact") is not None
+        and (pif.behavioral_data or {}).get("days_since_last_contact") > 60
+    )
+
+    return AnalyticsSummaryResponse(
+        total_firms_tracked=total_firms,
+        firms_by_tier=firms_by_tier,
+        top_pain_points=top_pain_points,
+        avg_monthly_volume_by_tier=avg_monthly_volume_by_tier,
+        pipeline_funnel=pipeline_funnel,
+        firms_contacted_last_30_days=contacted_30,
+        firms_needing_recontact=needing_recontact,
     )
