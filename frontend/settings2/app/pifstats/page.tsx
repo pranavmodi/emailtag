@@ -494,10 +494,14 @@ export default function PifListPage() {
                     <div className="flex flex-wrap gap-2">
                       {(["A","B","C","D"] as const).map((tier) => {
                         const count = analyticsSummary.firms_by_tier[tier] ?? 0;
-                        const colors = { A: "emerald", B: "indigo", C: "amber", D: "slate" };
-                        const c = colors[tier];
+                        const tierChipColors: Record<string, string> = {
+                          A: "bg-emerald-100 text-emerald-700",
+                          B: "bg-indigo-100 text-indigo-700",
+                          C: "bg-amber-100 text-amber-700",
+                          D: "bg-slate-100 text-slate-600",
+                        };
                         return (
-                          <span key={tier} className={`rounded-full bg-${c}-100 text-${c}-700 px-2.5 py-0.5 text-xs font-medium`}>
+                          <span key={tier} className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${tierChipColors[tier]}`}>
                             {tier}: {count}
                           </span>
                         );
@@ -964,16 +968,45 @@ function FirmCard({
     }
   };
 
+  const tierBorderColors: Record<string, string> = {
+    A: "border-l-emerald-400",
+    B: "border-l-indigo-400",
+    C: "border-l-amber-400",
+    D: "border-l-rose-300",
+  };
+  const tierIconBg: Record<string, string> = {
+    A: "bg-emerald-50",
+    B: "bg-indigo-50",
+    C: "bg-amber-50",
+    D: "bg-slate-50",
+  };
+  const tierIconColor: Record<string, string> = {
+    A: "text-emerald-600",
+    B: "text-indigo-600",
+    C: "text-amber-600",
+    D: "text-slate-500",
+  };
+  const tierBadgeColors: Record<string, string> = {
+    A: "bg-emerald-100 text-emerald-700",
+    B: "bg-indigo-100 text-indigo-700",
+    C: "bg-amber-100 text-amber-700",
+    D: "bg-slate-100 text-slate-600",
+  };
+  const hasTier = !!firm.icp_tier;
+  const borderClass = hasTier ? `border-l-4 ${tierBorderColors[firm.icp_tier!]}` : "";
+  const iconBg = hasTier ? (tierIconBg[firm.icp_tier!] ?? "bg-indigo-50") : "bg-indigo-50";
+  const iconColor = hasTier ? (tierIconColor[firm.icp_tier!] ?? "text-indigo-600") : "text-indigo-600";
+
   return (
-    <div className="rounded-xl border border-slate-200 bg-white transition-shadow hover:shadow-md">
+    <div className={`rounded-xl border border-slate-200 bg-white transition-shadow hover:shadow-md ${borderClass}`}>
       {/* Header - Always visible */}
       <div
         className="flex cursor-pointer items-center justify-between p-4"
         onClick={onToggle}
       >
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50">
-            <Building2 className="h-5 w-5 text-indigo-600" />
+          <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${iconBg}`}>
+            <Building2 className={`h-5 w-5 ${iconColor}`} />
           </div>
           <div>
             <h3 className="font-semibold text-slate-800">{firm.firm_name}</h3>
@@ -998,20 +1031,11 @@ function FirmCard({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Badge className="bg-slate-100 text-slate-600">
-            {firm.emails.length} emails
-          </Badge>
-          <Badge className="bg-slate-100 text-slate-600">
-            {firm.phones.length} phones
-          </Badge>
-          {firm.icp_tier && (() => {
-            const tierColors: Record<string, string> = { A: "bg-emerald-100 text-emerald-700", B: "bg-indigo-100 text-indigo-700", C: "bg-amber-100 text-amber-700", D: "bg-slate-100 text-slate-600" };
-            return (
-              <Badge className={tierColors[firm.icp_tier] ?? "bg-slate-100 text-slate-600"}>
-                Tier {firm.icp_tier} · {firm.icp_score}
-              </Badge>
-            );
-          })()}
+          {firm.icp_tier && (
+            <Badge className={`font-semibold ${tierBadgeColors[firm.icp_tier] ?? "bg-slate-100 text-slate-600"}`}>
+              {firm.icp_tier} · {firm.icp_score}
+            </Badge>
+          )}
           {firm.leadership && firm.leadership.length > 0 && (
             <Badge className="bg-emerald-100 text-emerald-700">
               {firm.leadership.length} leaders
