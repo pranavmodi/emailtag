@@ -162,69 +162,101 @@ class LienModificationDetectionService:
     
     def _analyze_strikethrough_results(self, strikethrough_result: Dict[str, Any]) -> bool:
         """
-        Analyze strikethrough detection results to determine if modifications exist.
-        STRICT MODE: Only count as modification if actual struck-through text is provided.
-        
+        Analyze strikethrough and attorney info detection results to determine if modifications exist.
+        STRICT MODE: Only count as modification if actual struck-through text or attorney info additions are found.
+
         Args:
-            strikethrough_result: Results from PDF strikethrough detection
-            
+            strikethrough_result: Results from PDF strikethrough/modification detection
+
         Returns:
             bool: True if modifications are detected
         """
         if not strikethrough_result.get("success", False):
             logger.warning("Strikethrough detection was not successful")
             return False
-        
+
         strikethrough_instances = strikethrough_result.get("strikethrough_text", [])
-        
-        if not strikethrough_instances:
-            logger.info("STRICT ANALYSIS: No strikethrough instances found - no modifications detected")
-            return False
-        
+        attorney_info_additions = strikethrough_result.get("attorney_info_additions", [])
+
         # Check confidence levels and content with STRICT requirements
         significant_modifications = 0
         rejected_instances = 0
-        
+
+        # --- Analyze strikethrough instances ---
         for instance in strikethrough_instances:
             confidence = instance.get("confidence", 0.0)
             text_content = instance.get("text", "").strip()
-            
+
             # STRICT: Must have actual text content and high confidence
             if not text_content or len(text_content) == 0:
                 rejected_instances += 1
                 logger.info(f"STRICT FILTER: Rejected strikethrough - no readable text content")
                 continue
-                
+
             # STRICT: Must be substantial text (complete sentence or meaningful phrase)
             word_count = len(text_content.split())
             if word_count < 4:
                 rejected_instances += 1
                 logger.info(f"STRICT FILTER: Rejected strikethrough - too short ({word_count} words < 4): '{text_content}'")
                 continue
-                
+
             if confidence < MODIFICATION_CONFIDENCE_THRESHOLD:
                 rejected_instances += 1
                 logger.info(f"STRICT FILTER: Rejected strikethrough - confidence {confidence:.2f} below threshold {MODIFICATION_CONFIDENCE_THRESHOLD}")
                 continue
-            
+
             # Count as significant modification if we have actual struck-through text
             significant_modifications += 1
             visual_desc = instance.get("visual_description", "")
-            logger.info(f"STRICT DETECTION: High-confidence modification found!")
+            logger.info(f"STRICT DETECTION: High-confidence strikethrough modification found!")
             logger.info(f"  • Struck-through text: '{text_content}'")
             logger.info(f"  • Word count: {word_count}")
             logger.info(f"  • Confidence: {confidence:.2f}")
             logger.info(f"  • Visual description: {visual_desc}")
             logger.info(f"  • Location: {instance.get('location', 'Unknown')}")
-        
+
+        # --- Analyze attorney info additions (address additions flag as modification) ---
+        accepted_attorney_additions = 0
+        rejected_attorney_additions = 0
+
+        for addition in attorney_info_additions:
+            confidence = addition.get("confidence", 0.0)
+            added_text = addition.get("text", "").strip()
+            info_type = addition.get("info_type", "other")
+            addition_type = addition.get("addition_type", "other")
+
+            if not added_text:
+                rejected_attorney_additions += 1
+                logger.info(f"STRICT FILTER: Rejected attorney info addition - no readable text")
+                continue
+
+            if confidence < MODIFICATION_CONFIDENCE_THRESHOLD:
+                rejected_attorney_additions += 1
+                logger.info(f"STRICT FILTER: Rejected attorney info addition - confidence {confidence:.2f} below threshold {MODIFICATION_CONFIDENCE_THRESHOLD}: '{added_text[:50]}'")
+                continue
+
+            # Attorney address additions count as a lien modification
+            significant_modifications += 1
+            accepted_attorney_additions += 1
+            logger.info(f"STRICT DETECTION: Attorney info addition detected as modification!")
+            logger.info(f"  • Added text: '{added_text}'")
+            logger.info(f"  • Info type: {info_type}")
+            logger.info(f"  • Addition method: {addition_type}")
+            logger.info(f"  • Confidence: {confidence:.2f}")
+            logger.info(f"  • Location: {addition.get('location', 'Unknown')}")
+
         modifications_detected = significant_modifications > 0
-        
+
         logger.info(f"STRICT LIEN MODIFICATION ANALYSIS COMPLETE:")
         logger.info(f"  • Total strikethrough instances: {len(strikethrough_instances)}")
-        logger.info(f"  • Accepted modifications: {significant_modifications}")
-        logger.info(f"  • Rejected instances: {rejected_instances}")
+        logger.info(f"  • Total attorney info additions: {len(attorney_info_additions)}")
+        logger.info(f"  • Accepted strikethrough modifications: {significant_modifications - accepted_attorney_additions}")
+        logger.info(f"  • Accepted attorney info modifications: {accepted_attorney_additions}")
+        logger.info(f"  • Total accepted modifications: {significant_modifications}")
+        logger.info(f"  • Rejected strikethrough instances: {rejected_instances}")
+        logger.info(f"  • Rejected attorney info additions: {rejected_attorney_additions}")
         logger.info(f"  • Final decision: {'MODIFIED' if modifications_detected else 'NOT MODIFIED'}")
-        
+
         return modifications_detected
     
     async def check_lien_modifications_in_email(

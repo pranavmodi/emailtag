@@ -646,6 +646,73 @@ def _has_lien_modified_tag(applied_tags: List[str]) -> bool:
     """Check if 'Lien Modified' tag is present in applied tags."""
     return TAG_LIEN_MODIFIED in applied_tags
 
+
+def _build_lien_modification_comment(email_obj: Any) -> str:
+    """
+    Build a specific comment describing the lien modification detected.
+
+    Inspects lien_modification_results on the email object to determine whether
+    the modification is due to strikethroughs, attorney info additions, or both,
+    and returns a descriptive comment string.
+    """
+    strikethrough_details = []
+    attorney_info_details = []
+
+    if hasattr(email_obj, 'lien_modification_results') and email_obj.lien_modification_results:
+        for mod_result in email_obj.lien_modification_results:
+            if not mod_result.get("modifications_detected"):
+                continue
+            strikethrough_data = mod_result.get("strikethrough_data", {})
+
+            # Collect strikethrough details
+            for inst in strikethrough_data.get("strikethrough_text", []):
+                text = inst.get("text", "").strip()
+                if text and len(text.split()) >= 4:
+                    strikethrough_details.append(text)
+
+            # Collect attorney info addition details
+            for addition in strikethrough_data.get("attorney_info_additions", []):
+                text = addition.get("text", "").strip()
+                info_type = addition.get("info_type", "other")
+                addition_type = addition.get("addition_type", "other")
+                if text:
+                    attorney_info_details.append({
+                        "text": text,
+                        "info_type": info_type,
+                        "addition_type": addition_type
+                    })
+
+    # Build comment based on what was actually detected
+    has_strikethroughs = len(strikethrough_details) > 0
+    has_attorney_info = len(attorney_info_details) > 0
+
+    if has_strikethroughs and has_attorney_info:
+        comment = "Lien modification detected: The attached document contains struck-through text and added attorney/firm information."
+    elif has_attorney_info:
+        comment = "Lien modification detected: The attached document contains added attorney/firm information (stamped, handwritten, or stickered onto the lien)."
+    elif has_strikethroughs:
+        comment = "Lien modification detected: The attached document contains struck-through or crossed-out text."
+    else:
+        comment = "Lien modification detected: The attached document appears to have been modified."
+
+    # Append strikethrough details
+    if strikethrough_details:
+        detail_text = "; ".join(strikethrough_details[:3])
+        comment += f" Struck-through text: {detail_text}"
+
+    # Append attorney info details
+    if attorney_info_details:
+        additions_summary = []
+        for item in attorney_info_details[:3]:
+            label = item["info_type"].replace("_", " ").title()
+            method = item["addition_type"]
+            additions_summary.append(f"{label} ({method}): {item['text']}")
+        comment += f" Added info: {'; '.join(additions_summary)}"
+
+    comment += " This lien requires human review before processing."
+    return comment
+
+
 def _determine_lien_type(applied_tags: List[str], signature_type: str) -> str:
     """
     Determine lien type based on tags and signature type.
@@ -1327,24 +1394,8 @@ async def handle_lien_request(
             tags_to_add = [TAG_AI_HUMAN_REVIEW_REQUIRED] + (additional_tags or [])
             _tag_for_human_review(front_conversation_id, additional_tags=additional_tags)
 
-            # Add comment to conversation describing the modification (no autorespond)
-            # Build a descriptive comment from the modification results if available
-            comment_text = "Lien modification detected: The attached document appears to contain strikethroughs, crossed-out text, or other modifications. This lien requires human review before processing."
-            if hasattr(email_obj, 'lien_modification_results') and email_obj.lien_modification_results:
-                for mod_result in email_obj.lien_modification_results:
-                    if mod_result.get("modifications_detected"):
-                        strikethrough_data = mod_result.get("strikethrough_data", {})
-                        instances = strikethrough_data.get("strikethrough_text", [])
-                        if instances:
-                            details = []
-                            for inst in instances:
-                                text = inst.get("text", "").strip()
-                                if text and len(text.split()) >= 4:
-                                    details.append(text)
-                            if details:
-                                detail_text = "; ".join(details[:3])
-                                comment_text += f" Struck-through text found: {detail_text}"
-                        break
+            # Add comment to conversation describing the specific modification detected
+            comment_text = _build_lien_modification_comment(email_obj)
             frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
 
             # In test mode, save to sandbox so the conversation appears in the sandbox UI

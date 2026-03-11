@@ -115,7 +115,7 @@ class Settings(BaseSettings):
     
     # OpenAI Settings for Vision/Multimodal
     OPENAI_VISION_MODEL: Optional[str] = "gpt-4o"  # Model for image analysis
-    OPENAI_MAX_TOKENS: Optional[int] = 1000  # Max tokens for vision responses
+    OPENAI_MAX_TOKENS: Optional[int] = 2000  # Max tokens for vision responses (strikethrough + attorney info + quality)
     
     # Strikethrough Detection Provider
     STRIKETHROUGH_PROVIDER: Optional[str] = "openai"  # google|roboflow|openai

@@ -46,7 +46,7 @@ class OpenAIProvider(StrikethroughProvider):
         super().__init__()
         # Lock to gpt-5.2 for responses-based vision detection (avoid o3/other models)
         self.model = 'gpt-5.2'
-        self.max_tokens = max_tokens or getattr(settings, 'OPENAI_MAX_TOKENS', 1000)
+        self.max_tokens = max_tokens or getattr(settings, 'OPENAI_MAX_TOKENS', 2000)
         self.api_key = getattr(settings, 'OPENAI_API_KEY', None)
 
         if not self.api_key:
@@ -91,10 +91,11 @@ class OpenAIProvider(StrikethroughProvider):
             return None
     
     def _prepare_vision_prompt(self) -> str:
-        """Prepare the prompt for GPT-5.2 vision to detect strikethrough text and document quality."""
-        return """Analyze this lien document for TWO things:
+        """Prepare the prompt for GPT-5.2 vision to detect strikethrough text, document quality, and attorney info additions."""
+        return """Analyze this lien document for THREE things:
 1. Detect text that has been crossed out or struck through with visible lines
 2. Assess the overall text clarity and readability of the document
+3. Detect added attorney/PI firm information (handwritten, stamped, or stickered)
 
 PART 1: STRIKETHROUGH DETECTION
 
@@ -130,6 +131,33 @@ PART 2: DOCUMENT QUALITY ASSESSMENT
 - BLURRY: Shows blur, pixelation, or compression artifacts but mostly readable
 - UNREADABLE: Severely degraded, illegible, cannot read reliably
 
+PART 3: ATTORNEY / PI FIRM INFORMATION ADDITIONS
+
+Look for attorney or PI (Personal Injury) firm information that has been ADDED to the document AFTER it was originally printed. This is VERY IMPORTANT to detect.
+
+Common forms of added attorney/firm information:
+- RUBBER STAMPS in any color (red, blue, black, purple) containing firm name, address, phone, fax, or attorney name. These often appear as a block of text with a distinct ink color different from the rest of the document.
+- Handwritten firm name, attorney name, or law office name
+- Handwritten address (street, city, state, zip)
+- Handwritten phone number, fax number, or email address
+- Sticker labels with attorney/firm contact information
+- Any contact details added in margins, headers, footers, blank spaces, or over/near existing text
+
+KEY VISUAL CLUES that information was added after printing:
+- Text in a DIFFERENT COLOR than the main document (e.g., red, blue, or purple ink vs black printed text)
+- Text that looks like a rubber stamp impression (slightly uneven ink, rectangular block of info)
+- Handwriting anywhere on the document
+- Stickers or labels applied on top of the page
+- Text that overlaps or is placed near but not aligned with the original printed layout
+
+DO NOT flag:
+- Pre-printed attorney fields that are part of the original lien form template
+- Typed/printed text in black that is clearly part of the original document layout
+- Signatures (these are expected on lien documents)
+- Filled-in form fields where the form clearly has a designated blank for that information (e.g., "Attorney Name: ___________" filled in with the same style as the rest of the form)
+
+When in doubt about whether text was added after printing, flag it — false positives are better than missed detections for this category.
+
 Response format:
 {
     "strikethrough_detected": boolean,
@@ -142,12 +170,23 @@ Response format:
             "is_in_signature_area": false
         }
     ],
+    "attorney_info_detected": boolean,
+    "attorney_info_additions": [
+        {
+            "added_text": "the text that was added (e.g., '123 Main St, Suite 200, Los Angeles, CA 90001')",
+            "addition_type": "handwritten" | "stamped" | "sticker" | "other",
+            "info_type": "address" | "firm_name" | "attorney_name" | "phone" | "other",
+            "confidence": 0.0 to 1.0,
+            "location": "where on page (e.g., 'top margin', 'next to attorney field')"
+        }
+    ],
     "document_quality": "GOOD" | "BLURRY" | "UNREADABLE",
     "quality_explanation": "brief explanation of quality rating",
-    "analysis": "what you see regarding strikethrough marks and document clarity"
+    "analysis": "what you see regarding strikethrough marks, added attorney info, and document clarity"
 }
 
-Report strikethrough_detected: true if you see ANY lines crossing through text, regardless of whether you can read the text underneath."""
+Report strikethrough_detected: true if you see ANY lines crossing through text, regardless of whether you can read the text underneath.
+Report attorney_info_detected: true if you see ANY handwritten, stamped, or stickered attorney/firm information added to the document."""
     
     async def _detect_strikethrough_in_image(self, image_path: str, page_number: int) -> List[Dict[str, Any]]:
         """Detect strikethrough in a single image using OpenAI Responses API."""
@@ -161,7 +200,7 @@ Report strikethrough_detected: true if you see ANY lines crossing through text, 
                 "Authorization": f"Bearer {self.api_key}"
             }
             
-            # Structured output schema for strikethrough detection and document quality
+            # Structured output schema for strikethrough detection, attorney info additions, and document quality
             schema: Dict[str, Any] = {
                 "type": "object",
                 "properties": {
@@ -181,11 +220,27 @@ Report strikethrough_detected: true if you see ANY lines crossing through text, 
                             "additionalProperties": False
                         }
                     },
+                    "attorney_info_detected": {"type": "boolean"},
+                    "attorney_info_additions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "added_text": {"type": "string"},
+                                "addition_type": {"type": "string", "enum": ["handwritten", "stamped", "sticker", "other"]},
+                                "info_type": {"type": "string", "enum": ["address", "firm_name", "attorney_name", "phone", "other"]},
+                                "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                                "location": {"type": "string"}
+                            },
+                            "required": ["added_text", "addition_type", "info_type", "confidence", "location"],
+                            "additionalProperties": False
+                        }
+                    },
                     "document_quality": {"type": "string", "enum": ["GOOD", "BLURRY", "UNREADABLE"]},
                     "quality_explanation": {"type": "string"},
                     "analysis": {"type": "string"}
                 },
-                "required": ["strikethrough_detected", "strikethrough_instances", "document_quality", "quality_explanation", "analysis"],
+                "required": ["strikethrough_detected", "strikethrough_instances", "attorney_info_detected", "attorney_info_additions", "document_quality", "quality_explanation", "analysis"],
                 "additionalProperties": False
             }
 
@@ -297,10 +352,34 @@ Report strikethrough_detected: true if you see ANY lines crossing through text, 
                             reason = "no text" if not struck_text else f"low confidence ({confidence:.2f} < 0.5)"
                             logger.info(f"✗ Rejected strikethrough - {reason}: '{struck_text[:50] if struck_text else 'N/A'}'")
 
+                # Process attorney info additions
+                attorney_info_additions = []
+                if parsed_result.get("attorney_info_detected", False):
+                    for addition in parsed_result.get("attorney_info_additions", []):
+                        added_text = addition.get("added_text", "").strip()
+                        confidence = addition.get("confidence", 0.0)
+
+                        if added_text and confidence >= 0.5:
+                            attorney_info_additions.append({
+                                "text": added_text,
+                                "page_number": page_number,
+                                "addition_type": addition.get("addition_type", "other"),
+                                "info_type": addition.get("info_type", "other"),
+                                "confidence": confidence,
+                                "location": addition.get("location", f"Page {page_number}"),
+                                "type": "attorney_info_addition"
+                            })
+                            logger.info(f"✓ Detected attorney info addition: '{added_text[:60]}...' "
+                                       f"(type: {addition.get('info_type')}, method: {addition.get('addition_type')}, confidence: {confidence:.2f})")
+                        else:
+                            reason = "no text" if not added_text else f"low confidence ({confidence:.2f} < 0.5)"
+                            logger.info(f"✗ Rejected attorney info addition - {reason}: '{added_text[:50] if added_text else 'N/A'}'")
+
                 # Store quality info for this page even if no strikethroughs detected
                 # This allows us to aggregate quality across all pages
                 return {
                     "strikethrough_instances": strikethrough_instances,
+                    "attorney_info_additions": attorney_info_additions,
                     "document_quality": document_quality,
                     "quality_explanation": quality_explanation
                 }
@@ -309,6 +388,7 @@ Report strikethrough_detected: true if you see ANY lines crossing through text, 
             logger.error(f"Error detecting strikethrough in image {image_path}: {e}")
             return {
                 "strikethrough_instances": [],
+                "attorney_info_additions": [],
                 "document_quality": "GOOD",  # Default to GOOD on error
                 "quality_explanation": f"Error during quality assessment: {str(e)}"
             }
@@ -329,6 +409,7 @@ Report strikethrough_detected: true if you see ANY lines crossing through text, 
         
         try:
             all_strikethrough_instances = []
+            all_attorney_info_additions = []
             quality_assessments = []  # Track quality for each page
             had_error = False
 
@@ -347,9 +428,10 @@ Report strikethrough_detected: true if you see ANY lines crossing through text, 
                     page_result = {}
                     had_error = True
 
-                # Extract strikethrough instances and quality data
+                # Extract strikethrough instances, attorney info additions, and quality data
                 if isinstance(page_result, dict):
                     page_instances = page_result.get("strikethrough_instances", [])
+                    page_attorney_additions = page_result.get("attorney_info_additions", [])
                     document_quality = page_result.get("document_quality", "GOOD")
                     quality_explanation = page_result.get("quality_explanation", "")
                     if "Error during quality assessment" in quality_explanation or not page_instances:
@@ -357,11 +439,13 @@ Report strikethrough_detected: true if you see ANY lines crossing through text, 
                         had_error = had_error or ("Error during quality assessment" in quality_explanation)
                 else:
                     page_instances = []
+                    page_attorney_additions = []
                     document_quality = "GOOD"
                     quality_explanation = "Unexpected page_result type"
                     had_error = True
 
                 all_strikethrough_instances.extend(page_instances)
+                all_attorney_info_additions.extend(page_attorney_additions)
                 quality_assessments.append({
                     "page": i,
                     "quality": document_quality,
@@ -389,28 +473,32 @@ Report strikethrough_detected: true if you see ANY lines crossing through text, 
             pages_with_strikethrough = len(set(instance["page_number"] for instance in all_strikethrough_instances))
             summary = {
                 "total_strikethrough_instances": len(all_strikethrough_instances),
+                "total_attorney_info_additions": len(all_attorney_info_additions),
                 "pages_with_strikethrough": pages_with_strikethrough,
                 "total_pages": len(image_paths),
                 "overall_quality": overall_quality,
                 "quality_by_page": quality_assessments
             }
 
-            logger.info(f"OpenAI GPT-5.2 processing complete. Found {len(all_strikethrough_instances)} strikethrough instances.")
+            logger.info(f"OpenAI GPT-5.2 processing complete. Found {len(all_strikethrough_instances)} strikethrough instances, "
+                        f"{len(all_attorney_info_additions)} attorney info additions.")
 
             return {
                 "success": not had_error,
                 "strikethrough_text": all_strikethrough_instances,
+                "attorney_info_additions": all_attorney_info_additions,
                 "provider": "openai",
                 "summary": summary,
                 "document_quality": overall_quality  # Top-level quality for easy access
             }
-            
+
         except Exception as e:
             logger.error(f"Error during OpenAI GPT-5.2 processing: {e}", exc_info=True)
             return {
                 "success": False,
                 "error": f"Processing error: {str(e)}",
                 "strikethrough_text": [],
+                "attorney_info_additions": [],
                 "provider": "openai"
             }
 
@@ -525,10 +613,11 @@ async def _confirm_detection(
     """
     # Check if first run found issues
     has_strikethrough = len(first_result.get("strikethrough_text", [])) > 0
+    has_attorney_info = len(first_result.get("attorney_info_additions", [])) > 0
     # Only flag for confirmation if UNREADABLE (not BLURRY - BLURRY is acceptable)
     is_unreadable = first_result.get("document_quality", "GOOD") == "UNREADABLE"
 
-    if not has_strikethrough and not is_unreadable:
+    if not has_strikethrough and not has_attorney_info and not is_unreadable:
         # No issues found, no need to confirm
         logger.debug("No issues detected, skipping confirmation")
         return first_result
@@ -537,6 +626,8 @@ async def _confirm_detection(
     issues_detected = []
     if has_strikethrough:
         issues_detected.append(f"strikethrough ({len(first_result['strikethrough_text'])} instances)")
+    if has_attorney_info:
+        issues_detected.append(f"attorney info additions ({len(first_result['attorney_info_additions'])} instances)")
     if is_unreadable:
         issues_detected.append(f"quality: {first_result['document_quality']}")
 
@@ -548,11 +639,13 @@ async def _confirm_detection(
 
     # Compare results
     second_has_strikethrough = len(second_result.get("strikethrough_text", [])) > 0
+    second_has_attorney_info = len(second_result.get("attorney_info_additions", [])) > 0
     # Only confirm UNREADABLE if both runs agree it's UNREADABLE
     second_is_unreadable = second_result.get("document_quality", "GOOD") == "UNREADABLE"
 
     # Only confirm if both runs agree
     confirmed_strikethrough = has_strikethrough and second_has_strikethrough
+    confirmed_attorney_info = has_attorney_info and second_has_attorney_info
     confirmed_unreadable = is_unreadable and second_is_unreadable
 
     # Log confirmation results
@@ -561,44 +654,43 @@ async def _confirm_detection(
     elif has_strikethrough:
         logger.info(f"✗ Strikethrough NOT confirmed (only first run detected it)")
 
+    if confirmed_attorney_info:
+        logger.info(f"✓ Attorney info additions CONFIRMED (both runs detected it)")
+    elif has_attorney_info:
+        logger.info(f"✗ Attorney info additions NOT confirmed (only first run detected it)")
+
     if confirmed_unreadable:
         logger.info(f"✓ Quality issue CONFIRMED (both runs: {first_result['document_quality']} / {second_result['document_quality']})")
     elif is_unreadable:
         logger.info(f"✗ Quality issue NOT confirmed (first: {first_result['document_quality']}, second: {second_result['document_quality']})")
 
-    # Build confirmed result
-    if confirmed_strikethrough and confirmed_unreadable:
-        # Both confirmed, use first result
-        logger.info("Both strikethrough and quality issues confirmed")
-        return first_result
-    elif confirmed_strikethrough:
-        # Only strikethrough confirmed, keep strikethrough but reset quality
-        logger.info("Only strikethrough confirmed, resetting quality to GOOD")
-        result = first_result.copy()
-        result["document_quality"] = "GOOD"
-        if "summary" in result:
-            result["summary"]["overall_quality"] = "GOOD"
-        return result
-    elif confirmed_unreadable:
-        # Only quality issue confirmed (UNREADABLE), keep quality but clear strikethrough
-        logger.info("Only quality issue confirmed (UNREADABLE), clearing strikethrough detections")
-        result = first_result.copy()
+    # Build confirmed result — start from first_result and selectively clear unconfirmed detections
+    result = first_result.copy()
+
+    # Clear unconfirmed strikethrough
+    if not confirmed_strikethrough:
         result["strikethrough_text"] = []
         if "summary" in result:
             result["summary"]["total_strikethrough_instances"] = 0
             result["summary"]["pages_with_strikethrough"] = 0
-        return result
-    else:
-        # Nothing confirmed, return clean result
-        logger.info("No issues confirmed, returning clean result")
-        result = first_result.copy()
-        result["strikethrough_text"] = []
+
+    # Clear unconfirmed attorney info
+    if not confirmed_attorney_info:
+        result["attorney_info_additions"] = []
+        if "summary" in result:
+            result["summary"]["total_attorney_info_additions"] = 0
+
+    # Clear unconfirmed quality issue
+    if not confirmed_unreadable:
         result["document_quality"] = "GOOD"
         if "summary" in result:
-            result["summary"]["total_strikethrough_instances"] = 0
-            result["summary"]["pages_with_strikethrough"] = 0
             result["summary"]["overall_quality"] = "GOOD"
-        return result
+
+    any_confirmed = confirmed_strikethrough or confirmed_attorney_info or confirmed_unreadable
+    logger.info(f"Confirmation complete: strikethrough={confirmed_strikethrough}, "
+                f"attorney_info={confirmed_attorney_info}, unreadable={confirmed_unreadable}")
+
+    return result
 
 
 # Convenience functions
