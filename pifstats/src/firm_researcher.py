@@ -516,6 +516,215 @@ LEADERSHIP_MEMBER_SCHEMA = {
 }
 
 
+class StaffMember(BaseModel):
+    """Operational staff member."""
+    name: str = Field(default="", description="Full name")
+    title: str = Field(default="", description="Job title")
+    role_category: str = Field(
+        default="other",
+        description="Role category: intake_specialist, case_manager, paralegal, office_manager, billing_coordinator, medical_records, other"
+    )
+    email: Optional[str] = Field(None, description="Email address")
+    phone: Optional[str] = Field(None, description="Phone number")
+    linkedin: Optional[str] = Field(None, description="LinkedIn profile URL")
+    bio: Optional[str] = Field(None, description="Brief bio or description")
+
+
+class StaffResearchResult(BaseModel):
+    """Result of staff research."""
+    staff: List[StaffMember] = Field(default_factory=list)
+    sources: List[str] = Field(default_factory=list)
+
+
+STAFF_RESEARCH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "staff": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Full name"},
+                    "title": {"type": "string", "description": "Job title at the firm"},
+                    "role_category": {
+                        "type": "string",
+                        "enum": [
+                            "intake_specialist",
+                            "case_manager",
+                            "paralegal",
+                            "office_manager",
+                            "billing_coordinator",
+                            "medical_records",
+                            "other"
+                        ],
+                        "description": "Best matching role category"
+                    },
+                    "email": {"type": ["string", "null"], "description": "Email address if found"},
+                    "phone": {"type": ["string", "null"], "description": "Phone number if found"},
+                    "linkedin": {"type": ["string", "null"], "description": "LinkedIn profile URL starting with https://www.linkedin.com/in/. Must be an actual URL or null."},
+                    "bio": {"type": ["string", "null"], "description": "Brief bio or role description"}
+                },
+                "required": ["name", "title", "role_category", "email", "phone", "linkedin", "bio"],
+                "additionalProperties": False
+            },
+            "description": "Operational staff members (non-attorney)"
+        },
+        "sources": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "URLs of sources used for research"
+        }
+    },
+    "required": ["staff", "sources"],
+    "additionalProperties": False
+}
+
+
+STAFF_RESEARCH_PROMPT = """You are an expert legal industry researcher. Research the following personal injury law firm to find their OPERATIONAL STAFF (non-attorney roles).
+
+Firm Name: {firm_name}
+Website: {website}
+Known Location: {location}
+
+You are looking for people in these roles:
+1. **Intake Specialists / Intake Coordinators** - People who handle new case intake, answer initial calls
+2. **Case Managers / Case Coordinators** - People who manage ongoing cases, coordinate between parties
+3. **Paralegals / Legal Assistants** - People who assist attorneys with case prep, document management
+4. **Office Managers / Operations Managers** - People who run day-to-day office operations
+5. **Billing Coordinators / Billing Specialists** - People who handle billing, invoicing, collections
+6. **Medical Records Coordinators** - People who request and manage medical records
+
+Do NOT include:
+- Attorneys, partners, associates, or counsel (these are leadership roles)
+- Receptionists or general admin unless they have a specific operational title
+
+Search strategies:
+- Check the firm's website staff/team pages (often separate from attorneys)
+- Search LinkedIn: "[Firm Name] intake specialist", "[Firm Name] case manager", "[Firm Name] paralegal"
+- Search LinkedIn: "[Firm Name] office manager", "[Firm Name] legal assistant"
+- Check Google: "[Firm Name] staff" or "[Firm Name] team"
+
+IMPORTANT FORMATTING RULES:
+- For LinkedIn URLs: Only include actual LinkedIn profile URLs (e.g., https://www.linkedin.com/in/jane-smith). Return null if not found.
+- For email/phone: Return actual values or null if not found.
+- Only include people you actually find evidence of. Do not make up any information.
+- Classify each person into the best matching role_category based on their title."""
+
+
+def research_firm_staff(
+    firm_name: str,
+    website: Optional[str] = None,
+    location: Optional[str] = None
+) -> Optional[StaffResearchResult]:
+    """
+    Research operational staff at a law firm using OpenAI web search.
+
+    Searches for intake specialists, case managers, paralegals, office managers, etc.
+
+    Args:
+        firm_name: Name of the law firm
+        website: Firm website URL if known
+        location: Known location/address of the firm
+
+    Returns:
+        StaffResearchResult with found staff, or None if research fails
+    """
+    if not firm_name:
+        logger.warning("No firm name provided for staff research")
+        return None
+
+    headers = {
+        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    prompt = STAFF_RESEARCH_PROMPT.format(
+        firm_name=firm_name,
+        website=website or "Not provided",
+        location=location or "Not provided"
+    )
+
+    payload = {
+        "model": "gpt-4o",
+        "input": [
+            {
+                "role": "system",
+                "content": "You are an expert legal industry researcher with access to web search. Find operational staff members at law firms. Only report people you find real evidence of."
+            },
+            {"role": "user", "content": prompt}
+        ],
+        "tools": [
+            {
+                "type": "web_search_preview",
+                "search_context_size": "high"
+            }
+        ],
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "staff_research_result",
+                "strict": True,
+                "schema": STAFF_RESEARCH_SCHEMA
+            }
+        }
+    }
+
+    try:
+        with httpx.Client(timeout=300.0, verify=False) as client:
+            logger.info(f"Starting staff research for firm: {firm_name}")
+            response = client.post(OPENAI_API_URL, headers=headers, json=payload)
+            response.raise_for_status()
+
+            result = response.json()
+            output = result.get("output", [])
+            content = ""
+            for item in output:
+                if item.get("type") == "message":
+                    for content_item in item.get("content", []):
+                        if content_item.get("type") == "output_text":
+                            content = content_item.get("text", "")
+
+            if not content:
+                logger.error("Empty response from OpenAI staff research")
+                return None
+
+            research_data = json.loads(content)
+
+            staff = [
+                StaffMember(**member)
+                for member in research_data.get("staff", [])
+            ]
+
+            research_result = StaffResearchResult(
+                staff=staff,
+                sources=research_data.get("sources", [])
+            )
+
+            usage = result.get("usage", {})
+            if usage:
+                logger.info(
+                    f"Staff research token usage - Input: {usage.get('input_tokens', 0)}, "
+                    f"Output: {usage.get('output_tokens', 0)}, "
+                    f"Total: {usage.get('total_tokens', 0)}"
+                )
+
+            logger.info(f"Staff research complete for {firm_name}: found {len(staff)} staff members")
+            return research_result
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error during staff research: {e.response.status_code} - {e.response.text}")
+        return None
+    except httpx.RequestError as e:
+        logger.error(f"Request error during staff research: {str(e)}")
+        return None
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error in staff research: {str(e)}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error during staff research: {str(e)}")
+        return None
+
+
 OUTREACH_SYSTEM_PROMPT = """You are an expert at writing warm, conversational LinkedIn outreach messages for a B2B AI company called Possible Minds.
 
 You need to generate 8 outputs for each contact:

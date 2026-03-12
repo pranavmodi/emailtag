@@ -742,6 +742,52 @@ async def get_research_status(
         )
 
 
+@router.post("/{pif_id}/research-staff", response_model=ResearchStartResponse)
+async def research_staff(
+    pif_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> ResearchStartResponse:
+    """
+    Start async staff research for a PIF using OpenAI web search.
+
+    Searches for operational staff: intake specialists, case managers,
+    paralegals, office managers, billing coordinators, etc.
+
+    Args:
+        pif_id: PIF info ID
+        db: Database session
+
+    Returns:
+        Task ID and status for polling
+    """
+    pif = await pif_info_crud.get(db, id=pif_id)
+    if not pif:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PIF info not found",
+        )
+
+    await pif_info_crud.update(
+        db,
+        db_obj=pif,
+        obj_in={"staff_research_status": "queued"}
+    )
+
+    from app.tasks.firm_research import research_staff_task
+
+    task = research_staff_task.delay(str(pif_id))
+
+    logger.info(f"Staff research task queued for firm: {pif.firm_name}, task_id: {task.id}")
+
+    return ResearchStartResponse(
+        pif_id=pif_id,
+        firm_name=pif.firm_name,
+        task_id=task.id,
+        status="queued",
+        message="Staff research task queued. Poll /research-status/{task_id} for progress."
+    )
+
+
 @router.post("/{pif_id}/generate-outreach", response_model=OutreachResponse)
 async def generate_outreach(
     pif_id: UUID,

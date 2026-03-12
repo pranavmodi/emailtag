@@ -1808,6 +1808,7 @@ async def handle_lien_request(
 
         # Process all split documents (from all attachments)
         upload_results = []
+        rejected_splits = []  # Splits skipped due to missing/mismatched signature
         has_patient_demo = False
         has_liens = False
         all_unique_patient_ids = set()
@@ -1871,6 +1872,27 @@ async def handle_lien_request(
                         )
                         continue
 
+                    # Check per-split signature type — reject unsigned pages in a mixed document
+                    split_sig_type = split_doc.get("signature_type", "UNKNOWN")
+                    if split_sig_type == "UNKNOWN":
+                        if split_lien_type.upper() == "RAD":
+                            lien_type_label = "Professional Lien (Report)"
+                        else:
+                            lien_type_label = "Technical Lien (Imaging)"
+                        sig_label = "attorney" if signature_type == "ASL" else "patient"
+                        logger.warning(
+                            f"📄 {signature_type} AGENT: Rejecting split {i+1}/{len(all_split_documents)} — "
+                            f"{lien_type_label} is unsigned (Patient={split_patient_id}). "
+                            f"Expected {signature_type} signature but page has signature_type=UNKNOWN."
+                        )
+                        rejected_splits.append({
+                            "patient_id": split_patient_id,
+                            "lien_type": split_lien_type,
+                            "lien_type_label": lien_type_label,
+                            "reason": f"{sig_label} signature not found"
+                        })
+                        continue
+
                     has_liens = True
                     logger.info(
                         f"📄 {signature_type} AGENT: Processing lien split {i+1}/{len(all_split_documents)}: "
@@ -1899,8 +1921,45 @@ async def handle_lien_request(
                         logger.warning(f"📄 {signature_type} AGENT: Upload failed for split {i+1}")
 
             # Check if all uploads succeeded
-            all_uploads_success = all(result["success"] for result in upload_results)
-            upload_success = all_uploads_success
+            lien_upload_results = [r for r in upload_results if r.get("page_type") == "lien"]
+            if lien_upload_results:
+                all_uploads_success = all(result["success"] for result in upload_results)
+                upload_success = all_uploads_success
+            elif rejected_splits and not has_patient_demo:
+                # ALL lien splits were rejected (unsigned) and no patient demos — tag for human review
+                logger.warning(
+                    f"📄 {signature_type} AGENT: All lien splits rejected due to missing signatures for "
+                    f"conversation {front_conversation_id}. Rejected: {rejected_splits}"
+                )
+                try:
+                    _tag_for_human_review(front_conversation_id)
+
+                    rejection_details = "; ".join(
+                        f"{r['lien_type_label']} ({r['reason']})" for r in rejected_splits
+                    )
+                    comment_text = (
+                        f"All lien documents in this email are unsigned. "
+                        f"Rejected: {rejection_details}. "
+                        f"Please request properly signed lien documents."
+                    )
+                    frontapp_service.add_conversation_comment(front_conversation_id, comment_text)
+
+                    return {
+                        "agent_handled": True,
+                        "processed_flag": True,
+                        "details": {
+                            "action": "tagged_for_human_review_all_unsigned",
+                            "lien_type": lien_type,
+                            "signature_type": signature_type,
+                            "rejected_splits": rejected_splits
+                        }
+                    }
+                except Exception as e:
+                    logger.error(f"Failed to handle all-rejected splits: {e}")
+                    return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"All splits unsigned and error tagging: {e}"}}
+            else:
+                # No lien uploads but patient demos exist — treat as success for demo upload
+                upload_success = all(result["success"] for result in upload_results) if upload_results else False
 
             # Add Patient Demo tag if patient demo documents were detected
             if has_patient_demo:
@@ -2170,10 +2229,42 @@ async def handle_lien_request(
                     any_has_demo = True
 
                 if use_consolidated:
+                    # Build per-patient rejection notice
+                    pid_rejected = [r for r in rejected_splits if r.get("patient_id") == pid]
+                    pid_unsigned_notice = ""
+                    if pid_rejected:
+                        sig_label = "attorney" if signature_type == "ASL" else "patient"
+                        rejection_lines = "".join(
+                            f"<li>{r['lien_type_label']}: {r['reason']}. "
+                            f"Please resubmit with the {sig_label}'s signature.</li>"
+                            for r in pid_rejected
+                        )
+                        pid_unsigned_notice = (
+                            f"<br/><p><strong>The following lien(s) could not be processed:</strong></p>"
+                            f"<ul>{rejection_lines}</ul>"
+                        )
+                    pid_placeholder_values["unsigned_lien_notice"] = pid_unsigned_notice
+
                     # Render the per-patient section template
                     pid_section = _safe_format_template(section_template, **pid_placeholder_values)
+
+                    # If template didn't consume {unsigned_lien_notice}, inject after intro
+                    if pid_unsigned_notice and pid_unsigned_notice not in pid_section:
+                        intro_marker = "uploaded to the patient's file."
+                        if intro_marker in pid_section:
+                            insert_pos = pid_section.index(intro_marker) + len(intro_marker)
+                            remaining = pid_section[insert_pos:]
+                            for suffix in ["</p>", "</div>", "<br/>", "<br>"]:
+                                if remaining.lstrip().startswith(suffix):
+                                    insert_pos = pid_section.index(suffix, insert_pos) + len(suffix)
+                                    break
+                            pid_section = pid_section[:insert_pos] + pid_unsigned_notice + pid_section[insert_pos:]
+                        else:
+                            pid_section = pid_unsigned_notice + pid_section
+
                     if pid_has_demo:
                         pid_section += "<br/><p><em>Note: Patient demographic documents have also been uploaded.</em></p>"
+
                     rendered_sections.append(pid_section)
 
                     # Collect Westfax recipients across all patients
@@ -2191,7 +2282,38 @@ async def handle_lien_request(
                     })
                 else:
                     # Fallback: per-patient separate emails (original behavior)
+                    # Build per-patient rejection notice
+                    pid_rejected = [r for r in rejected_splits if r.get("patient_id") == pid]
+                    pid_unsigned_notice = ""
+                    if pid_rejected:
+                        sig_label = "attorney" if signature_type == "ASL" else "patient"
+                        rejection_lines = "".join(
+                            f"<li>{r['lien_type_label']}: {r['reason']}. "
+                            f"Please resubmit with the {sig_label}'s signature.</li>"
+                            for r in pid_rejected
+                        )
+                        pid_unsigned_notice = (
+                            f"<br/><p><strong>The following lien(s) could not be processed:</strong></p>"
+                            f"<ul>{rejection_lines}</ul>"
+                        )
+                    pid_placeholder_values["unsigned_lien_notice"] = pid_unsigned_notice
+
                     pid_reply_body = _safe_format_template(templates["success"], **pid_placeholder_values)
+
+                    # If template didn't consume {unsigned_lien_notice}, inject after intro
+                    if pid_unsigned_notice and pid_unsigned_notice not in pid_reply_body:
+                        intro_marker = "uploaded to the patient's file."
+                        if intro_marker in pid_reply_body:
+                            insert_pos = pid_reply_body.index(intro_marker) + len(intro_marker)
+                            remaining = pid_reply_body[insert_pos:]
+                            for suffix in ["</p>", "</div>", "<br/>", "<br>"]:
+                                if remaining.lstrip().startswith(suffix):
+                                    insert_pos = pid_reply_body.index(suffix, insert_pos) + len(suffix)
+                                    break
+                            pid_reply_body = pid_reply_body[:insert_pos] + pid_unsigned_notice + pid_reply_body[insert_pos:]
+                        else:
+                            pid_reply_body = pid_unsigned_notice + pid_reply_body
+
                     if pid_has_demo:
                         pid_reply_body += "<br/><p><em>Note: Patient demographic documents have also been uploaded.</em></p>"
 
@@ -2292,7 +2414,8 @@ async def handle_lien_request(
                     "total_splits": len(all_split_documents) if all_split_documents else 0,
                     "upload_results": upload_results,
                     "per_patient_results": per_patient_results,
-                    "consolidated_response": use_consolidated
+                    "consolidated_response": use_consolidated,
+                    "rejected_splits": rejected_splits
                 }
             }
 
@@ -2375,8 +2498,51 @@ async def handle_lien_request(
             placeholder_values.update(custom_placeholders)
             logger.info(f"📝 Merged {len(custom_placeholders)} custom placeholders into template")
 
+        # Build rejection notice HTML for unsigned lien pages (used across all response paths)
+        unsigned_lien_notice = ""
+        if rejected_splits:
+            sig_label = "attorney" if signature_type == "ASL" else "patient"
+            rejection_lines = "".join(
+                f"<li>{r['lien_type_label']}: {r['reason']}. "
+                f"Please resubmit with the {sig_label}'s signature.</li>"
+                for r in rejected_splits
+            )
+            unsigned_lien_notice = (
+                f"<br/><p><strong>The following lien(s) could not be processed:</strong></p>"
+                f"<ul>{rejection_lines}</ul>"
+            )
+            logger.info(
+                f"📄 {signature_type} AGENT: Built rejection notice for {len(rejected_splits)} unsigned split(s) "
+                f"for conversation {front_conversation_id}"
+            )
+
+        # Add rejection notice as a placeholder so it can be positioned in the template
+        placeholder_values["unsigned_lien_notice"] = unsigned_lien_notice
+
         # Generate success response with nested placeholder resolution
         reply_body = _safe_format_template(templates["success"], **placeholder_values)
+
+        # If the template didn't contain {unsigned_lien_notice} placeholder, inject after intro paragraph
+        if unsigned_lien_notice and unsigned_lien_notice in reply_body:
+            # Template consumed the placeholder — already positioned correctly
+            pass
+        elif unsigned_lien_notice:
+            # Template doesn't have the placeholder — inject after the "Thank you" intro paragraph
+            intro_marker = "uploaded to the patient's file."
+            if intro_marker in reply_body:
+                insert_pos = reply_body.index(intro_marker) + len(intro_marker)
+                # Find the end of the enclosing HTML tag (e.g., </p>) if present
+                remaining = reply_body[insert_pos:]
+                tag_end = ""
+                for suffix in ["</p>", "</div>", "<br/>", "<br>"]:
+                    if remaining.lstrip().startswith(suffix):
+                        tag_end = suffix
+                        insert_pos = reply_body.index(tag_end, insert_pos) + len(tag_end)
+                        break
+                reply_body = reply_body[:insert_pos] + unsigned_lien_notice + reply_body[insert_pos:]
+            else:
+                # Fallback: prepend to body
+                reply_body = unsigned_lien_notice + reply_body
 
         # Add note about patient demo if present
         if has_patient_demo:
@@ -2430,7 +2596,8 @@ async def handle_lien_request(
                 "has_patient_demo": has_patient_demo,
                 "upload_success": upload_success,
                 "total_splits": len(all_split_documents) if all_split_documents else 0,
-                "upload_results": upload_results
+                "upload_results": upload_results,
+                "rejected_splits": rejected_splits
             }
         }
 

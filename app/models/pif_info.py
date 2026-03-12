@@ -86,6 +86,17 @@ class PifInfo(Base):
         comment="Timestamp of last research"
     )
 
+    # Staff research fields
+    staff: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(
+        JSONB, nullable=True,
+        comment="Operational staff: intake specialists, case managers, paralegals, etc."
+    )
+
+    staff_research_status: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True,
+        comment="Staff research status: queued, in_progress, completed, failed"
+    )
+
     # Behavioral intelligence fields
     behavioral_data: Mapped[Optional[Dict[str, Any]]] = mapped_column(
         JSONB, nullable=True,

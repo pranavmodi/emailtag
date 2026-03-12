@@ -916,6 +916,9 @@ function FirmCard({
   const [isResearching, setIsResearching] = useState(false);
   const [researchError, setResearchError] = useState<string | null>(null);
   const [researchStatus, setResearchStatus] = useState<string | null>(null);
+  const [isResearchingStaff, setIsResearchingStaff] = useState(false);
+  const [staffResearchError, setStaffResearchError] = useState<string | null>(null);
+  const [staffResearchStatus, setStaffResearchStatus] = useState<string | null>(null);
 
   const pollResearchStatus = async (taskId: string) => {
     const maxAttempts = 120; // 10 minutes max (5 second intervals)
@@ -950,6 +953,38 @@ function FirmCard({
     await poll();
   };
 
+  const pollStaffResearchStatus = async (taskId: string) => {
+    const maxAttempts = 120;
+    let attempts = 0;
+
+    const poll = async (): Promise<void> => {
+      attempts++;
+      try {
+        const status = await PifApi.getResearchStatus(taskId);
+        setStaffResearchStatus(status.status);
+
+        if (status.status === "completed") {
+          setIsResearchingStaff(false);
+          onResearchComplete(status);
+        } else if (status.status === "failed") {
+          setIsResearchingStaff(false);
+          setStaffResearchError(status.message || "Staff research failed");
+        } else if (attempts < maxAttempts) {
+          setTimeout(poll, 5000);
+        } else {
+          setIsResearchingStaff(false);
+          setStaffResearchError("Staff research timed out");
+        }
+      } catch (err) {
+        setIsResearchingStaff(false);
+        const message = err instanceof Error ? err.message : "Failed to check staff research status";
+        setStaffResearchError(message);
+      }
+    };
+
+    await poll();
+  };
+
   const handleResearch = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsResearching(true);
@@ -965,6 +1000,23 @@ function FirmCard({
       setIsResearching(false);
       const message = err instanceof Error ? err.message : "Failed to start research";
       setResearchError(message);
+    }
+  };
+
+  const handleStaffResearch = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsResearchingStaff(true);
+    setStaffResearchError(null);
+    setStaffResearchStatus("starting");
+
+    try {
+      const result = await PifApi.startStaffResearch(firm.id);
+      setStaffResearchStatus("queued");
+      await pollStaffResearchStatus(result.task_id);
+    } catch (err) {
+      setIsResearchingStaff(false);
+      const message = err instanceof Error ? err.message : "Failed to start staff research";
+      setStaffResearchError(message);
     }
   };
 
@@ -1041,6 +1093,11 @@ function FirmCard({
               {firm.leadership.length} leaders
             </Badge>
           )}
+          {firm.staff && firm.staff.length > 0 && (
+            <Badge className="bg-cyan-100 text-cyan-700">
+              {firm.staff.length} staff
+            </Badge>
+          )}
           {firm.research_status === "completed" && (
             <Button
               variant="ghost"
@@ -1072,6 +1129,27 @@ function FirmCard({
               <>
                 <Sparkles className="mr-2 h-4 w-4" />
                 {firm.research_status === "completed" ? "Re-Research" : "Research"}
+              </>
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={handleStaffResearch}
+            disabled={isResearchingStaff}
+            className="h-8 px-2 text-sm text-cyan-600 hover:bg-cyan-50 hover:text-cyan-700"
+          >
+            {isResearchingStaff ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {staffResearchStatus === "queued" && "Queued..."}
+                {staffResearchStatus === "in_progress" && "Searching..."}
+                {staffResearchStatus === "starting" && "Starting..."}
+                {!staffResearchStatus && "Searching..."}
+              </>
+            ) : (
+              <>
+                <Users className="mr-2 h-4 w-4" />
+                {firm.staff_research_status === "completed" ? "Re-Research Staff" : "Research Staff"}
               </>
             )}
           </Button>

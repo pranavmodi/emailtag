@@ -87,6 +87,25 @@ const generateResearchCSV = (firm: PifInfoResponse): string => {
     lines.push("");
   }
 
+  // Staff Section
+  const csvStaff = firm.staff || [];
+  if (csvStaff.length > 0) {
+    lines.push("=== KEY STAFF ===");
+    lines.push("Name,Title,Role Category,Email,Phone,LinkedIn,Bio");
+    for (const member of csvStaff) {
+      lines.push([
+        escapeCSV(member.name),
+        escapeCSV(member.title),
+        escapeCSV(member.role_category),
+        escapeCSV(member.email),
+        escapeCSV(member.phone),
+        escapeCSV(isValidLinkedInUrl(member.linkedin) ? member.linkedin : ""),
+        escapeCSV(member.bio),
+      ].join(","));
+    }
+    lines.push("");
+  }
+
   // Awards & Recognition
   if (research?.awards_recognition && research.awards_recognition.length > 0) {
     lines.push("=== AWARDS & RECOGNITION ===");
@@ -196,6 +215,27 @@ const generateContactsCSV = (firm: PifInfoResponse): string => {
     ].join(","));
   }
 
+  // Add staff members (from staff research)
+  const staffMembers = firm.staff || [];
+  for (const member of staffMembers) {
+    lines.push([
+      escapeCSV(firm.firm_name),
+      escapeCSV(firm.website),
+      escapeCSV(firmDescription),
+      escapeCSV(practiceAreas),
+      "Staff",
+      escapeCSV(member.name),
+      escapeCSV(member.title),
+      escapeCSV(member.email),
+      escapeCSV(member.phone),
+      "",
+      escapeCSV(isValidLinkedInUrl(member.linkedin) ? member.linkedin : ""),
+      escapeCSV(member.bio),
+      "",
+      "",
+    ].join(","));
+  }
+
   // Add contacts (from email extraction)
   for (const contact of contacts) {
     lines.push([
@@ -217,7 +257,7 @@ const generateContactsCSV = (firm: PifInfoResponse): string => {
   }
 
   // If no contacts at all, still output one row with firm info
-  if (leadership.length === 0 && contacts.length === 0) {
+  if (leadership.length === 0 && staffMembers.length === 0 && contacts.length === 0) {
     lines.push([
       escapeCSV(firm.firm_name),
       escapeCSV(firm.website),
@@ -250,6 +290,27 @@ export function ResearchModal({ firm, isOpen, onClose }: ResearchModalProps) {
 
   const research = firm.research_data;
   const leadership = firm.leadership || [];
+  const staff = firm.staff || [];
+
+  const roleCategoryLabels: Record<string, string> = {
+    intake_specialist: "Intake Specialist",
+    case_manager: "Case Manager",
+    paralegal: "Paralegal",
+    office_manager: "Office Manager",
+    billing_coordinator: "Billing Coordinator",
+    medical_records: "Medical Records",
+    other: "Other",
+  };
+
+  const roleCategoryColors: Record<string, string> = {
+    intake_specialist: "bg-cyan-50 text-cyan-700",
+    case_manager: "bg-violet-50 text-violet-700",
+    paralegal: "bg-amber-50 text-amber-700",
+    office_manager: "bg-rose-50 text-rose-700",
+    billing_coordinator: "bg-emerald-50 text-emerald-700",
+    medical_records: "bg-blue-50 text-blue-700",
+    other: "bg-slate-50 text-slate-600",
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -513,6 +574,79 @@ export function ResearchModal({ firm, isOpen, onClose }: ResearchModalProps) {
                           <span className="text-xs text-slate-400">+{leader.skills.length - 4}</span>
                         )}
                       </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Operational Staff */}
+          {staff.length > 0 && (
+            <section>
+              <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800 mb-4">
+                <Users className="h-5 w-5 text-cyan-500" />
+                Key Staff ({staff.length})
+              </h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {staff.map((member, i) => (
+                  <div
+                    key={i}
+                    className="rounded-xl border border-slate-200 bg-white p-4 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <div className="font-semibold text-slate-800">{member.name}</div>
+                        {member.title && (
+                          <div className="text-sm text-slate-500">{member.title}</div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className={`text-xs ${roleCategoryColors[member.role_category] ?? "bg-slate-50 text-slate-600"}`}>
+                          {roleCategoryLabels[member.role_category] ?? member.role_category}
+                        </Badge>
+                        {isValidLinkedInUrl(member.linkedin) ? (
+                          <a
+                            href={member.linkedin?.startsWith("http") ? member.linkedin : `https://${member.linkedin}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100"
+                            title="View LinkedIn Profile"
+                          >
+                            <Linkedin className="h-4 w-4" />
+                          </a>
+                        ) : (
+                          <div
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-400"
+                            title="LinkedIn not found"
+                          >
+                            <Linkedin className="h-4 w-4" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Contact Info */}
+                    <div className="space-y-1.5 mb-3">
+                      {member.email && (
+                        <div className="flex items-center gap-2 text-sm text-slate-600">
+                          <Mail className="h-3.5 w-3.5 text-slate-400" />
+                          <a href={`mailto:${member.email}`} className="hover:text-indigo-600">
+                            {member.email}
+                          </a>
+                        </div>
+                      )}
+                      {member.phone && (
+                        <div className="flex items-center gap-2 text-sm text-slate-600">
+                          <Phone className="h-3.5 w-3.5 text-slate-400" />
+                          {member.phone}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Bio */}
+                    {member.bio && (
+                      <p className="text-sm text-slate-600 line-clamp-3">{member.bio}</p>
                     )}
                   </div>
                 ))}

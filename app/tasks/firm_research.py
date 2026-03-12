@@ -238,3 +238,113 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
         }
     finally:
         db.close()
+
+
+@celery_app.task(bind=True, base=ResearchTask, name="app.tasks.firm_research.research_staff_task")
+def research_staff_task(self, pif_id: str) -> Dict[str, Any]:
+    """
+    Background task to research operational staff at a firm.
+
+    Searches for intake specialists, case managers, paralegals, office managers, etc.
+
+    Args:
+        pif_id: UUID of the PIF record
+
+    Returns:
+        Dict with research results and status
+    """
+    import sys
+    import os
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+
+    from pifstats.src.firm_researcher import research_firm_staff
+    from app.crud.sync.pif_info import pif_info as pif_info_crud_sync
+
+    db = SessionLocal()
+
+    try:
+        pif = pif_info_crud_sync.get(db, id=UUID(pif_id))
+        if not pif:
+            logger.error(f"PIF not found: {pif_id}")
+            return {"status": "failed", "message": "PIF not found"}
+
+        pif_info_crud_sync.update(
+            db,
+            db_obj=pif,
+            obj_in={"staff_research_status": "in_progress"}
+        )
+        db.commit()
+
+        logger.info(f"Starting staff research for firm: {pif.firm_name}")
+
+        location = pif.addresses[0] if pif.addresses else None
+
+        result = research_firm_staff(
+            firm_name=pif.firm_name,
+            website=pif.website,
+            location=location
+        )
+
+        if result is None:
+            pif_info_crud_sync.update(
+                db,
+                db_obj=pif,
+                obj_in={"staff_research_status": "failed"}
+            )
+            db.commit()
+            return {
+                "status": "failed",
+                "pif_id": pif_id,
+                "message": "Staff research failed - no results returned"
+            }
+
+        # Sanitize LinkedIn URLs
+        staff_dicts = []
+        for member in result.staff:
+            member_dict = member.model_dump()
+            member_dict["linkedin"] = sanitize_linkedin_url(member_dict.get("linkedin"))
+            staff_dicts.append(member_dict)
+
+        pif_info_crud_sync.update(
+            db,
+            db_obj=pif,
+            obj_in={
+                "staff": staff_dicts,
+                "staff_research_status": "completed"
+            }
+        )
+        db.commit()
+
+        logger.info(f"Staff research completed for {pif.firm_name}: {len(staff_dicts)} staff members")
+
+        return {
+            "status": "completed",
+            "pif_id": pif_id,
+            "firm_name": pif.firm_name,
+            "staff_count": len(staff_dicts),
+            "message": f"Staff research completed. Found {len(staff_dicts)} staff members."
+        }
+
+    except Exception as e:
+        logger.error(f"Staff research task error for {pif_id}: {str(e)}")
+        try:
+            pif = pif_info_crud_sync.get(db, id=UUID(pif_id))
+            if pif:
+                pif_info_crud_sync.update(
+                    db,
+                    db_obj=pif,
+                    obj_in={"staff_research_status": "failed"}
+                )
+                db.commit()
+        except Exception:
+            pass
+
+        return {
+            "status": "failed",
+            "pif_id": pif_id,
+            "message": f"Staff research failed: {str(e)}"
+        }
+    finally:
+        db.close()

@@ -27,6 +27,20 @@ class LeadershipMember(BaseModel):
     image_url: Optional[str] = Field(None, description="Profile image URL")
 
 
+class StaffMember(BaseModel):
+    """Operational staff member from research."""
+    name: str = Field(default="", description="Full name")
+    title: str = Field(default="", description="Job title")
+    role_category: str = Field(
+        default="other",
+        description="Role category: intake_specialist, case_manager, paralegal, office_manager, billing_coordinator, medical_records, other"
+    )
+    email: Optional[str] = Field(None, description="Email address")
+    phone: Optional[str] = Field(None, description="Phone number")
+    linkedin: Optional[str] = Field(None, description="LinkedIn profile URL")
+    bio: Optional[str] = Field(None, description="Brief bio or description")
+
+
 class PifInfoBase(BaseModel):
     """Base schema for PIF info."""
     firm_name: str = Field(..., description="Name of the personal injury law firm")
@@ -95,6 +109,8 @@ class PifInfoResponse(PifInfoBase):
     research_data: Optional[Dict[str, Any]] = Field(None, description="Additional research findings")
     research_status: Optional[str] = Field(None, description="Research status")
     last_researched_at: Optional[datetime] = Field(None, description="Last research timestamp")
+    staff: Optional[List[Dict[str, Any]]] = Field(None, description="Operational staff members")
+    staff_research_status: Optional[str] = Field(None, description="Staff research status")
     # Behavioral intelligence
     behavioral_data: Optional[Dict[str, Any]] = Field(None, description="Email behavior analysis")
     icp_score: Optional[int] = Field(None, description="ICP score 0-100")
