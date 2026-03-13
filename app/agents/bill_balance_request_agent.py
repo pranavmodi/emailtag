@@ -21,7 +21,7 @@ from celery.utils.log import get_task_logger
 
 from app.core.config import settings as app_settings_instance
 from app.services import frontapp_service
-from app.agents.agent_helpers import send_reply_to_front_direct, send_reply_to_front_with_attachment, extract_patient_id_from_email_logic
+from app.agents.agent_helpers import send_reply_to_front_direct, send_reply_to_front_with_attachment, send_reply_to_front_with_attachments, extract_patient_id_from_email_logic
 from app.helpers.billing_status_table import generate_billing_status_table
 # Import shared templates
 from app.agents.templates.shared_templates import (
@@ -33,6 +33,7 @@ from app.agents.templates.shared_templates import (
 # Database imports for fetching templates
 from app.db.session import AsyncSessionLocal
 from app.crud.tag_settings import tag_settings_crud
+from app.crud.template_attachment import template_attachment_crud
 
 # --- BEGIN: Logging ---
 logger = get_task_logger(__name__)
@@ -79,7 +80,7 @@ async def save_test_mode_response_bill_balance(
     patient_id: str = None,
     response_type: str = None,
     details: Dict[str, Any] = None,
-    bill_attachment_path: str = None
+    attachment_paths: List[str] = None
 ) -> Dict[str, Any]:
     """
     Saves the generated bill balance response to file system for test mode.
@@ -91,7 +92,7 @@ async def save_test_mode_response_bill_balance(
         patient_id: Patient ID if found
         response_type: Type of response (e.g., "billing_info", "clarification_request", "not_found")
         details: Additional metadata about the response
-        bill_attachment_path: Path to a bill PDF file to copy into the test output dir
+        attachment_paths: List of attachment file paths to copy into the test output dir
 
     Returns:
         Dict with status and file path
@@ -108,13 +109,16 @@ async def save_test_mode_response_bill_balance(
             timestamp_suffix = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
             response_file = test_dir / f"response_{timestamp_suffix}.json"
 
-        # Copy bill attachment PDF into the test output directory if provided
-        bill_attachment_filename = None
-        if bill_attachment_path and os.path.exists(bill_attachment_path):
-            bill_attachment_filename = f"bill_{patient_id}.pdf" if patient_id else os.path.basename(bill_attachment_path)
-            dest_path = test_dir / bill_attachment_filename
-            shutil.copy2(bill_attachment_path, dest_path)
-            logger.info(f"🧪 TEST MODE: Copied bill attachment to {dest_path}")
+        # Copy attachment PDFs into the test output directory if provided
+        copied_attachments = []
+        if attachment_paths:
+            for att_path in attachment_paths:
+                if att_path and os.path.exists(att_path):
+                    att_filename = os.path.basename(att_path)
+                    dest_path = test_dir / att_filename
+                    shutil.copy2(att_path, dest_path)
+                    copied_attachments.append(att_filename)
+                    logger.info(f"🧪 TEST MODE: Copied attachment to {dest_path}")
 
         response_data = {
             "timestamp": datetime.now().isoformat(),
@@ -124,7 +128,7 @@ async def save_test_mode_response_bill_balance(
             "response_type": response_type,
             "details": details or {},
             "status": "test_mode_saved",
-            "bill_attachment": bill_attachment_filename
+            "attachments": copied_attachments
         }
 
         with open(response_file, "w") as f:
@@ -153,7 +157,8 @@ async def send_or_save_response_bill_balance(
     patient_id: str = None,
     response_type: str = None,
     details: Dict[str, Any] = None,
-    bill_attachment_path: str = None
+    attachment_paths: List[str] = None,
+    temp_attachment_paths: List[str] = None
 ) -> None:
     """
     Either sends the response via Front API or saves to file based on test_mode.
@@ -165,7 +170,8 @@ async def send_or_save_response_bill_balance(
         patient_id: Patient ID if found
         response_type: Type of response
         details: Additional metadata
-        bill_attachment_path: Path to a bill PDF file to attach
+        attachment_paths: List of file paths to attach (bill, final report, W9, etc.)
+        temp_attachment_paths: List of temp file paths to clean up after sending (NOT persistent files like W9)
     """
     if test_mode:
         # Test mode: save to file
@@ -175,27 +181,33 @@ async def send_or_save_response_bill_balance(
             patient_id=patient_id,
             response_type=response_type,
             details=details,
-            bill_attachment_path=bill_attachment_path
+            attachment_paths=attachment_paths
         )
     else:
         # Normal mode: send via Front API
-        if bill_attachment_path and os.path.exists(bill_attachment_path):
-            await send_reply_to_front_with_attachment(
+        # Filter to only paths that exist
+        valid_paths = [p for p in (attachment_paths or []) if p and os.path.exists(p)]
+
+        if valid_paths:
+            await send_reply_to_front_with_attachments(
                 conversation_id=conversation_id,
                 reply_text=response_text,
-                attachment_path=bill_attachment_path
+                attachment_paths=valid_paths
             )
-            # Clean up temp file after sending
-            try:
-                os.remove(bill_attachment_path)
-                logger.info(f"Cleaned up temp bill attachment: {bill_attachment_path}")
-            except OSError as e:
-                logger.warning(f"Failed to clean up temp bill attachment {bill_attachment_path}: {e}")
         else:
             await send_reply_to_front_direct(
                 conversation_id=conversation_id,
                 reply_text=response_text
             )
+
+        # Clean up only temp files (not persistent template attachments like W9)
+        for temp_path in (temp_attachment_paths or []):
+            try:
+                if temp_path and os.path.exists(temp_path):
+                    os.remove(temp_path)
+                    logger.info(f"Cleaned up temp attachment: {temp_path}")
+            except OSError as e:
+                logger.warning(f"Failed to clean up temp attachment {temp_path}: {e}")
 # --- END: Test Mode Support ---
 
 # NOTE: Old BILL_BALANCE_TEMPLATE and LIEN_REMINDER_TEMPLATE removed.
@@ -775,27 +787,122 @@ async def handle_bill_balance_request(
         logger.debug(f"Generated billing_status_table HTML for patient {patient_id}: {billing_status_table}")
         logger.debug(f"Generated lien_status_table HTML for patient {patient_id}: {lien_status_table}")
 
-        # Decode bill attachment if available (used for both response paths)
+        # --- Collect all attachments: bill, final report, W9 ---
+        bill_tmp_dir = Path("/tmp/bill_attachments")
+        bill_tmp_dir.mkdir(parents=True, exist_ok=True)
+        temp_attachment_paths = []  # Temp files to clean up after sending
+
+        # 1. Decode bill attachment if available
         bill_attachment_path = None
         if patient_bill_status.get("bill"):
             try:
                 bill_b64 = patient_bill_status["bill"]
+                # Strip data URI prefix if present (e.g., "data:application/pdf;base64,")
+                if bill_b64.startswith("data:"):
+                    bill_b64 = bill_b64.split(",", 1)[1] if "," in bill_b64 else bill_b64
                 # Strip whitespace/newlines and fix padding (common with API responses)
                 bill_b64 = bill_b64.strip().replace("\n", "").replace("\r", "").replace(" ", "")
                 missing_padding = len(bill_b64) % 4
                 if missing_padding:
                     bill_b64 += "=" * (4 - missing_padding)
-                bill_pdf_bytes = base64.b64decode(bill_b64, validate=True)
-                bill_tmp_dir = Path("/tmp/bill_attachments")
-                bill_tmp_dir.mkdir(parents=True, exist_ok=True)
+                bill_pdf_bytes = base64.b64decode(bill_b64)
                 bill_tmp_path = bill_tmp_dir / f"bill_{patient_id}.pdf"
                 with open(bill_tmp_path, "wb") as f:
                     f.write(bill_pdf_bytes)
                 bill_attachment_path = str(bill_tmp_path)
+                temp_attachment_paths.append(bill_attachment_path)
                 logger.info(f"Decoded bill PDF for patient {patient_id}: {len(bill_pdf_bytes)} bytes -> {bill_attachment_path}")
             except Exception as e:
                 logger.error(f"Failed to decode bill PDF for patient {patient_id}: {e}", exc_info=True)
                 bill_attachment_path = None
+
+        # 2. Fetch final reports via MCP (get_patient_files_by_type with fileType=FREP)
+        # API may return a single object or an array of files
+        final_report_paths = []
+        try:
+            final_report_response = await call_mcp_tool(
+                tool_name="get_patient_files_by_type",
+                arguments={"patient_id": patient_id, "file_type": "FREP"}
+            )
+            if final_report_response and isinstance(final_report_response, dict):
+                fr_data = final_report_response.get("data", {})
+                fr_result = fr_data.get("result", "")
+                fr_status = fr_data.get("responseStatus", "")
+
+                if fr_status == "Success" and fr_result and fr_result != "No record found":
+                    # Parse the result JSON string — may be a single object or an array
+                    if isinstance(fr_result, str):
+                        fr_result = json.loads(fr_result)
+
+                    # Normalize to a list
+                    if isinstance(fr_result, dict):
+                        fr_files = [fr_result]
+                    elif isinstance(fr_result, list):
+                        fr_files = fr_result
+                    else:
+                        fr_files = []
+
+                    logger.info(f"Found {len(fr_files)} final report file(s) for patient {patient_id}")
+
+                    for idx, fr_file in enumerate(fr_files):
+                        try:
+                            fr_file_data = fr_file.get("FileData", "")
+                            fr_filename = fr_file.get("FileName", f"final_report_{patient_id}_{idx}.pdf")
+                            if not fr_file_data:
+                                logger.info(f"No FileData in final report [{idx}] for patient {patient_id}, skipping")
+                                continue
+                            # Decode base64 to PDF
+                            fr_b64 = fr_file_data.strip().replace("\n", "").replace("\r", "").replace(" ", "")
+                            missing_padding = len(fr_b64) % 4
+                            if missing_padding:
+                                fr_b64 += "=" * (4 - missing_padding)
+                            fr_pdf_bytes = base64.b64decode(fr_b64)
+                            fr_tmp_path = bill_tmp_dir / fr_filename
+                            with open(fr_tmp_path, "wb") as f:
+                                f.write(fr_pdf_bytes)
+                            fr_path_str = str(fr_tmp_path)
+                            final_report_paths.append(fr_path_str)
+                            temp_attachment_paths.append(fr_path_str)
+                            logger.info(f"Decoded final report [{idx}] for patient {patient_id}: {fr_filename} ({len(fr_pdf_bytes)} bytes)")
+                        except Exception as file_err:
+                            logger.warning(f"Failed to decode final report [{idx}] for patient {patient_id}: {file_err}")
+                else:
+                    logger.info(f"No final report found for patient {patient_id} (status: {fr_status})")
+        except Exception as e:
+            logger.warning(f"Failed to fetch final reports for patient {patient_id}: {e}", exc_info=True)
+
+        # 3. Load W9 from template attachments — copy to temp with friendly name
+        w9_path = None
+        try:
+            async with AsyncSessionLocal() as db:
+                w9_attachments = await template_attachment_crud.get_by_tag_and_template(
+                    db, BILL_BALANCE_TAG_NAME, "w9_form"
+                )
+                if w9_attachments and os.path.exists(w9_attachments[0].file_path):
+                    # Copy to temp dir with the original friendly filename
+                    w9_original = w9_attachments[0].file_path
+                    w9_friendly_name = w9_attachments[0].filename or "Precise_Imaging_W9.pdf"
+                    w9_tmp_path = bill_tmp_dir / w9_friendly_name
+                    shutil.copy2(w9_original, w9_tmp_path)
+                    w9_path = str(w9_tmp_path)
+                    temp_attachment_paths.append(w9_path)
+                    logger.info(f"Loaded W9 form from template attachments: {w9_original} -> {w9_path}")
+                else:
+                    logger.warning(f"No W9 form found in template attachments for tag '{BILL_BALANCE_TAG_NAME}'. Upload via /settings/template-config with template_key 'w9_form'.")
+        except Exception as e:
+            logger.warning(f"Failed to load W9 form from template attachments: {e}", exc_info=True)
+            w9_path = None
+
+        # Collect all available attachment paths
+        all_attachment_paths = []
+        if bill_attachment_path:
+            all_attachment_paths.append(bill_attachment_path)
+        for fr_path in final_report_paths:
+            all_attachment_paths.append(fr_path)
+        if w9_path:
+            all_attachment_paths.append(w9_path)
+
+        logger.info(f"Collected {len(all_attachment_paths)} attachments for patient {patient_id}: bill={bool(bill_attachment_path)}, final_reports={len(final_report_paths)}, w9={bool(w9_path)}")
 
         if not all_liens_signed:
             # Generate Lien Reminder response - use DB template
@@ -831,12 +938,7 @@ async def handle_bill_balance_request(
             )
             subject = f"Re: {patient_id} - Billing Information"
 
-        # TODO: Add report attachments if requested
-        if include_reports:
-            # This would need additional MCP calls to get reports
-            pass
-
-        # Send the response
+        # Send the response with all collected attachments
         await send_or_save_response_bill_balance(
             conversation_id=front_conversation_id,
             response_text=reply_body,
@@ -847,12 +949,18 @@ async def handle_bill_balance_request(
                 "bill_balance": patient_bill_balance,
                 "liens_signed": all_liens_signed,
                 "studies_found": len(study_details_list),
-                "template_used": "comprehensive" if all_liens_signed else "lien_reminder"
+                "template_used": "comprehensive" if all_liens_signed else "lien_reminder",
+                "attachments_included": {
+                    "bill": bool(bill_attachment_path),
+                    "final_reports": len(final_report_paths),
+                    "w9": bool(w9_path)
+                }
             },
-            bill_attachment_path=bill_attachment_path
+            attachment_paths=all_attachment_paths,
+            temp_attachment_paths=temp_attachment_paths
         )
 
-        logger.info(f"Successfully sent comprehensive billing response for patient {patient_id} in conversation {front_conversation_id}")
+        logger.info(f"Successfully sent comprehensive billing response for patient {patient_id} in conversation {front_conversation_id} with {len(all_attachment_paths)} attachments")
         return {
             "agent_handled": True,
             "processed_flag": True,
@@ -862,7 +970,7 @@ async def handle_bill_balance_request(
                 "bill_balance": patient_bill_balance,
                 "liens_signed": all_liens_signed,
                 "studies_found": len(study_details_list),
-                "attachments": len(attachments),
+                "attachments": len(all_attachment_paths),
                 "template_used": "comprehensive" if all_liens_signed else "lien_reminder"
             }
         }

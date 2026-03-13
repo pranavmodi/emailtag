@@ -34,6 +34,8 @@ from app.schemas.pif_info import (
     BatchTaskResponse,
     ScoreResponse,
     AnalyticsSummaryResponse,
+    PeopleSearchResponse,
+    PersonSearchResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -281,6 +283,47 @@ async def list_pif_info(
 
     return PifInfoListResponse(
         items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
+
+
+@router.get("/people", response_model=PeopleSearchResponse)
+async def search_people(
+    title: str = Query(None, description="Search term for person title (e.g. 'CMO', 'intake', 'paralegal')"),
+    name: str = Query(None, description="Search term for person name"),
+    role_category: str = Query(
+        None,
+        description="Filter staff by role category: intake_specialist, case_manager, paralegal, office_manager, billing_coordinator, medical_records, other"
+    ),
+    source: str = Query("all", description="Source filter: 'leadership', 'staff', or 'all'"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=200, description="Items per page"),
+    db: AsyncSession = Depends(get_db),
+) -> PeopleSearchResponse:
+    """
+    Search across all firms' leadership and staff for people by title or name.
+
+    Queries the leadership and staff JSONB arrays across all PIF records.
+    Useful for finding all people with a specific role (e.g. all CMOs, all intake specialists).
+    """
+    skip = (page - 1) * page_size
+    results, total = await pif_info_crud.search_people(
+        db,
+        title=title,
+        name=name,
+        role_category=role_category,
+        source=source,
+        skip=skip,
+        limit=page_size,
+    )
+
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+
+    return PeopleSearchResponse(
+        results=[PersonSearchResult(**r) for r in results],
         total=total,
         page=page,
         page_size=page_size,

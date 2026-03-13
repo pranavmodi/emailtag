@@ -460,6 +460,13 @@ async def get_bill_balance_test_response(conversation_id: str):
                 with open(rf, "r") as f:
                     response_data = json.load(f)
                     response_data["_filename"] = rf.name
+                    # Normalize: support both old "bill_attachment" (string) and new "attachments" (array)
+                    if "attachments" in response_data and "bill_attachment" not in response_data:
+                        attachments_list = response_data["attachments"]
+                        response_data["bill_attachment"] = attachments_list[0] if attachments_list else None
+                    elif "bill_attachment" in response_data and "attachments" not in response_data:
+                        ba = response_data["bill_attachment"]
+                        response_data["attachments"] = [ba] if ba else []
                     responses.append(response_data)
             except Exception as json_err:
                 logger.warning(f"Could not parse {rf.name}: {json_err}")
@@ -478,6 +485,8 @@ async def get_bill_balance_test_response(conversation_id: str):
             "response_type": first_response.get("response_type"),
             "details": first_response.get("details"),
             "status": first_response.get("status"),
+            "bill_attachment": first_response.get("bill_attachment"),
+            "attachments": first_response.get("attachments", []),
             # New field: all responses for multi-patient support
             "responses": responses,
             "response_count": len(responses)

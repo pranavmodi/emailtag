@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import or_, select, func
+from sqlalchemy import or_, select, func, text, literal_column
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import CRUDBase
@@ -267,6 +267,136 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
             await db.refresh(pif)
 
         return pif
+
+
+    async def search_people(
+        self,
+        db: AsyncSession,
+        *,
+        title: Optional[str] = None,
+        name: Optional[str] = None,
+        role_category: Optional[str] = None,
+        source: str = "all",
+        skip: int = 0,
+        limit: int = 50,
+    ) -> tuple[List[Dict[str, Any]], int]:
+        """
+        Search across leadership and staff JSONB arrays for people by title/name.
+
+        Uses jsonb_array_elements to unnest the arrays and filter.
+
+        Args:
+            title: Search term to match against person title (ILIKE)
+            name: Search term to match against person name (ILIKE)
+            role_category: Filter staff by role_category value (exact match)
+            source: 'leadership', 'staff', or 'all'
+            skip: Offset for pagination
+            limit: Max results
+
+        Returns:
+            Tuple of (list of person dicts with firm context, total count)
+        """
+        queries = []
+
+        if source in ("all", "leadership"):
+            queries.append("""
+                SELECT
+                    person->>'name' AS name,
+                    person->>'title' AS title,
+                    person->>'email' AS email,
+                    person->>'phone' AS phone,
+                    person->>'linkedin' AS linkedin,
+                    person->>'bio' AS bio,
+                    NULL AS role_category,
+                    'leadership' AS source,
+                    pif.id AS firm_id,
+                    pif.firm_name AS firm_name,
+                    pif.website AS firm_website
+                FROM pif_info pif,
+                     jsonb_array_elements(pif.leadership) AS person
+                WHERE pif.leadership IS NOT NULL
+            """)
+
+        if source in ("all", "staff"):
+            queries.append("""
+                SELECT
+                    person->>'name' AS name,
+                    person->>'title' AS title,
+                    person->>'email' AS email,
+                    person->>'phone' AS phone,
+                    person->>'linkedin' AS linkedin,
+                    person->>'bio' AS bio,
+                    person->>'role_category' AS role_category,
+                    'staff' AS source,
+                    pif.id AS firm_id,
+                    pif.firm_name AS firm_name,
+                    pif.website AS firm_website
+                FROM pif_info pif,
+                     jsonb_array_elements(pif.staff) AS person
+                WHERE pif.staff IS NOT NULL
+            """)
+
+        if not queries:
+            return [], 0
+
+        combined = " UNION ALL ".join(queries)
+
+        # Build WHERE clauses for the outer query
+        conditions = []
+        params: Dict[str, Any] = {}
+
+        if title:
+            conditions.append("LOWER(title) LIKE :title_search")
+            params["title_search"] = f"%{title.lower()}%"
+
+        if name:
+            conditions.append("LOWER(name) LIKE :name_search")
+            params["name_search"] = f"%{name.lower()}%"
+
+        if role_category:
+            conditions.append("role_category = :role_cat")
+            params["role_cat"] = role_category
+
+        where_clause = ""
+        if conditions:
+            where_clause = "WHERE " + " AND ".join(conditions)
+
+        # Count query
+        count_sql = f"SELECT COUNT(*) FROM ({combined}) sub {where_clause}"
+        count_result = await db.execute(text(count_sql), params)
+        total = count_result.scalar() or 0
+
+        # Data query with pagination
+        data_sql = f"""
+            SELECT * FROM ({combined}) sub
+            {where_clause}
+            ORDER BY firm_name ASC, source ASC, name ASC
+            LIMIT :lim OFFSET :off
+        """
+        params["lim"] = limit
+        params["off"] = skip
+
+        result = await db.execute(text(data_sql), params)
+        rows = result.mappings().all()
+
+        people = [
+            {
+                "name": row["name"],
+                "title": row["title"],
+                "email": row["email"],
+                "phone": row["phone"],
+                "linkedin": row["linkedin"],
+                "bio": row["bio"],
+                "role_category": row["role_category"],
+                "source": row["source"],
+                "firm_id": str(row["firm_id"]),
+                "firm_name": row["firm_name"],
+                "firm_website": row["firm_website"],
+            }
+            for row in rows
+        ]
+
+        return people, total
 
 
 pif_info = CRUDPifInfo(PifInfo)

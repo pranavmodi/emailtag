@@ -1,0 +1,67 @@
+services:
+  # ───────────────────────────────────────────────
+  # FastAPI backend (port 8444)
+  # ───────────────────────────────────────────────
+  web:
+    build: .
+    container_name: emailtag-web
+#    network_mode: host
+    env_file:
+      - .env
+    volumes:
+      - ./certs:/app/certs:ro
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8444 --ssl-keyfile certs/privkey.pem --ssl-certfile certs/fullchain.pem
+    restart: unless-stopped
+
+  # ───────────────────────────────────────────────
+  # Celery worker: all queues
+  # ───────────────────────────────────────────────
+  worker:
+    build: .
+    container_name: emailtag-worker
+#    network_mode: host
+    env_file:
+      - .env
+    command: celery -A app.tasks.worker worker -l info -Q emails,tagging,processing,ocr
+    restart: unless-stopped
+
+  # ───────────────────────────────────────────────
+  # Next.js settings frontend (port 3001)
+  # ───────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend/settings2
+      dockerfile: Dockerfile
+    container_name: emailtag-frontend
+#    network_mode: host
+    environment:
+      - PORT=3001
+      - HOSTNAME=0.0.0.0
+    restart: unless-stopped
+
+  # ───────────────────────────────────────────────
+  # Flower - Celery monitoring (port 5555)
+  # ───────────────────────────────────────────────
+  flower:
+    build: .
+    container_name: emailtag-flower
+#    network_mode: host
+    env_file:
+      - .env
+    command: celery -A app.tasks.worker flower --port=5555
+    restart: unless-stopped
+
+  # ───────────────────────────────────────────────
+  # PreciseMCP server (port 8001)
+  # ───────────────────────────────────────────────
+  mcp:
+    build:
+      context: ../precisemcp
+      dockerfile: Dockerfile
+    container_name: precisemcp
+#    network_mode: host
+    env_file:
+      - ../precisemcp/.env
+    environment:
+      - PORT=8001
+    restart: unless-stopped

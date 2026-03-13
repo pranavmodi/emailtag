@@ -284,6 +284,30 @@ class ScoreResponse(BaseModel):
     score_breakdown: Dict[str, Any]
 
 
+class PersonSearchResult(BaseModel):
+    """A person found across leadership/staff data."""
+    name: str
+    title: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    linkedin: Optional[str] = None
+    bio: Optional[str] = None
+    role_category: Optional[str] = None
+    source: str  # 'leadership' or 'staff'
+    firm_id: str
+    firm_name: str
+    firm_website: Optional[str] = None
+
+
+class PeopleSearchResponse(BaseModel):
+    """Response for people search endpoint."""
+    results: List[PersonSearchResult]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
 class AnalyticsSummaryResponse(BaseModel):
     """Schema for analytics summary across all firms."""
     total_firms_tracked: int
