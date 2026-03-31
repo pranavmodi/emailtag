@@ -216,8 +216,16 @@ async def send_or_save_response_bill_balance(
 
 # --- Helper Functions for MCP Integration ---
 
-def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
-    """Creates an HTML table for lien statuses that renders properly in email clients."""
+def _create_lien_status_table(
+    lien_statuses: List[Dict[str, Any]],
+    patient_esign_link: str = None,
+    attorney_esign_link: str = None,
+) -> str:
+    """Creates an HTML table for lien statuses that renders properly in email clients.
+
+    When a signature is missing and an esign link is available, includes a
+    clickable 'Please eSign here' link so the recipient can sign directly.
+    """
     if not lien_statuses:
         return "No lien information available"
 
@@ -232,10 +240,10 @@ def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
     html_parts.append('</tr>')
     html_parts.append('</thead>')
     html_parts.append('<tbody>')
-    
+
     for lien in lien_statuses:
         lien_type = lien.get('lienType', 'Unknown')
-        
+
         # Use the boolean flags as the source of truth for signature status
         if lien.get('hasPatientSigned', False):
             patient_date = lien.get('patientSignedLienDate', '')
@@ -247,7 +255,10 @@ def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
             else:
                 patient_sig = "Signed"
         else:
-            patient_sig = "Not Signed"
+            if patient_esign_link:
+                patient_sig = f'Not Signed.<br/><a href="{patient_esign_link}" target="_blank">Please eSign here</a>'
+            else:
+                patient_sig = "Not Signed"
 
         if lien.get('hasAttorneySigned', False):
             attorney_date = lien.get('attorneySignedDate', '')
@@ -259,18 +270,21 @@ def _create_lien_status_table(lien_statuses: List[Dict[str, Any]]) -> str:
             else:
                 attorney_sig = "Signed"
         else:
-            attorney_sig = "Not Signed"
-        
+            if attorney_esign_link:
+                attorney_sig = f'Not Signed.<br/><a href="{attorney_esign_link}" target="_blank">Please eSign here</a>'
+            else:
+                attorney_sig = "Not Signed"
+
         # Add table row
         html_parts.append('<tr>')
         html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{lien_type}</td>')
         html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{patient_sig}</td>')
         html_parts.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{attorney_sig}</td>')
         html_parts.append('</tr>')
-    
+
     html_parts.append('</tbody>')
     html_parts.append('</table>')
-    
+
     return ''.join(html_parts)
 
 
@@ -364,9 +378,12 @@ async def handle_bill_balance_request(
         # Fallback to extraction from email content
         patient_id = await extract_patient_id_from_email_logic(current_email_content, front_conversation_id, email_subject)
 
+    # Fetch templates from database early (needed for all response types including clarification)
+    templates = await _fetch_bill_balance_templates_from_db()
+
     # Check if we've already asked for clarification
     already_asked_for_clarification = _check_if_clarification_request(structured_history_messages)
-    
+
     if not patient_id:
         if already_asked_for_clarification:
             # Step 3: We already asked for clarification, tag for human review
@@ -377,9 +394,10 @@ async def handle_bill_balance_request(
                 if not test_mode:
                     frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
 
+                escalation_text = templates.get("escalation") or TEMPLATE_REQUEST_PATIENT_ID_AGAIN_ESCALATE
                 await send_or_save_response_bill_balance(
                     conversation_id=front_conversation_id,
-                    response_text=TEMPLATE_REQUEST_PATIENT_ID_AGAIN_ESCALATE,
+                    response_text=escalation_text,
                     test_mode=test_mode,
                     response_type="human_review_escalation",
                     details={"action": "tagged_for_human_review"}
@@ -394,9 +412,10 @@ async def handle_bill_balance_request(
             logger.info(f"Patient ID not found for conversation {front_conversation_id}. Requesting clarification.")
 
             try:
+                request_patient_id_text = templates.get("request_patient_id") or TEMPLATE_REQUEST_PATIENT_ID
                 await send_or_save_response_bill_balance(
                     conversation_id=front_conversation_id,
-                    response_text=TEMPLATE_REQUEST_PATIENT_ID,
+                    response_text=request_patient_id_text,
                     test_mode=test_mode,
                     response_type="clarification_request",
                     details={"action": "requested_clarification"}
@@ -409,9 +428,6 @@ async def handle_bill_balance_request(
 
     # Step 1: Patient ID found, get patient information and billing information using MCP tools
     logger.info(f"Patient ID {patient_id} found. Fetching patient and billing information via MCP tools.")
-
-    # Fetch templates from database early (needed for all response types)
-    templates = await _fetch_bill_balance_templates_from_db()
 
     try:
         # Import the MCP client function
@@ -695,6 +711,8 @@ async def handle_bill_balance_request(
         patient_bill_status = result.get('patientBillStatus', {})
         lien_status_list = result.get('lienStatusList', [])
         study_details_list = result.get('patientStudyDetails', [])
+        patient_esign_link = result.get('patientEsignLink')
+        attorney_esign_link = result.get('attorneyEsignLink')
         
         # Patient data might be at top level or in a nested structure
         patient_data = result.get('patientData', {})
@@ -781,7 +799,7 @@ async def handle_bill_balance_request(
 
         # Create sections for the comprehensive template
         billing_status_table = await generate_billing_status_table(patient_id, bill_balance_data=mcp_response)
-        lien_status_table = _create_lien_status_table(lien_status_list)
+        lien_status_table = _create_lien_status_table(lien_status_list, patient_esign_link, attorney_esign_link)
 
         # Log generated HTML tables for debugging
         logger.debug(f"Generated billing_status_table HTML for patient {patient_id}: {billing_status_table}")
@@ -871,22 +889,21 @@ async def handle_bill_balance_request(
         except Exception as e:
             logger.warning(f"Failed to fetch final reports for patient {patient_id}: {e}", exc_info=True)
 
-        # 3. Load W9 from template attachments — copy to temp with friendly name
+        # 3. Load W9 from template attachments (stored in DB) — write to temp with friendly name
         w9_path = None
         try:
             async with AsyncSessionLocal() as db:
                 w9_attachments = await template_attachment_crud.get_by_tag_and_template(
                     db, BILL_BALANCE_TAG_NAME, "w9_form"
                 )
-                if w9_attachments and os.path.exists(w9_attachments[0].file_path):
-                    # Copy to temp dir with the original friendly filename
-                    w9_original = w9_attachments[0].file_path
+                if w9_attachments and w9_attachments[0].file_content:
                     w9_friendly_name = w9_attachments[0].filename or "Precise_Imaging_W9.pdf"
                     w9_tmp_path = bill_tmp_dir / w9_friendly_name
-                    shutil.copy2(w9_original, w9_tmp_path)
+                    with open(w9_tmp_path, "wb") as f:
+                        f.write(w9_attachments[0].file_content)
                     w9_path = str(w9_tmp_path)
                     temp_attachment_paths.append(w9_path)
-                    logger.info(f"Loaded W9 form from template attachments: {w9_original} -> {w9_path}")
+                    logger.info(f"Loaded W9 form from DB -> {w9_path} ({len(w9_attachments[0].file_content)} bytes)")
                 else:
                     logger.warning(f"No W9 form found in template attachments for tag '{BILL_BALANCE_TAG_NAME}'. Upload via /settings/template-config with template_key 'w9_form'.")
         except Exception as e:

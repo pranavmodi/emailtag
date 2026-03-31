@@ -70,6 +70,7 @@ celery_app.conf.task_routes = {
     "app.tasks.email.perform_autorespond_task": {"queue": "processing"},
     "app.tasks.pif_extraction.extract_pif_from_conversation": {"queue": "processing"},
     "app.tasks.firm_research.research_firm_task": {"queue": "processing"},
+    "app.tasks.firm_research.research_staff_task": {"queue": "processing"},
     "app.tasks.behavior_analysis.analyze_firm_behavior_task": {"queue": "processing"},
     "app.tasks.behavior_analysis.analyze_all_firms_task": {"queue": "processing"},
     "app.tasks.behavior_analysis.score_all_firms_task": {"queue": "processing"},

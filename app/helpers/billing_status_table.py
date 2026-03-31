@@ -218,7 +218,9 @@ async def generate_billing_status_table(
             ordered_status = study.get('ordered_status', '') or 'N/A'
             image_count = study.get('image_count', 0) or 0
             images_available = "Yes" if image_count > 0 else "No"
-            report_available = "No"  # Default — no report data from this API
+            # Derive report availability from ordered_status:
+            # "SIGNED" means the radiologist has signed/finalized the report
+            report_available = "Yes" if ordered_status.upper() in ("SIGNED", "FINALIZED", "TRANSCRIBED", "DICTATED") else "No"
 
             # Look up billing data
             lookup_key = _normalize_study_key(study_desc, raw_date)

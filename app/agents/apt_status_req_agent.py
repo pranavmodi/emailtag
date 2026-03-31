@@ -948,10 +948,15 @@ async def handle_apt_status_request_agent_sdk(
                     all_attachments = await template_attachment_crud.get_by_tag_name(db, "Apt status req")
                     attachments = [a for a in all_attachments if a.mime_type == "application/pdf"]
 
-                if attachments:
-                    # Use the most recent attachment
-                    hipaa_form_path = attachments[0].file_path
-                    logger.info(f"Using HIPAA form from database: {hipaa_form_path}")
+                if attachments and attachments[0].file_content:
+                    # Write DB content to a temp file for sending
+                    import tempfile
+                    hipaa_friendly_name = attachments[0].filename or "Medical-Release-Form.pdf"
+                    tmp_dir = tempfile.mkdtemp(prefix="apt_hipaa_")
+                    hipaa_form_path = os.path.join(tmp_dir, hipaa_friendly_name)
+                    with open(hipaa_form_path, "wb") as f:
+                        f.write(attachments[0].file_content)
+                    logger.info(f"Loaded HIPAA form from DB -> {hipaa_form_path} ({len(attachments[0].file_content)} bytes)")
                 else:
                     logger.error("No HIPAA form found in database! Please upload via /settings/template-config")
 

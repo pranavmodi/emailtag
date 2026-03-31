@@ -27,7 +27,6 @@ class TemplateAttachmentCreate(BaseModel):
 class TemplateAttachmentResponse(TemplateAttachmentBase):
     """Schema for template attachment response."""
     id: UUID
-    file_path: str
     created_at: datetime
     uploaded_by: Optional[str] = None
 

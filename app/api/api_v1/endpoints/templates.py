@@ -750,17 +750,9 @@ async def view_attachment(
                 detail=f"Attachment not found"
             )
 
-        # Get file content
-        file_content = template_attachment_crud.get_file_content(attachment)
-        if file_content is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Attachment file not found on disk"
-            )
-
         # Serve inline for viewing in browser
         return Response(
-            content=file_content,
+            content=attachment.file_content,
             media_type=attachment.mime_type,
             headers={
                 "Content-Disposition": f'inline; filename="{attachment.filename}"'
@@ -805,16 +797,8 @@ async def download_attachment(
                 detail=f"Attachment not found"
             )
 
-        # Get file content
-        file_content = template_attachment_crud.get_file_content(attachment)
-        if file_content is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Attachment file not found on disk"
-            )
-
         return Response(
-            content=file_content,
+            content=attachment.file_content,
             media_type=attachment.mime_type,
             headers={
                 "Content-Disposition": f'attachment; filename="{attachment.filename}"'

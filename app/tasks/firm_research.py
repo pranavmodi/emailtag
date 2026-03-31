@@ -253,6 +253,7 @@ def research_staff_task(self, pif_id: str) -> Dict[str, Any]:
     Returns:
         Dict with research results and status
     """
+    logger.warning(f"🔬 research_staff_task PICKED UP by worker for pif_id={pif_id}, celery_task_id={self.request.id}")
     import sys
     import os
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))

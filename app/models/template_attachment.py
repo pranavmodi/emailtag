@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, DateTime, Integer, ForeignKey
+from sqlalchemy import String, DateTime, Integer, LargeBinary
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base
@@ -12,15 +12,14 @@ class TemplateAttachment(Base):
     """
     Model for storing document attachments associated with templates.
 
-    Documents are stored on the filesystem and referenced by file_path.
-    This model stores metadata about the attachments.
+    Documents are stored as binary content directly in the database.
 
     Attributes:
         id: Unique identifier for the attachment
         tag_name: The tag these attachments belong to (e.g., "Lien Templates")
         template_key: Optional specific template key within the tag (e.g., "lien_success")
         filename: Original filename of the uploaded document
-        file_path: Path where the file is stored on disk
+        file_content: Binary content of the file stored in the database
         mime_type: MIME type of the file (e.g., "application/pdf")
         file_size: Size of the file in bytes
         description: Optional description of the attachment
@@ -52,8 +51,8 @@ class TemplateAttachment(Base):
         nullable=False
     )
 
-    file_path: Mapped[str] = mapped_column(
-        String(1024),
+    file_content: Mapped[bytes] = mapped_column(
+        LargeBinary,
         nullable=False
     )
 

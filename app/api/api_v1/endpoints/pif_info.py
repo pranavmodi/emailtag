@@ -820,7 +820,11 @@ async def research_staff(
 
     task = research_staff_task.delay(str(pif_id))
 
-    logger.info(f"Staff research task queued for firm: {pif.firm_name}, task_id: {task.id}")
+    # Log queue routing for debugging
+    route = research_staff_task.app.amqp.router.route(
+        research_staff_task.app.amqp.queues, research_staff_task.name, {}, {}
+    )
+    logger.warning(f"Staff research task DISPATCHED for firm: {pif.firm_name}, task_id: {task.id}, routed_to_queue: {route.get('queue', 'UNKNOWN')}")
 
     return ResearchStartResponse(
         pif_id=pif_id,
