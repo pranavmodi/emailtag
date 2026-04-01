@@ -64,12 +64,11 @@ def _get_billing_status_text(
     ordered_status: str,
     billing_status_raw: str,
     billing_amount: Any,
-    study_date: str
 ) -> str:
     """
     Determine billing status text using 3-way logic:
     1. Cancelled → "Cancelled Study"
-    2. Billed with amount > 0 → "$X.XX - Billed on MM/DD/YYYY"
+    2. Billed with amount > 0 → "$X.XX - Billed"
     3. Not cancelled, amount > 0 → "Potential to be billed is $X.XX"
     4. Else → "N/A"
     """
@@ -86,8 +85,6 @@ def _get_billing_status_text(
     if amount > 0:
         amount_str = f"${amount:,.2f}"
         if billing_status_raw and 'BILLED' in billing_status_raw.upper():
-            if study_date and study_date != 'N/A':
-                return f"{amount_str} - Billed on {study_date}"
             return f"{amount_str} - Billed"
         return f"Potential to be billed is {amount_str}"
 
@@ -232,7 +229,7 @@ async def generate_billing_status_table(
             billing_amount = billing_entry.get('billingAmount')
 
             billing_status = _get_billing_status_text(
-                ordered_status, billing_status_raw, billing_amount, study_date
+                ordered_status, billing_status_raw, billing_amount
             )
 
             # Accumulate billed vs potential amounts
@@ -265,7 +262,7 @@ async def generate_billing_status_table(
                 billing_amount = bs.get('billingAmount')
 
                 billing_status = _get_billing_status_text(
-                    exam_status, billing_status_raw, billing_amount, study_date
+                    exam_status, billing_status_raw, billing_amount
                 )
 
                 # Accumulate billed vs potential amounts

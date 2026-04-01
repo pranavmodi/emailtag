@@ -254,36 +254,26 @@ export default function TemplateConfigPage() {
 
               {/* Bill Balance Templates Editor - Show for Bill or Balance Request tag */}
               {selectedTag === "Bill or Balance Request" && (
-                <>
-                  <BillBalanceTemplatesEditor
-                    tagSettings={tagSettings}
-                    customPlaceholders={mergedCustomPlaceholders}
-                    onFieldChange={handleFieldChange}
-                    onSave={handleSaveTagSettings}
-                    onReset={handleResetTagSettings}
-                  />
-                  <DocumentAttachments
-                    tagName={selectedTag}
-                    currentUser={currentUser}
-                  />
-                </>
+                <BillBalanceTemplatesEditor
+                  tagSettings={tagSettings}
+                  customPlaceholders={mergedCustomPlaceholders}
+                  onFieldChange={handleFieldChange}
+                  onSave={handleSaveTagSettings}
+                  onReset={handleResetTagSettings}
+                  currentUser={currentUser}
+                />
               )}
 
               {/* Apt Status Req Templates Editor - Show for Apt status req */}
               {selectedTag === "Apt status req" && (
-                <>
-                  <AptStatusReqTemplatesEditor
-                    tagSettings={tagSettings}
-                    customPlaceholders={mergedCustomPlaceholders}
-                    onFieldChange={handleFieldChange}
-                    onSave={handleSaveTagSettings}
-                    onReset={handleResetTagSettings}
-                  />
-                  <DocumentAttachments
-                    tagName={selectedTag}
-                    currentUser={currentUser}
-                  />
-                </>
+                <AptStatusReqTemplatesEditor
+                  tagSettings={tagSettings}
+                  customPlaceholders={mergedCustomPlaceholders}
+                  onFieldChange={handleFieldChange}
+                  onSave={handleSaveTagSettings}
+                  onReset={handleResetTagSettings}
+                  currentUser={currentUser}
+                />
               )}
 
               {/* Live Table Preview */}

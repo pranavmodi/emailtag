@@ -320,6 +320,118 @@ print(f'Logs saved to {output_path}')
 
 ---
 
+## 5. Sandbox Autorespond Debugging
+
+When autorespond agents (bill_balance, apt_status_req) run in **sandbox/test mode**, responses are saved to files instead of being sent. Use this workflow to diagnose failures across recent sandbox conversations.
+
+### Sandbox modes
+
+Sandbox mode is configured per-agent. Check which agents are in sandbox via the `autorespond_settings_check` trace step (`sandbox_modes` field) or in the worker logs (`AUTORESPOND MODE: SANDBOX for [...]`).
+
+### Step 1: List recent autorespond conversations and their outcomes
+
+Query the `emails` table for recent conversations processed by the agent, grouped by outcome:
+
+```bash
+emailtag/bin/python -c "
+from app.db.session import SessionLocal
+from app.models.email import Email
+from sqlalchemy import desc
+
+db = SessionLocal()
+try:
+    emails = db.query(Email).filter(
+        Email.status.like('%bill_balance%')  # or '%apt_status%' for apt status req
+    ).order_by(desc(Email.created_at)).limit(15).all()
+    for e in emails:
+        print(f'{e.front_conversation_id} | {e.status} | {str(e.created_at)[:19]} | {e.subject[:80] if e.subject else \"(no subject)\"}')
+finally:
+    db.close()
+"
+```
+
+Key statuses:
+- `processed_agent_bill_balance_request` — agent handled successfully (sandbox: saved to file)
+- `processed_tagged_no_autorespond_agent_bill_balance_request_did_not_handle` — agent failed or could not handle
+
+### Step 2: Batch-analyze failure reasons across conversations
+
+Pull the key trace steps (`openai_patient_extraction`, `mcp_patient_lookup`, `agent_execution`) for recent failed conversations to identify patterns:
+
+```bash
+emailtag/bin/python -c "
+import json
+from app.db.session import SessionLocal
+from app.models.email import Email
+from sqlalchemy import desc, text
+
+db = SessionLocal()
+try:
+    emails = db.query(Email).filter(
+        Email.status.like('%bill_balance_request_did_not_handle%')
+    ).order_by(desc(Email.created_at)).limit(10).all()
+
+    for e in emails:
+        print(f'=== {e.front_conversation_id} ===')
+        print(f'  Subject: {e.subject[:100] if e.subject else \"(none)\"}')
+        print(f'  Sender: {e.sender}')
+
+        rows = db.execute(text('''
+            SELECT step_name, input_data, output_data
+            FROM email_processing_trace
+            WHERE front_conversation_id = :cid
+              AND step_name IN ('agent_execution', 'openai_patient_extraction', 'mcp_patient_lookup')
+            ORDER BY step_order
+        '''), {'cid': e.front_conversation_id}).fetchall()
+
+        for row in rows:
+            step, inp, out = row[0], row[1] or {}, row[2] or {}
+            if step == 'openai_patient_extraction':
+                raw = out.get('raw_response', '')
+                print(f'  [{step}] success={out.get(\"extraction_success\")} patients={out.get(\"patients_count\")} raw={raw[:200]}')
+            elif step == 'mcp_patient_lookup':
+                print(f'  [{step}] {inp.get(\"lookup_type\",\"?\")} args={json.dumps(inp.get(\"mcp_arguments\",{}))[:150]} -> success={out.get(\"lookup_success\")} reason={out.get(\"reason\",\"\")[:80]}')
+            elif step == 'agent_execution':
+                details = out.get('details', {})
+                print(f'  [{step}] handled={out.get(\"agent_handled\")} details={json.dumps(details)[:200]}')
+        print()
+finally:
+    db.close()
+"
+```
+
+### Step 3: Interpret common failure patterns
+
+| Pattern | Meaning | Where to look |
+|---|---|---|
+| `agent_execution` → `handled=False`, details has `"reason": "Unexpected processing error: ..."` | **Code bug** in the agent — a Python exception crashed the handler | Fix the error in the agent source code |
+| `mcp_patient_lookup` → all attempts `success=False` | **Patient not found** in RadFlow — name split issue, patient not in system, or wrong DOB/DOI | Check name combinations in MCP logs (`docker logs precisemcp --tail 50`), verify patient exists manually |
+| `openai_patient_extraction` → `extraction_success=False` | **GPT couldn't extract** valid patient info (no DOB/DOI, ambiguous names) | Check the email content — may lack identifying info, agent correctly requests clarification |
+| `agent_execution` → `handled=True`, `action=requested_clarification` | Agent sent a clarification request (ask for patient ID) — **expected behavior** when patient can't be found | Not a bug if patient truly not identifiable |
+| Multiple `agent_execution` traces for same conversation | Email was reprocessed multiple times (e.g., new messages in thread triggered re-processing) | Check if the repeated processing is expected |
+
+### Step 4: Check sandbox test output files (inside Docker)
+
+Bill balance sandbox outputs are written inside the worker container:
+
+```bash
+# List recent sandbox outputs
+docker exec worker ls -lt /tmp/bill_balance_test_outputs/ | head -20
+
+# Read a specific sandbox response
+docker exec worker cat /tmp/bill_balance_test_outputs/<CONVERSATION_ID>/response_*.json | python3 -m json.tool
+```
+
+### Step 5: Verify MCP name combination attempts
+
+When patient lookup fails, check what name combinations the MCP server tried:
+
+```bash
+docker logs precisemcp --tail 50 2>&1 | grep -E "NAME COMBO|No results|Found patient|Failed to find"
+```
+
+---
+
 ## Quick Reference
 
 | What You Need | Best Method |

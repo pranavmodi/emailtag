@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { DEFAULT_TAG_SETTINGS, DEFAULT_APT_STATUS_TEMPLATES } from "../constants/template-config.constants";
 import { getDummyPlaceholders } from "../utils/template-helpers";
+import { DocumentAttachments } from "./DocumentAttachments";
 
 interface AptStatusReqTemplatesEditorProps {
   tagSettings: typeof DEFAULT_TAG_SETTINGS;
@@ -12,6 +13,7 @@ interface AptStatusReqTemplatesEditorProps {
   onFieldChange: (key: keyof typeof DEFAULT_TAG_SETTINGS, value: string) => void;
   onSave: () => void;
   onReset: () => void;
+  currentUser: string;
 }
 
 type AptStatusScenario =
@@ -38,7 +40,8 @@ export function AptStatusReqTemplatesEditor({
   customPlaceholders,
   onFieldChange,
   onSave,
-  onReset
+  onReset,
+  currentUser
 }: AptStatusReqTemplatesEditorProps) {
   const [selectedScenario, setSelectedScenario] = useState<AptStatusScenario>("unified");
   const [showPreview, setShowPreview] = useState(true);
@@ -216,6 +219,13 @@ export function AptStatusReqTemplatesEditor({
             </div>
           )}
         </div>
+
+        {/* Per-scenario Document Attachments */}
+        <DocumentAttachments
+          tagName="Apt status req"
+          templateKey={templateKey}
+          currentUser={currentUser}
+        />
 
         {/* Save Button for Templates */}
         <div className="mt-4 flex justify-end gap-2 border-t-2 border-indigo-300 pt-4">

@@ -889,26 +889,30 @@ async def handle_bill_balance_request(
         except Exception as e:
             logger.warning(f"Failed to fetch final reports for patient {patient_id}: {e}", exc_info=True)
 
-        # 3. Load W9 from template attachments (stored in DB) — write to temp with friendly name
-        w9_path = None
+        # 3. Determine which template key to use (for per-template attachments)
+        active_template_key = "bill_balance_lien_reminder_template" if not all_liens_signed else "bill_balance_found_template"
+
+        # 4. Load template attachments filtered by the active template key
+        template_doc_paths = []
         try:
             async with AsyncSessionLocal() as db:
-                w9_attachments = await template_attachment_crud.get_by_tag_and_template(
-                    db, BILL_BALANCE_TAG_NAME, "w9_form"
+                template_attachments = await template_attachment_crud.get_by_tag_and_template(
+                    db, BILL_BALANCE_TAG_NAME, template_key=active_template_key
                 )
-                if w9_attachments and w9_attachments[0].file_content:
-                    w9_friendly_name = w9_attachments[0].filename or "Precise_Imaging_W9.pdf"
-                    w9_tmp_path = bill_tmp_dir / w9_friendly_name
-                    with open(w9_tmp_path, "wb") as f:
-                        f.write(w9_attachments[0].file_content)
-                    w9_path = str(w9_tmp_path)
-                    temp_attachment_paths.append(w9_path)
-                    logger.info(f"Loaded W9 form from DB -> {w9_path} ({len(w9_attachments[0].file_content)} bytes)")
-                else:
-                    logger.warning(f"No W9 form found in template attachments for tag '{BILL_BALANCE_TAG_NAME}'. Upload via /settings/template-config with template_key 'w9_form'.")
+                for ta in template_attachments:
+                    if ta.file_content:
+                        friendly_name = ta.filename or f"attachment_{ta.id}.pdf"
+                        ta_tmp_path = bill_tmp_dir / friendly_name
+                        with open(ta_tmp_path, "wb") as f:
+                            f.write(ta.file_content)
+                        ta_path = str(ta_tmp_path)
+                        template_doc_paths.append(ta_path)
+                        temp_attachment_paths.append(ta_path)
+                        logger.info(f"Loaded template attachment from DB -> {ta_path} ({len(ta.file_content)} bytes)")
+                if not template_attachments:
+                    logger.info(f"No template attachments found for tag '{BILL_BALANCE_TAG_NAME}' template_key='{active_template_key}'.")
         except Exception as e:
-            logger.warning(f"Failed to load W9 form from template attachments: {e}", exc_info=True)
-            w9_path = None
+            logger.warning(f"Failed to load template attachments: {e}", exc_info=True)
 
         # Collect all available attachment paths
         all_attachment_paths = []
@@ -916,10 +920,10 @@ async def handle_bill_balance_request(
             all_attachment_paths.append(bill_attachment_path)
         for fr_path in final_report_paths:
             all_attachment_paths.append(fr_path)
-        if w9_path:
-            all_attachment_paths.append(w9_path)
+        for td_path in template_doc_paths:
+            all_attachment_paths.append(td_path)
 
-        logger.info(f"Collected {len(all_attachment_paths)} attachments for patient {patient_id}: bill={bool(bill_attachment_path)}, final_reports={len(final_report_paths)}, w9={bool(w9_path)}")
+        logger.info(f"Collected {len(all_attachment_paths)} attachments for patient {patient_id}: bill={bool(bill_attachment_path)}, final_reports={len(final_report_paths)}, template_docs={len(template_doc_paths)}, template_key={active_template_key}")
 
         if not all_liens_signed:
             # Generate Lien Reminder response - use DB template
@@ -970,7 +974,7 @@ async def handle_bill_balance_request(
                 "attachments_included": {
                     "bill": bool(bill_attachment_path),
                     "final_reports": len(final_report_paths),
-                    "w9": bool(w9_path)
+                    "template_docs": len(template_doc_paths)
                 }
             },
             attachment_paths=all_attachment_paths,

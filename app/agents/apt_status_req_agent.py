@@ -938,27 +938,24 @@ async def handle_apt_status_request_agent_sdk(
                 else:
                     logger.info("Using default HIPAA template (no settings found)")
 
-                # Load HIPAA form from template attachments
-                # First try to find one with template_key="hipaa_form", then fall back to any PDF attachment
+                # Load template attachments for the HIPAA scenario
                 attachments = await template_attachment_crud.get_by_tag_and_template(
-                    db, "Apt status req", "hipaa_form"
+                    db, "Apt status req", template_key="apt_status_hipaa_template"
                 )
-                if not attachments:
-                    # Fall back to any attachment for this tag (first PDF found)
-                    all_attachments = await template_attachment_crud.get_by_tag_name(db, "Apt status req")
-                    attachments = [a for a in all_attachments if a.mime_type == "application/pdf"]
 
-                if attachments and attachments[0].file_content:
-                    # Write DB content to a temp file for sending
+                if attachments:
                     import tempfile
-                    hipaa_friendly_name = attachments[0].filename or "Medical-Release-Form.pdf"
                     tmp_dir = tempfile.mkdtemp(prefix="apt_hipaa_")
+                    # Use the first attachment as the primary HIPAA form path
+                    # (for backwards compatibility with send_reply_to_front_with_attachment)
+                    first = attachments[0]
+                    hipaa_friendly_name = first.filename or "Medical-Release-Form.pdf"
                     hipaa_form_path = os.path.join(tmp_dir, hipaa_friendly_name)
                     with open(hipaa_form_path, "wb") as f:
-                        f.write(attachments[0].file_content)
-                    logger.info(f"Loaded HIPAA form from DB -> {hipaa_form_path} ({len(attachments[0].file_content)} bytes)")
+                        f.write(first.file_content)
+                    logger.info(f"Loaded template attachment from DB -> {hipaa_form_path} ({len(first.file_content)} bytes)")
                 else:
-                    logger.error("No HIPAA form found in database! Please upload via /settings/template-config")
+                    logger.error("No template attachments found for 'Apt status req'! Please upload via /settings/template-config")
 
             # Only try to send with attachment if we have a HIPAA form
             if hipaa_form_path:

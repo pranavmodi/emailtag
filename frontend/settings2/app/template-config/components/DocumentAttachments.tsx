@@ -13,9 +13,9 @@ interface DocumentAttachmentsProps {
 }
 
 const TAG_HINTS: Record<string, string> = {
-  "Apt status req": "Upload the HIPAA release form PDF here. It will be attached automatically when sending HIPAA authorization requests to unauthorized senders.",
+  "Apt status req": "Upload documents for this specific scenario. They will be attached automatically when this template is used.",
   "Lien Templates": "Upload documents to include with lien-related autorespond emails.",
-  "Bill or Balance Request": "Upload documents to include with billing-related autorespond emails.",
+  "Bill or Balance Request": "Upload documents for this specific scenario. They will be attached automatically when this template is used.",
 };
 
 function formatFileSize(bytes: number): string {

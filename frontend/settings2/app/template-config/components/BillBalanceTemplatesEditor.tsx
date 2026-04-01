@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { DEFAULT_TAG_SETTINGS, DUMMY_BILLING_STATUS_TABLE } from "../constants/template-config.constants";
+import { DocumentAttachments } from "./DocumentAttachments";
 
 interface BillBalanceTemplatesEditorProps {
   tagSettings: typeof DEFAULT_TAG_SETTINGS;
@@ -11,6 +12,7 @@ interface BillBalanceTemplatesEditorProps {
   onFieldChange: (key: keyof typeof DEFAULT_TAG_SETTINGS, value: string) => void;
   onSave: () => void;
   onReset: () => void;
+  currentUser: string;
 }
 
 type BillBalanceScenario = "balance_found" | "balance_not_found" | "lien_reminder" | "no_data" | "request_patient_id" | "escalation";
@@ -24,7 +26,7 @@ const SCENARIO_OPTIONS: Array<{ value: BillBalanceScenario; label: string; descr
   { value: "escalation", label: "Escalation", description: "Escalate to human review after failed identification", emoji: "🚨", color: "red" },
 ];
 
-export function BillBalanceTemplatesEditor({ tagSettings, customPlaceholders, onFieldChange, onSave, onReset }: BillBalanceTemplatesEditorProps) {
+export function BillBalanceTemplatesEditor({ tagSettings, customPlaceholders, onFieldChange, onSave, onReset, currentUser }: BillBalanceTemplatesEditorProps) {
   const [selectedScenario, setSelectedScenario] = useState<BillBalanceScenario>("balance_found");
   const [showPreview, setShowPreview] = useState(true);
 
@@ -185,6 +187,13 @@ export function BillBalanceTemplatesEditor({ tagSettings, customPlaceholders, on
             </div>
           )}
         </div>
+
+        {/* Per-scenario Document Attachments */}
+        <DocumentAttachments
+          tagName="Bill or Balance Request"
+          templateKey={templateKey}
+          currentUser={currentUser}
+        />
 
         {/* Save Button for Bill Balance Templates */}
         <div className="mt-4 flex justify-end gap-2 border-t-2 border-blue-300 pt-4">

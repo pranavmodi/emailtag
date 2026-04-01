@@ -1360,19 +1360,19 @@ def perform_tagging_task(self, email_id: str) -> Dict:
         perform_autorespond_task.apply_async(args=[email_id], kwargs={'determined_tags': new_tags}, queue='processing')
         return {"status": "queued_for_autorespond", "email_id": email_id, "tags_applied_to_front": applied_tags_to_front, "determined_tags": new_tags}
 
+    except RetryableOpenAIError:
+        # Let Celery's autoretry handle this — do NOT swallow the exception
+        logger.warning(f"RetryableOpenAIError in perform_tagging_task for {email_id} — will be retried by Celery")
+        if db.is_active:
+            db.rollback()
+        raise
     except Exception as e:
         logger.exception(f"Error in perform_tagging_task for {email_id}: {str(e)}")
         if db.is_active:
             db.rollback()
         try:
             email_uuid_for_error = UUID(email_id)
-            # Consider updating status to "tagging_failed_exception" if email_obj was fetched
-            # db_temp = SessionLocal()
-            # temp_email_obj = email_crud_sync.get(db_temp, id=email_uuid_for_error)
-            # if temp_email_obj:
-            #     email_crud_sync.update(db_temp, db_obj=temp_email_obj, obj_in=EmailUpdate(status="tagging_failed_exception", is_processed=True))
-            # db_temp.close()
-        except: # Outer try-except for safety with UUID conversion
+        except:
             pass
         return {"status": "error", "message": str(e)}
     finally:
