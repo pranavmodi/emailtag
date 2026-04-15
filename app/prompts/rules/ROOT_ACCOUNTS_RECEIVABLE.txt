@@ -22,7 +22,10 @@ Please use the following rules to sub-classify the provided email content, alrea
    - **Lien reduction, settlement, or bill reduction requests** = 'Negotiations' (even if they mention liens)
    - **Lien submissions, missing lien requests, or lien modifications** = 'Liens'
 
-4. **Case Updates vs Billing Distinction**:
+4. **Billing vs Liens Priority Rule**:
+   - When an email requests **both** billing information (e.g., "bill", "balance", "invoice") **and** a lien, classify as **'Billing'**. Billing takes priority over Liens when both are mentioned.
+
+5. **Case Updates vs Billing Distinction**:
    - **Check status inquiries** (e.g., "will you cash the check", "check confirmation", "voiding/reissuing checks") = 'Case Updates'
    - **Payment status updates** (e.g., "payment sent but not received", "payment on the way") = 'Case Updates' 
    - **Attorney/legal case communications** (e.g., "new attorney", "drop letter", "case pending") = 'Case Updates'

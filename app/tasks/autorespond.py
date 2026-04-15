@@ -642,7 +642,8 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                         settings_obj=settings,
                         email_subject=email_obj.subject,
                         test_mode=bill_balance_test_mode_enabled,
-                        extracted_patient_ids=extracted_patient_ids  # Pass ALL pre-extracted patient IDs
+                        extracted_patient_ids=extracted_patient_ids,  # Pass ALL pre-extracted patient IDs
+                        email_sender=sender_email  # Pass sender for authorization verification
                     )
 
                 try:

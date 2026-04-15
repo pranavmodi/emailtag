@@ -21,7 +21,7 @@ from celery.utils.log import get_task_logger
 
 from app.core.config import settings as app_settings_instance
 from app.services import frontapp_service
-from app.agents.agent_helpers import send_reply_to_front_direct, send_reply_to_front_with_attachment, send_reply_to_front_with_attachments, extract_patient_id_from_email_logic
+from app.agents.agent_helpers import send_reply_to_front_direct, send_reply_to_front_with_attachment, send_reply_to_front_with_attachments, extract_patient_id_from_email_logic, verify_sender_for_patient_access
 from app.helpers.billing_status_table import generate_billing_status_table
 # Import shared templates
 from app.agents.templates.shared_templates import (
@@ -309,7 +309,8 @@ async def handle_bill_balance_request(
     settings_obj: Any = app_settings_instance,
     email_subject: str = None,
     test_mode: bool = False,
-    extracted_patient_ids: List[str] = None  # Add pre-extracted patient IDs parameter (list)
+    extracted_patient_ids: List[str] = None,  # Add pre-extracted patient IDs parameter (list)
+    email_sender: str = None  # Sender email for authorization verification
 ) -> Dict[str, Any]:
     """
     Main orchestrator for handling "Bill or balance Request" emails.
@@ -327,6 +328,7 @@ async def handle_bill_balance_request(
         email_subject: Email subject line
         test_mode: If True, save responses to file instead of sending via Front API
         extracted_patient_ids: Pre-extracted patient IDs (list)
+        email_sender: Sender email for authorization verification
     """
     logger.info(f"handle_bill_balance_request called for conversation: {front_conversation_id} (test_mode={test_mode})")
 
@@ -350,7 +352,8 @@ async def handle_bill_balance_request(
                 settings_obj=settings_obj,
                 email_subject=email_subject,
                 test_mode=test_mode,
-                extracted_patient_ids=[patient_id]  # Single patient ID in list
+                extracted_patient_ids=[patient_id],  # Single patient ID in list
+                email_sender=email_sender
             )
             all_results.append(result)
 
@@ -425,6 +428,138 @@ async def handle_bill_balance_request(
             except Exception as e:
                 logger.error(f"Failed to send clarification request: {e}")
                 return {"agent_handled": False, "processed_flag": False, "details": {"reason": f"Failed to send clarification: {e}"}}
+
+    # --- BEGIN: SENDER VERIFICATION ---
+    # Check if sender verification is enabled in settings
+    sender_verification_enabled = True  # Default to enabled for security
+    async with AsyncSessionLocal() as db:
+        workspace_settings = await tag_settings_crud.get_settings_dict(db, "WORKSPACE")
+        sender_verification_enabled = workspace_settings.get("enable_sender_verification", True)
+
+    if patient_id and email_sender and sender_verification_enabled:
+        verification_result = await verify_sender_for_patient_access(
+            patient_id=patient_id,
+            sender_email=email_sender
+        )
+
+        if not verification_result["authorized"]:
+            logger.warning(
+                f"Unauthorized bill/balance access: {email_sender} to patient {patient_id} "
+                f"(role={verification_result['role']}, status={verification_result['verification_status']})"
+            )
+
+            # Load HIPAA / unauthorized templates from apt status settings (shared across agents)
+            hipaa_template = (
+                "Hello,\n\nTo proceed with your request for patient information, we require authorization. "
+                "Please complete the attached HIPAA release form and reply to this email with the completed document.\n\nThank you for your cooperation."
+            )
+            unauthorized_template = (
+                "Hello,\n\nWe're unable to automatically provide patient information as you are not currently listed "
+                "as an authorized party for this patient's case.\n\nA team member will review your request and contact you shortly.\n\nThank you."
+            )
+            hipaa_form_path = None
+
+            async with AsyncSessionLocal() as db:
+                apt_settings = await tag_settings_crud.get_settings_dict(db, "Apt status req")
+                if apt_settings:
+                    if apt_settings.get("apt_status_hipaa_template"):
+                        hipaa_template = apt_settings["apt_status_hipaa_template"]
+                    elif apt_settings.get("hipaa_template"):
+                        hipaa_template = apt_settings["hipaa_template"]
+                    if apt_settings.get("apt_status_unauthorized_template"):
+                        unauthorized_template = apt_settings["apt_status_unauthorized_template"]
+
+                # Load HIPAA form attachment
+                attachments = await template_attachment_crud.get_by_tag_and_template(
+                    db, "Apt status req", template_key="apt_status_hipaa_template"
+                )
+                if attachments:
+                    import tempfile
+                    tmp_dir = tempfile.mkdtemp(prefix="bb_hipaa_")
+                    first = attachments[0]
+                    hipaa_friendly_name = first.filename or "Medical-Release-Form.pdf"
+                    hipaa_form_path = os.path.join(tmp_dir, hipaa_friendly_name)
+                    with open(hipaa_form_path, "wb") as f:
+                        f.write(first.file_content)
+                    logger.info(f"Loaded HIPAA form attachment -> {hipaa_form_path} ({len(first.file_content)} bytes)")
+
+            # Send HIPAA form if available, otherwise unauthorized template
+            if hipaa_form_path:
+                if test_mode:
+                    await save_test_mode_response_bill_balance(
+                        conversation_id=front_conversation_id,
+                        response_text=hipaa_template,
+                        patient_id=patient_id,
+                        response_type="hipaa_form_unauthorized",
+                        details={
+                            "action": "sender_not_authorized_hipaa_sent",
+                            "sender": email_sender,
+                            "role": verification_result["role"],
+                        }
+                    )
+                    frontapp_service.add_conversation_tags(front_conversation_id, ["AI handled", "AI: Human review required"])
+                else:
+                    result = await send_reply_to_front_with_attachment(
+                        front_conversation_id,
+                        hipaa_template,
+                        hipaa_form_path,
+                        tags_to_add=["AI handled", "AI: Human review required"]
+                    )
+                    if result.get("status") == "success":
+                        logger.info("Sent HIPAA form to unauthorized sender for bill/balance request")
+                    else:
+                        logger.error(f"Failed to send HIPAA form: {result}")
+
+                return {
+                    "agent_handled": True,
+                    "processed_flag": True,
+                    "details": {
+                        "action": "sender_not_authorized_hipaa_sent",
+                        "sender": email_sender,
+                        "patient_id": patient_id,
+                        "role": verification_result["role"],
+                        "verification_status": verification_result["verification_status"],
+                        "reason": "Sender not authorized - HIPAA form sent"
+                    }
+                }
+            else:
+                # Fallback: no HIPAA form available — send unauthorized text template
+                logger.info("No HIPAA form available, sending unauthorized template for bill/balance")
+                if test_mode:
+                    await save_test_mode_response_bill_balance(
+                        conversation_id=front_conversation_id,
+                        response_text=unauthorized_template,
+                        patient_id=patient_id,
+                        response_type="unauthorized_escalated",
+                        details={
+                            "action": "sender_not_authorized_escalated",
+                            "sender": email_sender,
+                            "role": verification_result["role"],
+                        }
+                    )
+                    frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+                else:
+                    await send_reply_to_front_direct(
+                        conversation_id=front_conversation_id,
+                        reply_text=unauthorized_template
+                    )
+                    frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
+
+                return {
+                    "agent_handled": True,
+                    "processed_flag": True,
+                    "details": {
+                        "action": "sender_not_authorized_escalated",
+                        "sender": email_sender,
+                        "patient_id": patient_id,
+                        "role": verification_result["role"],
+                        "verification_status": verification_result["verification_status"],
+                        "reason": "Sender not authorized - unauthorized template sent"
+                    }
+                }
+    elif patient_id and not email_sender:
+        logger.warning(f"Sender email not available for verification on patient {patient_id} — proceeding without verification")
+    # --- END: SENDER VERIFICATION ---
 
     # Step 1: Patient ID found, get patient information and billing information using MCP tools
     logger.info(f"Patient ID {patient_id} found. Fetching patient and billing information via MCP tools.")
@@ -790,9 +925,6 @@ async def handle_bill_balance_request(
             lien.get('hasPatientSigned', False) and lien.get('hasAttorneySigned', False)
             for lien in lien_status_list
         )
-        
-        # Determine if reports are requested
-        include_reports = "report" in current_email_content.lower()
 
         # Build comprehensive response using template (templates already fetched earlier)
         attachments = []
@@ -810,9 +942,10 @@ async def handle_bill_balance_request(
         bill_tmp_dir.mkdir(parents=True, exist_ok=True)
         temp_attachment_paths = []  # Temp files to clean up after sending
 
-        # 1. Decode bill attachment if available
+        # 1. Decode bill attachment if available (only when liens are fully signed —
+        #    we do not send the bill PDF to an attorney who has not signed yet)
         bill_attachment_path = None
-        if patient_bill_status.get("bill"):
+        if all_liens_signed and patient_bill_status.get("bill"):
             try:
                 bill_b64 = patient_bill_status["bill"]
                 # Strip data URI prefix if present (e.g., "data:application/pdf;base64,")
@@ -835,59 +968,67 @@ async def handle_bill_balance_request(
                 bill_attachment_path = None
 
         # 2. Fetch final reports via MCP (get_patient_files_by_type with fileType=FREP)
+        # Only fetch when liens are fully signed — otherwise we would leak the
+        # radiologist report to an attorney who has not signed yet.
         # API may return a single object or an array of files
         final_report_paths = []
-        try:
-            final_report_response = await call_mcp_tool(
-                tool_name="get_patient_files_by_type",
-                arguments={"patient_id": patient_id, "file_type": "FREP"}
+        if not all_liens_signed:
+            logger.info(
+                f"Patient {patient_id}: skipping bill PDF and final report attachments — "
+                f"liens not fully signed"
             )
-            if final_report_response and isinstance(final_report_response, dict):
-                fr_data = final_report_response.get("data", {})
-                fr_result = fr_data.get("result", "")
-                fr_status = fr_data.get("responseStatus", "")
+        else:
+            try:
+                final_report_response = await call_mcp_tool(
+                    tool_name="get_patient_files_by_type",
+                    arguments={"patient_id": patient_id, "file_type": "FREP"}
+                )
+                if final_report_response and isinstance(final_report_response, dict):
+                    fr_data = final_report_response.get("data", {})
+                    fr_result = fr_data.get("result", "")
+                    fr_status = fr_data.get("responseStatus", "")
 
-                if fr_status == "Success" and fr_result and fr_result != "No record found":
-                    # Parse the result JSON string — may be a single object or an array
-                    if isinstance(fr_result, str):
-                        fr_result = json.loads(fr_result)
+                    if fr_status == "Success" and fr_result and fr_result != "No record found":
+                        # Parse the result JSON string — may be a single object or an array
+                        if isinstance(fr_result, str):
+                            fr_result = json.loads(fr_result)
 
-                    # Normalize to a list
-                    if isinstance(fr_result, dict):
-                        fr_files = [fr_result]
-                    elif isinstance(fr_result, list):
-                        fr_files = fr_result
+                        # Normalize to a list
+                        if isinstance(fr_result, dict):
+                            fr_files = [fr_result]
+                        elif isinstance(fr_result, list):
+                            fr_files = fr_result
+                        else:
+                            fr_files = []
+
+                        logger.info(f"Found {len(fr_files)} final report file(s) for patient {patient_id}")
+
+                        for idx, fr_file in enumerate(fr_files):
+                            try:
+                                fr_file_data = fr_file.get("FileData", "")
+                                fr_filename = fr_file.get("FileName", f"final_report_{patient_id}_{idx}.pdf")
+                                if not fr_file_data:
+                                    logger.info(f"No FileData in final report [{idx}] for patient {patient_id}, skipping")
+                                    continue
+                                # Decode base64 to PDF
+                                fr_b64 = fr_file_data.strip().replace("\n", "").replace("\r", "").replace(" ", "")
+                                missing_padding = len(fr_b64) % 4
+                                if missing_padding:
+                                    fr_b64 += "=" * (4 - missing_padding)
+                                fr_pdf_bytes = base64.b64decode(fr_b64)
+                                fr_tmp_path = bill_tmp_dir / fr_filename
+                                with open(fr_tmp_path, "wb") as f:
+                                    f.write(fr_pdf_bytes)
+                                fr_path_str = str(fr_tmp_path)
+                                final_report_paths.append(fr_path_str)
+                                temp_attachment_paths.append(fr_path_str)
+                                logger.info(f"Decoded final report [{idx}] for patient {patient_id}: {fr_filename} ({len(fr_pdf_bytes)} bytes)")
+                            except Exception as file_err:
+                                logger.warning(f"Failed to decode final report [{idx}] for patient {patient_id}: {file_err}")
                     else:
-                        fr_files = []
-
-                    logger.info(f"Found {len(fr_files)} final report file(s) for patient {patient_id}")
-
-                    for idx, fr_file in enumerate(fr_files):
-                        try:
-                            fr_file_data = fr_file.get("FileData", "")
-                            fr_filename = fr_file.get("FileName", f"final_report_{patient_id}_{idx}.pdf")
-                            if not fr_file_data:
-                                logger.info(f"No FileData in final report [{idx}] for patient {patient_id}, skipping")
-                                continue
-                            # Decode base64 to PDF
-                            fr_b64 = fr_file_data.strip().replace("\n", "").replace("\r", "").replace(" ", "")
-                            missing_padding = len(fr_b64) % 4
-                            if missing_padding:
-                                fr_b64 += "=" * (4 - missing_padding)
-                            fr_pdf_bytes = base64.b64decode(fr_b64)
-                            fr_tmp_path = bill_tmp_dir / fr_filename
-                            with open(fr_tmp_path, "wb") as f:
-                                f.write(fr_pdf_bytes)
-                            fr_path_str = str(fr_tmp_path)
-                            final_report_paths.append(fr_path_str)
-                            temp_attachment_paths.append(fr_path_str)
-                            logger.info(f"Decoded final report [{idx}] for patient {patient_id}: {fr_filename} ({len(fr_pdf_bytes)} bytes)")
-                        except Exception as file_err:
-                            logger.warning(f"Failed to decode final report [{idx}] for patient {patient_id}: {file_err}")
-                else:
-                    logger.info(f"No final report found for patient {patient_id} (status: {fr_status})")
-        except Exception as e:
-            logger.warning(f"Failed to fetch final reports for patient {patient_id}: {e}", exc_info=True)
+                        logger.info(f"No final report found for patient {patient_id} (status: {fr_status})")
+            except Exception as e:
+                logger.warning(f"Failed to fetch final reports for patient {patient_id}: {e}", exc_info=True)
 
         # 3. Determine which template key to use (for per-template attachments)
         active_template_key = "bill_balance_lien_reminder_template" if not all_liens_signed else "bill_balance_found_template"
