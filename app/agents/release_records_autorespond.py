@@ -27,14 +27,13 @@ from app.mcp import default_mcp_client as mcp_client
 from app.agents.agent_helpers import (
     format_conversation_history_for_agent,
     get_patient_and_study_info,
+    handle_unauthorized_sender,
     send_fallback_reply_and_tag,
     extract_all_patient_ids_from_email_logic,
     send_reply_to_front_direct,
     send_reply_to_front_with_attachment,
     verify_sender_for_patient_access
 )
-from app.crud.template_attachment import template_attachment_crud
-from app.db.session import AsyncSessionLocal
 # --- END: Agent Helper Imports ---
 
 # --- BEGIN: Logging ---
@@ -246,48 +245,14 @@ async def handle_release_of_records_request(
 
         logger.info(f"Sender verification result: authorized={is_authorized}, role={verification_role}, status={verification_result.get('verification_status')}")
 
-        # Handle unauthorized senders - send HIPAA form (loaded from DB)
+        # Handle unauthorized senders - use universal WORKSPACE-based denial response
         if not is_authorized:
-            import tempfile
-            hipaa_form_path = None
-            try:
-                async with AsyncSessionLocal() as db:
-                    hipaa_attachments = await template_attachment_crud.get_by_tag_and_template(
-                        db, "Release of Records", "hipaa_form"
-                    )
-                    if hipaa_attachments and hipaa_attachments[0].file_content:
-                        hipaa_friendly_name = hipaa_attachments[0].filename or "Medical-Release-Form.pdf"
-                        tmp_dir = tempfile.mkdtemp(prefix="hipaa_")
-                        hipaa_form_path = os.path.join(tmp_dir, hipaa_friendly_name)
-                        with open(hipaa_form_path, "wb") as f:
-                            f.write(hipaa_attachments[0].file_content)
-                        logger.info(f"Loaded HIPAA form from DB -> {hipaa_form_path} ({len(hipaa_attachments[0].file_content)} bytes)")
-                    else:
-                        logger.warning("No HIPAA form found in DB template attachments. Upload via /settings with tag 'Release of Records', template_key 'hipaa_form'.")
-            except Exception as e:
-                logger.warning(f"Failed to load HIPAA form from DB: {e}", exc_info=True)
-
-            # Fallback to bundled file if DB lookup failed
-            if not hipaa_form_path:
-                hipaa_form_path = os.path.join(os.path.dirname(__file__), "templates", "Medical-Release-Form.pdf")
-                logger.info(f"Using bundled HIPAA form fallback: {hipaa_form_path}")
-
-            result = await send_reply_to_front_with_attachment(
-                front_conversation_id,
-                TEMPLATE_HIPAA_NEEDED,
-                hipaa_form_path,
-                tags_to_add=["AI handled"]
+            return await handle_unauthorized_sender(
+                conversation_id=front_conversation_id,
+                sender_email=email_sender,
+                patient_id=patient_id,
+                verification_result=verification_result,
             )
-
-            if result.get("status") == "success":
-                agent_outcome["agent_handled"] = True
-                agent_outcome["processed_flag"] = True
-                agent_outcome["details"] = {"reason": "Successfully sent HIPAA form with attachment", "response": result}
-            else:
-                logger.error(f"Failed to send HIPAA reply with attachment: {result}")
-                raise ValueError(f"Failed to send HIPAA reply with attachment: {result}")
-
-            return agent_outcome
         
         # Handle doctor on file case
         if verification_role == "doctor_on_file":

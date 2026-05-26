@@ -53,9 +53,9 @@ export function useTagSettings(selectedTag: string, currentUser: string) {
         apt_status_hipaa_template: response.settings.apt_status_hipaa_template ?? response.settings.hipaa_template ?? DEFAULT_APT_STATUS_TEMPLATES.apt_status_hipaa_template,
         apt_status_unauthorized_template: response.settings.apt_status_unauthorized_template ?? DEFAULT_APT_STATUS_TEMPLATES.apt_status_unauthorized_template,
 
-        // Legacy aliases for backward compatibility
+        // Legacy aliases / workspace-level templates
         unified_template: response.settings.apt_status_unified_template ?? response.settings.unified_template ?? DEFAULT_APT_STATUS_TEMPLATES.apt_status_unified_template,
-        hipaa_template: response.settings.apt_status_hipaa_template ?? response.settings.hipaa_template ?? DEFAULT_APT_STATUS_TEMPLATES.apt_status_hipaa_template,
+        hipaa_template: response.settings.hipaa_template ?? response.settings.apt_status_hipaa_template ?? DEFAULT_APT_STATUS_TEMPLATES.apt_status_hipaa_template,
 
         // Lien templates (multi-scenario tag)
         lien_success_template: response.settings.lien_success_template ?? DEFAULT_LIEN_TEMPLATES.lien_success_template,

@@ -14,3 +14,5 @@ from .template_attachment import TemplateAttachment  # noqa
 from .pif_info import PifInfo  # noqa
 from .pif_pipeline import PifOutreachPipeline  # noqa
 from .conversation_log import ConversationLog  # noqa
+from .autorespond_event import AutorespondEvent  # noqa
+from .inbox_audit import InboxAuditRun, InboxAuditMiss  # noqa

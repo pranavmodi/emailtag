@@ -1,7 +1,11 @@
 """Celery worker configuration."""
 
 import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from celery import Celery
+from celery.schedules import crontab
 from celery.signals import after_setup_logger, after_setup_task_logger
 
 from app.core.config import settings
@@ -74,6 +78,8 @@ celery_app.conf.task_routes = {
     "app.tasks.behavior_analysis.analyze_firm_behavior_task": {"queue": "processing"},
     "app.tasks.behavior_analysis.analyze_all_firms_task": {"queue": "processing"},
     "app.tasks.behavior_analysis.score_all_firms_task": {"queue": "processing"},
+    "app.tasks.inbox_audit.audit_all_inboxes": {"queue": "processing"},
+    "app.tasks.inbox_audit.audit_single_inbox": {"queue": "processing"},
     "tasks.send_attachment_to_ocr": {"queue": "ocr"},
     "app.tasks.worker.test_task": {"queue": "emails"},
 }
@@ -86,6 +92,20 @@ celery_app.conf.update(
     enable_utc=True,
     worker_hijack_root_logger=False,
 )
+
+
+def _la_now():
+    """Return current time in America/Los_Angeles, DST-aware. Used by crontab to
+    schedule daily jobs at a Pacific-time hour regardless of standard/daylight time."""
+    return datetime.now(ZoneInfo("America/Los_Angeles"))
+
+
+celery_app.conf.beat_schedule = {
+    "daily-inbox-audit-6am-pt": {
+        "task": "app.tasks.inbox_audit.audit_all_inboxes",
+        "schedule": crontab(hour=6, minute=0, nowfun=_la_now),
+    },
+}
 
 # Autodiscover tasks in the app package
 celery_app.autodiscover_tasks(["app.tasks"])

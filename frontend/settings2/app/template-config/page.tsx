@@ -25,6 +25,7 @@ import { LienTemplatesEditor } from "./components/LienTemplatesEditor";
 import { BillBalanceTemplatesEditor } from "./components/BillBalanceTemplatesEditor";
 import { UnifiedTemplateEditor } from "./components/UnifiedTemplateEditor";
 import { AptStatusReqTemplatesEditor } from "./components/AptStatusReqTemplatesEditor";
+import { SenderVerificationTemplates } from "./components/SenderVerificationTemplates";
 import PlaceholderSection from "./components/PlaceholderSection";
 import { DocumentAttachments } from "./components/DocumentAttachments";
 import { TablePreview } from "./components/TablePreview";
@@ -269,6 +270,17 @@ export default function TemplateConfigPage() {
                 <AptStatusReqTemplatesEditor
                   tagSettings={tagSettings}
                   customPlaceholders={mergedCustomPlaceholders}
+                  onFieldChange={handleFieldChange}
+                  onSave={handleSaveTagSettings}
+                  onReset={handleResetTagSettings}
+                  currentUser={currentUser}
+                />
+              )}
+
+              {/* Workspace Sender Verification Templates - Show for WORKSPACE */}
+              {selectedTag === "WORKSPACE" && (
+                <SenderVerificationTemplates
+                  tagSettings={tagSettings}
                   onFieldChange={handleFieldChange}
                   onSave={handleSaveTagSettings}
                   onReset={handleResetTagSettings}

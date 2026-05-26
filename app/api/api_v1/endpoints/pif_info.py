@@ -36,7 +36,14 @@ from app.schemas.pif_info import (
     AnalyticsSummaryResponse,
     PeopleSearchResponse,
     PersonSearchResult,
+    LeadershipEmailHistoryResponse,
 )
+from app.schemas.autorespond_event import (
+    AutorespondEventResponse,
+    AutorespondEventListResponse,
+    AutorespondEventSummary,
+)
+from app.crud import autorespond_event as autorespond_event_crud
 
 logger = logging.getLogger(__name__)
 
@@ -261,23 +268,47 @@ async def list_pif_info(
         None,
         description="Sort order: 'conversation_count' (most conversations first), 'firm_name' (alphabetical), or 'updated_at' (most recent first, default)"
     ),
+    research_status: str = Query(
+        None,
+        description="Filter by research status: 'completed', 'pending', 'queued', 'in_progress', 'failed'"
+    ),
+    icp_tier: str = Query(
+        None,
+        description="Filter by ICP tier: 'A', 'B', 'C', 'D'"
+    ),
+    entity_type: str = Query(
+        None,
+        description="Filter by entity type: 'pi_law_firm', 'medical_referring', 'medical_facility', 'insurance', 'funding', 'collections', 'legal_other', 'administrative', 'patient_adjacent'"
+    ),
+    recently_researched: int = Query(
+        None,
+        description="Filter firms researched within the last N days (e.g. 7 for last week)"
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> PifInfoListResponse:
     """
-    List all PIF info with optional search, sorting, and pagination.
+    List all PIF info with optional search, filters, sorting, and pagination.
 
     Args:
         search: Optional search term
         page: Page number (1-indexed)
         page_size: Number of items per page
         sort_by: Sort order (conversation_count, firm_name, updated_at)
+        research_status: Filter by research_status (e.g. 'completed')
+        icp_tier: Filter by ICP tier ('A', 'B', 'C', 'D')
+        recently_researched: Filter firms researched within the last N days
         db: Database session
 
     Returns:
         Paginated list of PIF info
     """
     skip = (page - 1) * page_size
-    items, total = await pif_info_crud.search(db, search=search, skip=skip, limit=page_size, sort_by=sort_by)
+    items, total = await pif_info_crud.search(
+        db, search=search, skip=skip, limit=page_size, sort_by=sort_by,
+        research_status=research_status, icp_tier=icp_tier,
+        entity_type=entity_type,
+        recently_researched_days=recently_researched,
+    )
 
     total_pages = (total + page_size - 1) // page_size if total > 0 else 0
 
@@ -329,6 +360,53 @@ async def search_people(
         page_size=page_size,
         total_pages=total_pages,
     )
+
+
+# ---------------------------------------------------------------------------
+# Autorespond Event Tracking Endpoints
+# (Must be before /{pif_id} catch-all routes)
+# ---------------------------------------------------------------------------
+
+@router.get("/autorespond-events", response_model=AutorespondEventListResponse)
+async def list_autorespond_events(
+    agent_type: str = Query(None, description="Filter by agent type"),
+    search: str = Query(None, description="Search firm name, contact email, or subject"),
+    date_from: str = Query(None, description="Start date (YYYY-MM-DD)"),
+    date_to: str = Query(None, description="End date (YYYY-MM-DD)"),
+    test_mode: bool = Query(None, description="Filter by test mode"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+) -> AutorespondEventListResponse:
+    """List all autorespond events with optional filters and pagination."""
+    skip = (page - 1) * page_size
+    items, total = await autorespond_event_crud.list_events(
+        db,
+        agent_type=agent_type,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+        test_mode=test_mode,
+        skip=skip,
+        limit=page_size,
+    )
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+    return AutorespondEventListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
+
+
+@router.get("/autorespond-events/summary", response_model=AutorespondEventSummary)
+async def get_autorespond_events_summary(
+    db: AsyncSession = Depends(get_db),
+) -> AutorespondEventSummary:
+    """Get aggregate summary of autorespond activity."""
+    data = await autorespond_event_crud.get_summary(db)
+    return AutorespondEventSummary(**data)
 
 
 @router.get("/{pif_id}", response_model=PifInfoResponse)
@@ -505,6 +583,7 @@ async def process_day_conversations(
 
             # Upsert to database
             contacts_dicts = [c.model_dump() for c in firm_info.contacts]
+            extracted_entity_type = getattr(firm_info, 'entity_type', 'pi_law_firm') or 'pi_law_firm'
 
             pif, is_new = await pif_info_crud.upsert_from_extraction(
                 db,
@@ -517,6 +596,7 @@ async def process_day_conversations(
                 contacts=contacts_dicts,
                 conversation_id=conv_id,
                 extraction_notes=firm_info.extraction_notes or None,
+                entity_type=extracted_entity_type,
             )
 
             if is_new:
@@ -585,6 +665,7 @@ async def extract_from_conversation(
 
     # Upsert to database
     contacts_dicts = [c.model_dump() for c in firm_info.contacts]
+    extracted_entity_type = getattr(firm_info, 'entity_type', 'pi_law_firm') or 'pi_law_firm'
 
     pif, is_new = await pif_info_crud.upsert_from_extraction(
         db,
@@ -597,6 +678,7 @@ async def extract_from_conversation(
         contacts=contacts_dicts,
         conversation_id=conversation_id,
         extraction_notes=firm_info.extraction_notes or None,
+        entity_type=extracted_entity_type,
     )
 
     return {
@@ -605,6 +687,7 @@ async def extract_from_conversation(
         "is_new_firm": is_new,
         "pif_id": str(pif.id),
         "firm_name": pif.firm_name,
+        "entity_type": pif.entity_type,
         "firm_info": {
             "website": pif.website,
             "emails": pif.emails,
@@ -940,6 +1023,68 @@ async def analyze_firm_behavior(
     )
 
 
+@router.post("/{pif_id}/analyze-leadership-emails", response_model=LeadershipEmailHistoryResponse)
+async def analyze_leadership_emails(
+    pif_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> LeadershipEmailHistoryResponse:
+    """
+    Queue leadership email history analysis for a firm.
+
+    Dispatches a Celery task that:
+    - Loads the firm's leadership array
+    - For each leader, searches the email table by email or name match
+    - Aggregates per leader: total emails, tag distribution, contact dates, subjects
+    - Stores results in research_data['leadership_email_history']
+
+    Returns immediately with task_id for polling.
+    """
+    pif = await pif_info_crud.get(db, id=pif_id)
+    if not pif:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PIF info not found")
+
+    if not pif.leadership:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No leadership data found. Run research first.",
+        )
+
+    from app.tasks.firm_research import analyze_leadership_emails_task
+    task = analyze_leadership_emails_task.delay(str(pif_id))
+
+    logger.info(f"Leadership email history task queued for {pif.firm_name}: {task.id}")
+
+    return LeadershipEmailHistoryResponse(
+        pif_id=pif_id,
+        firm_name=pif.firm_name,
+        task_id=task.id,
+        status="queued",
+        message=f"Leadership email history analysis queued for '{pif.firm_name}'. Task ID: {task.id}",
+    )
+
+
+@router.get("/{pif_id}/autorespond-events", response_model=AutorespondEventListResponse)
+async def list_firm_autorespond_events(
+    pif_id: UUID,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+) -> AutorespondEventListResponse:
+    """List autorespond events for a specific firm."""
+    skip = (page - 1) * page_size
+    items, total = await autorespond_event_crud.list_events(
+        db, pif_id=pif_id, skip=skip, limit=page_size
+    )
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+    return AutorespondEventListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
+
+
 @router.post("/analyze-behavior/batch", response_model=BatchTaskResponse)
 async def analyze_behavior_batch(
     db: AsyncSession = Depends(get_db),
@@ -1077,6 +1222,15 @@ async def get_analytics_summary(
         key = tier if tier in firms_by_tier else "unscored"
         firms_by_tier[key] = count
 
+    # Firms by entity type
+    entity_type_result = await db.execute(
+        select(PifInfo.entity_type, func.count(PifInfo.id))
+        .group_by(PifInfo.entity_type)
+    )
+    firms_by_entity_type: Dict[str, int] = {}
+    for etype, count in entity_type_result.fetchall():
+        firms_by_entity_type[etype or "pi_law_firm"] = count
+
     # Load all firms with behavioral data for aggregation
     all_pifs_result = await db.execute(
         select(PifInfo).where(PifInfo.behavioral_data.is_not(None))
@@ -1133,6 +1287,7 @@ async def get_analytics_summary(
     return AnalyticsSummaryResponse(
         total_firms_tracked=total_firms,
         firms_by_tier=firms_by_tier,
+        firms_by_entity_type=firms_by_entity_type,
         top_pain_points=top_pain_points,
         avg_monthly_volume_by_tier=avg_monthly_volume_by_tier,
         pipeline_funnel=pipeline_funnel,

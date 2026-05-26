@@ -30,7 +30,8 @@ import {
 } from "lucide-react";
 
 import { ApiError, PifApi } from "@/lib/api";
-import type { PifInfoResponse, PifInfoListResponse, ProcessDayResponse, ResearchStatusResponse, OutreachMessageResult, FirmLookupResponse, FirmLookupConversation, FirmLookupCreateResponse, AnalyticsSummary, PeopleSearchResponse, PersonSearchResult } from "@/lib/types";
+import type { PifInfoResponse, PifInfoListResponse, ProcessDayResponse, ResearchStatusResponse, OutreachMessageResult, FirmLookupResponse, FirmLookupConversation, FirmLookupCreateResponse, AnalyticsSummary, PeopleSearchResponse, PersonSearchResult, AutorespondEventListResponse, AutorespondEventSummary } from "@/lib/types";
+import { ENTITY_TYPE_LABELS, AGENT_TYPE_LABELS } from "@/lib/types";
 import { ResearchModal } from "./ResearchModal";
 import { BehavioralSection } from "./BehavioralSection";
 import { PipelineSection } from "./PipelineSection";
@@ -81,6 +82,7 @@ export default function PifListPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<string>("updated_at");
   const [tierFilter, setTierFilter] = useState<string>("");
+  const [entityTypeFilter, setEntityTypeFilter] = useState<string>("");
   const [researchModalFirm, setResearchModalFirm] = useState<PifInfoResponse | null>(null);
 
   // Analytics summary state
@@ -100,7 +102,7 @@ export default function PifListPage() {
 
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<"pif" | "lookup" | "outreach" | "outgen" | "people">("pif");
+  const [activeTab, setActiveTab] = useState<"pif" | "lookup" | "outreach" | "outgen" | "people" | "autoresponds">("pif");
 
   // Outreach state
   const [outreachFirmId, setOutreachFirmId] = useState<string>("");
@@ -155,6 +157,7 @@ export default function PifListPage() {
         page: currentPage,
         pageSize,
         sortBy: sortBy || undefined,
+        entityType: entityTypeFilter || undefined,
       });
       setData(payload);
       setError(null);
@@ -168,7 +171,7 @@ export default function PifListPage() {
       const message = err instanceof Error ? err.message : "Failed to load PIF data";
       setError(message);
     }
-  }, [searchTerm, currentPage, pageSize, sortBy]);
+  }, [searchTerm, currentPage, pageSize, sortBy, entityTypeFilter]);
 
   const fetchResearchedFirms = useCallback(async () => {
     try {
@@ -225,13 +228,13 @@ export default function PifListPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, authChecked]);
 
-  // Re-fetch when page or sort changes
+  // Re-fetch when page, sort, or entity type filter changes
   useEffect(() => {
     if (!isLoading) {
       fetchData();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, sortBy]);
+  }, [currentPage, sortBy, entityTypeFilter]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -472,6 +475,17 @@ export default function PifListPage() {
             <Users className="h-4 w-4 inline-block mr-1.5 -mt-0.5" />
             People
           </button>
+          <button
+            onClick={() => setActiveTab("autoresponds")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "autoresponds"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Mail className="h-4 w-4 inline-block mr-1.5 -mt-0.5" />
+            Autoresponds
+          </button>
         </div>
 
         {activeTab === "pif" && (
@@ -554,7 +568,7 @@ export default function PifListPage() {
                 )}
 
                 {analyticsExpanded && analyticsSummary && (
-                  <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4 border-t border-slate-100 pt-4">
+                  <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-5 border-t border-slate-100 pt-4">
                     <div>
                       <p className="text-xs text-slate-500 mb-2">Firms by Tier</p>
                       <div className="space-y-1">
@@ -569,6 +583,20 @@ export default function PifListPage() {
                             </div>
                           );
                         })}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 mb-2">By Entity Type</p>
+                      <div className="space-y-1">
+                        {Object.entries(analyticsSummary.firms_by_entity_type || {})
+                          .sort(([, a], [, b]) => b - a)
+                          .map(([etype, count]) => (
+                          <div key={etype} className="flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-violet-400" />
+                            <span className="text-xs text-slate-600 truncate">{ENTITY_TYPE_LABELS[etype] ?? etype}</span>
+                            <span className="ml-auto text-xs text-slate-400">{count}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                     <div>
@@ -750,8 +778,21 @@ export default function PifListPage() {
                     <Button type="submit">Search</Button>
                   </form>
 
-                  {/* Sort + Tier Filter */}
+                  {/* Sort + Tier + Entity Type Filters */}
                   <div className="flex items-center gap-2">
+                    <select
+                      value={entityTypeFilter}
+                      onChange={(e) => {
+                        setEntityTypeFilter(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">All Types</option>
+                      {Object.entries(ENTITY_TYPE_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
                     <select
                       value={tierFilter}
                       onChange={(e) => {
@@ -899,6 +940,10 @@ export default function PifListPage() {
           <PeopleTab />
         )}
 
+        {activeTab === "autoresponds" && (
+          <AutorespondTab />
+        )}
+
       </main>
 
       {/* Research Modal */}
@@ -934,6 +979,9 @@ function FirmCard({
   const [isResearchingStaff, setIsResearchingStaff] = useState(false);
   const [staffResearchError, setStaffResearchError] = useState<string | null>(null);
   const [staffResearchStatus, setStaffResearchStatus] = useState<string | null>(null);
+  const [isAnalyzingEmails, setIsAnalyzingEmails] = useState(false);
+  const [analyzeEmailsError, setAnalyzeEmailsError] = useState<string | null>(null);
+  const [analyzeEmailsMsg, setAnalyzeEmailsMsg] = useState<string | null>(null);
 
   const pollResearchStatus = async (taskId: string) => {
     const maxAttempts = 120; // 10 minutes max (5 second intervals)
@@ -1035,6 +1083,24 @@ function FirmCard({
     }
   };
 
+  const handleAnalyzeEmails = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsAnalyzingEmails(true);
+    setAnalyzeEmailsError(null);
+    setAnalyzeEmailsMsg(null);
+
+    try {
+      const result = await PifApi.analyzeLeadershipEmails(firm.id);
+      setAnalyzeEmailsMsg(`Queued (task: ${result.task_id}). Refresh in a moment.`);
+      // Trigger a refresh after a delay so the data shows up
+      setTimeout(() => onResearchComplete({} as ResearchStatusResponse), 5000);
+    } catch (err) {
+      setAnalyzeEmailsError(err instanceof Error ? err.message : "Failed to analyze leadership emails");
+    } finally {
+      setIsAnalyzingEmails(false);
+    }
+  };
+
   const tierBorderColors: Record<string, string> = {
     A: "border-l-emerald-400",
     B: "border-l-indigo-400",
@@ -1098,6 +1164,11 @@ function FirmCard({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {firm.entity_type && firm.entity_type !== "pi_law_firm" && (
+            <Badge className="bg-violet-100 text-violet-700 text-[10px]">
+              {ENTITY_TYPE_LABELS[firm.entity_type] ?? firm.entity_type}
+            </Badge>
+          )}
           {firm.icp_tier && (
             <Badge className={`font-semibold ${tierBadgeColors[firm.icp_tier] ?? "bg-slate-100 text-slate-600"}`}>
               {firm.icp_tier} · {firm.icp_score}
@@ -1168,6 +1239,26 @@ function FirmCard({
               </>
             )}
           </Button>
+          {firm.research_status === "completed" && (
+            <Button
+              variant="ghost"
+              onClick={handleAnalyzeEmails}
+              disabled={isAnalyzingEmails}
+              className="h-8 px-2 text-sm text-violet-600 hover:bg-violet-50 hover:text-violet-700"
+            >
+              {isAnalyzingEmails ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Mail className="mr-2 h-4 w-4" />
+                  Analyze Emails
+                </>
+              )}
+            </Button>
+          )}
           {isExpanded ? (
             <ChevronUp className="h-5 w-5 text-slate-400" />
           ) : (
@@ -1175,6 +1266,13 @@ function FirmCard({
           )}
         </div>
       </div>
+
+      {/* Analyze Emails status messages */}
+      {(analyzeEmailsError || analyzeEmailsMsg) && (
+        <div className={`px-4 pb-2 text-xs ${analyzeEmailsError ? "text-rose-600" : "text-emerald-600"}`}>
+          {analyzeEmailsError ?? analyzeEmailsMsg}
+        </div>
+      )}
 
       {/* Expanded Content */}
       {isExpanded && (
@@ -1344,6 +1442,95 @@ function FirmCard({
 
             {/* Outreach Pipeline */}
             <PipelineSection pifId={firm.id} />
+
+            {/* Leadership Email History */}
+            {firm.research_data?.leadership_email_history && firm.research_data.leadership_email_history.length > 0 && (
+              <div className="md:col-span-2">
+                <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <Mail className="h-4 w-4 text-violet-500" />
+                  Leadership Email History
+                </h4>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[...firm.research_data.leadership_email_history]
+                    .sort((a, b) => b.total_emails - a.total_emails)
+                    .map((entry, i) => (
+                      <div
+                        key={i}
+                        className="rounded-lg border border-violet-100 bg-violet-50/30 p-3 text-sm"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="font-medium text-slate-800">{entry.name}</div>
+                            {entry.title && (
+                              <div className="text-xs text-slate-500">{entry.title}</div>
+                            )}
+                          </div>
+                          <Badge className="bg-violet-100 text-violet-700 text-xs shrink-0">
+                            {entry.total_emails} {entry.total_emails === 1 ? "email" : "emails"}
+                          </Badge>
+                        </div>
+
+                        {entry.total_emails === 0 ? (
+                          <div className="mt-2 text-xs text-slate-400 italic">No emails found</div>
+                        ) : (
+                          <div className="mt-2 space-y-2">
+                            {/* Contact dates */}
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                              {entry.first_contact && (
+                                <span>
+                                  First: {new Date(entry.first_contact).toLocaleDateString()}
+                                </span>
+                              )}
+                              {entry.last_contact && (
+                                <span>
+                                  Last: {new Date(entry.last_contact).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Tag distribution */}
+                            {Object.keys(entry.tag_distribution).length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {Object.entries(entry.tag_distribution)
+                                  .sort((a, b) => b[1] - a[1])
+                                  .map(([tag, count]) => (
+                                    <Badge
+                                      key={tag}
+                                      className="bg-slate-100 text-slate-600 text-[10px] py-0 px-1.5"
+                                    >
+                                      {tag} ({count})
+                                    </Badge>
+                                  ))}
+                              </div>
+                            )}
+
+                            {/* Recent subjects */}
+                            {entry.recent_subjects && entry.recent_subjects.length > 0 && (
+                              <div>
+                                <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-0.5">
+                                  Recent Subjects
+                                </div>
+                                <ul className="space-y-0.5">
+                                  {entry.recent_subjects.slice(0, 5).map((subject, j) => (
+                                    <li key={j} className="text-xs text-slate-600 truncate">
+                                      {subject}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Matched by */}
+                            <div className="text-[10px] text-slate-400">
+                              Matched by: {entry.matched_by}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
 
             {/* Leadership (from research) */}
             {firm.leadership && firm.leadership.length > 0 && (
@@ -3198,6 +3385,326 @@ function PeopleTab() {
           {!hasSearched && (
             <div className="py-12 text-center text-slate-500">
               Enter a title, name, or role category and click Search.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </motion.section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Autorespond Events Tab
+// ---------------------------------------------------------------------------
+
+const AGENT_TYPE_COLORS: Record<string, string> = {
+  apt_status_req: "bg-blue-50 text-blue-700",
+  bill_balance_request: "bg-emerald-50 text-emerald-700",
+  medical_records: "bg-violet-50 text-violet-700",
+  psl_lien: "bg-amber-50 text-amber-700",
+  asl_lien: "bg-orange-50 text-orange-700",
+  missing_lien_request: "bg-rose-50 text-rose-700",
+  case_updates: "bg-cyan-50 text-cyan-700",
+  unknown_sig_lien: "bg-slate-100 text-slate-600",
+};
+
+function AutorespondTab() {
+  const [events, setEvents] = useState<AutorespondEventListResponse | null>(null);
+  const [summary, setSummary] = useState<AutorespondEventSummary | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Filters
+  const [agentTypeFilter, setAgentTypeFilter] = useState<string>("");
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
+
+  const fetchData = useCallback(async (page = 1) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [eventsData, summaryData] = await Promise.all([
+        PifApi.listAutorespondEvents({
+          agentType: agentTypeFilter || undefined,
+          search: searchTerm || undefined,
+          dateFrom: dateFrom || undefined,
+          dateTo: dateTo || undefined,
+          page,
+          pageSize,
+        }),
+        PifApi.getAutorespondEventsSummary(),
+      ]);
+      setEvents(eventsData);
+      setSummary(summaryData);
+      setCurrentPage(page);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load autorespond events");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [agentTypeFilter, searchTerm, dateFrom, dateTo]);
+
+  useEffect(() => {
+    fetchData(1);
+  }, [fetchData]);
+
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  };
+
+  const formatTime = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  };
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={easing}
+      className="flex flex-col gap-6"
+    >
+      {/* Summary Cards */}
+      {summary && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-slate-900">{summary.total_events}</div>
+              <div className="text-xs text-slate-500">Total Autoresponds</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-blue-600">{summary.events_today}</div>
+              <div className="text-xs text-slate-500">Today</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-emerald-600">{summary.events_this_week}</div>
+              <div className="text-xs text-slate-500">This Week</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-violet-600">{Object.keys(summary.by_agent_type).length}</div>
+              <div className="text-xs text-slate-500">Active Agent Types</div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Agent Type Breakdown */}
+      {summary && Object.keys(summary.by_agent_type).length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-slate-700">By Agent Type</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-4">
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(summary.by_agent_type)
+                .sort((a, b) => b[1] - a[1])
+                .map(([agent, count]) => (
+                  <button
+                    key={agent}
+                    onClick={() => {
+                      setAgentTypeFilter(agentTypeFilter === agent ? "" : agent);
+                    }}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                      agentTypeFilter === agent
+                        ? "ring-2 ring-indigo-400 ring-offset-1"
+                        : ""
+                    } ${AGENT_TYPE_COLORS[agent] || "bg-slate-100 text-slate-600"}`}
+                  >
+                    {AGENT_TYPE_LABELS[agent] || agent}
+                    <span className="font-bold">{count}</span>
+                  </button>
+                ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Top Firms */}
+      {summary && summary.top_firms.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-slate-700">Top Firms by Autorespond Volume</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-4">
+            <div className="flex flex-wrap gap-2">
+              {summary.top_firms.map((f, i) => (
+                <span key={i} className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
+                  {f.firm_name}
+                  <span className="font-bold">{f.count}</span>
+                </span>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Filters & Events Table */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Autorespond Events</CardTitle>
+          <CardDescription>Every autorespond sent, linked to the firm and contact.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {/* Filter Row */}
+          <div className="flex flex-wrap gap-3 mb-4">
+            <input
+              type="text"
+              placeholder="Search firm, email, subject..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && fetchData(1)}
+              className="rounded-md border border-slate-200 px-3 py-1.5 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            />
+            <select
+              value={agentTypeFilter}
+              onChange={(e) => setAgentTypeFilter(e.target.value)}
+              className="rounded-md border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            >
+              <option value="">All Agents</option>
+              {Object.entries(AGENT_TYPE_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="rounded-md border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            />
+            <span className="self-center text-slate-400 text-sm">to</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="rounded-md border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            />
+            <Button
+              variant="ghost"
+              onClick={() => fetchData(1)}
+              disabled={isLoading}
+              className="text-sm px-3 py-1.5"
+            >
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              <span className="ml-1">Search</span>
+            </Button>
+          </div>
+
+          {error && (
+            <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>
+          )}
+
+          {isLoading && !events ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+            </div>
+          ) : events && events.items.length > 0 ? (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-xs font-medium uppercase text-slate-500">
+                      <th className="pb-2 pr-4">Date</th>
+                      <th className="pb-2 pr-4">Agent</th>
+                      <th className="pb-2 pr-4">Firm</th>
+                      <th className="pb-2 pr-4">Contact</th>
+                      <th className="pb-2 pr-4">Subject</th>
+                      <th className="pb-2 pr-4">Tags</th>
+                      <th className="pb-2 pr-4">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {events.items.map((evt) => (
+                      <tr key={evt.id} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="py-2.5 pr-4 whitespace-nowrap">
+                          <div className="text-xs text-slate-900">{formatDate(evt.created_at)}</div>
+                          <div className="text-xs text-slate-400">{formatTime(evt.created_at)}</div>
+                        </td>
+                        <td className="py-2.5 pr-4">
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${AGENT_TYPE_COLORS[evt.agent_type] || "bg-slate-100 text-slate-600"}`}>
+                            {AGENT_TYPE_LABELS[evt.agent_type] || evt.agent_type}
+                          </span>
+                        </td>
+                        <td className="py-2.5 pr-4">
+                          <div className="text-sm font-medium text-slate-900">{evt.firm_name || "Unknown"}</div>
+                        </td>
+                        <td className="py-2.5 pr-4">
+                          {evt.contact_name && (
+                            <div className="text-xs font-medium text-slate-700">{evt.contact_name}</div>
+                          )}
+                          <div className="text-xs text-slate-500 truncate max-w-[200px]">{evt.contact_email}</div>
+                        </td>
+                        <td className="py-2.5 pr-4">
+                          <div className="text-xs text-slate-600 truncate max-w-[250px]" title={evt.email_subject || ""}>
+                            {evt.email_subject || "-"}
+                          </div>
+                        </td>
+                        <td className="py-2.5 pr-4">
+                          <div className="flex flex-wrap gap-1 max-w-[200px]">
+                            {evt.tags.slice(0, 3).map((tag, i) => (
+                              <span key={i} className="inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
+                                {tag}
+                              </span>
+                            ))}
+                            {evt.tags.length > 3 && (
+                              <span className="text-[10px] text-slate-400">+{evt.tags.length - 3}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2.5 pr-4">
+                          {evt.test_mode ? (
+                            <span className="inline-block rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Sandbox</span>
+                          ) : evt.response_sent ? (
+                            <span className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">Sent</span>
+                          ) : (
+                            <span className="inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">Not Sent</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              {events.total_pages > 1 && (
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-xs text-slate-500">
+                    Page {events.page} of {events.total_pages} ({events.total} total)
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      disabled={currentPage <= 1}
+                      onClick={() => fetchData(currentPage - 1)}
+                      className="text-sm px-3 py-1.5"
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={currentPage >= events.total_pages}
+                      onClick={() => fetchData(currentPage + 1)}
+                      className="text-sm px-3 py-1.5"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="py-12 text-center text-slate-500">
+              No autorespond events found.
             </div>
           )}
         </CardContent>

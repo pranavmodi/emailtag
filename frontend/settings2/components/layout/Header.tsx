@@ -91,6 +91,13 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: "▶️",
     primary: false,
   },
+  {
+    href: "/inbox-audit",
+    label: "Inbox Audit",
+    description: "Daily reconciliation of Front inboxes vs processed emails",
+    icon: "🛡️",
+    primary: false,
+  },
 ];
 
 interface HeaderProps {

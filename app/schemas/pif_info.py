@@ -44,6 +44,7 @@ class StaffMember(BaseModel):
 class PifInfoBase(BaseModel):
     """Base schema for PIF info."""
     firm_name: str = Field(..., description="Name of the personal injury law firm")
+    entity_type: str = Field(default="pi_law_firm", description="Entity type classification")
     website: Optional[str] = Field(None, description="Firm website URL")
     emails: List[str] = Field(default_factory=list, description="Email addresses")
     phones: List[str] = Field(default_factory=list, description="Phone numbers")
@@ -61,6 +62,7 @@ class PifInfoCreate(PifInfoBase):
 class PifInfoUpdate(BaseModel):
     """Schema for updating PIF info."""
     firm_name: Optional[str] = None
+    entity_type: Optional[str] = None
     website: Optional[str] = None
     emails: Optional[List[str]] = None
     phones: Optional[List[str]] = None
@@ -312,8 +314,18 @@ class AnalyticsSummaryResponse(BaseModel):
     """Schema for analytics summary across all firms."""
     total_firms_tracked: int
     firms_by_tier: Dict[str, int]
+    firms_by_entity_type: Dict[str, int] = Field(default_factory=dict)
     top_pain_points: List[Dict[str, Any]]
     avg_monthly_volume_by_tier: Dict[str, float]
     pipeline_funnel: Dict[str, int]
     firms_contacted_last_30_days: int
     firms_needing_recontact: int
+
+
+class LeadershipEmailHistoryResponse(BaseModel):
+    """Schema for leadership email history analysis response."""
+    pif_id: UUID
+    firm_name: str
+    task_id: str
+    status: str = "queued"
+    message: str

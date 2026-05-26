@@ -35,6 +35,7 @@ from app.agents.lien_agent import handle_asl_lien_request, handle_psl_lien_reque
 # Original recipients registry for reply-all bug fix
 from app.agents.agent_helpers import register_original_recipients, clear_original_recipients
 from app.agents.agent_helpers import extract_patient_id_from_email_logic
+from app.crud.autorespond_event import resolve_pif_for_sender, create_event_sync
 
 logger = get_task_logger(__name__)
 
@@ -1009,6 +1010,30 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
 
         logger.info(f"Setting final status for email {email_id} to: {final_email_status}. Original tagging status: {current_status_from_tagging}. Agent handled: {agent_handled_response}")
         email_crud_sync.update(db, db_obj=email_obj, obj_in=EmailUpdate(status=final_email_status, is_processed=True))
+
+        # --- Record autorespond event for pifstats tracking ---
+        if agent_name_for_status != "none":
+            try:
+                pif_match = resolve_pif_for_sender(db, sender_email)
+                is_test = agent_name_for_status in sandbox_modes if sandbox_modes else False
+                create_event_sync(
+                    db,
+                    pif_id=pif_match["pif_id"] if pif_match else None,
+                    firm_name=pif_match["firm_name"] if pif_match else None,
+                    agent_type=agent_name_for_status,
+                    contact_email=sender_email or "",
+                    contact_name=pif_match["contact_name"] if pif_match else None,
+                    conversation_id=front_conversation_id,
+                    email_subject=email_obj.subject,
+                    tags=applied_tag_names,
+                    response_sent=auto_response_processed_flag,
+                    test_mode=is_test,
+                    details=auto_response_details,
+                )
+                logger.info(f"Recorded autorespond event: agent={agent_name_for_status}, firm={pif_match['firm_name'] if pif_match else 'unknown'}, sent={auto_response_processed_flag}")
+            except Exception as e:
+                logger.error(f"Failed to record autorespond event for {email_id}: {e}", exc_info=True)
+        # --- End autorespond event recording ---
 
         tracer.log_step(
             step_name=TraceSteps.AUTORESPOND_COMPLETED,

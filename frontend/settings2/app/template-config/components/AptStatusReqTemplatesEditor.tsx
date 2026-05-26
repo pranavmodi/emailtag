@@ -21,9 +21,7 @@ type AptStatusScenario =
   | "not_found"
   | "db_error"
   | "request_id"
-  | "request_id_escalate"
-  | "hipaa"
-  | "unauthorized";
+  | "request_id_escalate";
 
 const SCENARIO_OPTIONS: Array<{ value: AptStatusScenario; label: string; description: string; emoji: string; color: string }> = [
   { value: "unified", label: "Appointment Found", description: "Success - show appointment details", emoji: "✅", color: "green" },
@@ -31,8 +29,6 @@ const SCENARIO_OPTIONS: Array<{ value: AptStatusScenario; label: string; descrip
   { value: "db_error", label: "Database Error", description: "Technical error fetching data", emoji: "⚠️", color: "orange" },
   { value: "request_id", label: "Request Patient ID", description: "Ask for patient identification", emoji: "🔍", color: "blue" },
   { value: "request_id_escalate", label: "Escalate to Human", description: "Still can't find patient, escalate", emoji: "👤", color: "purple" },
-  { value: "hipaa", label: "HIPAA Authorization", description: "Sender not authorized, request HIPAA form", emoji: "🔒", color: "rose" },
-  { value: "unauthorized", label: "Unauthorized Fallback", description: "When HIPAA form can't be sent", emoji: "🚫", color: "red" },
 ];
 
 export function AptStatusReqTemplatesEditor({
@@ -53,8 +49,6 @@ export function AptStatusReqTemplatesEditor({
       db_error: "apt_status_db_error_template",
       request_id: "apt_status_request_id_template",
       request_id_escalate: "apt_status_request_id_escalate_template",
-      hipaa: "apt_status_hipaa_template",
-      unauthorized: "apt_status_unauthorized_template",
     };
     return keyMap[scenario];
   };
@@ -66,8 +60,6 @@ export function AptStatusReqTemplatesEditor({
       db_error: DEFAULT_APT_STATUS_TEMPLATES.apt_status_db_error_template,
       request_id: DEFAULT_APT_STATUS_TEMPLATES.apt_status_request_id_template,
       request_id_escalate: DEFAULT_APT_STATUS_TEMPLATES.apt_status_request_id_escalate_template,
-      hipaa: DEFAULT_APT_STATUS_TEMPLATES.apt_status_hipaa_template,
-      unauthorized: DEFAULT_APT_STATUS_TEMPLATES.apt_status_unauthorized_template,
     };
     return keyMap[scenario];
   };
@@ -119,7 +111,7 @@ export function AptStatusReqTemplatesEditor({
           <span className="text-lg">📋</span>
           Appointment Status Response Templates
           <span className="ml-auto rounded-full bg-indigo-600 px-2 py-0.5 text-xs text-white">
-            7 Scenarios
+            5 Scenarios
           </span>
         </h3>
         <p className="mb-6 text-xs text-slate-600">
@@ -181,11 +173,6 @@ export function AptStatusReqTemplatesEditor({
           {selectedScenario === "db_error" && (
             <p className="text-xs text-slate-500">
               Use {"{patient_id}"} to reference the patient ID in the error message.
-            </p>
-          )}
-          {selectedScenario === "hipaa" && (
-            <p className="text-xs text-slate-500">
-              The HIPAA release form PDF (uploaded in Document Attachments) will be attached automatically.
             </p>
           )}
         </div>

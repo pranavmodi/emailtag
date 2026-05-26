@@ -204,6 +204,13 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
         )
         db.commit()
 
+        # Auto-trigger leadership email history analysis
+        try:
+            analyze_leadership_emails_task.delay(pif_id)
+            logger.info(f"Queued leadership email history analysis for {pif.firm_name}")
+        except Exception as e:
+            logger.warning(f"Failed to queue leadership email history analysis: {e}")
+
         logger.info(f"Research completed for {pif.firm_name}: {len(enriched_leadership)} leaders")
 
         return {
@@ -238,6 +245,219 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
         }
     finally:
         db.close()
+
+
+def analyze_leadership_email_history(pif_id: str) -> Dict[str, Any]:
+    """
+    Analyze whether leadership members of a researched PIF firm have personally
+    sent emails to Precise Imaging, and what kind of emails they were.
+
+    Args:
+        pif_id: UUID string of the PIF record
+
+    Returns:
+        Dict with analysis results per leadership member
+    """
+    from sqlalchemy import select
+    from app.models.email import Email
+    from app.crud.sync.pif_info import pif_info as pif_info_crud_sync
+
+    FOUNDER_TITLES = ("founder", "managing partner", "owner", "principal", "founding", "partner", "ceo")
+
+    db = SessionLocal()
+    try:
+        pif = pif_info_crud_sync.get(db, id=UUID(pif_id))
+        if not pif:
+            logger.error(f"PIF not found for leadership email history: {pif_id}")
+            return {"status": "failed", "message": "PIF not found"}
+
+        leadership = pif.leadership or []
+        if not leadership:
+            logger.info(f"No leadership data for {pif.firm_name}, skipping email history analysis")
+            return {"status": "skipped", "message": "No leadership data available"}
+
+        # Extract firm email domains from the firm's emails list
+        firm_domains = set()
+        for email_addr in (pif.emails or []):
+            if "@" in email_addr:
+                firm_domains.add(email_addr.split("@")[1].lower())
+
+        logger.info(
+            f"Analyzing leadership email history for {pif.firm_name}: "
+            f"{len(leadership)} leaders, firm domains: {firm_domains}"
+        )
+
+        results = []
+
+        for leader in leadership:
+            leader_name = leader.get("name", "").strip()
+            leader_title = leader.get("title", "")
+            leader_email = leader.get("email", "")
+
+            if not leader_name:
+                continue
+
+            # Determine if this person is a "founder" type
+            is_founder = any(
+                ft in (leader_title or "").lower()
+                for ft in FOUNDER_TITLES
+            )
+
+            matched_emails = []
+            matched_by = None
+
+            # Strategy 1: Match by email address
+            if leader_email and "@" in leader_email:
+                stmt = select(Email).where(
+                    Email.sender.ilike(f"%{leader_email}%")
+                )
+                result = db.execute(stmt)
+                email_matches = result.scalars().all()
+                if email_matches:
+                    matched_emails = email_matches
+                    matched_by = "email"
+
+            # Strategy 2: Match by name + firm domain (if no email match found)
+            if not matched_emails and leader_name and firm_domains:
+                name_parts = leader_name.split()
+                if len(name_parts) >= 2:
+                    first_name = name_parts[0]
+                    last_name = name_parts[-1]
+
+                    # Search for emails where sender matches name pattern
+                    # and cross-reference with firm's known email domains
+                    stmt = select(Email).where(
+                        Email.sender.ilike(f"%{first_name}%{last_name}%")
+                    )
+                    result = db.execute(stmt)
+                    name_matches = result.scalars().all()
+
+                    # Filter: sender must contain one of the firm's domains
+                    domain_filtered = []
+                    for em in name_matches:
+                        sender_lower = (em.sender or "").lower()
+                        if any(domain in sender_lower for domain in firm_domains):
+                            domain_filtered.append(em)
+
+                    if domain_filtered:
+                        matched_emails = domain_filtered
+                        matched_by = "name"
+
+            if not matched_emails:
+                # No emails found for this leader
+                results.append({
+                    "name": leader_name,
+                    "title": leader_title,
+                    "email": leader_email,
+                    "is_founder": is_founder,
+                    "total_emails": 0,
+                    "first_contact": None,
+                    "last_contact": None,
+                    "tag_distribution": {},
+                    "recent_subjects": [],
+                    "matched_by": None,
+                })
+                continue
+
+            # Aggregate email data
+            tag_distribution: Dict[str, int] = {}
+            dates = []
+            subjects = []
+
+            for em in matched_emails:
+                # Collect tags
+                for tag in em.tags:
+                    tag_name = tag.name
+                    tag_distribution[tag_name] = tag_distribution.get(tag_name, 0) + 1
+
+                # Collect dates
+                if em.created_at:
+                    dates.append(em.created_at)
+
+                # Collect subjects
+                if em.subject:
+                    subjects.append({
+                        "subject": em.subject,
+                        "date": em.created_at.isoformat() if em.created_at else None,
+                        "conversation_id": em.front_conversation_id,
+                    })
+
+            # Sort dates
+            dates.sort()
+            first_contact = dates[0].isoformat() if dates else None
+            last_contact = dates[-1].isoformat() if dates else None
+
+            # Get last 5 subjects (most recent first)
+            subjects.sort(key=lambda x: x.get("date") or "", reverse=True)
+            recent_subjects = [s["subject"] for s in subjects[:5]]
+
+            results.append({
+                "name": leader_name,
+                "title": leader_title,
+                "email": leader_email,
+                "is_founder": is_founder,
+                "total_emails": len(matched_emails),
+                "first_contact": first_contact,
+                "last_contact": last_contact,
+                "tag_distribution": tag_distribution,
+                "recent_subjects": recent_subjects,
+                "matched_by": matched_by,
+            })
+
+        # Store results in research_data under 'leadership_email_history'
+        research_data = dict(pif.research_data) if pif.research_data else {}
+        research_data["leadership_email_history"] = results
+
+        pif_info_crud_sync.update(
+            db,
+            db_obj=pif,
+            obj_in={"research_data": research_data}
+        )
+        db.commit()
+
+        # Summary stats
+        leaders_with_emails = sum(1 for r in results if r["total_emails"] > 0)
+        total_matched = sum(r["total_emails"] for r in results)
+
+        logger.info(
+            f"Leadership email history completed for {pif.firm_name}: "
+            f"{leaders_with_emails}/{len(results)} leaders have sent emails, "
+            f"{total_matched} total emails matched"
+        )
+
+        return {
+            "status": "completed",
+            "pif_id": pif_id,
+            "firm_name": pif.firm_name,
+            "leaders_analyzed": len(results),
+            "leaders_with_emails": leaders_with_emails,
+            "total_emails_matched": total_matched,
+        }
+
+    except Exception as e:
+        logger.error(f"Leadership email history error for {pif_id}: {str(e)}", exc_info=True)
+        return {
+            "status": "failed",
+            "pif_id": pif_id,
+            "message": f"Leadership email history failed: {str(e)}"
+        }
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, base=ResearchTask, name="app.tasks.firm_research.analyze_leadership_emails_task")
+def analyze_leadership_emails_task(self, pif_id: str) -> Dict[str, Any]:
+    """
+    Celery task to analyze leadership email history for a PIF firm.
+
+    Args:
+        pif_id: UUID string of the PIF record
+
+    Returns:
+        Dict with analysis results
+    """
+    logger.info(f"Starting leadership email history analysis for pif_id={pif_id}")
+    return analyze_leadership_email_history(pif_id)
 
 
 @celery_app.task(bind=True, base=ResearchTask, name="app.tasks.firm_research.research_staff_task")

@@ -39,10 +39,14 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
         search: Optional[str] = None,
         skip: int = 0,
         limit: int = 20,
-        sort_by: Optional[str] = None
+        sort_by: Optional[str] = None,
+        research_status: Optional[str] = None,
+        icp_tier: Optional[str] = None,
+        entity_type: Optional[str] = None,
+        recently_researched_days: Optional[int] = None,
     ) -> tuple[List[PifInfo], int]:
         """
-        Search PIF info with optional text search and sorting.
+        Search PIF info with optional text search, filters, and sorting.
 
         Args:
             db: Database session
@@ -51,6 +55,9 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
             limit: Maximum number of records to return
             sort_by: Sort order - 'conversation_count' (desc), 'firm_name' (asc),
                      or 'updated_at' (desc, default)
+            research_status: Filter by research_status (e.g. 'completed', 'pending')
+            icp_tier: Filter by ICP tier ('A', 'B', 'C', 'D')
+            recently_researched_days: Filter firms researched within the last N days
 
         Returns a tuple of (items, total_count).
         """
@@ -67,6 +74,24 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
             )
             query = query.filter(search_filter)
             count_query = count_query.filter(search_filter)
+
+        if research_status:
+            query = query.filter(PifInfo.research_status == research_status)
+            count_query = count_query.filter(PifInfo.research_status == research_status)
+
+        if icp_tier:
+            query = query.filter(PifInfo.icp_tier == icp_tier)
+            count_query = count_query.filter(PifInfo.icp_tier == icp_tier)
+
+        if entity_type:
+            query = query.filter(PifInfo.entity_type == entity_type)
+            count_query = count_query.filter(PifInfo.entity_type == entity_type)
+
+        if recently_researched_days is not None:
+            from datetime import datetime, timedelta
+            cutoff = datetime.utcnow() - timedelta(days=recently_researched_days)
+            query = query.filter(PifInfo.last_researched_at >= cutoff)
+            count_query = count_query.filter(PifInfo.last_researched_at >= cutoff)
 
         # Get total count
         total_result = await db.execute(count_query)
@@ -114,7 +139,8 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
         addresses: List[str],
         contacts: List[Dict[str, Any]],
         conversation_id: str,
-        extraction_notes: Optional[str] = None
+        extraction_notes: Optional[str] = None,
+        entity_type: str = "pi_law_firm",
     ) -> tuple[PifInfo, bool]:
         """
         Upsert PIF info from extraction results.
@@ -174,6 +200,7 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
             # Create new record
             new_pif = PifInfo(
                 firm_name=firm_name,
+                entity_type=entity_type,
                 website=website,
                 emails=emails or [],
                 phones=phones or [],
@@ -311,7 +338,8 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
                     'leadership' AS source,
                     pif.id AS firm_id,
                     pif.firm_name AS firm_name,
-                    pif.website AS firm_website
+                    pif.website AS firm_website,
+                    pif.entity_type AS entity_type
                 FROM pif_info pif,
                      jsonb_array_elements(pif.leadership) AS person
                 WHERE pif.leadership IS NOT NULL
@@ -330,7 +358,8 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
                     'staff' AS source,
                     pif.id AS firm_id,
                     pif.firm_name AS firm_name,
-                    pif.website AS firm_website
+                    pif.website AS firm_website,
+                    pif.entity_type AS entity_type
                 FROM pif_info pif,
                      jsonb_array_elements(pif.staff) AS person
                 WHERE pif.staff IS NOT NULL

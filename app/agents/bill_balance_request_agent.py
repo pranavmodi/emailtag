@@ -21,7 +21,7 @@ from celery.utils.log import get_task_logger
 
 from app.core.config import settings as app_settings_instance
 from app.services import frontapp_service
-from app.agents.agent_helpers import send_reply_to_front_direct, send_reply_to_front_with_attachment, send_reply_to_front_with_attachments, extract_patient_id_from_email_logic, verify_sender_for_patient_access
+from app.agents.agent_helpers import send_reply_to_front_direct, send_reply_to_front_with_attachment, send_reply_to_front_with_attachments, extract_patient_id_from_email_logic, verify_sender_for_patient_access, handle_unauthorized_sender
 from app.helpers.billing_status_table import generate_billing_status_table
 # Import shared templates
 from app.agents.templates.shared_templates import (
@@ -448,115 +448,14 @@ async def handle_bill_balance_request(
                 f"(role={verification_result['role']}, status={verification_result['verification_status']})"
             )
 
-            # Load HIPAA / unauthorized templates from apt status settings (shared across agents)
-            hipaa_template = (
-                "Hello,\n\nTo proceed with your request for patient information, we require authorization. "
-                "Please complete the attached HIPAA release form and reply to this email with the completed document.\n\nThank you for your cooperation."
+            return await handle_unauthorized_sender(
+                conversation_id=front_conversation_id,
+                sender_email=email_sender,
+                patient_id=patient_id,
+                verification_result=verification_result,
+                test_mode=test_mode,
+                test_mode_save_fn=save_test_mode_response_bill_balance,
             )
-            unauthorized_template = (
-                "Hello,\n\nWe're unable to automatically provide patient information as you are not currently listed "
-                "as an authorized party for this patient's case.\n\nA team member will review your request and contact you shortly.\n\nThank you."
-            )
-            hipaa_form_path = None
-
-            async with AsyncSessionLocal() as db:
-                apt_settings = await tag_settings_crud.get_settings_dict(db, "Apt status req")
-                if apt_settings:
-                    if apt_settings.get("apt_status_hipaa_template"):
-                        hipaa_template = apt_settings["apt_status_hipaa_template"]
-                    elif apt_settings.get("hipaa_template"):
-                        hipaa_template = apt_settings["hipaa_template"]
-                    if apt_settings.get("apt_status_unauthorized_template"):
-                        unauthorized_template = apt_settings["apt_status_unauthorized_template"]
-
-                # Load HIPAA form attachment
-                attachments = await template_attachment_crud.get_by_tag_and_template(
-                    db, "Apt status req", template_key="apt_status_hipaa_template"
-                )
-                if attachments:
-                    import tempfile
-                    tmp_dir = tempfile.mkdtemp(prefix="bb_hipaa_")
-                    first = attachments[0]
-                    hipaa_friendly_name = first.filename or "Medical-Release-Form.pdf"
-                    hipaa_form_path = os.path.join(tmp_dir, hipaa_friendly_name)
-                    with open(hipaa_form_path, "wb") as f:
-                        f.write(first.file_content)
-                    logger.info(f"Loaded HIPAA form attachment -> {hipaa_form_path} ({len(first.file_content)} bytes)")
-
-            # Send HIPAA form if available, otherwise unauthorized template
-            if hipaa_form_path:
-                if test_mode:
-                    await save_test_mode_response_bill_balance(
-                        conversation_id=front_conversation_id,
-                        response_text=hipaa_template,
-                        patient_id=patient_id,
-                        response_type="hipaa_form_unauthorized",
-                        details={
-                            "action": "sender_not_authorized_hipaa_sent",
-                            "sender": email_sender,
-                            "role": verification_result["role"],
-                        }
-                    )
-                    frontapp_service.add_conversation_tags(front_conversation_id, ["AI handled", "AI: Human review required"])
-                else:
-                    result = await send_reply_to_front_with_attachment(
-                        front_conversation_id,
-                        hipaa_template,
-                        hipaa_form_path,
-                        tags_to_add=["AI handled", "AI: Human review required"]
-                    )
-                    if result.get("status") == "success":
-                        logger.info("Sent HIPAA form to unauthorized sender for bill/balance request")
-                    else:
-                        logger.error(f"Failed to send HIPAA form: {result}")
-
-                return {
-                    "agent_handled": True,
-                    "processed_flag": True,
-                    "details": {
-                        "action": "sender_not_authorized_hipaa_sent",
-                        "sender": email_sender,
-                        "patient_id": patient_id,
-                        "role": verification_result["role"],
-                        "verification_status": verification_result["verification_status"],
-                        "reason": "Sender not authorized - HIPAA form sent"
-                    }
-                }
-            else:
-                # Fallback: no HIPAA form available — send unauthorized text template
-                logger.info("No HIPAA form available, sending unauthorized template for bill/balance")
-                if test_mode:
-                    await save_test_mode_response_bill_balance(
-                        conversation_id=front_conversation_id,
-                        response_text=unauthorized_template,
-                        patient_id=patient_id,
-                        response_type="unauthorized_escalated",
-                        details={
-                            "action": "sender_not_authorized_escalated",
-                            "sender": email_sender,
-                            "role": verification_result["role"],
-                        }
-                    )
-                    frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
-                else:
-                    await send_reply_to_front_direct(
-                        conversation_id=front_conversation_id,
-                        reply_text=unauthorized_template
-                    )
-                    frontapp_service.add_conversation_tags(front_conversation_id, ["AI: Human review required"])
-
-                return {
-                    "agent_handled": True,
-                    "processed_flag": True,
-                    "details": {
-                        "action": "sender_not_authorized_escalated",
-                        "sender": email_sender,
-                        "patient_id": patient_id,
-                        "role": verification_result["role"],
-                        "verification_status": verification_result["verification_status"],
-                        "reason": "Sender not authorized - unauthorized template sent"
-                    }
-                }
     elif patient_id and not email_sender:
         logger.warning(f"Sender email not available for verification on patient {patient_id} — proceeding without verification")
     # --- END: SENDER VERIFICATION ---

@@ -17,7 +17,7 @@ SCHEDULING_SCENARIOS = {
             "<p>Sincerely,<br>"
             "Prospective Patient (via Test Script)</p>"
         ),
-        "expected_tags": ["Scheduling request"]
+        "expected_tags": ["Schedule Request"]
     },
     "3": {
         "description": "RX Order Pending - Prescription Status",
@@ -160,7 +160,7 @@ SCHEDULING_SCENARIOS = {
             "<p>Thank you,<br>"
             "Potential Patient</p>"
         ),
-        "expected_tags": ["Scheduling request"]
+        "expected_tags": ["Schedule Request"]
     },
     "29": {
         "description": "Appointment Status Request with PDF Attachment - OCR Test",

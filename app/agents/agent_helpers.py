@@ -2029,4 +2029,148 @@ async def verify_sender_for_patient_access(
             "message": f"Error during sender verification: {str(e)}"
         }
 
-# --- END: Sender Verification Functions --- 
+# --- END: Sender Verification Functions ---
+
+
+# --- BEGIN: Universal Sender Verification Denial Response ---
+
+# Default HIPAA template (fallback if not configured in WORKSPACE settings)
+_DEFAULT_HIPAA_TEMPLATE = """Hello,
+
+To proceed with your request for patient information, we require authorization. Please complete the attached HIPAA release form and reply to this email with the completed document.
+
+Thank you for your cooperation."""
+
+
+async def handle_unauthorized_sender(
+    conversation_id: str,
+    sender_email: str,
+    patient_id: str,
+    verification_result: Dict[str, Any],
+    test_mode: bool = False,
+    test_mode_save_fn=None,
+) -> Dict[str, Any]:
+    """
+    Universal handler for unauthorized sender denial responses.
+
+    Loads HIPAA template from WORKSPACE tag_settings and the HIPAA form
+    attachment from the template_attachment table (tag_name="WORKSPACE",
+    template_key="hipaa_form"). Falls back to a hardcoded default template
+    if WORKSPACE settings don't exist.
+
+    If no HIPAA form PDF is uploaded, the conversation is tagged for human
+    review without sending a reply.
+
+    Args:
+        conversation_id: Front conversation ID
+        sender_email: The unauthorized sender's email
+        patient_id: The patient ID being accessed
+        verification_result: Result from verify_sender_for_patient_access()
+        test_mode: If True, save response to file instead of sending via Front
+        test_mode_save_fn: Optional async/sync callable for test mode persistence.
+            Signature: (conversation_id, response_text, patient_id, response_type, details, **kwargs)
+            If None, test mode will just log and tag without saving.
+
+    Returns:
+        Dict with agent_handled, processed_flag, and details keys
+    """
+    from app.db.session import AsyncSessionLocal
+    from app.crud.tag_settings import tag_settings_crud
+    from app.crud.template_attachment import template_attachment_crud
+
+    role = verification_result.get("role", "unknown")
+    verification_status = verification_result.get("verification_status", "unverified")
+
+    # Load template from WORKSPACE settings
+    hipaa_template = _DEFAULT_HIPAA_TEMPLATE
+    hipaa_form_path = None
+
+    async with AsyncSessionLocal() as db:
+        workspace_settings = await tag_settings_crud.get_settings_dict(db, "WORKSPACE")
+        if workspace_settings:
+            if workspace_settings.get("hipaa_template"):
+                hipaa_template = workspace_settings["hipaa_template"]
+                logger.info("Loaded HIPAA template from WORKSPACE settings")
+
+        # Load HIPAA form attachment from WORKSPACE
+        attachments = await template_attachment_crud.get_by_tag_and_template(
+            db, "WORKSPACE", template_key="hipaa_form"
+        )
+        if attachments and attachments[0].file_content:
+            import tempfile
+            tmp_dir = tempfile.mkdtemp(prefix="hipaa_workspace_")
+            first = attachments[0]
+            hipaa_friendly_name = first.filename or "Medical-Release-Form.pdf"
+            hipaa_form_path = os.path.join(tmp_dir, hipaa_friendly_name)
+            with open(hipaa_form_path, "wb") as f:
+                f.write(first.file_content)
+            logger.info(f"Loaded HIPAA form attachment from WORKSPACE -> {hipaa_form_path} ({len(first.file_content)} bytes)")
+        else:
+            logger.error("No HIPAA form found in WORKSPACE template attachments! Upload via /template-config with tag 'WORKSPACE', template_key 'hipaa_form'.")
+
+    tags_hipaa = ["AI handled", "AI: Human review required"]
+
+    if hipaa_form_path:
+        # Send HIPAA form
+        if test_mode:
+            if test_mode_save_fn:
+                import asyncio as _asyncio
+                result = test_mode_save_fn(
+                    conversation_id=conversation_id,
+                    response_text=hipaa_template,
+                    patient_id=patient_id,
+                    response_type="hipaa_form_unauthorized",
+                    details={
+                        "action": "sender_not_authorized_hipaa_sent",
+                        "sender": sender_email,
+                        "role": role,
+                        "hipaa_form_path": hipaa_form_path,
+                    },
+                )
+                if _asyncio.iscoroutine(result):
+                    await result
+            frontapp_service.add_conversation_tags(conversation_id, tags_hipaa)
+            logger.info("Test mode: saved HIPAA unauthorized response")
+        else:
+            result = await send_reply_to_front_with_attachment(
+                conversation_id,
+                hipaa_template,
+                hipaa_form_path,
+                tags_to_add=tags_hipaa,
+            )
+            if result.get("status") == "success":
+                logger.info("Sent HIPAA form to unauthorized sender")
+            else:
+                logger.error(f"Failed to send HIPAA form: {result}")
+
+        return {
+            "agent_handled": True,
+            "processed_flag": True,
+            "details": {
+                "action": "sender_not_authorized_hipaa_sent",
+                "sender": sender_email,
+                "patient_id": patient_id,
+                "role": role,
+                "verification_status": verification_status,
+                "reason": "Sender not authorized - HIPAA form sent",
+            },
+        }
+    else:
+        # No HIPAA form uploaded — tag for human review, don't send a reply
+        logger.warning("No HIPAA form PDF uploaded — tagging for human review without sending reply")
+        frontapp_service.add_conversation_tags(conversation_id, ["AI: Human review required"])
+
+        return {
+            "agent_handled": False,
+            "processed_flag": True,
+            "details": {
+                "action": "sender_not_authorized_no_hipaa_form",
+                "sender": sender_email,
+                "patient_id": patient_id,
+                "role": role,
+                "verification_status": verification_status,
+                "reason": "Sender not authorized - no HIPAA form uploaded, tagged for human review",
+            },
+        }
+
+# --- END: Universal Sender Verification Denial Response ---

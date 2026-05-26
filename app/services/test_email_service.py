@@ -60,7 +60,7 @@ def get_scenarios_by_type() -> dict:
     # Define type mappings based on expected_tags
     type_mappings = {
         "apt_status": ["Apt status req"],
-        "scheduling": ["Scheduling request", "RX", "Cancel Request", "Reschedule Request"],
+        "scheduling": ["Schedule Request", "RX", "Cancel Request", "Reschedule Request"],
         "lien_asl": ["ASL"],
         "lien_psl": ["PSL"],
         "lien_modified": ["Lien Modified"],

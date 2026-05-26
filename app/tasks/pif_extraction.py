@@ -65,7 +65,8 @@ def upsert_pif_sync(
     addresses: List[str],
     contacts: List[Dict[str, Any]],
     conversation_id: str,
-    extraction_notes: Optional[str] = None
+    extraction_notes: Optional[str] = None,
+    entity_type: str = "pi_law_firm",
 ) -> tuple[PifInfo, bool]:
     """
     Upsert PIF info from extraction results (sync version).
@@ -113,6 +114,7 @@ def upsert_pif_sync(
         # Create new record
         new_pif = PifInfo(
             firm_name=firm_name,
+            entity_type=entity_type,
             website=website,
             emails=emails or [],
             phones=phones or [],
@@ -184,6 +186,7 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
 
         # Store in database using sync session
         contacts_dicts = [c.model_dump() for c in firm_info.contacts]
+        extracted_entity_type = getattr(firm_info, 'entity_type', 'pi_law_firm') or 'pi_law_firm'
 
         pif, is_new = upsert_pif_sync(
             db,
@@ -196,10 +199,43 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
             contacts=contacts_dicts,
             conversation_id=conversation_id,
             extraction_notes=firm_info.extraction_notes or None,
+            entity_type=extracted_entity_type,
         )
 
         action = "created" if is_new else "updated"
         logger.info(f"PIF extraction complete: {action} firm '{firm_info.firm_name}' (ID: {pif.id})")
+
+        # Auto-trigger research (max 5/day per entity type)
+        research_triggered = False
+        if pif.research_status not in ("completed", "in_progress", "queued"):
+            try:
+                from sqlalchemy import func as sa_func, cast, Date
+                today = datetime.utcnow().date()
+                researched_today_for_type = db.query(sa_func.count(PifInfo.id)).filter(
+                    cast(PifInfo.last_researched_at, Date) == today,
+                    PifInfo.entity_type == pif.entity_type,
+                ).scalar() or 0
+
+                if researched_today_for_type < 5:
+                    pif.research_status = "queued"
+                    pif.last_researched_at = datetime.utcnow()
+                    db.add(pif)
+                    db.commit()
+
+                    from app.tasks.firm_research import research_firm_task
+                    research_firm_task.delay(str(pif.id))
+                    research_triggered = True
+                    logger.info(
+                        f"Auto-queued research for '{firm_info.firm_name}' "
+                        f"[{pif.entity_type}] ({researched_today_for_type + 1}/5 today)"
+                    )
+                else:
+                    logger.info(
+                        f"Skipping auto-research for '{firm_info.firm_name}' — "
+                        f"daily limit reached for {pif.entity_type} ({researched_today_for_type}/5)"
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to auto-trigger research for '{firm_info.firm_name}': {e}")
 
         return {
             "conversation_id": conversation_id,
@@ -207,9 +243,11 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
             "action": action,
             "pif_id": str(pif.id),
             "firm_name": firm_info.firm_name,
+            "entity_type": extracted_entity_type,
             "emails_count": len(firm_info.firm_emails),
             "phones_count": len(firm_info.firm_phones),
             "contacts_count": len(firm_info.contacts),
+            "research_triggered": research_triggered,
         }
 
     except Exception as e:

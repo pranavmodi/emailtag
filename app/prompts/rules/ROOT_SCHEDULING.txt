@@ -1,6 +1,6 @@
 Sub-Classification Rules for Scheduling Category
 ================================================
-**Sub-Categories:** RX, Cancel Request, Reschedule Request, Scheduling request.
+**Sub-Categories:** RX, Cancel Request, Reschedule Request, Schedule Request.
 
 Please use the following rules to sub-classify the provided email content, already identified as 'Scheduling', into one of the above sub-categories.
 
@@ -11,9 +11,9 @@ Please use the following rules to sub-classify the provided email content, alrea
 
 1. **Primary Scheduling Intent**: Based on the email content, determine the primary intent related to scheduling and classify as follows:
 
-   **CRITICAL DISTINCTION - Scheduling request vs RX:**
+   **CRITICAL DISTINCTION - Schedule Request vs RX:**
 
-   **Scheduling request** = ACTION to book/schedule OR providing information to facilitate scheduling (future-focused)
+   **Schedule Request** = ACTION to book/schedule OR providing information to facilitate scheduling (future-focused)
    Examples: "Please schedule an appointment", "Book this patient for MRI", "Schedule imaging for this patient", "Contact patient and schedule", "Set up appointment", "When can we get the patient scheduled?", "Please advise when was the patient last called to schedule his appointment", "Here are the phone numbers for the patient" (when providing contact info for scheduling purposes)
 
    **RX** = STATUS inquiry about whether scheduling was completed OR details about an already-booked appointment OR prescription processing (checking confirmed appointments or orders)
@@ -21,9 +21,9 @@ Please use the following rules to sub-classify the provided email content, alrea
 
    **Classification Rules:**
 
-   - If the email contains an **active request to schedule, book, or set up an appointment** (using words like "please schedule", "book appointment", "set up imaging", "contact and schedule", "arrange appointment"), classify as 'Scheduling request'. This takes priority even if the email mentions prescriptions, referrals, or provides patient information for scheduling purposes.
+   - If the email contains an **active request to schedule, book, or set up an appointment** (using words like "please schedule", "book appointment", "set up imaging", "contact and schedule", "arrange appointment"), classify as 'Schedule Request'. This takes priority even if the email mentions prescriptions, referrals, or provides patient information for scheduling purposes.
 
-   - If the email is **providing information that was requested to facilitate scheduling** (e.g., patient contact phone numbers, demographics, availability) in response to Precise Imaging's attempt to schedule or contact the patient, classify as 'Scheduling request'. Examples: "Here are the phone numbers for the patient", "Patient's correct contact info is...", "Patient is available on these dates".
+   - If the email is **providing information that was requested to facilitate scheduling** (e.g., patient contact phone numbers, demographics, availability) in response to Precise Imaging's attempt to schedule or contact the patient, classify as 'Schedule Request'. Examples: "Here are the phone numbers for the patient", "Patient's correct contact info is...", "Patient is available on these dates".
 
    - If the email is a **status inquiry asking WHETHER an appointment was scheduled or completed** (e.g., "Has the patient been scheduled?", "Were you able to schedule the client?", "Did you schedule the appointment?", "Please confirm if client has been scheduled", "Any update on my schedule request?", "Following up on scheduling"), classify as 'RX'. This includes follow-ups on previous schedule requests asking if the scheduling action was completed.
 

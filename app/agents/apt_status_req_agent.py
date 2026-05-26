@@ -26,7 +26,6 @@ from app.mcp import default_mcp_client as mcp_client # Import default configured
 from app.db.session import AsyncSessionLocal
 from app.crud.message_template import message_template_crud
 from app.crud.tag_settings import tag_settings_crud
-from app.crud.template_attachment import template_attachment_crud
 # Import templates from their locations (as fallback)
 from app.agents.templates.appointment_status_templates import (
     TEMPLATE_APPOINTMENT_FOUND_DETAILED,
@@ -41,6 +40,7 @@ from app.agents.templates.shared_templates import (
 from app.agents.agent_helpers import (
     format_conversation_history_for_agent,
     get_patient_and_study_info,
+    handle_unauthorized_sender,
     send_fallback_reply_and_tag,
     send_reply_to_front,
     send_reply_to_front_direct,
@@ -156,21 +156,6 @@ DEFAULT_PORTAL_LINKS = {
     "reports_images": "https://example.com/portal/reports"
 }
 
-# Default HIPAA template (fallback if not configured in settings)
-DEFAULT_HIPAA_TEMPLATE = """Hello,
-
-To proceed with your request for patient information, we require authorization. Please complete the attached HIPAA release form and reply to this email with the completed document.
-
-Thank you for your cooperation."""
-
-# Default unauthorized template (fallback when HIPAA form can't be sent)
-DEFAULT_UNAUTHORIZED_TEMPLATE = """Hello,
-
-We're unable to automatically provide patient information as you are not currently listed as an authorized party for this patient's case.
-
-A team member will review your request and contact you shortly.
-
-Thank you."""
 
 # # Unified template (standard approach - replaces all legacy template parts)
 # # COMMENTED OUT: If DB settings are missing, we should log an error instead of using a default
@@ -913,153 +898,14 @@ async def handle_apt_status_request_agent_sdk(
         if not verification_result["authorized"]:
             logger.warning(f"Unauthorized access: {email_sender} to patient {extracted_patient_id} ({verification_result['role']})")
 
-            # Load HIPAA template from settings (with fallback to default)
-            hipaa_template = DEFAULT_HIPAA_TEMPLATE
-            unauthorized_template = DEFAULT_UNAUTHORIZED_TEMPLATE
-            hipaa_form_path = None
-
-            async with AsyncSessionLocal() as db:
-                # Load HIPAA and unauthorized templates from tag settings
-                apt_settings = await tag_settings_crud.get_settings_dict(db, "Apt status req")
-                if apt_settings:
-                    # Try new key first, then legacy key
-                    if apt_settings.get("apt_status_hipaa_template"):
-                        hipaa_template = apt_settings.get("apt_status_hipaa_template")
-                        logger.info("Loaded HIPAA template from tag settings (new key)")
-                    elif apt_settings.get("hipaa_template"):
-                        hipaa_template = apt_settings.get("hipaa_template")
-                        logger.info("Loaded HIPAA template from tag settings (legacy key)")
-                    else:
-                        logger.info("Using default HIPAA template (not configured in settings)")
-
-                    if apt_settings.get("apt_status_unauthorized_template"):
-                        unauthorized_template = apt_settings.get("apt_status_unauthorized_template")
-                        logger.info("Loaded unauthorized template from tag settings")
-                else:
-                    logger.info("Using default HIPAA template (no settings found)")
-
-                # Load template attachments for the HIPAA scenario
-                attachments = await template_attachment_crud.get_by_tag_and_template(
-                    db, "Apt status req", template_key="apt_status_hipaa_template"
-                )
-
-                if attachments:
-                    import tempfile
-                    tmp_dir = tempfile.mkdtemp(prefix="apt_hipaa_")
-                    # Use the first attachment as the primary HIPAA form path
-                    # (for backwards compatibility with send_reply_to_front_with_attachment)
-                    first = attachments[0]
-                    hipaa_friendly_name = first.filename or "Medical-Release-Form.pdf"
-                    hipaa_form_path = os.path.join(tmp_dir, hipaa_friendly_name)
-                    with open(hipaa_form_path, "wb") as f:
-                        f.write(first.file_content)
-                    logger.info(f"Loaded template attachment from DB -> {hipaa_form_path} ({len(first.file_content)} bytes)")
-                else:
-                    logger.error("No template attachments found for 'Apt status req'! Please upload via /settings/template-config")
-
-            # Only try to send with attachment if we have a HIPAA form
-            if hipaa_form_path:
-                if test_mode:
-                    # In test mode, save the HIPAA response to file
-                    save_apt_status_test_response(
-                        conversation_id=front_conversation_id,
-                        response_text=hipaa_template,
-                        patient_id=extracted_patient_id,
-                        response_type="hipaa_form_unauthorized",
-                        details={
-                            "action": "sender_not_authorized_hipaa_sent",
-                            "sender": email_sender,
-                            "role": verification_result["role"],
-                            "hipaa_form_path": hipaa_form_path,
-                        },
-                        tags_to_add=["AI handled", TAG_AI_HUMAN_REVIEW_REQUIRED]
-                    )
-                    # Still apply tags in test mode
-                    frontapp_service.add_conversation_tags(
-                        front_conversation_id,
-                        ["AI handled", TAG_AI_HUMAN_REVIEW_REQUIRED]
-                    )
-                    logger.info(f"🧪 APT STATUS TEST MODE: Saved HIPAA response to file")
-                    return {
-                        "agent_handled": True,
-                        "processed_flag": True,
-                        "details": {
-                            "action": "sender_not_authorized_hipaa_sent",
-                            "sender": email_sender,
-                            "patient_id": extracted_patient_id,
-                            "role": verification_result["role"],
-                            "verification_status": verification_result["verification_status"],
-                            "reason": "Sender not authorized - HIPAA form saved to sandbox"
-                        }
-                    }
-                else:
-                    result = await send_reply_to_front_with_attachment(
-                        front_conversation_id,
-                        hipaa_template,
-                        hipaa_form_path,
-                        tags_to_add=["AI handled", TAG_AI_HUMAN_REVIEW_REQUIRED]
-                    )
-
-                    if result.get("status") == "success":
-                        logger.info(f"✅ Sent HIPAA form to unauthorized sender and tagged for review")
-                        return {
-                            "agent_handled": True,
-                            "processed_flag": True,
-                            "details": {
-                                "action": "sender_not_authorized_hipaa_sent",
-                                "sender": email_sender,
-                                "patient_id": extracted_patient_id,
-                                "role": verification_result["role"],
-                                "verification_status": verification_result["verification_status"],
-                                "reason": "Sender not authorized - HIPAA form sent"
-                            }
-                        }
-                    else:
-                        logger.error(f"Failed to send HIPAA form with attachment: {result}")
-
-            # Fallback: No HIPAA form available or failed to send - use unauthorized template
-            logger.info("Using unauthorized template (no HIPAA form or send failed)")
-
-            if test_mode:
-                save_apt_status_test_response(
-                    conversation_id=front_conversation_id,
-                    response_text=unauthorized_template,
-                    patient_id=extracted_patient_id,
-                    response_type="unauthorized_escalated",
-                    details={
-                        "action": "sender_not_authorized_escalated",
-                        "sender": email_sender,
-                        "role": verification_result["role"],
-                    },
-                    tags_to_add=[TAG_AI_HUMAN_REVIEW_REQUIRED]
-                )
-                frontapp_service.add_conversation_tags(
-                    front_conversation_id,
-                    [TAG_AI_HUMAN_REVIEW_REQUIRED]
-                )
-                logger.info(f"🧪 APT STATUS TEST MODE: Saved unauthorized response to file")
-            else:
-                await send_reply_to_front_direct(
-                    conversation_id=front_conversation_id,
-                    reply_text=unauthorized_template
-                )
-
-                frontapp_service.add_conversation_tags(
-                    front_conversation_id,
-                    [TAG_AI_HUMAN_REVIEW_REQUIRED]
-                )
-
-            return {
-                "agent_handled": True,
-                "processed_flag": True,
-                "details": {
-                    "action": "sender_not_authorized_escalated",
-                    "sender": email_sender,
-                    "patient_id": extracted_patient_id,
-                    "role": verification_result["role"],
-                    "reason": "Sender not authorized - escalated to human review (no HIPAA form configured)"
-                }
-            }
+            return await handle_unauthorized_sender(
+                conversation_id=front_conversation_id,
+                sender_email=email_sender,
+                patient_id=extracted_patient_id,
+                verification_result=verification_result,
+                test_mode=test_mode,
+                test_mode_save_fn=save_apt_status_test_response,
+            )
 
         # Sender is authorized - proceed
         pass

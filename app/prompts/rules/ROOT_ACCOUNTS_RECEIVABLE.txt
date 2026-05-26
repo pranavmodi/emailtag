@@ -7,7 +7,7 @@ Please use the following rules to sub-classify the provided email content, alrea
 --- START Accounts Receivable Sub-Classification RULES ---
 
 1. **Primary Financial Topic**: Based on the email content, determine the primary financial topic discussed and classify as follows:
-   - If the email primarily concerns **invoices, payments due, account balances, W-9 requests, or general billing inquiries**, classify as 'Billing'.
+   - If the email primarily concerns **invoices, payments due, account balances, or general billing inquiries**, classify as 'Billing'. Note: W-9 requests alone do not indicate Billing — W-9s often accompany settlement offers, which belong in 'Negotiations'.
    - If the email primarily discusses **legal claims on property to secure debt payment (e.g., medical liens, attorney liens)**, including requests, submissions, or modifications of liens, classify as 'Liens'.
    - If the email is primarily about **discussing, proposing, or agreeing to changes in payment terms, settlement amounts, or bill reductions**, classify as 'Negotiations'.
    - If the email primarily provides **updates on the status of a financial case, account history, or payment tracking**, including **check status inquiries, payment confirmations, attorney changes, drop letters, settlement updates, liability clearance updates, payment promises, refund requests, or payment dispatch notifications**, classify as 'Case Updates'.
@@ -22,8 +22,9 @@ Please use the following rules to sub-classify the provided email content, alrea
    - **Lien reduction, settlement, or bill reduction requests** = 'Negotiations' (even if they mention liens)
    - **Lien submissions, missing lien requests, or lien modifications** = 'Liens'
 
-4. **Billing vs Liens Priority Rule**:
-   - When an email requests **both** billing information (e.g., "bill", "balance", "invoice") **and** a lien, classify as **'Billing'**. Billing takes priority over Liens when both are mentioned.
+4. **Negotiations vs Billing Priority Rule**:
+   - If the email contains a **settlement offer or payment offer** (e.g., "please accept $X as payment in full", "we offer $X to settle", "accept this amount as full payment"), classify as **'Negotiations'** — even if the email also mentions W-9 requests, balances, or billing information. Settlement/payment offers take priority over billing inquiries.
+   - When an email requests **both** billing information (e.g., "bill", "balance", "invoice") **and** a lien, but does NOT contain a settlement/payment offer, classify as **'Billing'**. Billing takes priority over Liens when both are mentioned.
 
 5. **Case Updates vs Billing Distinction**:
    - **Check status inquiries** (e.g., "will you cash the check", "check confirmation", "voiding/reissuing checks") = 'Case Updates'

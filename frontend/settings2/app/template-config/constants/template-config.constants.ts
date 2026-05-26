@@ -95,6 +95,7 @@ Access reports & images (Request login here for reports): <a href="{reports_link
 export type TemplateKey = keyof typeof TEMPLATE_DEFINITIONS;
 
 export const TAG_OPTIONS = [
+  { value: "WORKSPACE", label: "Workspace (Global)" },
   { value: "Apt status req", label: "Apt Status Req" },
   { value: "Lien Templates", label: "Lien Templates" },
   { value: "Bill or Balance Request", label: "Bill or Balance Request" }

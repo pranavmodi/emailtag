@@ -16,6 +16,7 @@ const TAG_HINTS: Record<string, string> = {
   "Apt status req": "Upload documents for this specific scenario. They will be attached automatically when this template is used.",
   "Lien Templates": "Upload documents to include with lien-related autorespond emails.",
   "Bill or Balance Request": "Upload documents for this specific scenario. They will be attached automatically when this template is used.",
+  "WORKSPACE": "Upload the HIPAA authorization form (PDF) used across all autoresponders when a sender cannot be verified.",
 };
 
 function formatFileSize(bytes: number): string {

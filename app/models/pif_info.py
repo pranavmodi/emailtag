@@ -20,6 +20,11 @@ class PifInfo(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
 
+    entity_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="pi_law_firm", index=True,
+        comment="Entity type: pi_law_firm, medical_referring, medical_facility, insurance, funding, collections, legal_other, administrative, patient_adjacent"
+    )
+
     website: Mapped[Optional[str]] = mapped_column(
         String(500), unique=True, nullable=True, index=True,
         comment="Firm website URL - unique identifier when available"
@@ -56,7 +61,7 @@ class PifInfo(Base):
     )
 
     conversation_ids: Mapped[List[str]] = mapped_column(
-        ARRAY(String), nullable=False, default=list, index=True,
+        ARRAY(String), nullable=False, default=list,
         comment="Front conversation IDs involving this firm"
     )
 

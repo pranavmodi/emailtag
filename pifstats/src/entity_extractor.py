@@ -25,9 +25,13 @@ class ContactPerson(BaseModel):
 
 
 class FirmInfo(BaseModel):
-    """Extracted personal injury law firm information."""
+    """Extracted external organization information."""
 
-    firm_name: str = Field(default="", description="Name of the law firm")
+    firm_name: str = Field(default="", description="Name of the organization")
+    entity_type: str = Field(
+        default="pi_law_firm",
+        description="Type of entity: pi_law_firm, medical_referring, medical_facility, insurance, funding, collections, legal_other, administrative, patient_adjacent"
+    )
     firm_emails: List[str] = Field(default_factory=list, description="All email addresses associated with the firm")
     firm_phones: List[str] = Field(default_factory=list, description="All phone numbers for the firm")
     firm_fax: str = Field(default="", description="Fax number if available")
@@ -45,7 +49,22 @@ FIRM_INFO_SCHEMA = {
     "properties": {
         "firm_name": {
             "type": "string",
-            "description": "Name of the law firm"
+            "description": "Name of the organization"
+        },
+        "entity_type": {
+            "type": "string",
+            "enum": [
+                "pi_law_firm",
+                "medical_referring",
+                "medical_facility",
+                "insurance",
+                "funding",
+                "collections",
+                "legal_other",
+                "administrative",
+                "patient_adjacent"
+            ],
+            "description": "Type of external organization detected"
         },
         "firm_emails": {
             "type": "array",
@@ -99,7 +118,7 @@ FIRM_INFO_SCHEMA = {
         }
     },
     "required": [
-        "firm_name", "firm_emails", "firm_phones", "firm_fax",
+        "firm_name", "entity_type", "firm_emails", "firm_phones", "firm_fax",
         "firm_website", "firm_address", "contacts", "case_reference",
         "patient_name", "extraction_notes"
     ],
@@ -107,35 +126,48 @@ FIRM_INFO_SCHEMA = {
 }
 
 
-EXTRACTION_PROMPT = """You are an expert at extracting contact information for personal injury law firms from email conversations.
+EXTRACTION_PROMPT = """You are an expert at extracting contact information for external organizations from email conversations with an imaging center.
 
-Analyze the following email conversation and extract all available information about the personal injury law firm(s) involved.
+Analyze the following email conversation and extract all available information about the primary external organization involved.
 
 Focus on:
-1. Law firm name - Look for signatures, letterheads, or mentions
-2. Email addresses - All email addresses from the firm domain
-3. Phone numbers - Main lines, direct lines, cell phones
-4. Fax numbers
-5. Website URLs
-6. Physical addresses
-7. Individual contacts - Names, titles (Attorney, Paralegal, Case Manager, etc.), their direct contact info
-8. Case/claim reference numbers
-9. Patient names mentioned
+1. Organization name - Look for signatures, letterheads, or mentions
+2. Entity type classification (see reference below)
+3. Email addresses - All email addresses from their domain
+4. Phone numbers - Main lines, direct lines, cell phones
+5. Fax numbers
+6. Website URLs
+7. Physical addresses
+8. Individual contacts - Names, titles, their direct contact info
+9. Case/claim reference numbers
+10. Patient names mentioned
+
+Entity Type Classification Reference:
+- pi_law_firm: Personal injury attorneys, paralegals, case managers at PI law firms
+- medical_referring: PCPs, orthopedic, pain management, chiropractic, neurology, urgent care, PT, sports medicine, podiatry, ENT offices
+- medical_facility: Hospitals, other imaging centers, surgery centers, rehab facilities
+- insurance: Health insurance, auto/no-fault insurance, workers comp carriers, third-party administrators
+- funding: Lien funding companies, litigation funding, factoring companies
+- collections: Collection agencies
+- legal_other: Workers comp attorneys, malpractice attorneys, insurance defense attorneys
+- administrative: Record copy services, interpreters, equipment vendors, IT/EMR vendors
+- patient_adjacent: Non-law-firm case managers, patient advocates
 
 Important guidelines:
 - Only extract information that is explicitly present in the conversation
 - Do not make up or infer information that isn't clearly stated
-- If multiple firms are mentioned, focus on the primary personal injury law firm in the correspondence
+- If multiple organizations are mentioned, focus on the primary external organization in the correspondence
 - Look carefully at email signatures as they often contain comprehensive contact info
 - Phone extensions should be extracted separately
 - Format phone numbers as they appear in the source
+- Default to pi_law_firm if the entity type is ambiguous or uncertain
 
 Email Conversation:
 ---
 {conversation_text}
 ---
 
-Extract the law firm information from this conversation."""
+Extract the organization information from this conversation."""
 
 
 def extract_firm_info(conversation_text: str) -> Optional[FirmInfo]:
@@ -207,6 +239,7 @@ def extract_firm_info(conversation_text: str) -> Optional[FirmInfo]:
 
             firm_info = FirmInfo(
                 firm_name=extracted_data.get("firm_name", ""),
+                entity_type=extracted_data.get("entity_type", "pi_law_firm"),
                 firm_emails=extracted_data.get("firm_emails", []),
                 firm_phones=extracted_data.get("firm_phones", []),
                 firm_fax=extracted_data.get("firm_fax", ""),
@@ -305,6 +338,7 @@ async def extract_firm_info_async(conversation_text: str) -> Optional[FirmInfo]:
 
             firm_info = FirmInfo(
                 firm_name=extracted_data.get("firm_name", ""),
+                entity_type=extracted_data.get("entity_type", "pi_law_firm"),
                 firm_emails=extracted_data.get("firm_emails", []),
                 firm_phones=extracted_data.get("firm_phones", []),
                 firm_fax=extracted_data.get("firm_fax", ""),
