@@ -92,12 +92,14 @@ def _extract_patient_ids(text: str) -> List[str]:
 def _extract_name_dates(text: str) -> Dict[str, Optional[str]]:
     normalized = re.sub(r"\s+", " ", text or "")
     patient_match = re.search(
-        r"(?:patient|client)\s*[:\-]\s*([A-Z][a-zA-Z'’-]+)\s+([A-Z][a-zA-Z'’-]+)",
+        r"(?:client\s*/\s*patient|patient\s*/\s*client|patient|client)\s*[:\-]\s*"
+        r"([A-Z][a-zA-Z'’-]+)\s+([A-Z][a-zA-Z'’-]+)",
         normalized,
         re.IGNORECASE,
     )
     name_match = patient_match or re.search(
-        r"\b([A-Z][a-zA-Z'’-]+)\s+([A-Z][a-zA-Z'’-]+)\b.{0,80}\b(?:DOB|date of birth|DOI|date of injury)\b",
+        r"\b([A-Z][a-zA-Z'’-]+)\s+([A-Z][a-zA-Z'’-]+)\b.{0,100}\b"
+        r"(?:DOB|date of birth|DOI|date of injury|DOL|date of loss)\b",
         normalized,
     )
     dob_match = re.search(
@@ -106,7 +108,8 @@ def _extract_name_dates(text: str) -> Dict[str, Optional[str]]:
         re.IGNORECASE,
     )
     doi_match = re.search(
-        r"\b(?:DOI|date of injury)\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})",
+        r"\b(?:DOI|date of injury|DOL|date of loss)\s*[:\-]?\s*"
+        r"(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})",
         normalized,
         re.IGNORECASE,
     )
@@ -116,6 +119,97 @@ def _extract_name_dates(text: str) -> Dict[str, Optional[str]]:
         "dob": _to_db_date(dob_match.group(1)) if dob_match else None,
         "doi": _to_db_date(doi_match.group(1)) if doi_match else None,
     }
+
+
+def _split_patient_name(value: Any) -> Dict[str, Optional[str]]:
+    cleaned = re.sub(r"\s+", " ", str(value or "")).strip()
+    cleaned = re.sub(
+        r"^(?:client|patient|client\s*/\s*patient)\s*[:\-]\s*",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    parts = cleaned.split()
+    if len(parts) < 2:
+        return {"first_name": None, "last_name": None}
+    return {"first_name": parts[0], "last_name": parts[-1]}
+
+
+def _document_patient_candidates(
+    extracted_facts: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Pull patient lookup candidates from LLM-normalized document facts."""
+    candidates: List[Dict[str, Any]] = []
+    document_facts = (extracted_facts or {}).get("_document_facts") or []
+    if not isinstance(document_facts, list):
+        return candidates
+
+    for document in document_facts:
+        if not isinstance(document, dict):
+            continue
+        candidate: Dict[str, Any] = {
+            "first_name": None,
+            "last_name": None,
+            "dob": None,
+            "doi": None,
+            "source": {
+                "document_id": document.get("document_id"),
+                "filename": document.get("filename"),
+            },
+        }
+
+        extracted_fields = document.get("extracted_fields") or []
+        if isinstance(extracted_fields, list):
+            for field_fact in extracted_fields:
+                if not isinstance(field_fact, dict):
+                    continue
+                field_name = str(field_fact.get("field") or "").lower()
+                value = field_fact.get("value")
+                if field_name in {"patient_name", "client_name", "name"}:
+                    candidate.update(_split_patient_name(value))
+                elif (
+                    field_name in {"patient_dob", "dob", "date_of_birth", "birth_date"}
+                    and value
+                ):
+                    candidate["dob"] = _to_db_date(str(value))
+                elif field_name in {
+                    "patient_doi",
+                    "doi",
+                    "date_of_injury",
+                    "date_of_loss",
+                    "dol",
+                    "loss_date",
+                } and value:
+                    candidate["doi"] = _to_db_date(str(value))
+
+        identifiers = document.get("patient_identifiers") or []
+        if isinstance(identifiers, list):
+            identifier_text = "\n".join(str(item) for item in identifiers)
+            parsed = _extract_name_dates(identifier_text)
+            for key in ("first_name", "last_name", "dob", "doi"):
+                candidate[key] = candidate.get(key) or parsed.get(key)
+
+            for identifier in identifiers:
+                text = str(identifier)
+                if not candidate.get("first_name") or not candidate.get("last_name"):
+                    if not re.search(
+                        r"\b(?:DOB|date of birth|DOI|DOL|date of injury|date of loss)\b",
+                        text,
+                        re.IGNORECASE,
+                    ):
+                        candidate.update(_split_patient_name(text))
+
+        if document.get("notes"):
+            parsed = _extract_name_dates(str(document.get("notes")))
+            for key in ("first_name", "last_name", "dob", "doi"):
+                candidate[key] = candidate.get(key) or parsed.get(key)
+
+        if candidate.get("first_name") and candidate.get("last_name") and (
+            candidate.get("dob") or candidate.get("doi")
+        ):
+            candidates.append(candidate)
+
+    return candidates
 
 
 def _to_db_date(value: str) -> Optional[str]:
@@ -158,6 +252,7 @@ async def resolve_patient(
     thread_text: str,
     extracted_patient_ids: Optional[List[str]],
     run_logger: BillOfferRunLogger,
+    extracted_facts: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Optional[str], Dict[str, Any]]:
     """Resolve patient according to the Phase 1 lookup order."""
     existing_ids = [pid for pid in (extracted_patient_ids or []) if pid]
@@ -168,7 +263,10 @@ async def resolve_patient(
             output_snapshot={"patient_ids": existing_ids},
             message="Using pre-extracted patient IDs",
         )
-        return existing_ids[0], {"method": "existing_extracted_patient_ids", "candidates": existing_ids}
+        return existing_ids[0], {
+            "method": "existing_extracted_patient_ids",
+            "candidates": existing_ids,
+        }
 
     text_ids = _extract_patient_ids(thread_text)
     if text_ids:
@@ -180,6 +278,33 @@ async def resolve_patient(
         )
         return text_ids[0], {"method": "thread_text_patient_id", "candidates": text_ids}
 
+    document_ids = _extract_patient_ids(
+        str((extracted_facts or {}).get("_document_facts") or "")
+    )
+    if document_ids:
+        await run_logger.log(
+            "patient_lookup_document_ids",
+            BillOfferAgentStepStatus.COMPLETED,
+            output_snapshot={"patient_ids": document_ids},
+            message="Found patient IDs in document facts",
+        )
+        return document_ids[0], {"method": "document_fact_patient_id", "candidates": document_ids}
+
+    for document_candidate in _document_patient_candidates(extracted_facts):
+        await run_logger.log(
+            "patient_lookup_document_name_dates_extracted",
+            BillOfferAgentStepStatus.COMPLETED,
+            output_snapshot=document_candidate,
+            message="Extracted name/date candidates from document facts",
+        )
+        patient_id, patient_match = await _lookup_patient_by_name_dates(
+            name_dates=document_candidate,
+            run_logger=run_logger,
+            source_method="document_fact",
+        )
+        if patient_id:
+            return patient_id, patient_match
+
     name_dates = _extract_name_dates(thread_text)
     await run_logger.log(
         "patient_lookup_name_dates_extracted",
@@ -188,10 +313,23 @@ async def resolve_patient(
         message="Extracted name/date candidates for lookup",
     )
 
+    return await _lookup_patient_by_name_dates(
+        name_dates=name_dates,
+        run_logger=run_logger,
+        source_method="name_date_lookup",
+    )
+
+
+async def _lookup_patient_by_name_dates(
+    *,
+    name_dates: Dict[str, Any],
+    run_logger: BillOfferRunLogger,
+    source_method: str,
+) -> Tuple[Optional[str], Dict[str, Any]]:
     first_name = name_dates.get("first_name")
     last_name = name_dates.get("last_name")
     if not first_name or not last_name:
-        return None, {"method": "name_date_lookup", "reason": "missing_name"}
+        return None, {"method": source_method, "reason": "missing_name"}
 
     lookup_attempts = []
     if name_dates.get("dob"):
@@ -231,7 +369,15 @@ async def resolve_patient(
                     continue
                 patient_id = patients[0].get("patient_id") or patients[0].get("patientId")
                 if patient_id:
-                    return patient_id, {"method": method, "patient": patients[0]}
+                    return patient_id, {
+                        "method": (
+                            method
+                            if source_method == "name_date_lookup"
+                            else f"{source_method}_{method}"
+                        ),
+                        "patient": patients[0],
+                        "candidate": name_dates,
+                    }
         except Exception as exc:
             await run_logger.log(
                 "patient_lookup_attempt",
@@ -239,7 +385,7 @@ async def resolve_patient(
                 input_snapshot={"tool": tool_name, "arguments": arguments},
                 error=str(exc),
             )
-    return None, {"method": "name_date_lookup", "reason": "no_match", "candidate": name_dates}
+    return None, {"method": source_method, "reason": "no_match", "candidate": name_dates}
 
 
 async def fetch_patient_context(
@@ -377,10 +523,24 @@ async def handle_bill_offer_request(
             )
             run_logger.intake_id = intake.id
 
+        extracted_facts = extract_bill_offer_facts_structured(bill_offer_context)
+        await run_logger.log(
+            "offer_facts_extracted",
+            BillOfferAgentStepStatus.COMPLETED,
+            output_snapshot={
+                "fields": [field for field in extracted_facts.keys() if not field.startswith("_")],
+                "document_facts_count": len(extracted_facts.get("_document_facts") or []),
+                "conflicts_count": len(extracted_facts.get("_conflicts") or []),
+                "meta": extracted_facts.get("_meta", {}),
+                "facts": extracted_facts,
+            },
+        )
+
         patient_id, patient_match = await resolve_patient(
             thread_text=thread_text,
             extracted_patient_ids=extracted_patient_ids,
             run_logger=run_logger,
+            extracted_facts=extracted_facts,
         )
 
         patient_data = None
@@ -394,19 +554,6 @@ async def handle_bill_offer_request(
                 output_snapshot=patient_match,
                 message="Could not resolve patient",
             )
-
-        extracted_facts = extract_bill_offer_facts_structured(bill_offer_context)
-        await run_logger.log(
-            "offer_facts_extracted",
-            BillOfferAgentStepStatus.COMPLETED,
-            output_snapshot={
-                "fields": [field for field in extracted_facts.keys() if not field.startswith("_")],
-                "document_facts_count": len(extracted_facts.get("_document_facts") or []),
-                "conflicts_count": len(extracted_facts.get("_conflicts") or []),
-                "meta": extracted_facts.get("_meta", {}),
-                "facts": extracted_facts,
-            },
-        )
 
         async with AsyncSessionLocal() as db:
             intake = await bill_offer_crud.get_intake_by_conversation(db, front_conversation_id)

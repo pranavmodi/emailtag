@@ -222,3 +222,50 @@ def test_patient_lookup_uses_prior_thread_text_patient_id():
 
     assert patient_id == "PRE123456"
     assert match["method"] == "thread_text_patient_id"
+
+
+def test_patient_lookup_uses_document_fact_name_and_dob(monkeypatch):
+    calls = []
+
+    async def fake_call_mcp_tool(tool_name, arguments):
+        calls.append((tool_name, arguments))
+        return {
+            "patients": [
+                {"patient_id": "PRE999111", "first_name": "Maira", "last_name": "Romo"}
+            ]
+        }
+
+    monkeypatch.setattr("app.agents.bill_offer_agent.call_mcp_tool", fake_call_mcp_tool)
+
+    patient_id, match = asyncio.run(
+        resolve_patient(
+            thread_text="Current email asks for lien reduction without patient demographics.",
+            extracted_patient_ids=[],
+            extracted_facts={
+                "_document_facts": [
+                    {
+                        "document_id": "ocr_1",
+                        "filename": "Maira Romo - Precise.pdf",
+                        "extracted_fields": [
+                            {"field": "patient_name", "value": "Maira Romo"},
+                            {"field": "patient_dob", "value": "03/29/1993"},
+                            {"field": "date_of_loss", "value": "05/31/2021"},
+                        ],
+                        "patient_identifiers": [
+                            "Maira Romo",
+                            "DOB: 03/29/1993",
+                            "DOL: 05/31/2021",
+                        ],
+                    }
+                ]
+            },
+            run_logger=DummyRunLogger(),
+        )
+    )
+
+    assert patient_id == "PRE999111"
+    assert match["method"] == "document_fact_name_dob"
+    assert calls[0] == (
+        "fetch_patient_by_name_and_dob",
+        {"firstName": "Maira", "lastName": "Romo", "dob": "1993-03-29"},
+    )
