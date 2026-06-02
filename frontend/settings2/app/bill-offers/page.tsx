@@ -90,6 +90,35 @@ function confidenceText(value: any) {
   return typeof value === "number" ? `${Math.round(value * 100)}%` : "-";
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildDocumentSourceMap(documentFacts: any[]) {
+  const sourceMap: Record<string, string> = {};
+  documentFacts.forEach((document, index) => {
+    if (!document || typeof document !== "object") return;
+    const filename = document.filename || document.document_id || `Document ${index + 1}`;
+    if (document.document_id) sourceMap[String(document.document_id)] = String(filename);
+    sourceMap[`ocr_${index + 1}`] = String(filename);
+  });
+  return sourceMap;
+}
+
+function sourceLabel(sourceId: any, sourceMap: Record<string, string>) {
+  if (!sourceId) return "";
+  const id = String(sourceId);
+  return sourceMap[id] || id;
+}
+
+function replaceSourceReferences(value: any, sourceMap: Record<string, string>) {
+  let text = String(value || "");
+  Object.entries(sourceMap).forEach(([id, label]) => {
+    text = text.replace(new RegExp(`\\b${escapeRegExp(id)}\\b`, "g"), label);
+  });
+  return text;
+}
+
 export default function BillOffersPage() {
   const [items, setItems] = useState<BillOfferTaggedEmail[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
@@ -314,6 +343,7 @@ export default function BillOffersPage() {
   const conflicts = Array.isArray(selectedIntake?.extracted_facts?._conflicts)
     ? selectedIntake?.extracted_facts?._conflicts
     : [];
+  const documentSourceMap = buildDocumentSourceMap(documentFacts);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -585,11 +615,12 @@ export default function BillOffersPage() {
                             value={draftValues[field] ?? ""}
                             extractedFact={factOf(selectedIntake.extracted_facts, field)}
                             correctedFact={factOf(selectedIntake.corrected_facts, field)}
+                            documentSourceMap={documentSourceMap}
                             onChange={(value) => setDraftValues((prev) => ({ ...prev, [field]: value }))}
                           />
                         ))}
                       </div>
-                      {conflicts.length ? <JsonPreview title="Conflicts" value={conflicts} open /> : null}
+                      {conflicts.length ? <ConflictList conflicts={conflicts} documentSourceMap={documentSourceMap} /> : null}
                     </section>
 
                     <section className="rounded-md border border-slate-200 bg-white p-4">
@@ -733,14 +764,18 @@ function FactEditor({
   value,
   extractedFact,
   correctedFact,
+  documentSourceMap,
   onChange,
 }: {
   label: string;
   value: string;
   extractedFact: Record<string, any> | null;
   correctedFact: Record<string, any> | null;
+  documentSourceMap: Record<string, string>;
   onChange: (value: string) => void;
 }) {
+  const displaySourceId = sourceLabel(extractedFact?.source_id, documentSourceMap);
+
   return (
     <div className="rounded-md border border-slate-200 bg-white p-4">
       <label className="text-sm font-medium text-slate-900">{label}</label>
@@ -754,13 +789,19 @@ function FactEditor({
           <div className="font-medium text-slate-700">Extracted</div>
           <div>{String(extractedFact?.value ?? "-")}</div>
           <div className="mt-1 text-slate-500">
-            Source: {extractedFact?.source || "-"} {extractedFact?.source_id ? `(${extractedFact.source_id})` : ""}
+            Source: {extractedFact?.source || "-"} {displaySourceId ? `(${displaySourceId})` : ""}
           </div>
           <div className="text-slate-500">Confidence: {confidenceText(extractedFact?.confidence)}</div>
           {extractedFact?.is_ambiguous && (
-            <div className="mt-1 text-amber-700">{extractedFact.ambiguity_notes || "Ambiguous"}</div>
+            <div className="mt-1 text-amber-700">
+              {replaceSourceReferences(extractedFact.ambiguity_notes || "Ambiguous", documentSourceMap)}
+            </div>
           )}
-          {extractedFact?.evidence && <div className="mt-2 text-slate-600">{extractedFact.evidence}</div>}
+          {extractedFact?.evidence && (
+            <div className="mt-2 text-slate-600">
+              {replaceSourceReferences(extractedFact.evidence, documentSourceMap)}
+            </div>
+          )}
         </div>
         {correctedFact && (
           <div className="rounded bg-emerald-50 p-2 text-emerald-800">
@@ -768,6 +809,35 @@ function FactEditor({
             <div>{String(correctedFact.value ?? "-")}</div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ConflictList({
+  conflicts,
+  documentSourceMap,
+}: {
+  conflicts: any[];
+  documentSourceMap: Record<string, string>;
+}) {
+  return (
+    <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
+      <div className="text-xs font-medium text-amber-900">Conflicts</div>
+      <div className="mt-2 space-y-2">
+        {conflicts.map((conflict, index) => (
+          <div key={`${conflict.field || "conflict"}-${index}`} className="rounded bg-white/70 p-2 text-xs text-amber-900">
+            <div className="font-medium">{conflict.field || `Conflict ${index + 1}`}</div>
+            <div className="mt-1">
+              {replaceSourceReferences(conflict.description || "-", documentSourceMap)}
+            </div>
+            {Array.isArray(conflict.sources) && conflict.sources.length ? (
+              <div className="mt-1 text-amber-700">
+                Sources: {conflict.sources.map((source: any) => sourceLabel(source, documentSourceMap)).join(", ")}
+              </div>
+            ) : null}
+          </div>
+        ))}
       </div>
     </div>
   );
