@@ -1,7 +1,9 @@
 """Bill Offer Phase 1 review API."""
 
+import copy
+import re
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Optional
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -38,6 +40,98 @@ from app.services.bill_offer_extraction_service import (
 router = APIRouter()
 
 
+def _build_document_source_map(extracted_facts: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    if not isinstance(extracted_facts, dict):
+        return {}
+    document_facts = extracted_facts.get("_document_facts")
+    if not isinstance(document_facts, list):
+        return {}
+
+    source_map: Dict[str, str] = {}
+    for index, document in enumerate(document_facts):
+        if not isinstance(document, dict):
+            continue
+        filename = str(document.get("filename") or document.get("document_id") or f"Document {index + 1}")
+        document_id = document.get("document_id")
+        if document_id:
+            source_map[str(document_id)] = filename
+        source_map.setdefault(f"ocr_{index + 1}", filename)
+    return source_map
+
+
+def _replace_source_references(value: Any, source_map: Dict[str, str]) -> Any:
+    if not isinstance(value, str) or not source_map:
+        return value
+    resolved = value
+    for source_id, filename in source_map.items():
+        resolved = re.sub(rf"\b{re.escape(source_id)}\b", filename, resolved)
+    return resolved
+
+
+def _decorate_extracted_facts_for_response(
+    extracted_facts: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Use document filenames in API display fields while preserving stored raw facts."""
+    if not isinstance(extracted_facts, dict):
+        return extracted_facts
+
+    source_map = _build_document_source_map(extracted_facts)
+    if not source_map:
+        return extracted_facts
+
+    facts = copy.deepcopy(extracted_facts)
+    for field_value in facts.values():
+        if not isinstance(field_value, dict):
+            continue
+        source_id = field_value.get("source_id")
+        if source_id and str(source_id) in source_map:
+            field_value["source_id"] = source_map[str(source_id)]
+        for text_key in ("evidence", "ambiguity_notes"):
+            if text_key in field_value:
+                field_value[text_key] = _replace_source_references(field_value[text_key], source_map)
+
+    conflicts = facts.get("_conflicts")
+    if isinstance(conflicts, list):
+        for conflict in conflicts:
+            if not isinstance(conflict, dict):
+                continue
+            if "description" in conflict:
+                conflict["description"] = _replace_source_references(conflict["description"], source_map)
+            if isinstance(conflict.get("sources"), list):
+                conflict["sources"] = [
+                    source_map.get(str(source), str(source)) for source in conflict["sources"]
+                ]
+
+    meta = facts.get("_meta")
+    if isinstance(meta, dict) and "summary" in meta:
+        meta["summary"] = _replace_source_references(meta["summary"], source_map)
+
+    document_facts = facts.get("_document_facts")
+    if isinstance(document_facts, list):
+        for document in document_facts:
+            if not isinstance(document, dict):
+                continue
+            if "notes" in document:
+                document["notes"] = _replace_source_references(document["notes"], source_map)
+            for extracted_field in document.get("extracted_fields") or []:
+                if isinstance(extracted_field, dict):
+                    for text_key in ("evidence", "ambiguity_notes"):
+                        if text_key in extracted_field:
+                            extracted_field[text_key] = _replace_source_references(
+                                extracted_field[text_key], source_map
+                            )
+
+    return facts
+
+
+def _intake_response(intake: Any) -> Optional[BillOfferIntakeResponse]:
+    if intake is None:
+        return None
+    response = BillOfferIntakeResponse.model_validate(intake)
+    response.extracted_facts = _decorate_extracted_facts_for_response(response.extracted_facts)
+    return response
+
+
 @router.get("/settings", response_model=BillOfferSettingsResponse)
 async def get_bill_offer_settings(
     db: AsyncSession = Depends(get_db),
@@ -72,7 +166,7 @@ async def list_bill_offer_intakes(
     items, total = await crud.list_intakes(
         db, status=status_filter, skip=skip, limit=limit
     )
-    return BillOfferIntakeListResponse(items=items, total=total)
+    return BillOfferIntakeListResponse(items=[_intake_response(item) for item in items], total=total)
 
 
 @router.get("/tagged-emails", response_model=BillOfferTaggedEmailListResponse)
@@ -95,7 +189,7 @@ async def list_bill_offer_tagged_emails(
                 received_at=email.created_at,
                 tags=["Bill Offer"],
                 has_intake=bool(intake),
-                intake=intake,
+                intake=_intake_response(intake) if intake else None,
             )
         )
     return BillOfferTaggedEmailListResponse(items=items, total=total)
@@ -109,7 +203,7 @@ async def get_bill_offer_intake(
     intake = await crud.get_intake(db, intake_id)
     if not intake:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Intake not found")
-    return intake
+    return _intake_response(intake)
 
 
 @router.get(
@@ -179,7 +273,7 @@ async def update_bill_offer_corrections(
         update_values["patient_match"] = payload.patient_match
 
     intake = await crud.update_intake(db, intake=intake, obj_in=update_values)
-    return intake
+    return _intake_response(intake)
 
 
 @router.post("/{intake_id}/rerun-check", response_model=BillOfferIntakeResponse)
@@ -217,7 +311,7 @@ async def rerun_bill_offer_check(
             "last_agent_action": "rerun_check",
         },
     )
-    return intake
+    return _intake_response(intake)
 
 
 @router.post(
@@ -283,7 +377,7 @@ async def run_bill_offer_agent_for_conversation(
     return BillOfferRunAgentResponse(
         status="queued",
         run_id=run_id,
-        intake=intake,
+        intake=_intake_response(intake),
         details={"task_id": task.id, "queued": True},
     )
 
@@ -331,7 +425,7 @@ async def send_bill_offer_reply(
             "last_agent_action": "approved_reply_sent",
         },
     )
-    return intake
+    return _intake_response(intake)
 
 
 @router.post("/{intake_id}/manual-review", response_model=BillOfferIntakeResponse)
@@ -353,4 +447,4 @@ async def mark_bill_offer_manual_review(
             "last_agent_action": f"manual_review: {payload.reason or 'No reason provided'}",
         },
     )
-    return intake
+    return _intake_response(intake)

@@ -38,6 +38,84 @@ def test_tagged_email_listing_endpoint(monkeypatch):
     assert response.items[0].tags == ["Bill Offer"]
 
 
+def test_tagged_email_listing_resolves_document_source_names(monkeypatch):
+    email_id = uuid.uuid4()
+    intake_id = uuid.uuid4()
+
+    async def fake_list_tagged(db, skip, limit):
+        email = SimpleNamespace(
+            id=email_id,
+            front_conversation_id="cnv_123",
+            subject="Offer",
+            sender="attorney@example.com",
+            created_at=datetime(2026, 6, 1, 12, 0, 0),
+        )
+        intake = SimpleNamespace(
+            id=intake_id,
+            front_conversation_id="cnv_123",
+            email_id=email_id,
+            status="pending_details",
+            patient_id="PRE123456",
+            patient_match={},
+            patient_data={},
+            extracted_facts={
+                "precise_offer_amount": {
+                    "value": 1817.95,
+                    "source": "attachment_document",
+                    "source_id": "ocr_1",
+                    "confidence": 0.95,
+                    "evidence": "REDUCTION LETTER (ocr_1) supports this. ocr_2 confirms.",
+                    "ambiguity_notes": "",
+                },
+                "_document_facts": [
+                    {
+                        "document_id": "ocr_1",
+                        "filename": "REDUCTION LETTER.docx",
+                        "extracted_fields": [],
+                    },
+                    {
+                        "document_id": "ocr_2",
+                        "filename": "Yield Calculator.pdf",
+                        "extracted_fields": [],
+                    },
+                ],
+                "_conflicts": [
+                    {
+                        "field": "settlement_amount",
+                        "description": "ocr_1 conflicts with ocr_2",
+                        "sources": ["ocr_1", "ocr_2"],
+                    }
+                ],
+                "_meta": {"summary": "Found in ocr_1 and ocr_2"},
+            },
+            corrected_facts={},
+            missing_fields=["medpay_status"],
+            confidence={},
+            original_sender_email="attorney@example.com",
+            last_agent_action="drafted",
+            last_run_id="run-1",
+            last_agent_run_status="completed",
+            reply_draft=None,
+            reply_sent_at=None,
+            reviewed_by=None,
+            reviewed_at=None,
+            created_at=datetime(2026, 6, 1, 12, 0, 0),
+            updated_at=datetime(2026, 6, 1, 12, 0, 0),
+        )
+        return [{"email": email, "intake": intake}], 1
+
+    monkeypatch.setattr(bill_offers.crud, "list_tagged_bill_offer_emails", fake_list_tagged)
+
+    response = asyncio.run(bill_offers.list_bill_offer_tagged_emails(db=None))
+
+    facts = response.items[0].intake.extracted_facts
+    assert facts["precise_offer_amount"]["source_id"] == "REDUCTION LETTER.docx"
+    assert "REDUCTION LETTER.docx" in facts["precise_offer_amount"]["evidence"]
+    assert "Yield Calculator.pdf" in facts["precise_offer_amount"]["evidence"]
+    assert facts["_conflicts"][0]["sources"] == ["REDUCTION LETTER.docx", "Yield Calculator.pdf"]
+    assert facts["_meta"]["summary"] == "Found in REDUCTION LETTER.docx and Yield Calculator.pdf"
+
+
 def test_conversation_log_endpoint(monkeypatch):
     log_id = uuid.uuid4()
 
