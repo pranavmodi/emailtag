@@ -172,6 +172,7 @@ export default function BillOffersPage() {
   const visibleItems = items.filter((item) => {
     if (filter === "all") return true;
     if (filter === "unprocessed") return !item.has_intake;
+    if (filter === "processed") return item.has_intake;
     return item.intake?.status === filter;
   });
 
@@ -347,8 +348,8 @@ export default function BillOffersPage() {
           </div>
         )}
 
-        <div className="grid gap-5 xl:grid-cols-[520px_1fr]">
-          <Card>
+        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,520px)_minmax(0,1fr)]">
+          <Card className="min-w-0 overflow-hidden">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileSearch className="h-5 w-5 text-slate-700" />
@@ -361,6 +362,7 @@ export default function BillOffersPage() {
                 {[
                   ["all", "All"],
                   ["unprocessed", "Unprocessed"],
+                  ["processed", "Processed"],
                   ["pending_patient", "Pending Patient"],
                   ["pending_details", "Pending Details"],
                   ["ready_for_phase_2", "Ready"],
@@ -387,14 +389,20 @@ export default function BillOffersPage() {
                   No Bill Offer-tagged conversations found.
                 </div>
               ) : (
-                <div className="max-h-[780px] overflow-y-auto rounded-md border border-slate-200 bg-white">
-                  <table className="w-full text-left text-xs">
+                <div className="max-h-[780px] w-full overflow-hidden overflow-y-auto rounded-md border border-slate-200 bg-white">
+                  <table className="w-full table-fixed text-left text-xs">
+                    <colgroup>
+                      <col className="w-[42%]" />
+                      <col className="w-[23%]" />
+                      <col className="w-[22%]" />
+                      <col className="w-[13%]" />
+                    </colgroup>
                     <thead className="sticky top-0 bg-slate-100 text-slate-600">
                       <tr>
-                        <th className="px-3 py-2 font-medium">Conversation</th>
-                        <th className="px-3 py-2 font-medium">Patient</th>
-                        <th className="px-3 py-2 font-medium">Status</th>
-                        <th className="px-3 py-2 font-medium">Confidence</th>
+                        <th className="px-2 py-2 font-medium">Conversation</th>
+                        <th className="px-2 py-2 font-medium">Patient</th>
+                        <th className="px-2 py-2 font-medium">Status</th>
+                        <th className="px-2 py-2 font-medium">Conf.</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -409,28 +417,28 @@ export default function BillOffersPage() {
                               active ? "bg-slate-900 text-white" : "hover:bg-slate-50"
                             }`}
                           >
-                            <td className="px-3 py-3 align-top">
-                              <div className="max-w-[210px] truncate font-medium">{item.subject || "(No subject)"}</div>
-                              <div className={`mt-1 truncate ${active ? "text-white/70" : "text-slate-500"}`}>
+                            <td className="min-w-0 px-2 py-3 align-top">
+                              <div className="min-w-0 truncate font-medium">{item.subject || "(No subject)"}</div>
+                              <div className={`mt-1 min-w-0 truncate ${active ? "text-white/70" : "text-slate-500"}`}>
                                 {item.front_conversation_id}
                               </div>
-                              <div className={`truncate ${active ? "text-white/70" : "text-slate-500"}`}>{item.sender}</div>
+                              <div className={`min-w-0 break-all ${active ? "text-white/70" : "text-slate-500"}`}>{item.sender}</div>
                               <div className={active ? "text-white/70" : "text-slate-500"}>{formatDate(item.received_at)}</div>
                             </td>
-                            <td className="px-3 py-3 align-top">
-                              <div>{intake?.patient_data?.patient_name || "-"}</div>
+                            <td className="min-w-0 px-2 py-3 align-top">
+                              <div className="min-w-0 break-words">{intake?.patient_data?.patient_name || "-"}</div>
                               <div className={active ? "text-white/70" : "text-slate-500"}>{intake?.patient_id || "-"}</div>
                             </td>
-                            <td className="px-3 py-3 align-top">
+                            <td className="min-w-0 px-2 py-3 align-top">
                               {intake ? (
-                                <Badge className={STATUS_STYLES[intake.status] || "bg-slate-100 text-slate-700"}>
+                                <Badge className={`max-w-full whitespace-normal break-words px-2 leading-tight ${STATUS_STYLES[intake.status] || "bg-slate-100 text-slate-700"}`}>
                                   {intake.status.replace(/_/g, " ")}
                                 </Badge>
                               ) : (
-                                <Badge className="bg-slate-100 text-slate-700">not processed</Badge>
+                                <Badge className="max-w-full whitespace-normal break-words bg-slate-100 px-2 leading-tight text-slate-700">not processed</Badge>
                               )}
                               {intake?.missing_fields?.length ? (
-                                <div className={`mt-1 ${active ? "text-amber-100" : "text-amber-700"}`}>
+                                <div className={`mt-1 min-w-0 break-all ${active ? "text-amber-100" : "text-amber-700"}`}>
                                   {intake.missing_fields.join(", ")}
                                 </div>
                               ) : null}
@@ -438,7 +446,7 @@ export default function BillOffersPage() {
                                 {intake?.last_agent_run_status || "-"}
                               </div>
                             </td>
-                            <td className="px-3 py-3 align-top">
+                            <td className="min-w-0 px-2 py-3 align-top">
                               <div>{confidenceText(intake?.confidence?.average)}</div>
                               <div className={active ? "text-white/70" : "text-slate-500"}>
                                 {formatDate(intake?.updated_at)}
