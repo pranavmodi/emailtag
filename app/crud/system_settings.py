@@ -299,6 +299,7 @@ class CRUDSystemSettings:
             "autorespond_medical_records": "Enable/disable automatic responses to medical records requests (Release of Records, Image Request, CD Requests, Reports Request)",
             "autorespond_bill_balance_request": "Enable/disable automatic responses to bill or balance request emails",
             "autorespond_bill_offer": "Enable/disable the Bill Offer intake agent",
+            "autorespond_bill_offer_review_required": "Require Settings2 review before Bill Offer Phase 1 replies are sent",
             "autorespond_case_updates": "Enable/disable automatic responses to case update emails (Drop Pending, Promise to send payment, etc.)",
             "autorespond_missing_lien_request": "Enable/disable automatic responses to missing lien request emails",
             "autorespond_psl_lien": "Enable/disable automatic responses to Patient Signed Lien (PSL) emails",

@@ -9,17 +9,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.bill_offer_agent import handle_bill_offer_request
 from app.crud import bill_offer as crud
+from app.crud.system_settings import system_settings_crud
 from app.db.session import get_db
 from app.models.bill_offer import BillOfferIntakeStatus
 from app.schemas.bill_offer import (
     BillOfferAgentLogListResponse,
+    BillOfferCorrectionAuditListResponse,
     BillOfferCorrectionRequest,
     BillOfferIntakeListResponse,
     BillOfferIntakeResponse,
     BillOfferManualReviewRequest,
+    BillOfferReviewRequiredRequest,
     BillOfferRunAgentRequest,
     BillOfferRunAgentResponse,
     BillOfferSendReplyRequest,
+    BillOfferSettingsResponse,
     BillOfferTaggedEmailListResponse,
     BillOfferTaggedEmailResponse,
 )
@@ -32,6 +36,30 @@ from app.services.bill_offer_extraction_service import (
 from app.services.frontapp_service import get_conversation_text
 
 router = APIRouter()
+
+
+@router.get("/settings", response_model=BillOfferSettingsResponse)
+async def get_bill_offer_settings(
+    db: AsyncSession = Depends(get_db),
+) -> BillOfferSettingsResponse:
+    review_required = await system_settings_crud.get_setting_value(
+        db, "autorespond_bill_offer_review_required", default=True
+    )
+    return BillOfferSettingsResponse(review_required=bool(review_required))
+
+
+@router.post("/settings/review-required", response_model=BillOfferSettingsResponse)
+async def set_bill_offer_review_required(
+    payload: BillOfferReviewRequiredRequest,
+    db: AsyncSession = Depends(get_db),
+) -> BillOfferSettingsResponse:
+    await system_settings_crud.toggle_autorespond(
+        db,
+        autorespond_type="autorespond_bill_offer_review_required",
+        enable=payload.enabled,
+        updated_by=payload.reviewed_by or "Settings2",
+    )
+    return BillOfferSettingsResponse(review_required=payload.enabled)
 
 
 @router.get("", response_model=BillOfferIntakeListResponse)
@@ -98,6 +126,22 @@ async def list_bill_offer_logs(
         db, front_conversation_id=front_conversation_id, skip=skip, limit=limit
     )
     return BillOfferAgentLogListResponse(items=items, total=total)
+
+
+@router.get(
+    "/conversations/{front_conversation_id}/corrections",
+    response_model=BillOfferCorrectionAuditListResponse,
+)
+async def list_bill_offer_correction_audits(
+    front_conversation_id: str,
+    skip: int = 0,
+    limit: int = Query(200, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db),
+) -> BillOfferCorrectionAuditListResponse:
+    items, total = await crud.list_correction_audits_for_conversation(
+        db, front_conversation_id=front_conversation_id, skip=skip, limit=limit
+    )
+    return BillOfferCorrectionAuditListResponse(items=items, total=total)
 
 
 @router.patch("/{intake_id}", response_model=BillOfferIntakeResponse)

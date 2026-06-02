@@ -4,6 +4,15 @@ from datetime import datetime
 from types import SimpleNamespace
 
 from app.api.api_v1.endpoints import bill_offers
+from app.agents.bill_offer_agent import resolve_patient
+
+
+class DummyRunLogger:
+    def __init__(self):
+        self.logs = []
+
+    async def log(self, *args, **kwargs):
+        self.logs.append((args, kwargs))
 
 
 def test_tagged_email_listing_endpoint(monkeypatch):
@@ -123,3 +132,55 @@ def test_manual_agent_trigger_endpoint(monkeypatch):
     assert response.run_id == "run-1"
     assert response.intake.front_conversation_id == "cnv_123"
     assert response.intake.last_agent_run_status == "completed"
+
+
+def test_correction_audit_endpoint(monkeypatch):
+    audit_id = uuid.uuid4()
+    intake_id = uuid.uuid4()
+
+    async def fake_list_audits(db, front_conversation_id, skip, limit):
+        return [
+            SimpleNamespace(
+                id=audit_id,
+                front_conversation_id=front_conversation_id,
+                intake_id=intake_id,
+                field_name="precise_offer_amount",
+                previous_value={"value": 400},
+                new_value={"value": 500},
+                changed_by="Settings2",
+                created_at=datetime(2026, 6, 1, 12, 0, 0),
+            )
+        ], 1
+
+    monkeypatch.setattr(bill_offers.crud, "list_correction_audits_for_conversation", fake_list_audits)
+
+    response = asyncio.run(bill_offers.list_bill_offer_correction_audits("cnv_123", db=None))
+
+    assert response.total == 1
+    assert response.items[0].field_name == "precise_offer_amount"
+    assert response.items[0].new_value == {"value": 500}
+
+
+def test_bill_offer_review_required_settings_endpoint(monkeypatch):
+    async def fake_get_setting(db, setting_key, default):
+        assert setting_key == "autorespond_bill_offer_review_required"
+        return False
+
+    monkeypatch.setattr(bill_offers.system_settings_crud, "get_setting_value", fake_get_setting)
+
+    response = asyncio.run(bill_offers.get_bill_offer_settings(db=None))
+
+    assert response.review_required is False
+
+
+def test_patient_lookup_uses_prior_thread_text_patient_id():
+    patient_id, match = asyncio.run(
+        resolve_patient(
+            thread_text="Prior message: Patient PRE123456. Current message: please review offer.",
+            extracted_patient_ids=[],
+            run_logger=DummyRunLogger(),
+        )
+    )
+
+    assert patient_id == "PRE123456"
+    assert match["method"] == "thread_text_patient_id"

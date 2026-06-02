@@ -85,6 +85,15 @@ class BillOfferRunAgentRequest(BaseModel):
     send_reply: bool = False
 
 
+class BillOfferReviewRequiredRequest(BaseModel):
+    enabled: bool
+    reviewed_by: Optional[str] = None
+
+
+class BillOfferSettingsResponse(BaseModel):
+    review_required: bool
+
+
 class BillOfferAgentLogCreate(BaseModel):
     front_conversation_id: str
     email_id: Optional[UUID] = None
@@ -143,6 +152,11 @@ class BillOfferIntakeListResponse(BaseModel):
 
 class BillOfferAgentLogListResponse(BaseModel):
     items: List[BillOfferAgentLogResponse]
+    total: int
+
+
+class BillOfferCorrectionAuditListResponse(BaseModel):
+    items: List[BillOfferCorrectionAuditResponse]
     total: int
 
 

@@ -170,6 +170,29 @@ async def create_correction_audit(
     return db_obj
 
 
+async def list_correction_audits_for_conversation(
+    db: AsyncSession,
+    *,
+    front_conversation_id: str,
+    skip: int = 0,
+    limit: int = 200,
+) -> Tuple[List[BillOfferCorrectionAudit], int]:
+    total_result = await db.execute(
+        select(func.count(BillOfferCorrectionAudit.id)).where(
+            BillOfferCorrectionAudit.front_conversation_id == front_conversation_id
+        )
+    )
+    total = total_result.scalar() or 0
+    result = await db.execute(
+        select(BillOfferCorrectionAudit)
+        .where(BillOfferCorrectionAudit.front_conversation_id == front_conversation_id)
+        .order_by(BillOfferCorrectionAudit.created_at.asc())
+        .offset(skip)
+        .limit(limit)
+    )
+    return list(result.scalars().all()), total
+
+
 async def list_tagged_bill_offer_emails(
     db: AsyncSession,
     *,

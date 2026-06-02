@@ -19,10 +19,11 @@ from app.models.bill_offer import (
 from app.schemas.bill_offer import BillOfferAgentLogCreate
 from app.services import frontapp_service
 from app.services.bill_offer_extraction_service import (
+    build_bill_offer_context,
     build_reply_draft,
     compute_missing_fields,
     confidence_summary,
-    extract_bill_offer_facts,
+    extract_bill_offer_facts_structured,
     merge_effective_facts,
 )
 
@@ -76,73 +77,6 @@ class BillOfferRunLogger:
                 )
         except Exception as exc:
             logger.error(f"Failed to write Bill Offer agent log: {exc}", exc_info=True)
-
-
-def _ocr_text_from_results(ocr_results: Any) -> str:
-    if not ocr_results:
-        return ""
-    chunks: List[str] = []
-    if isinstance(ocr_results, list):
-        for item in ocr_results:
-            if isinstance(item, dict):
-                for key in ("text", "extracted_text", "ocr_text", "content"):
-                    value = item.get(key)
-                    if value:
-                        chunks.append(str(value))
-                if item.get("pages") and isinstance(item["pages"], list):
-                    for page in item["pages"]:
-                        if isinstance(page, dict):
-                            chunks.append(str(page.get("text") or page.get("extracted_text") or ""))
-            else:
-                chunks.append(str(item))
-    elif isinstance(ocr_results, dict):
-        chunks.append(str(ocr_results.get("text") or ocr_results.get("extracted_text") or ocr_results))
-    return "\n".join(chunk for chunk in chunks if chunk)
-
-
-def _attachment_summary(raw_data: Any) -> List[Dict[str, Any]]:
-    if not isinstance(raw_data, dict):
-        return []
-    attachments = raw_data.get("attachments") or raw_data.get("_attachments") or []
-    if not isinstance(attachments, list):
-        return []
-    return [
-        {
-            "id": attachment.get("id"),
-            "filename": attachment.get("filename") or attachment.get("name"),
-            "content_type": attachment.get("content_type"),
-            "size": attachment.get("size"),
-        }
-        for attachment in attachments
-        if isinstance(attachment, dict)
-    ]
-
-
-def build_thread_text(
-    *,
-    current_email_content: str,
-    structured_history_messages: Optional[List[Dict[str, Any]]],
-    ocr_results: Any,
-    raw_data: Any,
-    email_subject: Optional[str],
-) -> Tuple[str, Dict[str, Any]]:
-    parts = []
-    if email_subject:
-        parts.append(f"Subject: {email_subject}")
-    if structured_history_messages:
-        for msg in structured_history_messages:
-            sender = msg.get("from") or msg.get("sender") or msg.get("author_email") or "Unknown"
-            body = msg.get("body") or msg.get("text_body") or ""
-            parts.append(f"Previous message from {sender}:\n{body}")
-    if current_email_content:
-        parts.append(f"Current message:\n{current_email_content}")
-    ocr_text = _ocr_text_from_results(ocr_results)
-    if ocr_text:
-        parts.append(f"OCR text:\n{ocr_text}")
-    attachments = _attachment_summary(raw_data)
-    if attachments:
-        parts.append(f"Attachments:\n{attachments}")
-    return "\n\n".join(parts), {"ocr_chars": len(ocr_text), "attachments": attachments}
 
 
 def _extract_patient_ids(text: str) -> List[str]:
@@ -404,19 +338,26 @@ async def handle_bill_offer_request(
     )
 
     try:
-        thread_text, context_meta = build_thread_text(
+        bill_offer_context = build_bill_offer_context(
+            front_conversation_id=front_conversation_id,
             current_email_content=current_email_content,
             structured_history_messages=structured_history_messages,
             ocr_results=ocr_results,
             raw_data=raw_data,
             email_subject=email_subject,
+            email_sender=email_sender,
+            extracted_patient_ids=extracted_patient_ids,
         )
+        thread_text = bill_offer_context.get("thread_text", "")
+        context_meta = bill_offer_context.get("context_sources", {})
         await run_logger.log(
             "thread_loaded",
             BillOfferAgentStepStatus.COMPLETED,
             output_snapshot={
                 "thread_chars": len(thread_text),
-                "history_count": len(structured_history_messages or []),
+                "message_count": len(bill_offer_context.get("messages", [])),
+                "document_count": len(bill_offer_context.get("documents", [])),
+                "attachment_count": len(bill_offer_context.get("attachments", [])),
                 **context_meta,
             },
         )
@@ -453,11 +394,17 @@ async def handle_bill_offer_request(
                 message="Could not resolve patient",
             )
 
-        extracted_facts = extract_bill_offer_facts(thread_text)
+        extracted_facts = extract_bill_offer_facts_structured(bill_offer_context)
         await run_logger.log(
             "offer_facts_extracted",
             BillOfferAgentStepStatus.COMPLETED,
-            output_snapshot={"fields": list(extracted_facts.keys()), "facts": extracted_facts},
+            output_snapshot={
+                "fields": [field for field in extracted_facts.keys() if not field.startswith("_")],
+                "document_facts_count": len(extracted_facts.get("_document_facts") or []),
+                "conflicts_count": len(extracted_facts.get("_conflicts") or []),
+                "meta": extracted_facts.get("_meta", {}),
+                "facts": extracted_facts,
+            },
         )
 
         async with AsyncSessionLocal() as db:
