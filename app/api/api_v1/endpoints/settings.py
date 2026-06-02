@@ -1110,6 +1110,10 @@ async def get_autorespond_settings(
                 "label": "Bill or Balance Request",
                 "description": "Automatic responses to bill or balance request emails"
             },
+            "bill_offer": {
+                "label": "Bill Offer",
+                "description": "Extracts bill offer details, prepares missing-information replies, and routes completed intakes for Phase 2 review."
+            },
             "case_updates": {
                 "label": "Case Updates",
                 "description": "Automatic responses to case update emails (Drop Pending, Promise to send payment, etc.)"
@@ -1148,6 +1152,11 @@ async def get_autorespond_settings(
                 enabled=settings.get("autorespond_bill_balance_request", True),
                 label=autorespond_info["bill_balance_request"]["label"],
                 description=autorespond_info["bill_balance_request"]["description"]
+            ),
+            bill_offer=AutorespondSettingDetail(
+                enabled=settings.get("autorespond_bill_offer", False),
+                label=autorespond_info["bill_offer"]["label"],
+                description=autorespond_info["bill_offer"]["description"]
             ),
             case_updates=AutorespondSettingDetail(
                 enabled=settings.get("autorespond_case_updates", True),
@@ -1196,6 +1205,7 @@ async def toggle_autorespond_setting(
             "autorespond_apt_status_req",
             "autorespond_medical_records",
             "autorespond_bill_balance_request",
+            "autorespond_bill_offer",
             "autorespond_case_updates",
             "autorespond_missing_lien_request",
             "autorespond_liens"

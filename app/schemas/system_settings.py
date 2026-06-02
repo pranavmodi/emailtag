@@ -51,6 +51,7 @@ class AllAutorespondSettingsResponse(BaseModel):
     apt_status_req: AutorespondSettingDetail
     medical_records: AutorespondSettingDetail
     bill_balance_request: AutorespondSettingDetail
+    bill_offer: AutorespondSettingDetail
     case_updates: AutorespondSettingDetail
     missing_lien_request: AutorespondSettingDetail
     liens: AutorespondSettingDetail

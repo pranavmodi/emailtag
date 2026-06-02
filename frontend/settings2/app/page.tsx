@@ -90,6 +90,12 @@ const AUTORESPOND_LAYOUT: Array<{
     accent: "from-fuchsia-500 to-rose-500",
     icon: FileWarning,
   },
+  {
+    key: "bill_offer",
+    settingKey: "autorespond_bill_offer",
+    accent: "from-amber-500 to-orange-500",
+    icon: PiggyBank,
+  },
   // Note: liens removed from here - now uses custom 3-way toggle (off/sandbox/production)
 ];
 

@@ -16,3 +16,4 @@ from .pif_pipeline import PifOutreachPipeline  # noqa
 from .conversation_log import ConversationLog  # noqa
 from .autorespond_event import AutorespondEvent  # noqa
 from .inbox_audit import InboxAuditRun, InboxAuditMiss  # noqa
+from .bill_offer import BillOfferIntake, BillOfferAgentLog, BillOfferCorrectionAudit  # noqa

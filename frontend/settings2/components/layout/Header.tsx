@@ -98,6 +98,13 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: "🛡️",
     primary: false,
   },
+  {
+    href: "/bill-offers",
+    label: "Bill Offers",
+    description: "Review bill offer intakes and agent logs",
+    icon: "💵",
+    primary: false,
+  },
 ];
 
 interface HeaderProps {

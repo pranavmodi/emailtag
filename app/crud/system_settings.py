@@ -237,12 +237,14 @@ class CRUDSystemSettings:
             "autorespond_bill_balance_request",
             "autorespond_case_updates",
             "autorespond_missing_lien_request",
+            "autorespond_bill_offer",
             "autorespond_liens"  # Consolidated liens setting (replaces PSL/ASL)
         ]
 
         settings = {}
         for setting_key in autorespond_types:
-            settings[setting_key] = await self.get_setting_value(db, setting_key, default=True)
+            default = False if setting_key == "autorespond_bill_offer" else True
+            settings[setting_key] = await self.get_setting_value(db, setting_key, default=default)
 
         return settings
 
@@ -261,10 +263,11 @@ class CRUDSystemSettings:
         Returns:
             True if enabled, False otherwise (defaults to True if not set)
         """
+        default = False if autorespond_type == "autorespond_bill_offer" else True
         enabled = await self.get_setting_value(
             db,
             autorespond_type,
-            default=True
+            default=default
         )
         return enabled
 
@@ -295,6 +298,7 @@ class CRUDSystemSettings:
             "autorespond_apt_status_req": "Enable/disable automatic responses to appointment status request emails (Apt status req tag)",
             "autorespond_medical_records": "Enable/disable automatic responses to medical records requests (Release of Records, Image Request, CD Requests, Reports Request)",
             "autorespond_bill_balance_request": "Enable/disable automatic responses to bill or balance request emails",
+            "autorespond_bill_offer": "Enable/disable the Bill Offer intake agent",
             "autorespond_case_updates": "Enable/disable automatic responses to case update emails (Drop Pending, Promise to send payment, etc.)",
             "autorespond_missing_lien_request": "Enable/disable automatic responses to missing lien request emails",
             "autorespond_psl_lien": "Enable/disable automatic responses to Patient Signed Lien (PSL) emails",

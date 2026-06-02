@@ -28,6 +28,7 @@ from app.models.processing_trace import StepTypes, TraceSteps, TraceStatus
 from app.agents.apt_status_req_agent import handle_apt_status_request_agent_sdk
 from app.agents.release_records_autorespond import handle_release_of_records_request
 from app.agents.bill_balance_request_agent import handle_bill_balance_request
+from app.agents.bill_offer_agent import handle_bill_offer_request
 from app.agents.case_updates_agent import handle_case_update_request
 from app.agents.missing_lien_request_agent import handle_missing_lien_request
 # Unified lien agent (replaces separate ASL/PSL agents, but keeps backward compatibility wrappers)
@@ -333,7 +334,26 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
         document_results = email_obj.ocr_results if hasattr(email_obj, 'ocr_results') and email_obj.ocr_results else None
 
         # --- Human Review Check for various tags ---
-        triggered_human_review_tags = [tag for tag in applied_tag_names if tag in TAGS_REQUIRING_HUMAN_REVIEW]
+        bill_offer_should_run = False
+        bill_offer_review_required = True
+        if BILL_OFFER_TAG_NAME in applied_tag_names:
+            bill_offer_should_run = asyncio.run(_check_autorespond_enabled("autorespond_bill_offer"))
+
+            async def _check_bill_offer_review_required():
+                async with AsyncSessionLocal() as async_db:
+                    return await system_settings_crud.get_setting_value(
+                        async_db,
+                        "autorespond_bill_offer_review_required",
+                        default=True,
+                    )
+
+            bill_offer_review_required = asyncio.run(_check_bill_offer_review_required())
+
+        triggered_human_review_tags = [
+            tag for tag in applied_tag_names
+            if tag in TAGS_REQUIRING_HUMAN_REVIEW
+            and not (tag == BILL_OFFER_TAG_NAME and bill_offer_should_run)
+        ]
 
         if triggered_human_review_tags:
             logger.info(f"Email {email_id} requires human review due to tags: {triggered_human_review_tags}. Applying '{HUMAN_REVIEW_TAG_NAME}' tag.")
@@ -373,7 +393,9 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
 
         # Determine which agent will handle this email
         _selected_agent = "none"
-        if APT_STATUS_REQ_TAG_NAME in applied_tag_names:
+        if bill_offer_should_run:
+            _selected_agent = "bill_offer"
+        elif APT_STATUS_REQ_TAG_NAME in applied_tag_names:
             _selected_agent = "apt_status_req"
         elif any(tag in applied_tag_names for tag in MEDICAL_RECORDS_TAGS):
             _selected_agent = "medical_records"
@@ -398,7 +420,44 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
             output_data={"agent": _selected_agent}
         )
 
-        if APT_STATUS_REQ_TAG_NAME in applied_tag_names:
+        if bill_offer_should_run:
+            agent_name_for_status = "bill_offer"
+            agent_result_dict = None
+
+            async def _run_bill_offer_agent():
+                nonlocal agent_result_dict
+                agent_result_dict = await handle_bill_offer_request(
+                    front_conversation_id=front_conversation_id,
+                    current_email_content=current_email_content,
+                    structured_history_messages=structured_history_messages,
+                    email_sender=sender_email,
+                    email_subject=email_obj.subject,
+                    extracted_patient_ids=email_obj.extracted_patient_ids or [],
+                    ocr_results=document_results,
+                    raw_data=email_obj.raw_data,
+                    email_id=email_obj.id,
+                    send_reply=not bill_offer_review_required,
+                    triggered_by="autorespond",
+                )
+
+            try:
+                asyncio.run(_run_bill_offer_agent())
+            except Exception as e:
+                logger.error(f"Error running Bill Offer agent for {email_id}: {e}", exc_info=True)
+                agent_result_dict = {
+                    "agent_handled": False,
+                    "processed_flag": False,
+                    "details": {"reason": f"Agent execution error: {e}"},
+                }
+
+            if agent_result_dict:
+                agent_handled_response = agent_result_dict.get("agent_handled", False)
+                auto_response_processed_flag = agent_result_dict.get("processed_flag", False)
+                auto_response_details = agent_result_dict.get("details", {"reason": "Unknown Bill Offer agent outcome"})
+            else:
+                auto_response_details = {"reason": "Bill Offer agent call failed or returned None."}
+
+        elif APT_STATUS_REQ_TAG_NAME in applied_tag_names:
             # Check if apt status test mode is enabled
             async def _check_apt_status_test_mode():
                 async with AsyncSessionLocal() as async_db:

@@ -548,3 +548,226 @@ The following belong to Phase 2 and should not be built as part of this mileston
 - marking successfully imported offers as `Resolved`;
 - AI counter-offer calculation;
 - billing-team counter-offer approval workflow.
+
+## Follow-Up Goal Prompt — LLM Extraction, Document Structuring, And UI Gaps
+
+Use this prompt after the initial Phase 1 scaffold exists and needs to be hardened.
+
+Prompt-design notes used:
+
+- OpenAI Codex guidance recommends using goals for durable, long-running work and giving Codex a clear objective, repo context, success criteria, validation commands, and stop conditions.
+- OpenAI Codex best practices recommend structuring substantial prompts like GitHub issues, including relevant file paths, implementation patterns, and verification expectations.
+- OpenAI prompt-engineering guidance recommends putting instructions first, separating instructions from context, being specific about desired output, and defining structured output formats.
+
+Reference links:
+
+- https://developers.openai.com/codex/use-cases/follow-goals
+- https://openai.com/business/guides-and-resources/how-openai-uses-codex/
+- https://help.openai.com/en/articles/6654000-best-practices-for-prompt-engineering-with-openai-api
+
+```md
+/goal
+Objective:
+Harden Phase 1 of the Bill Offer Agent so extraction and review are production-ready. Replace the current deterministic/regex Bill Offer extraction with LLM-backed structured extraction over the complete Front conversation and all available document/OCR context, add structured LLM document extraction for offer-relevant attachment data, complete the Settings2 review UI gaps, and verify the full workflow with focused tests.
+
+Context:
+- Current Phase 1 scaffold exists in:
+  - `app/agents/bill_offer_agent.py`
+  - `app/services/bill_offer_extraction_service.py`
+  - `app/api/api_v1/endpoints/bill_offers.py`
+  - `app/crud/bill_offer.py`
+  - `app/models/bill_offer.py`
+  - `app/schemas/bill_offer.py`
+  - `frontend/settings2/app/bill-offers/page.tsx`
+  - `frontend/settings2/lib/api.ts`
+  - `frontend/settings2/lib/types.ts`
+  - `app/tasks/autorespond.py`
+- The current extractor is mostly regex-based and should be replaced or wrapped with an LLM service that returns structured data.
+- Current tagging patient lookup already uses full Front conversation text when available:
+  - `app/tasks/email.py` calls `get_conversation_text(front_conversation_id)` before tagging and before early patient ID extraction.
+  - `get_conversation_text` returns chronological full-thread text plus `_structured_messages`.
+  - `extract_all_patient_ids_from_email_logic` then uses regex plus OpenAI name/date extraction and MCP lookup.
+  - If Front conversation text is unavailable, the system falls back to the current email body.
+- Bill Offer extraction should follow the same full-thread principle, but must also include all document/OCR context in a structured way.
+
+Scope:
+- Backend FastAPI/Celery code under `app/`
+- Bill Offer extraction services and agent orchestration
+- OpenAI/LLM structured extraction prompts and schemas
+- Document/OCR aggregation for all messages in a Front conversation where available
+- Bill Offer review APIs if extra response fields are needed by the UI
+- Settings2 Bill Offers UI under `frontend/settings2`
+- Focused tests under `test/`
+- This Phase 1 plan document if implementation details change
+
+Requirements:
+
+1. LLM-backed offer extraction
+- Replace the current deterministic-only Bill Offer extraction path with an LLM-backed structured extraction service.
+- The service must prepare all available emails in the Front conversation as context, not just the latest message.
+- Preserve chronological message boundaries, sender/recipient metadata, timestamps, subject, and direction/author role when available.
+- The LLM must return a structured response for the four required fields:
+  - `settlement_amount`
+  - `total_medical_bills`
+  - `medpay_status`
+  - `precise_offer_amount`
+- Each field must include:
+  - normalized value;
+  - original evidence text;
+  - source type: `email_body`, `prior_thread_message`, `ocr_text`, `attachment_document`, `subject`, or `user_correction`;
+  - source identifiers when available: message ID, attachment ID/name, page number, or OCR item index;
+  - confidence score;
+  - ambiguity notes when applicable.
+- `precise_offer_amount` remains critical. If the LLM is unsure whether an amount is specifically toward Precise Imaging, treat it as missing and include the ambiguity in evidence/notes.
+- Use structured-output parsing or a Pydantic-compatible validation layer so downstream code receives a predictable schema.
+- Keep deterministic regex extraction only as a fallback or cross-check, not as the primary extraction method.
+- Add logging for LLM extraction request shape, response validation, fallback usage, missing fields, and any parse failures. Do not log secrets.
+
+2. LLM-backed document extraction
+- All attachments/documents available to the Bill Offer intake must be represented in the extraction context.
+- If OCR text already exists on the email record, include it.
+- If document processing results contain structured document analysis, enhanced lien data, split document data, filenames, content types, page counts, or OCR snippets, include the relevant parts.
+- Add a document extraction/normalization step that asks the LLM to identify offer-relevant facts inside documents and return structured document facts.
+- Document extraction output should include:
+  - document identifier and filename;
+  - document type if known;
+  - page-level or section-level evidence when available;
+  - any extracted settlement amount, total medical bills, med-pay status, Precise Imaging offer amount, patient identifiers, patient name, DOB, DOI, attorney/firm names, and notes;
+  - confidence and ambiguity notes.
+- The final offer fact extractor must merge email-thread facts and document facts into one effective extracted-facts object.
+- If email text and document text conflict, preserve both pieces of evidence and mark the field ambiguous unless one source is clearly more reliable by documented rules.
+
+3. Conversation and document context aggregation
+- Build a Bill Offer context builder, or expand the existing one, so the agent has a single structured input containing:
+  - current email body;
+  - full Front conversation messages;
+  - subject;
+  - sender and original sender email;
+  - recipients;
+  - timestamps;
+  - OCR results;
+  - raw attachment metadata;
+  - document-processing output;
+  - extracted patient IDs already stored on the email.
+- Prefer structured messages over raw concatenated text where possible.
+- Make clear in logs whether context came from Front full conversation retrieval, DB email fields, OCR results, attachment metadata, or fallback current-body-only mode.
+
+4. Patient lookup behavior
+- Do not regress current tagging behavior.
+- Bill Offer patient lookup should reuse the same principle as tagging: full-conversation context first, fallback to latest/current email only when Front conversation retrieval fails.
+- Existing extracted patient IDs can still be used first, but validate or fetch patient context before treating the patient as found.
+- Preserve lookup order unless a safer local pattern exists:
+  - existing extracted patient IDs;
+  - patient ID found in full conversation or document context;
+  - name + DOB;
+  - name + DOI.
+- Add tests proving Bill Offer lookup uses full-thread context when a patient ID or name/date appears only in a prior message.
+
+5. Settings2 UI gaps
+- Improve `/bill-offers` so reviewers can complete Phase 1 without leaving the page.
+- Add a direct link to the Front conversation for each selected Bill Offer conversation. Use the existing Front URL/base-url pattern if present in the repo; otherwise derive the safest URL from the conversation ID and document the assumption.
+- The queue/list should show:
+  - conversation ID;
+  - subject;
+  - sender;
+  - received date;
+  - intake exists / not processed;
+  - patient match;
+  - status;
+  - missing fields;
+  - confidence summary;
+  - last updated;
+  - last agent run status.
+- The detail panel should show:
+  - conversation metadata;
+  - Front conversation link;
+  - original sender email;
+  - matched patient details;
+  - editable patient ID or patient match fields;
+  - lien total;
+  - study table;
+  - extracted facts;
+  - corrected facts;
+  - evidence snippets for each field;
+  - source and confidence for each field;
+  - document-derived facts;
+  - missing-fields summary;
+  - reply preview;
+  - chronological agent logs with expandable input/output/error details.
+- User corrections must continue to save to `corrected_facts` and must not overwrite raw `extracted_facts`.
+- If correction audit history is available from the backend, expose it in the detail view. If not, add the smallest API needed to retrieve it.
+- Add a visible control or status indicator for `autorespond_bill_offer_review_required` if the current settings UI does not expose it.
+
+6. Reply/status behavior
+- Preserve Phase 1 statuses:
+  - patient not found -> `pending_patient`
+  - patient found but offer details missing -> `pending_details`
+  - all four required details present -> `ready_for_phase_2`
+  - manual review requested -> `manual_review`
+- Replies must still follow the spec:
+  - patient-not-found reply asks for patient ID, name + DOB, or name + DOI;
+  - missing-details reply asks only for missing items;
+  - missing `precise_offer_amount` is listed first;
+  - present `precise_offer_amount` is echoed at the top;
+  - patient block, lien total, and studies table appear below the offer confirmation or missing-info request.
+- Completed Phase 1 intakes should not create portal records or draft counter-offers.
+
+Success criteria:
+- Bill Offer extraction uses an LLM as the primary extractor.
+- LLM extraction consumes full conversation context, including prior thread messages, not just the latest message.
+- Document/OCR context is normalized and processed by the LLM into structured offer-relevant facts.
+- Extracted facts include value, evidence, source, confidence, and ambiguity notes.
+- Conflicts between email and document evidence are represented explicitly instead of silently overwritten.
+- Missing-field computation still uses corrected facts over extracted facts.
+- Missing `precise_offer_amount` remains critical and first in the missing list.
+- Patient lookup for Bill Offers works when identifiers are present only in prior thread messages.
+- `/settings2/bill-offers` includes a Front conversation link.
+- `/settings2/bill-offers` displays the patient, lien, studies, extracted facts, corrected facts, evidence, document facts, missing fields, confidence, reply preview, actions, and expandable logs.
+- Review-required mode remains conservative by default.
+- Existing non-Bill Offer autorespond behavior is preserved.
+- Phase 2 portal import and counter-offer workflows remain out of scope.
+
+Tests and verification:
+- Add or update backend tests for:
+  - LLM extraction response parsing;
+  - malformed LLM response fallback/manual-review behavior;
+  - full-thread extraction where required facts are split across multiple emails;
+  - document/OCR fact extraction;
+  - conflict handling between email and document facts;
+  - patient lookup from prior-thread context;
+  - `precise_offer_amount` critical missing behavior;
+  - corrected facts overriding extracted facts;
+  - tagged-email listing, manual trigger, logs, correction audit retrieval, and send-reply behavior.
+- Add or update frontend tests if the project has a pattern for Settings2 UI tests.
+- Run:
+  - `venv/bin/python -m pytest test/test_bill_offer_extraction_service.py test/test_bill_offer_api.py`
+  - any new focused Bill Offer tests added under `test/`
+  - `cd frontend/settings2 && npm run lint`
+  - `cd frontend/settings2 && npm run build`
+- If any verification cannot run, document the exact command, failure, and blocker.
+
+Constraints:
+- Keep changes scoped to Phase 1 hardening.
+- Do not implement portal record creation.
+- Do not implement AI counter-offer calculation.
+- Do not remove human-review safeguards.
+- Do not overwrite raw extracted facts when reviewers make corrections.
+- Do not log PHI beyond the existing application logging pattern; prefer summaries, IDs, and evidence snippets only where required for review/debugging.
+- Follow existing FastAPI, SQLAlchemy, Celery, Pydantic, OpenAI client, and Settings2 component patterns.
+
+Iteration policy:
+Inspect the current implementation before editing. Work in small vertical slices:
+1. context builder;
+2. LLM extraction schema/service;
+3. document fact extraction;
+4. agent integration and status/reply preservation;
+5. UI gap closure;
+6. tests and verification.
+After each slice, run the narrowest useful test or type/build check and fix regressions before continuing.
+
+Stop condition:
+Stop only when the success criteria are implemented and verified, or when a concrete external blocker prevents completion. If blocked, document exactly what is missing, what was completed, and the smallest decision or dependency needed to continue.
+
+Final report:
+Summarize files changed, APIs added or changed, UI changes, LLM extraction behavior, document extraction behavior, patient lookup behavior, verification commands run, and remaining risks.
+```
