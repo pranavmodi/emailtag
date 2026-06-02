@@ -269,8 +269,14 @@ def process_email(email_id: str) -> Dict:
             for attachment in attachments_data:
                 attachment_url = attachment.get("url")
                 if attachment_url:
+                    filename = attachment.get("filename") or attachment.get("name")
+                    content_type = attachment.get("content_type") or attachment.get("type")
                     # send_attachment_to_ocr.delay(email_id, attachment_url)
-                    send_attachment_to_document_processing.apply_async(args=[email_id, attachment_url], queue='processing')
+                    send_attachment_to_document_processing.apply_async(
+                        args=[email_id, attachment_url],
+                        kwargs={"filename": filename, "content_type": content_type},
+                        queue='processing'
+                    )
                 else:
                     logger.warning(f"Attachment for email {email_id} is missing a URL. Decrementing total.")
                     # If an attachment has no URL, we should decrement the total count
@@ -1753,4 +1759,4 @@ def analyze_all_tags_task(self, target_date_str: str, hour: Optional[int] = None
         }
 
     finally:
-        db.close() 
+        db.close()

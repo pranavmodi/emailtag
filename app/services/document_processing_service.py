@@ -8,6 +8,9 @@ including document type identification, patient ID extraction, and content analy
 import logging
 import tempfile
 import os
+import io
+import zipfile
+import xml.etree.ElementTree as ET
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 from pydantic import BaseModel
@@ -47,6 +50,19 @@ class DocumentProcessingService:
             Document type string
         """
         filename_lower = filename.lower()
+
+        # Office documents are ZIP containers, so extension must be checked before
+        # treating any PK signature as an unsupported generic ZIP.
+        if filename_lower.endswith('.pdf'):
+            return "pdf"
+        elif filename_lower.endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff')):
+            return "image"
+        elif filename_lower.endswith(('.doc', '.docx')):
+            return "word_document"
+        elif filename_lower.endswith(('.xls', '.xlsx')):
+            return "excel_document"
+        elif filename_lower.endswith('.txt'):
+            return "text"
         
         # Check by file signature
         if file_content.startswith(b'%PDF-'):
@@ -60,19 +76,50 @@ class DocumentProcessingService:
         elif file_content.startswith(b'\x50\x4b'):
             return "zip_based"  # Could be docx, xlsx, etc.
         
-        # Check by file extension
-        if filename_lower.endswith('.pdf'):
-            return "pdf"
-        elif filename_lower.endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff')):
-            return "image"
-        elif filename_lower.endswith(('.doc', '.docx')):
-            return "word_document"
-        elif filename_lower.endswith(('.xls', '.xlsx')):
-            return "excel_document"
-        elif filename_lower.endswith('.txt'):
-            return "text"
-        
         return "unknown"
+
+    def _extract_docx_text(self, file_content: bytes) -> str:
+        """Extract readable text from a DOCX using the standard ZIP/XML structure."""
+        text_parts: List[str] = []
+        namespaces = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        with zipfile.ZipFile(io.BytesIO(file_content)) as archive:
+            xml_names = [
+                name for name in archive.namelist()
+                if name == "word/document.xml"
+                or name.startswith("word/header")
+                or name.startswith("word/footer")
+            ]
+            for xml_name in xml_names:
+                root = ET.fromstring(archive.read(xml_name))
+                for paragraph in root.findall(".//w:p", namespaces):
+                    paragraph_text = "".join(
+                        node.text or "" for node in paragraph.findall(".//w:t", namespaces)
+                    ).strip()
+                    if paragraph_text:
+                        text_parts.append(paragraph_text)
+        return "\n".join(text_parts)
+
+    def _extract_pdf_text(self, file_content: bytes) -> Dict[str, Any]:
+        """Extract embedded PDF text when available without making a network call."""
+        try:
+            from PyPDF2 import PdfReader
+
+            reader = PdfReader(io.BytesIO(file_content))
+            page_results = []
+            text_parts = []
+            for page_index, page in enumerate(reader.pages):
+                page_text = page.extract_text() or ""
+                page_text = page_text.strip()
+                if page_text:
+                    page_results.append({"page": page_index + 1, "text": page_text})
+                    text_parts.append(page_text)
+            return {
+                "extracted_text": "\n\n".join(text_parts),
+                "page_results": page_results,
+            }
+        except Exception as exc:
+            logger.warning(f"PDF embedded text extraction failed: {exc}")
+            return {"extracted_text": "", "page_results": []}
     
     async def _analyze_document_with_structured_output(self, file_content: bytes, filename: str) -> Dict[str, Any]:
         """
@@ -407,12 +454,15 @@ ANALYSIS REQUIREMENTS:
         try:
             # Run structured document analysis
             analysis_result = await self._analyze_document_with_structured_output(file_content, filename)
+            text_result = self._extract_pdf_text(file_content)
             
             return {
                 "document_type": "pdf",
                 "filename": filename,
                 "file_size": len(file_content),
                 "document_analysis": analysis_result,
+                "extracted_text": text_result.get("extracted_text", ""),
+                "page_results": text_result.get("page_results", []),
                 "processing_status": "completed"
             }
             
@@ -494,6 +544,43 @@ ANALYSIS REQUIREMENTS:
                 "processing_status": "failed"
             }
     
+    async def _process_word_document(self, file_content: bytes, filename: str) -> Dict[str, Any]:
+        """
+        Process DOCX documents by extracting readable text.
+
+        Older .doc binary files are not supported by this lightweight parser.
+        """
+        try:
+            if not filename.lower().endswith(".docx"):
+                return {
+                    "document_type": "word_document",
+                    "filename": filename,
+                    "file_size": len(file_content),
+                    "processing_status": "unsupported",
+                    "message": "Legacy .doc files are not supported for text extraction",
+                }
+
+            text_content = self._extract_docx_text(file_content)
+            return {
+                "document_type": "word_document",
+                "filename": filename,
+                "file_size": len(file_content),
+                "text_content": text_content,
+                "extracted_text": text_content,
+                "character_count": len(text_content),
+                "line_count": len(text_content.splitlines()),
+                "processing_status": "completed",
+            }
+        except Exception as e:
+            logger.error(f"Error processing Word document {filename}: {e}", exc_info=True)
+            return {
+                "document_type": "word_document",
+                "filename": filename,
+                "file_size": len(file_content),
+                "error": str(e),
+                "processing_status": "failed",
+            }
+
     async def _process_unknown_document(self, file_content: bytes, filename: str) -> Dict[str, Any]:
         """
         Process unknown document type with basic metadata extraction.
@@ -526,23 +613,25 @@ ANALYSIS REQUIREMENTS:
         """
         
         # Determine document type
-        doc_type = self._determine_document_type(file_content, filename)
+        detected_file_type = self._determine_document_type(file_content, filename)
         
         # Process based on type
-        if doc_type == "pdf":
+        if detected_file_type == "pdf":
             result = await self._process_pdf_document(file_content, filename)
-        elif doc_type in ["image", "png", "jpeg", "gif"]:
+        elif detected_file_type in ["image", "png", "jpeg", "gif"]:
             result = await self._process_image_document(file_content, filename)
-        elif doc_type == "text":
+        elif detected_file_type == "text":
             result = await self._process_text_document(file_content, filename)
+        elif detected_file_type == "word_document":
+            result = await self._process_word_document(file_content, filename)
         else:
             result = await self._process_unknown_document(file_content, filename)
         
         # Check if this is a lien document and apply enhanced processing
-        doc_type = result.get('document_analysis', {}).get('data', {}).get('document_type', '')
+        classified_doc_type = result.get('document_analysis', {}).get('data', {}).get('document_type', '')
         description = result.get('document_analysis', {}).get('data', {}).get('description', '').lower()
 
-        logger.info(f"🔍 CHECKING LIEN STATUS for {filename}: success={result.get('document_analysis', {}).get('success')}, doc_type={doc_type}")
+        logger.info(f"🔍 CHECKING LIEN STATUS for {filename}: success={result.get('document_analysis', {}).get('success')}, doc_type={classified_doc_type}")
 
         # Check if enhanced lien processing should be applied:
         # 1. Document type is explicitly "lien"
@@ -551,10 +640,10 @@ ANALYSIS REQUIREMENTS:
         should_apply_enhanced_processing = False
 
         if result.get("document_analysis", {}).get("success"):
-            if doc_type == "lien":
+            if classified_doc_type == "lien":
                 should_apply_enhanced_processing = True
                 logger.info(f"🔍 LIEN DETECTED (by type): Applying enhanced lien processing to {filename}")
-            elif doc_type == "patient_demo":
+            elif classified_doc_type == "patient_demo":
                 should_apply_enhanced_processing = True
                 logger.info(f"🔍 PATIENT DEMO DETECTED (by type): Applying enhanced lien processing to {filename}")
             elif any(keyword in description for keyword in ['lien agreement', 'lien document', 'personal injury lien', 'radiologist lien', 'technologist lien', 'tech lien', 'rad lien']):
@@ -577,7 +666,7 @@ ANALYSIS REQUIREMENTS:
             logger.info(f"🔍 LIEN PROCESSING SKIPPED for {filename} - not a lien document or processing failed")
 
         # --- RX PROVIDER CREDENTIAL EXTRACTION ---
-        if doc_type == "rx":
+        if classified_doc_type == "rx":
             try:
                 result = await self._extract_rx_provider_credentials(file_content, filename, result)
                 logger.info(f"✅ RX CREDENTIAL EXTRACTION COMPLETED for {filename}")
@@ -587,7 +676,7 @@ ANALYSIS REQUIREMENTS:
 
         # Add processing metadata
         result.update({
-            "detected_type": doc_type,
+            "detected_type": detected_file_type,
             "provider_info": {
                 "analysis_provider": "openai_structured_outputs"
             }

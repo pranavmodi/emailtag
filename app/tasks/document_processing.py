@@ -1,7 +1,7 @@
 """Document processing tasks using OpenAI-based document analysis."""
 
 import logging
-from typing import Dict
+from typing import Dict, Optional
 from uuid import UUID
 import httpx
 
@@ -27,14 +27,19 @@ DOCUMENT_ERROR_STATUS = "document_processing_error"
 @celery_app.task(name="tasks.send_attachment_to_document_processing", bind=True, 
                  max_retries=3, 
                  default_retry_delay=60)
-def send_attachment_to_document_processing(self, email_id: str, attachment_url: str):
+def send_attachment_to_document_processing(
+    self,
+    email_id: str,
+    attachment_url: str,
+    filename: Optional[str] = None,
+    content_type: Optional[str] = None,
+):
     """
     Downloads an attachment, processes it with document processing service,
     and updates the email record directly.
     """
 
-    # Extract filename for clearer logging
-    filename = attachment_url.split('/')[-1] if '/' in attachment_url else 'attachment'
+    filename = _resolve_attachment_filename(attachment_url, filename, content_type)
     logger.info(f"🔄 DOCUMENT PROCESSING START: {filename} for email {email_id}")
 
     try:
@@ -69,6 +74,28 @@ def send_attachment_to_document_processing(self, email_id: str, attachment_url: 
             log_ctx = clear_conversation_context()
             if log_ctx:
                 flush_conversation_logs(log_ctx)
+
+
+def _resolve_attachment_filename(
+    attachment_url: str,
+    filename: Optional[str] = None,
+    content_type: Optional[str] = None,
+) -> str:
+    """Prefer Front attachment filename, falling back to URL plus content-type hint."""
+    resolved = filename or (attachment_url.split('/')[-1] if '/' in attachment_url else 'attachment')
+    if "." in resolved:
+        return resolved
+
+    extension_by_content_type = {
+        "application/pdf": ".pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+        "application/msword": ".doc",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+        "application/vnd.ms-excel": ".xls",
+        "text/plain": ".txt",
+    }
+    extension = extension_by_content_type.get((content_type or "").split(";")[0].strip().lower())
+    return f"{resolved}{extension}" if extension else resolved
 
 
 def _do_document_processing(self, email_id: str, email_uuid: UUID, attachment_url: str, filename: str):
@@ -123,16 +150,13 @@ def _do_document_processing(self, email_id: str, email_uuid: UUID, attachment_ur
 
     # --- Process Document ---
     try:
-        # Extract filename from URL
-        filename = attachment_url.split('/')[-1] if '/' in attachment_url else 'attachment'
-        
         # Use document processing service
         import asyncio
         service = DocumentProcessingService()
         processing_result = asyncio.run(service.process_document(attachment_content, filename))
 
-        # Log document processing result WITHOUT binary pdf_bytes to avoid massive logs
-        result_summary = {k: v for k, v in processing_result.items() if k != 'enhanced_lien_processing'}
+        # Log processing shape without dumping extracted document text/PHI.
+        result_summary = _processing_result_log_summary(processing_result)
 
         # If enhanced lien processing exists, add a summary without pdf_bytes
         if 'enhanced_lien_processing' in processing_result:
@@ -327,12 +351,23 @@ def _parse_document_processing_result(processing_result: Dict, attachment_url: s
         
         result_dict = {
             "attachment_url": attachment_url,
+            "filename": processing_result.get("filename") or "",
+            "detected_type": processing_result.get("detected_type") or processing_result.get("document_type"),
+            "file_size": processing_result.get("file_size"),
             "patient_id": patient_id,
             "document_type": doc_type,
             "description": description,
             "document_analysis": document_analysis,
             "processing_status": processing_result.get("processing_status")
         }
+
+        for key in ("text_content", "extracted_text", "ocr_text", "content", "summary"):
+            if processing_result.get(key):
+                result_dict[key] = processing_result[key]
+
+        pages = processing_result.get("pages") or processing_result.get("page_results")
+        if pages:
+            result_dict["pages"] = pages
 
         # Include enhanced lien processing data if available (excluding pdf_bytes for JSON serialization)
         if "enhanced_lien_processing" in processing_result:
@@ -362,6 +397,24 @@ def _parse_document_processing_result(processing_result: Dict, attachment_url: s
             "attachment_url": attachment_url,
             "error": f"Failed to parse processing result: {parse_error}"
         }
+
+
+def _processing_result_log_summary(processing_result: Dict) -> Dict:
+    """Summarize document processing output without logging extracted PHI text."""
+    text_keys = {"text_content", "extracted_text", "ocr_text", "content", "summary"}
+    summary = {
+        key: value
+        for key, value in processing_result.items()
+        if key not in text_keys and key not in {"enhanced_lien_processing", "page_results", "pages"}
+    }
+    for key in text_keys:
+        if processing_result.get(key):
+            summary[f"{key}_chars"] = len(str(processing_result[key]))
+    pages = processing_result.get("pages") or processing_result.get("page_results") or []
+    if isinstance(pages, list):
+        summary["page_count"] = len(pages)
+        summary["page_text_chars"] = sum(len(str(page.get("text") or "")) for page in pages if isinstance(page, dict))
+    return summary
 
 
 def _check_document_processing_completion_and_trigger_orchestration(updated_email, completed_count: int, email_id: str, email_uuid_str: str):
