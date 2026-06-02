@@ -202,7 +202,15 @@ export default function BillOffersPage() {
     try {
       const response = await BillOffersApi.runAgent(selectedConversationId);
       await refreshSelected(response.intake);
-      setMessage(`Agent run completed: ${response.run_id}`);
+      if (response.status === "queued") {
+        setMessage(`Agent run queued: ${response.run_id}`);
+        window.setTimeout(() => {
+          loadList();
+          loadConversationDetails(selectedConversationId);
+        }, 3000);
+      } else {
+        setMessage(`Agent run completed: ${response.run_id}`);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to run agent");
     } finally {

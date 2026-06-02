@@ -71,6 +71,7 @@ def test_conversation_log_endpoint(monkeypatch):
 def test_manual_agent_trigger_endpoint(monkeypatch):
     email_id = uuid.uuid4()
     intake_id = uuid.uuid4()
+    queued = {}
 
     async def fake_get_email(db, front_conversation_id):
         return SimpleNamespace(
@@ -85,30 +86,25 @@ def test_manual_agent_trigger_endpoint(monkeypatch):
             raw_data={},
         )
 
-    async def fake_handle(**kwargs):
-        return {
-            "run_id": "run-1",
-            "details": {"status": "pending_details"},
-        }
-
-    async def fake_get_intake(db, front_conversation_id):
+    async def fake_upsert(db, front_conversation_id, values):
+        queued["upsert"] = values
         return SimpleNamespace(
             id=intake_id,
             front_conversation_id=front_conversation_id,
             email_id=email_id,
-            status="pending_details",
-            patient_id="PRE123456",
+            status="pending_patient",
+            patient_id=None,
             patient_match={},
             patient_data={},
             extracted_facts={},
             corrected_facts={},
-            missing_fields=["settlement_amount"],
+            missing_fields=[],
             confidence={},
             original_sender_email="attorney@example.com",
-            last_agent_action="drafted",
-            last_run_id="run-1",
-            last_agent_run_status="completed",
-            reply_draft="Draft",
+            last_agent_action="queued",
+            last_run_id=values["last_run_id"],
+            last_agent_run_status="queued",
+            reply_draft=None,
             reply_sent_at=None,
             reviewed_by=None,
             reviewed_at=None,
@@ -116,10 +112,47 @@ def test_manual_agent_trigger_endpoint(monkeypatch):
             updated_at=datetime(2026, 6, 1, 12, 0, 0),
         )
 
+    async def fake_create_log(db, obj_in):
+        queued["log"] = obj_in
+        return SimpleNamespace(id=uuid.uuid4(), **obj_in.model_dump(), created_at=datetime.utcnow())
+
+    async def fake_get_intake(db, front_conversation_id):
+        return SimpleNamespace(
+            id=intake_id,
+            front_conversation_id=front_conversation_id,
+            email_id=email_id,
+            status="pending_patient",
+            patient_id=None,
+            patient_match={},
+            patient_data={},
+            extracted_facts={},
+            corrected_facts={},
+            missing_fields=[],
+            confidence={},
+            original_sender_email="attorney@example.com",
+            last_agent_action="queued",
+            last_run_id=queued["upsert"]["last_run_id"],
+            last_agent_run_status="queued",
+            reply_draft=None,
+            reply_sent_at=None,
+            reviewed_by=None,
+            reviewed_at=None,
+            created_at=datetime(2026, 6, 1, 12, 0, 0),
+            updated_at=datetime(2026, 6, 1, 12, 0, 0),
+        )
+
+    class FakeTask:
+        id = "celery-task-1"
+
+    def fake_apply_async(**kwargs):
+        queued["task"] = kwargs
+        return FakeTask()
+
     monkeypatch.setattr(bill_offers.crud, "get_latest_bill_offer_email_for_conversation", fake_get_email)
-    monkeypatch.setattr(bill_offers, "get_conversation_text", lambda conversation_id: {"_structured_messages": []})
-    monkeypatch.setattr(bill_offers, "handle_bill_offer_request", fake_handle)
+    monkeypatch.setattr(bill_offers.crud, "upsert_intake_for_conversation", fake_upsert)
+    monkeypatch.setattr(bill_offers.crud, "create_log", fake_create_log)
     monkeypatch.setattr(bill_offers.crud, "get_intake_by_conversation", fake_get_intake)
+    monkeypatch.setattr(bill_offers.run_bill_offer_agent_task, "apply_async", fake_apply_async)
 
     response = asyncio.run(
         bill_offers.run_bill_offer_agent_for_conversation(
@@ -129,9 +162,14 @@ def test_manual_agent_trigger_endpoint(monkeypatch):
         )
     )
 
-    assert response.run_id == "run-1"
+    assert response.status == "queued"
+    assert response.details == {"task_id": "celery-task-1", "queued": True}
     assert response.intake.front_conversation_id == "cnv_123"
-    assert response.intake.last_agent_run_status == "completed"
+    assert response.intake.last_agent_run_status == "queued"
+    assert queued["task"]["queue"] == "processing"
+    assert queued["task"]["kwargs"]["email_id"] == str(email_id)
+    assert queued["task"]["kwargs"]["run_id"] == response.run_id
+    assert queued["log"].step_name == "manual_run_queued"
 
 
 def test_correction_audit_endpoint(monkeypatch):

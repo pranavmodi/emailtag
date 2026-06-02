@@ -319,8 +319,9 @@ async def handle_bill_offer_request(
     email_id: Optional[uuid.UUID] = None,
     send_reply: bool = False,
     triggered_by: Optional[str] = None,
+    run_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    run_id = str(uuid.uuid4())
+    run_id = run_id or str(uuid.uuid4())
     run_logger = BillOfferRunLogger(
         front_conversation_id=front_conversation_id,
         email_id=email_id,

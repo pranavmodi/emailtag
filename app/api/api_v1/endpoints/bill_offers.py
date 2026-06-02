@@ -2,17 +2,17 @@
 
 from datetime import datetime
 from typing import Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.bill_offer_agent import handle_bill_offer_request
 from app.crud import bill_offer as crud
 from app.crud.system_settings import system_settings_crud
 from app.db.session import get_db
-from app.models.bill_offer import BillOfferIntakeStatus
+from app.models.bill_offer import BillOfferAgentStepStatus, BillOfferIntakeStatus
 from app.schemas.bill_offer import (
+    BillOfferAgentLogCreate,
     BillOfferAgentLogListResponse,
     BillOfferCorrectionAuditListResponse,
     BillOfferCorrectionRequest,
@@ -27,13 +27,13 @@ from app.schemas.bill_offer import (
     BillOfferTaggedEmailListResponse,
     BillOfferTaggedEmailResponse,
 )
+from app.tasks.bill_offer import run_bill_offer_agent_task
 from app.services.bill_offer_extraction_service import (
     build_reply_draft,
     compute_missing_fields,
     confidence_summary,
     merge_effective_facts,
 )
-from app.services.frontapp_service import get_conversation_text
 
 router = APIRouter()
 
@@ -223,6 +223,7 @@ async def rerun_bill_offer_check(
 @router.post(
     "/conversations/{front_conversation_id}/run-agent",
     response_model=BillOfferRunAgentResponse,
+    status_code=status.HTTP_202_ACCEPTED,
 )
 async def run_bill_offer_agent_for_conversation(
     front_conversation_id: str,
@@ -238,36 +239,52 @@ async def run_bill_offer_agent_for_conversation(
             detail="No Bill Offer tagged email found for this conversation",
         )
 
-    conversation_data = get_conversation_text(front_conversation_id)
-    structured_history_messages = []
-    if conversation_data and conversation_data.get("_structured_messages"):
-        structured_history_messages = conversation_data["_structured_messages"]
-
-    result = await handle_bill_offer_request(
+    run_id = str(uuid4())
+    intake = await crud.upsert_intake_for_conversation(
+        db,
         front_conversation_id=front_conversation_id,
-        current_email_content=email.content_text or email.content_html or "",
-        structured_history_messages=structured_history_messages,
-        email_sender=email.sender,
-        email_subject=email.subject,
-        extracted_patient_ids=email.extracted_patient_ids or [],
-        ocr_results=email.ocr_results,
-        raw_data=email.raw_data,
-        email_id=email.id,
-        send_reply=payload.send_reply,
-        triggered_by=payload.reviewed_by or "Settings2 manual trigger",
+        values={
+            "email_id": email.id,
+            "original_sender_email": email.sender,
+            "last_run_id": run_id,
+            "last_agent_run_status": "queued",
+            "last_agent_action": "queued",
+        },
+    )
+    await crud.create_log(
+        db,
+        obj_in=BillOfferAgentLogCreate(
+            front_conversation_id=front_conversation_id,
+            email_id=email.id,
+            intake_id=intake.id,
+            run_id=run_id,
+            step_name="manual_run_queued",
+            step_status=BillOfferAgentStepStatus.COMPLETED,
+            input_snapshot={
+                "send_reply": payload.send_reply,
+                "triggered_by": payload.reviewed_by or "Settings2 manual trigger",
+            },
+            output_snapshot={"last_agent_run_status": "queued"},
+            message="Queued Bill Offer agent run",
+        ),
+    )
+    task = run_bill_offer_agent_task.apply_async(
+        kwargs={
+            "front_conversation_id": front_conversation_id,
+            "email_id": str(email.id),
+            "run_id": run_id,
+            "send_reply": payload.send_reply,
+            "triggered_by": payload.reviewed_by or "Settings2 manual trigger",
+        },
+        queue="processing",
     )
 
-    intake = await crud.get_intake_by_conversation(db, front_conversation_id)
-    if not intake:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Agent completed without creating an intake",
-        )
+    intake = await crud.get_intake_by_conversation(db, front_conversation_id) or intake
     return BillOfferRunAgentResponse(
-        status=result.get("details", {}).get("status", "completed"),
-        run_id=result.get("run_id", ""),
+        status="queued",
+        run_id=run_id,
         intake=intake,
-        details=result.get("details", {}),
+        details={"task_id": task.id, "queued": True},
     )
 
 
