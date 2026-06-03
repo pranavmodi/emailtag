@@ -48,6 +48,8 @@ const STATUS_STYLES: Record<string, string> = {
   manual_review: "bg-rose-100 text-rose-700",
 };
 
+const TERMINAL_RUN_STATUSES = new Set(["completed", "failed"]);
+
 function formatDate(value?: string | null) {
   if (!value) return "-";
   try {
@@ -131,15 +133,18 @@ export default function BillOffersPage() {
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const [pollingRun, setPollingRun] = useState<{ conversationId: string; runId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const currentPage = useMemo(() => getCurrentPageInfo("/bill-offers"), []);
   const selectedItem = items.find((item) => item.front_conversation_id === selectedConversationId) || null;
 
-  const loadList = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const loadList = useCallback(async (options?: { showLoading?: boolean; setErrors?: boolean }) => {
+    const showLoading = options?.showLoading !== false;
+    const setErrors = options?.setErrors !== false;
+    if (showLoading) setLoading(true);
+    if (setErrors) setError(null);
     try {
       const [response, settings] = await Promise.all([
         BillOffersApi.listTaggedEmails({ limit: 200 }),
@@ -154,10 +159,14 @@ export default function BillOffersPage() {
         setSelectedConversationId(selected.front_conversation_id);
         setSelectedIntake(selected.intake ?? null);
       }
+      return response.items;
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load Bill Offers");
+      if (setErrors) {
+        setError(err instanceof ApiError ? err.message : "Failed to load Bill Offers");
+      }
+      return null;
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [selectedConversationId]);
 
@@ -179,6 +188,53 @@ export default function BillOffersPage() {
       loadConversationDetails(selectedConversationId);
     }
   }, [selectedConversationId, loadConversationDetails]);
+
+  useEffect(() => {
+    if (!pollingRun) return;
+
+    let cancelled = false;
+    let inFlight = false;
+    let timeoutId: number | null = null;
+
+    const poll = async () => {
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      try {
+        const nextItems = await loadList({ showLoading: false, setErrors: false });
+        await loadConversationDetails(pollingRun.conversationId);
+        if (cancelled || !nextItems) return;
+
+        const item = nextItems.find(
+          (candidate) => candidate.front_conversation_id === pollingRun.conversationId
+        );
+        const intake = item?.intake;
+        if (!intake || intake.last_run_id !== pollingRun.runId) return;
+
+        const runStatus = intake.last_agent_run_status || "";
+        if (TERMINAL_RUN_STATUSES.has(runStatus)) {
+          setPollingRun(null);
+          setMessage(
+            runStatus === "completed"
+              ? `Agent run completed: ${pollingRun.runId}`
+              : `Agent run failed: ${pollingRun.runId}`
+          );
+        } else {
+          setMessage(`Agent run ${runStatus || "in progress"}: ${pollingRun.runId}`);
+        }
+      } finally {
+        inFlight = false;
+        if (!cancelled && pollingRun) {
+          timeoutId = window.setTimeout(poll, 4000);
+        }
+      }
+    };
+
+    timeoutId = window.setTimeout(poll, 1500);
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    };
+  }, [pollingRun, loadList, loadConversationDetails]);
 
   useEffect(() => {
     if (!selectedIntake) {
@@ -234,10 +290,7 @@ export default function BillOffersPage() {
       await refreshSelected(response.intake);
       if (response.status === "queued") {
         setMessage(`Agent run queued: ${response.run_id}`);
-        window.setTimeout(() => {
-          loadList();
-          loadConversationDetails(selectedConversationId);
-        }, 3000);
+        setPollingRun({ conversationId: selectedConversationId, runId: response.run_id });
       } else {
         setMessage(`Agent run completed: ${response.run_id}`);
       }
@@ -360,7 +413,7 @@ export default function BillOffersPage() {
               <ShieldCheck className="mr-2 h-4 w-4" />
               {reviewRequired ? "Review required" : "Auto-send enabled"}
             </Button>
-            <Button variant="ghost" onClick={loadList} disabled={loading}>
+            <Button variant="ghost" onClick={() => loadList()} disabled={loading}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
               Refresh
             </Button>
