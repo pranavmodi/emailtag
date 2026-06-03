@@ -528,6 +528,85 @@ def _coerce_field_fact(field: str, raw_fact: Any) -> Optional[Dict[str, Any]]:
     }
 
 
+def _looks_like_lien_offer_not_case_settlement(fact: Dict[str, Any]) -> bool:
+    """Detect when a lien/bill offer was incorrectly used as the gross settlement."""
+    text = " ".join(
+        str(fact.get(key) or "") for key in ("evidence", "ambiguity_notes")
+    ).lower()
+    if not text:
+        return False
+
+    strong_lien_offer_phrases = [
+        "settle this lien",
+        "settle the lien",
+        "settle your lien",
+        "settle lien",
+        "settle this bill",
+        "settle the bill",
+        "full and final payment",
+        "full and final satisfaction",
+        "full and complete satisfaction",
+        "toward precise imaging",
+        "precise imaging's lien",
+        "your medical lien",
+        "your lien",
+    ]
+    if any(phrase in text for phrase in strong_lien_offer_phrases):
+        return True
+
+    mentions_lien_or_bill = any(
+        term in text
+        for term in [
+            "lien",
+            "bill",
+            "balance",
+            "account",
+            "provider",
+            "precise imaging",
+            "your office",
+        ]
+    )
+    mentions_offer_payment = any(
+        term in text
+        for term in [
+            "accept $",
+            "offer $",
+            "offered $",
+            "proposed",
+            "proposal",
+            "payment",
+            "pay $",
+        ]
+    )
+    return mentions_lien_or_bill and mentions_offer_payment
+
+
+def _guard_settlement_amount(facts: Dict[str, Any]) -> None:
+    settlement_fact = facts.get("settlement_amount")
+    if not isinstance(settlement_fact, dict):
+        return
+    if not _looks_like_lien_offer_not_case_settlement(settlement_fact):
+        return
+
+    logger.warning(
+        "Bill Offer extraction rejected settlement_amount that appears to be a lien offer: "
+        "source=%s evidence=%s",
+        settlement_fact.get("source_id"),
+        _truncate(settlement_fact.get("evidence"), 160),
+    )
+    settlement_fact["value"] = None
+    settlement_fact["confidence"] = min(float(settlement_fact.get("confidence") or 0), 0.35)
+    settlement_fact["is_ambiguous"] = True
+    existing_notes = str(settlement_fact.get("ambiguity_notes") or "").strip()
+    guard_note = (
+        "Rejected as total settlement amount because the evidence appears to describe "
+        "a lien/bill payment offer, not the gross case settlement."
+    )
+    settlement_fact["ambiguity_notes"] = (
+        f"{existing_notes} {guard_note}".strip() if existing_notes else guard_note
+    )
+
+
 def _normalize_llm_response(response_data: Dict[str, Any]) -> Dict[str, Any]:
     raw_facts = response_data.get("facts") if isinstance(response_data, dict) else {}
     facts: Dict[str, Any] = {}
@@ -535,6 +614,8 @@ def _normalize_llm_response(response_data: Dict[str, Any]) -> Dict[str, Any]:
         fact = _coerce_field_fact(field, raw_facts.get(field) if isinstance(raw_facts, dict) else None)
         if fact:
             facts[field] = fact
+
+    _guard_settlement_amount(facts)
 
     document_facts = response_data.get("document_facts") or []
     facts["_document_facts"] = document_facts if isinstance(document_facts, list) else []
@@ -563,6 +644,10 @@ def _build_llm_prompt(context: Dict[str, Any]) -> str:
         "- Extract only facts that are supported by evidence in the provided context.\n"
         "- The Precise Imaging offer amount is critical. If an amount is not clearly an offer toward "
         "Precise Imaging's lien/bill, return null for precise_offer_amount and mark it ambiguous.\n"
+        "- settlement_amount means the total/gross case settlement only. Do not use lien/bill/provider "
+        "settlement language such as 'settle this lien', 'full and final payment', 'accept $X as full "
+        "payment', or an amount offered toward Precise Imaging's lien as settlement_amount. If the only "
+        "settlement-like amount is a lien/bill offer, return null for settlement_amount with notes.\n"
         "- Total medical bills means all providers, not only Precise Imaging.\n"
         "- Med-pay status can be text, such as 'No med-pay available' or 'Med-pay exhausted'.\n"
         "- Preserve document-derived facts in document_facts even when they are not selected as final facts.\n"

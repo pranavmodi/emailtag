@@ -113,6 +113,60 @@ def test_normalizes_llm_response_with_document_facts():
     assert compute_missing_fields(facts) == []
 
 
+def test_lien_offer_is_not_total_settlement_amount():
+    response = {
+        "facts": {
+            "settlement_amount": {
+                "value": "$2,000.00",
+                "evidence": "Can we please settle this lien for $2,000.00 as full and final payment.",
+                "source": "prior_thread_message",
+                "source_id": "msg_1",
+                "confidence": 0.9,
+                "is_ambiguous": False,
+                "ambiguity_notes": "",
+            },
+            "total_medical_bills": {
+                "value": "$17,238.03",
+                "evidence": "Total Medicals: $17,238.03",
+                "source": "email_body",
+                "source_id": "current_email",
+                "confidence": 0.95,
+                "is_ambiguous": False,
+                "ambiguity_notes": "",
+            },
+            "medpay_status": {
+                "value": None,
+                "evidence": "No med-pay status mentioned.",
+                "source": "email_body",
+                "source_id": "current_email",
+                "confidence": 0.3,
+                "is_ambiguous": True,
+                "ambiguity_notes": "Unknown.",
+            },
+            "precise_offer_amount": {
+                "value": "$2,000.00",
+                "evidence": "Can we please settle this lien for $2,000.00 as full and final payment.",
+                "source": "prior_thread_message",
+                "source_id": "msg_1",
+                "confidence": 0.9,
+                "is_ambiguous": False,
+                "ambiguity_notes": "",
+            },
+        },
+        "document_facts": [],
+        "conflicts": [],
+        "summary": "Lien offer present; gross settlement missing.",
+    }
+
+    facts = _normalize_llm_response(response)
+
+    assert facts["precise_offer_amount"]["value"] == 2000
+    assert facts["settlement_amount"]["value"] is None
+    assert facts["settlement_amount"]["is_ambiguous"] is True
+    assert "lien/bill payment offer" in facts["settlement_amount"]["ambiguity_notes"]
+    assert compute_missing_fields(facts) == ["settlement_amount", "medpay_status"]
+
+
 def test_ambiguous_precise_offer_counts_as_missing():
     facts = {
         "settlement_amount": {"value": 30000},
