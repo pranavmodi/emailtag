@@ -1,12 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ExternalLink, Loader2, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
+import {
+  ChevronDown,
+  ExternalLink,
+  Loader2,
+  Play,
+  RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
+} from "lucide-react";
 
 import {
   ApiError,
   InboxAuditApi,
   type InboxAuditMissResponse,
+  type InboxAuditQueueStatusResponse,
+  type InboxAuditQueueStatusTask,
   type InboxAuditRunResponse,
   type InboxAuditSummary,
 } from "@/lib/api";
@@ -38,6 +48,11 @@ const RUN_STATUS_STYLE: Record<string, string> = {
   failed: "bg-rose-100 text-rose-700",
 };
 
+type QueueBatch = {
+  startedAt: string;
+  tasks: InboxAuditQueueStatusTask[];
+};
+
 function formatDateTime(value: string | null | undefined): string {
   if (!value) return "—";
   try {
@@ -64,6 +79,12 @@ export default function InboxAuditPage() {
   const [error, setError] = useState<string | null>(null);
   const [triggering, setTriggering] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [queueingId, setQueueingId] = useState<string | null>(null);
+  const [queueingAll, setQueueingAll] = useState(false);
+  const [queueBatch, setQueueBatch] = useState<QueueBatch | null>(null);
+  const [queueDashboard, setQueueDashboard] =
+    useState<InboxAuditQueueStatusResponse | null>(null);
+  const [queueDashboardCollapsed, setQueueDashboardCollapsed] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const currentPage = useMemo(() => getCurrentPageInfo("/inbox-audit"), []);
@@ -93,11 +114,44 @@ export default function InboxAuditPage() {
     loadAll();
   }, [loadAll]);
 
+  useEffect(() => {
+    if (!queueBatch || queueBatch.tasks.length === 0) return;
+
+    let cancelled = false;
+    let timeoutId: number | null = null;
+
+    const poll = async () => {
+      try {
+        const result = await InboxAuditApi.getQueueProcessingStatus(queueBatch.tasks);
+        if (cancelled) return;
+        setQueueDashboard(result);
+
+        if (result.pending > 0) {
+          timeoutId = window.setTimeout(poll, 2500);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setStatusMessage(
+            err instanceof ApiError ? err.message : "Failed to load queue status"
+          );
+          timeoutId = window.setTimeout(poll, 5000);
+        }
+      }
+    };
+
+    timeoutId = window.setTimeout(poll, 800);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    };
+  }, [queueBatch]);
+
   const handleTrigger = async () => {
     setTriggering(true);
     setStatusMessage(null);
     try {
-      const result = await InboxAuditApi.triggerRun(24);
+      const result = await InboxAuditApi.triggerRun();
       setStatusMessage(result.message);
     } catch (err) {
       setStatusMessage(
@@ -105,6 +159,63 @@ export default function InboxAuditPage() {
       );
     } finally {
       setTriggering(false);
+    }
+  };
+
+  const handleQueueMiss = async (missId: string) => {
+    setQueueingId(missId);
+    setStatusMessage(null);
+    try {
+      const result = await InboxAuditApi.queueMissProcessing(missId);
+      setStatusMessage(result.message);
+    } catch (err) {
+      setStatusMessage(
+        err instanceof ApiError ? err.message : "Failed to queue processing"
+      );
+    } finally {
+      setQueueingId(null);
+    }
+  };
+
+  const handleQueueAll = async () => {
+    setQueueingAll(true);
+    setStatusMessage(null);
+    try {
+      const result = await InboxAuditApi.queueOpenMissesProcessing(5000, 5);
+      const tasks = result.task_ids
+        .map((taskId, index) => ({
+          task_id: taskId,
+          conversation_id: result.conversation_ids[index] ?? "",
+        }))
+        .filter((task) => task.task_id && task.conversation_id);
+
+      setQueueBatch(
+        tasks.length > 0 ? { startedAt: new Date().toISOString(), tasks } : null
+      );
+      setQueueDashboardCollapsed(false);
+      setQueueDashboard(
+        tasks.length > 0
+          ? {
+              total_queued: tasks.length,
+              processed: 0,
+              failed: 0,
+              pending: tasks.length,
+              failed_conversation_ids: [],
+              items: tasks.map((task) => ({
+                ...task,
+                state: "PENDING",
+                status: "pending",
+              })),
+            }
+          : null
+      );
+      setStatusMessage(result.message);
+    } catch (err) {
+      setStatusMessage(
+        err instanceof ApiError ? err.message : "Failed to queue open misses"
+      );
+    } finally {
+      setQueueingAll(false);
     }
   };
 
@@ -151,6 +262,19 @@ export default function InboxAuditPage() {
               )}
               Refresh
             </Button>
+            <Button
+              variant="ghost"
+              className="border border-slate-200 bg-white"
+              onClick={handleQueueAll}
+              disabled={queueingAll || loading || openMisses.length === 0}
+            >
+              {queueingAll ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="mr-2 h-4 w-4" />
+              )}
+              Add all to queue
+            </Button>
             <Button onClick={handleTrigger} disabled={triggering}>
               {triggering ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -171,6 +295,105 @@ export default function InboxAuditPage() {
           <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {error}
           </div>
+        )}
+
+        {queueDashboard && queueBatch && (
+          <Card className="mb-8">
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <CardTitle>Queue dashboard</CardTitle>
+                  <CardDescription>
+                    Last batch started {formatDateTime(queueBatch.startedAt)}
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="hidden items-center gap-3 text-xs text-slate-500 md:flex">
+                    <span>Queued {queueDashboard.total_queued}</span>
+                    <span>Processed {queueDashboard.processed}</span>
+                    <span>Pending {queueDashboard.pending}</span>
+                    <span>Failed {queueDashboard.failed}</span>
+                  </div>
+                  <Badge
+                    className={
+                      queueDashboard.pending > 0
+                        ? "bg-blue-100 text-blue-700"
+                        : queueDashboard.failed > 0
+                          ? "bg-rose-100 text-rose-700"
+                          : "bg-emerald-100 text-emerald-700"
+                    }
+                  >
+                    {queueDashboard.pending > 0 ? "running" : "complete"}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    className="px-2"
+                    onClick={() => setQueueDashboardCollapsed((value) => !value)}
+                    aria-expanded={!queueDashboardCollapsed}
+                    aria-label={
+                      queueDashboardCollapsed
+                        ? "Expand queue dashboard"
+                        : "Collapse queue dashboard"
+                    }
+                  >
+                    <ChevronDown
+                      className={`h-4 w-4 transition ${
+                        queueDashboardCollapsed ? "-rotate-90" : ""
+                      }`}
+                    />
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            {!queueDashboardCollapsed && (
+              <CardContent>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-xs font-medium uppercase text-slate-500">Queued</div>
+                    <div className="mt-1 text-2xl font-semibold text-slate-900">
+                      {queueDashboard.total_queued}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-xs font-medium uppercase text-slate-500">Processed</div>
+                    <div className="mt-1 text-2xl font-semibold text-emerald-700">
+                      {queueDashboard.processed}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-xs font-medium uppercase text-slate-500">Pending</div>
+                    <div className="mt-1 text-2xl font-semibold text-blue-700">
+                      {queueDashboard.pending}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-xs font-medium uppercase text-slate-500">Failed</div>
+                    <div className="mt-1 text-2xl font-semibold text-rose-700">
+                      {queueDashboard.failed}
+                    </div>
+                  </div>
+                </div>
+
+                {queueDashboard.failed_conversation_ids.length > 0 && (
+                  <div className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3">
+                    <div className="mb-2 text-xs font-medium uppercase text-rose-700">
+                      Failed conversation IDs
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {queueDashboard.failed_conversation_ids.map((conversationId) => (
+                        <span
+                          key={conversationId}
+                          className="rounded bg-white px-2 py-1 font-mono text-xs text-rose-700"
+                        >
+                          {conversationId}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            )}
+          </Card>
         )}
 
         <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -229,6 +452,54 @@ export default function InboxAuditPage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Open misses by state</CardTitle>
+            <CardDescription>
+              Distinct open miss conversations grouped by pipeline failure state.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {(summary?.misses_by_state ?? []).length === 0 ? (
+              <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
+                No open miss state data available.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {(summary?.misses_by_state ?? []).map((item) => {
+                  const maxCount = Math.max(
+                    1,
+                    ...(summary?.misses_by_state ?? []).map(
+                      (stateItem) => stateItem.count
+                    )
+                  );
+                  const width = `${Math.max(8, (item.count / maxCount) * 100)}%`;
+                  const stateMeta = STATE_LABELS[item.state] ?? {
+                    label: item.state,
+                    className: "bg-slate-100 text-slate-600",
+                  };
+                  return (
+                    <div key={item.state}>
+                      <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+                        <Badge className={stateMeta.className}>{stateMeta.label}</Badge>
+                        <span className="shrink-0 tabular-nums text-slate-500">
+                          {item.count}
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className="h-full rounded-full bg-slate-700"
+                          style={{ width }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Card className="mb-8">
           <CardHeader>
@@ -298,6 +569,14 @@ export default function InboxAuditPage() {
                             {formatDateTime(m.detected_at)}
                           </td>
                           <td className="py-3 pr-4 text-right">
+                            <Button
+                              variant="ghost"
+                              className="mr-2 px-3 py-1 text-xs"
+                              disabled={queueingId === m.id}
+                              onClick={() => handleQueueMiss(m.id)}
+                            >
+                              {queueingId === m.id ? "…" : "Queue"}
+                            </Button>
                             <Button
                               variant="ghost"
                               className="px-3 py-1 text-xs"

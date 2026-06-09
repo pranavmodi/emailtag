@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str
     CELERY_RESULT_BACKEND: str
 
+    # Inbox audit
+    INBOX_AUDIT_LOOKBACK_HOURS: int = 24
+
     # OpenAI
     OPENAI_API_KEY: str
     

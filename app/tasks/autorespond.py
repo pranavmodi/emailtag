@@ -14,6 +14,7 @@ from app.crud.system_settings import system_settings_crud
 from app.db.session import SessionLocal, AsyncSessionLocal
 from app.schemas.email import EmailUpdate
 from app.tasks.worker import celery_app
+from app.tasks.bill_offer import _conversation_bill_offer_document_context
 from app.services.frontapp_service import add_conversation_tags, get_conversation_text
 
 # Conversation log context imports
@@ -423,6 +424,13 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
         if bill_offer_should_run:
             agent_name_for_status = "bill_offer"
             agent_result_dict = None
+            bill_offer_document_context = _conversation_bill_offer_document_context(
+                db,
+                front_conversation_id=front_conversation_id,
+                selected_email_id=email_obj.id,
+                fallback_ocr_results=document_results,
+                fallback_raw_data=email_obj.raw_data,
+            )
 
             async def _run_bill_offer_agent():
                 nonlocal agent_result_dict
@@ -433,8 +441,8 @@ def perform_autorespond_task(email_id: str, determined_tags: List[str] = None) -
                     email_sender=sender_email,
                     email_subject=email_obj.subject,
                     extracted_patient_ids=email_obj.extracted_patient_ids or [],
-                    ocr_results=document_results,
-                    raw_data=email_obj.raw_data,
+                    ocr_results=bill_offer_document_context["ocr_results"],
+                    raw_data=bill_offer_document_context["raw_data"],
                     email_id=email_obj.id,
                     send_reply=not bill_offer_review_required,
                     triggered_by="autorespond",

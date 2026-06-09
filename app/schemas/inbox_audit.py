@@ -61,6 +61,7 @@ class InboxAuditSummary(BaseModel):
     open_misses: int = 0
     misses_by_day: List[dict] = Field(default_factory=list)
     misses_by_inbox: List[dict] = Field(default_factory=list)
+    misses_by_state: List[dict] = Field(default_factory=list)
 
 
 class ReviewMissRequest(BaseModel):
@@ -72,3 +73,37 @@ class TriggerRunResponse(BaseModel):
     status: str
     task_id: Optional[str] = None
     message: str
+
+
+class QueueProcessingResponse(BaseModel):
+    status: str
+    queued_count: int
+    task_ids: List[str] = Field(default_factory=list)
+    conversation_ids: List[str] = Field(default_factory=list)
+    message: str
+
+
+class QueueProcessingStatusItemRequest(BaseModel):
+    task_id: str
+    conversation_id: str
+
+
+class QueueProcessingStatusRequest(BaseModel):
+    tasks: List[QueueProcessingStatusItemRequest] = Field(default_factory=list)
+
+
+class QueueProcessingStatusItem(BaseModel):
+    task_id: str
+    conversation_id: str
+    state: str
+    status: str
+    error_message: Optional[str] = None
+
+
+class QueueProcessingStatusResponse(BaseModel):
+    total_queued: int
+    processed: int
+    failed: int
+    pending: int
+    failed_conversation_ids: List[str] = Field(default_factory=list)
+    items: List[QueueProcessingStatusItem] = Field(default_factory=list)

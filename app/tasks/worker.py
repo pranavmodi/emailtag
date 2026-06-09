@@ -81,6 +81,8 @@ celery_app.conf.task_routes = {
     "app.tasks.behavior_analysis.score_all_firms_task": {"queue": "processing"},
     "app.tasks.inbox_audit.audit_all_inboxes": {"queue": "processing"},
     "app.tasks.inbox_audit.audit_single_inbox": {"queue": "processing"},
+    "app.tasks.inbox_audit.queue_conversation_for_processing": {"queue": "processing"},
+    "tasks.send_attachment_to_document_processing": {"queue": "ocr"},
     "tasks.send_attachment_to_ocr": {"queue": "ocr"},
     "app.tasks.worker.test_task": {"queue": "emails"},
 }

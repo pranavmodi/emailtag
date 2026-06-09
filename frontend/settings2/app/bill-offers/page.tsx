@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, type UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   ExternalLink,
@@ -11,9 +11,11 @@ import {
   Play,
   RefreshCw,
   Save,
+  Search,
   Send,
   ShieldCheck,
   TriangleAlert,
+  X,
 } from "lucide-react";
 
 import { ApiError, BillOffersApi } from "@/lib/api";
@@ -49,6 +51,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 const TERMINAL_RUN_STATUSES = new Set(["completed", "failed"]);
+const TAGGED_EMAIL_PAGE_SIZE = 10;
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -77,7 +80,7 @@ function factOf(facts: Record<string, any> | null | undefined, field: string) {
 }
 
 function normalizeEditableValue(field: string, value: string) {
-  if (field === "medpay_status") return value;
+  if (field === "medpay_status") return value === "Yes" || value === "No" ? value : "";
   const cleaned = value.replace(/[$,]/g, "").trim();
   if (!cleaned) return "";
   const parsed = Number(cleaned);
@@ -123,6 +126,7 @@ function replaceSourceReferences(value: any, sourceMap: Record<string, string>) 
 
 export default function BillOffersPage() {
   const [items, setItems] = useState<BillOfferTaggedEmail[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [selectedIntake, setSelectedIntake] = useState<BillOfferIntake | null>(null);
   const [logs, setLogs] = useState<BillOfferAgentLog[]>([]);
@@ -131,35 +135,79 @@ export default function BillOffersPage() {
   const [patientIdDraft, setPatientIdDraft] = useState("");
   const [reviewRequired, setReviewRequired] = useState(true);
   const [filter, setFilter] = useState("all");
+  const [searchText, setSearchText] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [pollingRun, setPollingRun] = useState<{ conversationId: string; runId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const itemsRef = useRef<BillOfferTaggedEmail[]>([]);
+  const selectedConversationIdRef = useRef<string | null>(null);
 
   const currentPage = useMemo(() => getCurrentPageInfo("/bill-offers"), []);
   const selectedItem = items.find((item) => item.front_conversation_id === selectedConversationId) || null;
+  const serverSearch = appliedSearch;
 
-  const loadList = useCallback(async (options?: { showLoading?: boolean; setErrors?: boolean }) => {
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  useEffect(() => {
+    selectedConversationIdRef.current = selectedConversationId;
+  }, [selectedConversationId]);
+
+  const loadList = useCallback(async (options?: { showLoading?: boolean; setErrors?: boolean; append?: boolean; skip?: number }) => {
+    const append = options?.append === true;
+    const currentItems = itemsRef.current;
+    const skip = options?.skip ?? (append ? currentItems.length : 0);
     const showLoading = options?.showLoading !== false;
     const setErrors = options?.setErrors !== false;
-    if (showLoading) setLoading(true);
+    if (append) {
+      setLoadingMore(true);
+    } else if (showLoading) {
+      setLoading(true);
+    }
     if (setErrors) setError(null);
     try {
-      const [response, settings] = await Promise.all([
-        BillOffersApi.listTaggedEmails({ limit: 200 }),
-        BillOffersApi.getSettings(),
-      ]);
-      setItems(response.items);
-      setReviewRequired(settings.review_required);
-      const selected = selectedConversationId
-        ? response.items.find((item) => item.front_conversation_id === selectedConversationId)
-        : response.items[0];
+      const listPromise = BillOffersApi.listTaggedEmails({
+        skip,
+        limit: TAGGED_EMAIL_PAGE_SIZE,
+        search: serverSearch || undefined,
+        status: filter === "all" ? undefined : filter,
+      });
+      const [response, settings] = append
+        ? [await listPromise, null]
+        : await Promise.all([listPromise, BillOffersApi.getSettings()]);
+      const nextItems = append
+        ? [
+            ...currentItems,
+            ...response.items.filter(
+              (item) => !currentItems.some((existing) => existing.front_conversation_id === item.front_conversation_id)
+            ),
+          ]
+        : response.items;
+      setItems(nextItems);
+      setTotalCount(response.total);
+      setHasMore(skip + response.items.length < response.total);
+      if (settings) setReviewRequired(settings.review_required);
+      if (append) return nextItems;
+
+      const currentSelectedId = selectedConversationIdRef.current;
+      const selected =
+        nextItems.find((item) => item.front_conversation_id === currentSelectedId) ||
+        nextItems[0] ||
+        null;
       if (selected) {
         setSelectedConversationId(selected.front_conversation_id);
         setSelectedIntake(selected.intake ?? null);
+      } else {
+        setSelectedConversationId(null);
+        setSelectedIntake(null);
       }
-      return response.items;
+      return nextItems;
     } catch (err) {
       if (setErrors) {
         setError(err instanceof ApiError ? err.message : "Failed to load Bill Offers");
@@ -167,8 +215,9 @@ export default function BillOffersPage() {
       return null;
     } finally {
       if (showLoading) setLoading(false);
+      if (append) setLoadingMore(false);
     }
-  }, [selectedConversationId]);
+  }, [filter, serverSearch]);
 
   const loadConversationDetails = useCallback(async (conversationId: string) => {
     const [logResponse, auditResponse] = await Promise.allSettled([
@@ -179,9 +228,34 @@ export default function BillOffersPage() {
     setAudits(auditResponse.status === "fulfilled" ? auditResponse.value.items : []);
   }, []);
 
+  const loadNextPage = useCallback(() => {
+    if (loading || loadingMore || !hasMore) return;
+    void loadList({
+      append: true,
+      showLoading: false,
+      setErrors: false,
+      skip: itemsRef.current.length,
+    });
+  }, [hasMore, loadList, loading, loadingMore]);
+
+  const handleListScroll = (event: UIEvent<HTMLDivElement>) => {
+    const target = event.currentTarget;
+    const remaining = target.scrollHeight - target.scrollTop - target.clientHeight;
+    if (remaining < 240) {
+      loadNextPage();
+    }
+  };
+
   useEffect(() => {
     loadList();
   }, [loadList]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setAppliedSearch(searchText.trim());
+    }, 300);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchText]);
 
   useEffect(() => {
     if (selectedConversationId) {
@@ -254,11 +328,33 @@ export default function BillOffersPage() {
     setPatientIdDraft(selectedIntake.patient_id || "");
   }, [selectedIntake]);
 
+  const normalizedSearch = appliedSearch.toLowerCase();
   const visibleItems = items.filter((item) => {
     if (filter === "all") return true;
     if (filter === "unprocessed") return !item.has_intake;
     if (filter === "processed") return item.has_intake;
     return item.intake?.status === filter;
+  }).filter((item) => {
+    if (!normalizedSearch) return true;
+    const intake = item.intake;
+    const haystack = [
+      item.front_conversation_id,
+      item.subject,
+      item.sender,
+      item.search_text,
+      intake?.patient_id,
+      intake?.status,
+      intake?.missing_fields?.join(" "),
+      intake?.original_sender_email,
+      JSON.stringify(intake?.patient_data || {}),
+      JSON.stringify(intake?.patient_match || {}),
+      JSON.stringify(intake?.extracted_facts || {}),
+      JSON.stringify(intake?.corrected_facts || {}),
+    ]
+      .filter(Boolean)
+      .join("\n")
+      .toLowerCase();
+    return haystack.includes(normalizedSearch);
   });
 
   const selectItem = (item: BillOfferTaggedEmail) => {
@@ -438,9 +534,36 @@ export default function BillOffersPage() {
                 <FileSearch className="h-5 w-5 text-slate-700" />
                 Tagged Conversations
               </CardTitle>
-              <CardDescription>{items.length} conversations</CardDescription>
+              <CardDescription>
+                {items.length} of {totalCount || items.length} conversations loaded
+              </CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="mb-3">
+                <label htmlFor="bill-offer-search" className="sr-only">
+                  Search conversations
+                </label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    id="bill-offer-search"
+                    value={searchText}
+                    onChange={(event) => setSearchText(event.target.value)}
+                    placeholder="Search conversation ID or content"
+                    className="h-9 w-full rounded-md border border-slate-200 bg-white pl-8 pr-9 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                  />
+                  {searchText ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearchText("")}
+                      className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      aria-label="Clear search"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
               <div className="mb-4 flex flex-wrap gap-2">
                 {[
                   ["all", "All"],
@@ -467,12 +590,15 @@ export default function BillOffersPage() {
 
               {loading ? (
                 <div className="py-10 text-center text-sm text-slate-500">Loading...</div>
-              ) : visibleItems.length === 0 ? (
+              ) : visibleItems.length === 0 && !hasMore ? (
                 <div className="rounded-md border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
                   No Bill Offer-tagged conversations found.
                 </div>
               ) : (
-                <div className="max-h-[780px] w-full overflow-hidden overflow-y-auto rounded-md border border-slate-200 bg-white">
+                <div
+                  className="max-h-[780px] w-full overflow-hidden overflow-y-auto rounded-md border border-slate-200 bg-white"
+                  onScroll={handleListScroll}
+                >
                   <table className="w-full table-fixed text-left text-xs">
                     <colgroup>
                       <col className="w-[42%]" />
@@ -538,6 +664,20 @@ export default function BillOffersPage() {
                           </tr>
                         );
                       })}
+                      {(hasMore || loadingMore) && (
+                        <tr>
+                          <td colSpan={4} className="border-t border-slate-100 px-2 py-4 text-center text-slate-500">
+                            {loadingMore ? (
+                              <span className="inline-flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Loading more
+                              </span>
+                            ) : (
+                              "Scroll for more"
+                            )}
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -567,10 +707,6 @@ export default function BillOffersPage() {
                   <Button variant="ghost" onClick={handleRerunCheck} disabled={!selectedIntake || busy === "check"}>
                     <RefreshCw className="mr-2 h-4 w-4" />
                     Re-run Check
-                  </Button>
-                  <Button variant="ghost" onClick={handleSendReply} disabled={!selectedIntake?.reply_draft || busy === "send"}>
-                    <Send className="mr-2 h-4 w-4" />
-                    Approve & Send Reply
                   </Button>
                   <Button variant="ghost" onClick={handleManualReview} disabled={!selectedIntake || busy === "manual"}>
                     <TriangleAlert className="mr-2 h-4 w-4" />
@@ -664,6 +800,7 @@ export default function BillOffersPage() {
                         {Object.entries(FIELD_LABELS).map(([field, label]) => (
                           <FactEditor
                             key={field}
+                            field={field}
                             label={label}
                             value={draftValues[field] ?? ""}
                             extractedFact={factOf(selectedIntake.extracted_facts, field)}
@@ -676,15 +813,14 @@ export default function BillOffersPage() {
                       {conflicts.length ? <ConflictList conflicts={conflicts} documentSourceMap={documentSourceMap} /> : null}
                     </section>
 
-                    <section className="rounded-md border border-slate-200 bg-white p-4">
-                      <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                        <FileText className="h-4 w-4" />
-                        Document Facts
-                      </h3>
+                    <CollapsibleSection
+                      title={`Document Facts${documentFacts.length ? ` (${documentFacts.length})` : ""}`}
+                      icon={<FileText className="h-4 w-4" />}
+                    >
                       {documentFacts.length === 0 ? (
-                        <div className="mt-3 text-sm text-slate-500">No document-derived facts.</div>
+                        <div className="text-sm text-slate-500">No document-derived facts.</div>
                       ) : (
-                        <div className="mt-3 space-y-3">
+                        <div className="space-y-3">
                           {documentFacts.map((doc: any, index: number) => (
                             <div key={`${doc.document_id || "doc"}-${index}`} className="rounded-md border border-slate-200 p-3 text-sm">
                               <div className="font-medium text-slate-900">{doc.filename || doc.document_id || `Document ${index + 1}`}</div>
@@ -702,13 +838,22 @@ export default function BillOffersPage() {
                           ))}
                         </div>
                       )}
-                    </section>
+                    </CollapsibleSection>
 
-                    <section className="rounded-md border border-slate-200 bg-white p-4">
-                      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                        Reply Preview
-                      </div>
+                    <CollapsibleSection
+                      title="Reply Preview"
+                      icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />}
+                      action={
+                        <Button
+                          variant="ghost"
+                          onClick={handleSendReply}
+                          disabled={!selectedIntake?.reply_draft || busy === "send"}
+                        >
+                          <Send className="mr-2 h-4 w-4" />
+                          Approve & Send Reply
+                        </Button>
+                      }
+                    >
                       {selectedIntake.reply_draft ? (
                         <div
                           className="prose prose-sm max-w-none rounded-md bg-slate-50 p-4 text-slate-700"
@@ -717,21 +862,18 @@ export default function BillOffersPage() {
                       ) : (
                         <div className="text-sm text-slate-500">No reply draft yet.</div>
                       )}
-                    </section>
+                    </CollapsibleSection>
                   </>
                 )}
               </CardContent>
             </Card>
 
             <div className="grid gap-5 lg:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <History className="h-5 w-5 text-slate-700" />
-                    Correction Audit
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
+              <CollapsibleSection
+                title={`Correction Audit${audits.length ? ` (${audits.length})` : ""}`}
+                icon={<History className="h-5 w-5 text-slate-700" />}
+                variant="card"
+              >
                   {audits.length === 0 ? (
                     <div className="rounded-md border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
                       No corrections recorded.
@@ -751,14 +893,12 @@ export default function BillOffersPage() {
                       ))}
                     </div>
                   )}
-                </CardContent>
-              </Card>
+              </CollapsibleSection>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Agent Logs</CardTitle>
-                </CardHeader>
-                <CardContent>
+              <CollapsibleSection
+                title={`Agent Logs${logs.length ? ` (${logs.length})` : ""}`}
+                variant="card"
+              >
                   {logs.length === 0 ? (
                     <div className="rounded-md border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
                       No agent logs yet.
@@ -793,8 +933,7 @@ export default function BillOffersPage() {
                       ))}
                     </div>
                   )}
-                </CardContent>
-              </Card>
+              </CollapsibleSection>
             </div>
           </div>
         </div>
@@ -813,6 +952,7 @@ function Info({ label, value }: { label: string; value: string }) {
 }
 
 function FactEditor({
+  field,
   label,
   value,
   extractedFact,
@@ -820,6 +960,7 @@ function FactEditor({
   documentSourceMap,
   onChange,
 }: {
+  field: string;
   label: string;
   value: string;
   extractedFact: Record<string, any> | null;
@@ -832,11 +973,23 @@ function FactEditor({
   return (
     <div className="rounded-md border border-slate-200 bg-white p-4">
       <label className="text-sm font-medium text-slate-900">{label}</label>
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-2 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-      />
+      {field === "medpay_status" ? (
+        <select
+          value={value === "Yes" || value === "No" ? value : ""}
+          onChange={(event) => onChange(event.target.value)}
+          className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+        >
+          <option value="">Blank</option>
+          <option value="Yes">Yes</option>
+          <option value="No">No</option>
+        </select>
+      ) : (
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="mt-2 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+        />
+      )}
       <div className="mt-3 grid gap-2 text-xs text-slate-600">
         <div className="rounded bg-slate-50 p-2">
           <div className="font-medium text-slate-700">Extracted</div>
@@ -893,6 +1046,55 @@ function ConflictList({
         ))}
       </div>
     </div>
+  );
+}
+
+function CollapsibleSection({
+  title,
+  icon,
+  action,
+  children,
+  variant = "section",
+}: {
+  title: string;
+  icon?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  variant?: "section" | "card";
+}) {
+  const isCard = variant === "card";
+  return (
+    <details
+      className={
+        isCard
+          ? "rounded-2xl border border-slate-200/70 bg-white/90 shadow-lg shadow-slate-900/5 backdrop-blur"
+          : "rounded-md border border-slate-200 bg-white p-4"
+      }
+    >
+      <summary
+        className={
+          isCard
+            ? "flex cursor-pointer list-none items-center justify-between gap-3 p-6 text-xl font-semibold text-slate-900 marker:hidden"
+            : "flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-slate-900 marker:hidden"
+        }
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          {icon}
+          <span>{title}</span>
+        </span>
+        {action ? (
+          <span
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
+            {action}
+          </span>
+        ) : null}
+      </summary>
+      <div className={isCard ? "p-6 pt-0" : "mt-3"}>{children}</div>
+    </details>
   );
 }
 

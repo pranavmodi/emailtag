@@ -1,4 +1,5 @@
 from app.services.bill_offer_extraction_service import (
+    build_reply_draft,
     build_bill_offer_context,
     compute_missing_fields,
     extract_bill_offer_facts,
@@ -19,7 +20,7 @@ def test_extracts_required_bill_offer_facts():
 
     assert facts["settlement_amount"]["value"] == 30000
     assert facts["total_medical_bills"]["value"] == 45000
-    assert "No med-pay" in facts["medpay_status"]["value"]
+    assert facts["medpay_status"]["value"] == "No"
     assert facts["precise_offer_amount"]["value"] == 500
     assert compute_missing_fields(facts) == []
 
@@ -32,6 +33,25 @@ def test_missing_precise_offer_is_prioritized():
     assert compute_missing_fields(facts) == ["precise_offer_amount"]
 
 
+def test_extracts_precise_offer_from_reduction_request_without_explicit_recipient():
+    facts = extract_bill_offer_facts(
+        "The case settled for $100,000.00 and total medical bills are $33,355.05. "
+        "Therefore, we are requesting a reduction to $1,900.00 to satisfy the outstanding charges. "
+        "No med-pay."
+    )
+
+    assert facts["precise_offer_amount"]["value"] == 1900
+
+
+def test_does_not_extract_offer_when_sentence_names_another_provider():
+    facts = extract_bill_offer_facts(
+        "We are requesting a reduction to $1,900.00 for VBS Imaging to satisfy the outstanding charges. "
+        "No med-pay."
+    )
+
+    assert "precise_offer_amount" not in facts
+
+
 def test_corrected_facts_override_extracted_facts():
     extracted = {
         "settlement_amount": {"value": 30000, "confidence": 0.7},
@@ -41,12 +61,14 @@ def test_corrected_facts_override_extracted_facts():
     corrected = {
         "precise_offer_amount": {"value": 500, "source": "user_correction"},
         "settlement_amount": {"value": 35000, "source": "user_correction"},
+        "medpay_status": {"value": "No", "source": "user_correction"},
     }
 
     effective = merge_effective_facts(extracted, corrected)
 
     assert effective["settlement_amount"]["value"] == 35000
     assert effective["precise_offer_amount"]["value"] == 500
+    assert effective["medpay_status"]["value"] == "No"
     assert compute_missing_fields(effective) == []
 
 
@@ -108,6 +130,7 @@ def test_normalizes_llm_response_with_document_facts():
     )
 
     assert facts["settlement_amount"]["value"] == 30000
+    assert facts["medpay_status"]["value"] == "No"
     assert facts["precise_offer_amount"]["source_id"] == "msg_2"
     assert facts["_document_facts"][0]["filename"] == "offer.pdf"
     assert compute_missing_fields(facts) == []
@@ -180,6 +203,49 @@ def test_ambiguous_precise_offer_counts_as_missing():
     }
 
     assert compute_missing_fields(facts) == ["precise_offer_amount"]
+
+
+def test_medpay_status_must_be_definitive_yes_or_no():
+    facts = {
+        "settlement_amount": {"value": 30000},
+        "total_medical_bills": {"value": 45000},
+        "medpay_status": {"value": "Not mentioned"},
+        "precise_offer_amount": {"value": 500},
+    }
+
+    assert compute_missing_fields(facts) == ["medpay_status"]
+
+
+def test_reply_draft_uses_bill_balance_study_amount_fields():
+    reply = build_reply_draft(
+        patient_found=True,
+        patient_data={
+            "patient_id": "PRE943313",
+            "patient_name": "AARON PALACIOS",
+            "dob": "12/13/1994",
+            "doi": "11/27/2023",
+            "lien_total": 4400,
+            "studies": [
+                {
+                    "studyDescription": "MRI CERVICAL SPINE W/O CONTRAST",
+                    "studyDateTime": "02/22/2024 18:20:00",
+                    "billingAmount": 2200,
+                },
+                {
+                    "studyDescription": "MRI LUMBAR SPINE W/O CONTRAST",
+                    "studyDateTime": "07/06/2024 17:20:00",
+                    "billingAmount": 2200,
+                },
+            ],
+        },
+        missing_fields=["medpay_status"],
+        effective_facts={"precise_offer_amount": {"value": 1900}},
+    )
+
+    assert "02/22/2024 18:20:00" in reply
+    assert "$2,200.00" in reply
+    assert "$4,400.00" in reply
+    assert "$0.00" not in reply
 
 
 def test_structured_extraction_falls_back_when_llm_fails(monkeypatch):

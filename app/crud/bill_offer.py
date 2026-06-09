@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.bill_offer import (
@@ -18,6 +18,9 @@ from app.schemas.bill_offer import (
     BillOfferIntakeCreate,
     BillOfferIntakeUpdate,
 )
+
+MESSAGE_SEARCH_SNIPPET_CHARS = 4000
+CONVERSATION_SEARCH_TEXT_CHARS = 30000
 
 
 async def get_intake(db: AsyncSession, intake_id: UUID) -> Optional[BillOfferIntake]:
@@ -193,18 +196,120 @@ async def list_correction_audits_for_conversation(
     return list(result.scalars().all()), total
 
 
+async def _build_tagged_email_rows(
+    db: AsyncSession,
+    page: List[Email],
+) -> List[Dict[str, Any]]:
+    conversation_ids = [email.front_conversation_id for email in page]
+    intakes_by_conversation: Dict[str, BillOfferIntake] = {}
+    if conversation_ids:
+        intake_result = await db.execute(
+            select(BillOfferIntake).where(
+                BillOfferIntake.front_conversation_id.in_(conversation_ids)
+            )
+        )
+        intakes_by_conversation = {
+            intake.front_conversation_id: intake for intake in intake_result.scalars().all()
+        }
+
+    search_text_by_conversation = await _build_conversation_search_text(
+        db,
+        conversation_ids,
+    )
+
+    return [
+        {
+            "email": email,
+            "intake": intakes_by_conversation.get(email.front_conversation_id),
+            "search_text": search_text_by_conversation.get(email.front_conversation_id, ""),
+        }
+        for email in page
+    ]
+
+
+async def _build_conversation_search_text(
+    db: AsyncSession,
+    conversation_ids: List[str],
+) -> Dict[str, str]:
+    if not conversation_ids:
+        return {}
+
+    result = await db.execute(
+        select(
+            Email.front_conversation_id,
+            Email.subject,
+            Email.sender,
+            func.substr(Email.content_text, 1, MESSAGE_SEARCH_SNIPPET_CHARS).label(
+                "content_text"
+            ),
+        ).where(Email.front_conversation_id.in_(conversation_ids))
+    )
+
+    search_text_by_conversation: Dict[str, str] = {}
+    for row in result.all():
+        current = search_text_by_conversation.get(row.front_conversation_id, "")
+        if len(current) >= CONVERSATION_SEARCH_TEXT_CHARS:
+            continue
+
+        snippet = "\n".join(
+            str(value or "")
+            for value in (
+                row.front_conversation_id,
+                row.subject,
+                row.sender,
+                row.content_text,
+            )
+        )
+        next_value = f"{current}\n{snippet}" if current else snippet
+        search_text_by_conversation[row.front_conversation_id] = next_value[
+            :CONVERSATION_SEARCH_TEXT_CHARS
+        ]
+
+    return search_text_by_conversation
+
+
 async def list_tagged_bill_offer_emails(
     db: AsyncSession,
     *,
     skip: int = 0,
     limit: int = 100,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
 ) -> Tuple[List[Dict[str, Any]], int]:
     """List latest email per Bill Offer conversation, most recent first."""
+
+    search_term = (search or "").strip()
+    base_conditions = [Tag.name == "Bill Offer"]
+    if search_term:
+        pattern = f"%{search_term}%"
+        if search_term.lower().startswith("cnv_"):
+            base_conditions.append(Email.front_conversation_id.ilike(pattern))
+        else:
+            base_conditions.append(
+                or_(
+                    Email.front_conversation_id.ilike(pattern),
+                    Email.subject.ilike(pattern),
+                    Email.sender.ilike(pattern),
+                    Email.content_text.ilike(pattern),
+                )
+            )
+
+    status_term = (status or "").strip()
+    if status_term == "processed":
+        base_conditions.append(BillOfferIntake.id.isnot(None))
+    elif status_term == "unprocessed":
+        base_conditions.append(BillOfferIntake.id.is_(None))
+    elif status_term:
+        base_conditions.append(BillOfferIntake.status == status_term)
 
     result = await db.execute(
         select(Email)
         .join(Email.tags)
-        .where(Tag.name == "Bill Offer")
+        .outerjoin(
+            BillOfferIntake,
+            BillOfferIntake.front_conversation_id == Email.front_conversation_id,
+        )
+        .where(*base_conditions)
         .order_by(Email.created_at.desc())
         .limit(max(limit + skip, limit))
     )
@@ -222,32 +327,16 @@ async def list_tagged_bill_offer_emails(
         select(func.count(func.distinct(Email.front_conversation_id)))
         .select_from(Email)
         .join(Email.tags)
-        .where(Tag.name == "Bill Offer")
+        .outerjoin(
+            BillOfferIntake,
+            BillOfferIntake.front_conversation_id == Email.front_conversation_id,
+        )
+        .where(*base_conditions)
     )
     total = total_result.scalar() or 0
 
     page = deduped[skip : skip + limit]
-    conversation_ids = [email.front_conversation_id for email in page]
-    intakes_by_conversation: Dict[str, BillOfferIntake] = {}
-    if conversation_ids:
-        intake_result = await db.execute(
-            select(BillOfferIntake).where(
-                BillOfferIntake.front_conversation_id.in_(conversation_ids)
-            )
-        )
-        intakes_by_conversation = {
-            intake.front_conversation_id: intake for intake in intake_result.scalars().all()
-        }
-
-    items = []
-    for email in page:
-        items.append(
-            {
-                "email": email,
-                "intake": intakes_by_conversation.get(email.front_conversation_id),
-            }
-        )
-    return items, total
+    return await _build_tagged_email_rows(db, page), total
 
 
 async def get_latest_bill_offer_email_for_conversation(

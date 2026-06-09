@@ -81,12 +81,33 @@ class BillOfferRunLogger:
 
 def _extract_patient_ids(text: str) -> List[str]:
     matches = re.findall(r"\b(PRE\d{6,8}|PI[-\s]?\d{3,8})\b", text or "", re.IGNORECASE)
+    numeric_matches = re.findall(
+        r"\b(?:patient\s*id|patient\s*id#|patient\s*id\s*#|patient\s*#|pt\s*id)\s*[:#]?\s*(\d{6,8})\b",
+        text or "",
+        re.IGNORECASE,
+    )
     normalized = []
     for match in matches:
         value = match.upper().replace(" ", "")
         if value not in normalized:
             normalized.append(value)
+    for match in numeric_matches:
+        value = f"PRE{match}"
+        if value not in normalized:
+            normalized.append(value)
     return normalized
+
+
+def _clean_name_part(value: Any) -> str:
+    cleaned = re.sub(r"\s+", " ", str(value or "")).strip()
+    cleaned = cleaned.strip(" \t\r\n:;,./\\()[]{}<>")
+    cleaned = cleaned.strip("-–—")
+    return cleaned
+
+
+def _clean_name_value(value: Any) -> str:
+    parts = [_clean_name_part(part) for part in str(value or "").split()]
+    return " ".join(part for part in parts if part)
 
 
 def _extract_name_dates(text: str) -> Dict[str, Optional[str]]:
@@ -114,8 +135,8 @@ def _extract_name_dates(text: str) -> Dict[str, Optional[str]]:
         re.IGNORECASE,
     )
     return {
-        "first_name": name_match.group(1) if name_match else None,
-        "last_name": name_match.group(2) if name_match else None,
+        "first_name": _clean_name_part(name_match.group(1)) if name_match else None,
+        "last_name": _clean_name_part(name_match.group(2)) if name_match else None,
         "dob": _to_db_date(dob_match.group(1)) if dob_match else None,
         "doi": _to_db_date(doi_match.group(1)) if doi_match else None,
     }
@@ -129,10 +150,111 @@ def _split_patient_name(value: Any) -> Dict[str, Optional[str]]:
         cleaned,
         flags=re.IGNORECASE,
     )
-    parts = cleaned.split()
+    parts = [_clean_name_part(part) for part in cleaned.split()]
+    parts = [part for part in parts if part]
     if len(parts) < 2:
         return {"first_name": None, "last_name": None}
-    return {"first_name": parts[0], "last_name": parts[-1]}
+    return {"first_name": parts[0], "last_name": " ".join(parts[1:])}
+
+
+def _name_candidates_from_tokens(tokens: List[str]) -> List[Dict[str, Optional[str]]]:
+    if len(tokens) < 2:
+        return []
+
+    tokens = [_clean_name_part(token) for token in tokens]
+    tokens = [token for token in tokens if token]
+    if len(tokens) < 2:
+        return []
+
+    candidates = [{"first_name": tokens[0], "last_name": " ".join(tokens[1:])}]
+    if len(tokens) > 2:
+        candidates.append({"first_name": tokens[0], "last_name": tokens[-1]})
+        candidates.append({"first_name": tokens[0], "last_name": tokens[1]})
+
+    deduped: List[Dict[str, Optional[str]]] = []
+    seen = set()
+    for candidate in candidates:
+        key = (
+            str(candidate.get("first_name") or "").lower(),
+            str(candidate.get("last_name") or "").lower(),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(candidate)
+    return deduped
+
+
+def _subject_patient_name_candidates(thread_text: str) -> List[Dict[str, Optional[str]]]:
+    """Extract likely patient names from subject lines for date-constrained lookup."""
+    subject_lines = re.findall(r"(?im)^Subject:\s*(.+)$", thread_text or "")
+    candidates: List[Dict[str, Optional[str]]] = []
+    seen = set()
+    stop_words = {
+        "external",
+        "re",
+        "fw",
+        "fwd",
+        "lien",
+        "reduction",
+        "negotiation",
+        "request",
+        "precise",
+        "imaging",
+        "bill",
+        "billing",
+        "offer",
+        "client",
+        "patient",
+        "dob",
+        "doi",
+        "dol",
+        "date",
+        "loss",
+        "law",
+        "group",
+        "firm",
+        "office",
+        "apc",
+        "llp",
+        "pllc",
+    }
+
+    for subject in subject_lines:
+        cleaned = re.sub(r"\b(?:EXTERNAL|RE|FW|FWD)\s*:\s*", "", subject, flags=re.IGNORECASE)
+        cleaned = re.split(r"\b(?:DOB|DOI|DOL|date of birth|date of loss|date of injury)\b", cleaned, flags=re.IGNORECASE)[0]
+        segments = [segment.strip(" :;,") for segment in re.split(r"\s+-\s+|\s+\|\s+|/", cleaned)]
+        if cleaned.strip(" :;,") not in segments:
+            segments.insert(0, cleaned.strip(" :;,"))
+
+        for segment in segments:
+            if "@" in segment:
+                continue
+            tokens = re.findall(r"[A-Za-z][A-Za-z'’-]+", segment)
+            if not 2 <= len(tokens) <= 4:
+                continue
+            lowered = {token.lower() for token in tokens}
+            if lowered & stop_words:
+                continue
+            for candidate in _name_candidates_from_tokens(tokens):
+                key = (
+                    str(candidate.get("first_name") or "").lower(),
+                    str(candidate.get("last_name") or "").lower(),
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                candidates.append(candidate)
+
+    return candidates
+
+
+def _canonical_document_field_name(field_name: Any) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "_", str(field_name or "").lower()).strip("_")
+    for suffix in ("_ocr", "_extracted", "_from_ocr", "_from_document"):
+        if normalized.endswith(suffix):
+            normalized = normalized[: -len(suffix)]
+    return normalized
 
 
 def _document_patient_candidates(
@@ -163,17 +285,31 @@ def _document_patient_candidates(
             for field_fact in extracted_fields:
                 if not isinstance(field_fact, dict):
                     continue
-                field_name = str(field_fact.get("field") or "").lower()
+                field_name = _canonical_document_field_name(field_fact.get("field"))
                 value = field_fact.get("value")
-                if field_name in {"patient_name", "client_name", "name"}:
+                if field_name in {
+                    "patient_name",
+                    "client_name",
+                    "client_patient",
+                    "patient_client",
+                    "name",
+                }:
                     candidate.update(_split_patient_name(value))
                 elif (
-                    field_name in {"patient_dob", "dob", "date_of_birth", "birth_date"}
+                    field_name
+                    in {
+                        "patient_dob",
+                        "client_dob",
+                        "dob",
+                        "date_of_birth",
+                        "birth_date",
+                    }
                     and value
                 ):
                     candidate["dob"] = _to_db_date(str(value))
                 elif field_name in {
                     "patient_doi",
+                    "client_doi",
                     "doi",
                     "date_of_injury",
                     "date_of_loss",
@@ -290,7 +426,31 @@ async def resolve_patient(
         )
         return document_ids[0], {"method": "document_fact_patient_id", "candidates": document_ids}
 
+    subject_name_candidates = _subject_patient_name_candidates(thread_text)
     for document_candidate in _document_patient_candidates(extracted_facts):
+        for subject_name in subject_name_candidates:
+            combined_candidate = {
+                **document_candidate,
+                **subject_name,
+                "source": {
+                    **(document_candidate.get("source") or {}),
+                    "name_source": "subject",
+                },
+            }
+            await run_logger.log(
+                "patient_lookup_subject_name_document_dates_extracted",
+                BillOfferAgentStepStatus.COMPLETED,
+                output_snapshot=combined_candidate,
+                message="Combined subject name with document date candidates",
+            )
+            patient_id, patient_match = await _lookup_patient_by_name_dates(
+                name_dates=combined_candidate,
+                run_logger=run_logger,
+                source_method="subject_document_fact",
+            )
+            if patient_id:
+                return patient_id, patient_match
+
         await run_logger.log(
             "patient_lookup_document_name_dates_extracted",
             BillOfferAgentStepStatus.COMPLETED,
@@ -306,6 +466,28 @@ async def resolve_patient(
             return patient_id, patient_match
 
     name_dates = _extract_name_dates(thread_text)
+    for subject_name in subject_name_candidates:
+        subject_candidate = {
+            **name_dates,
+            **subject_name,
+            "source": {"name_source": "subject", "date_source": "thread_text"},
+        }
+        if not subject_candidate.get("dob") and not subject_candidate.get("doi"):
+            continue
+        await run_logger.log(
+            "patient_lookup_subject_name_thread_dates_extracted",
+            BillOfferAgentStepStatus.COMPLETED,
+            output_snapshot=subject_candidate,
+            message="Combined subject name with thread date candidates",
+        )
+        patient_id, patient_match = await _lookup_patient_by_name_dates(
+            name_dates=subject_candidate,
+            run_logger=run_logger,
+            source_method="subject_thread",
+        )
+        if patient_id:
+            return patient_id, patient_match
+
     await run_logger.log(
         "patient_lookup_name_dates_extracted",
         BillOfferAgentStepStatus.COMPLETED,
@@ -326,8 +508,8 @@ async def _lookup_patient_by_name_dates(
     run_logger: BillOfferRunLogger,
     source_method: str,
 ) -> Tuple[Optional[str], Dict[str, Any]]:
-    first_name = name_dates.get("first_name")
-    last_name = name_dates.get("last_name")
+    first_name = _clean_name_value(name_dates.get("first_name"))
+    last_name = _clean_name_value(name_dates.get("last_name"))
     if not first_name or not last_name:
         return None, {"method": source_method, "reason": "missing_name"}
 
@@ -405,6 +587,13 @@ async def fetch_patient_context(
         tool_name="get_patient_lien_bill_balance", arguments={"patient_id": patient_id}
     )
 
+    def mcp_response_succeeded(response: Any) -> bool:
+        if not isinstance(response, dict):
+            return False
+        if response.get("success") is False or response.get("error"):
+            return False
+        return bool(response)
+
     patient_name = "Unknown"
     dob = "Unknown"
     doi = "Unknown"
@@ -436,8 +625,8 @@ async def fetch_patient_context(
         "lien_total": lien_total,
         "studies": studies if isinstance(studies, list) else [],
         "mcp": {
-            "patient_info_success": bool(patient_info_response),
-            "bill_balance_success": bool(bill_response),
+            "patient_info_success": mcp_response_succeeded(patient_info_response),
+            "bill_balance_success": mcp_response_succeeded(bill_response),
         },
     }
     await run_logger.log(

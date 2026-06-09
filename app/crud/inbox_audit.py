@@ -1,14 +1,14 @@
 """CRUD operations for inbox audit (sync for Celery, async for API)."""
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-from app.models.email import Email
+from app.models.email import Email, Tag
 from app.models.inbox_audit import InboxAuditMiss, InboxAuditRun, RunStatus
 from app.models.processing_trace import EmailProcessingTrace, TraceStatus
 
@@ -18,14 +18,15 @@ from app.models.processing_trace import EmailProcessingTrace, TraceStatus
 
 def get_processed_conversation_ids_sync(
     db: Session, conversation_ids: List[str]
-) -> Tuple[set, set]:
-    """For a batch of conversation IDs, return (in_email_table, with_successful_trace).
+) -> Tuple[set, set, set]:
+    """Return audit state sets for a batch of conversation IDs.
 
-    A conversation is RECEIVED if it has a row in `email`.
-    A conversation is PROCESSED if it has any trace row with status='completed'.
+    A conversation was stored if it has a row in `email`.
+    A conversation was seen if any webhook/processing trace exists.
+    A conversation was processed if it reached a downstream terminal workflow step.
     """
     if not conversation_ids:
-        return set(), set()
+        return set(), set(), set()
 
     received_rows = db.execute(
         select(Email.front_conversation_id).where(
@@ -34,15 +35,29 @@ def get_processed_conversation_ids_sync(
     ).all()
     received = {row[0] for row in received_rows}
 
+    trace_rows = db.execute(
+        select(EmailProcessingTrace.front_conversation_id)
+        .where(EmailProcessingTrace.front_conversation_id.in_(conversation_ids))
+        .distinct()
+    ).all()
+    seen = {row[0] for row in trace_rows}
+
+    terminal_steps = {
+        "orchestration_queued_tagging",
+        "autorespond_completed",
+        "archive_executed",
+        "front_tags_applied",
+    }
     processed_rows = db.execute(
         select(EmailProcessingTrace.front_conversation_id)
         .where(EmailProcessingTrace.front_conversation_id.in_(conversation_ids))
         .where(EmailProcessingTrace.status == TraceStatus.COMPLETED)
+        .where(EmailProcessingTrace.step_name.in_(terminal_steps))
         .distinct()
     ).all()
     processed = {row[0] for row in processed_rows}
 
-    return received, processed
+    return received, seen, processed
 
 
 def create_run_sync(
@@ -191,8 +206,57 @@ async def mark_reviewed(
     return miss
 
 
+def build_miss_tag_counts(
+    conversation_ids: Iterable[str],
+    tag_rows: Iterable[Tuple[str, Optional[str]]],
+) -> List[Dict[str, Any]]:
+    """Count distinct missed conversations by local tag name."""
+    conversations = set(conversation_ids)
+    counts: Dict[str, int] = {}
+    tagged_conversations = set()
+    seen_pairs = set()
+
+    for conversation_id, tag_name in tag_rows:
+        if conversation_id not in conversations:
+            continue
+        label = tag_name or "Unknown tag"
+        pair = (conversation_id, label)
+        if pair in seen_pairs:
+            continue
+        seen_pairs.add(pair)
+        counts[label] = counts.get(label, 0) + 1
+        tagged_conversations.add(conversation_id)
+
+    no_local_tags = len(conversations - tagged_conversations)
+    if no_local_tags:
+        counts["No local tags"] = no_local_tags
+
+    return [
+        {"tag": tag, "count": count}
+        for tag, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
+
+async def get_miss(db: AsyncSession, *, miss_id: UUID) -> Optional[InboxAuditMiss]:
+    result = await db.execute(select(InboxAuditMiss).where(InboxAuditMiss.id == miss_id))
+    return result.scalar_one_or_none()
+
+
+async def list_open_miss_conversation_ids(
+    db: AsyncSession, *, limit: int = 500
+) -> List[str]:
+    result = await db.execute(
+        select(InboxAuditMiss.conversation_id)
+        .where(InboxAuditMiss.reviewed.is_(False))
+        .distinct()
+        .order_by(InboxAuditMiss.conversation_id)
+        .limit(limit)
+    )
+    return [row[0] for row in result.fetchall()]
+
+
 async def get_summary(db: AsyncSession, *, days: int = 7) -> Dict[str, Any]:
-    """Top-of-page summary: latest run, open misses, trend, by-inbox breakdown."""
+    """Top-of-page summary: latest run, open misses, trend, and breakdowns."""
     since = datetime.utcnow() - timedelta(days=days)
 
     last_run_result = await db.execute(
@@ -234,10 +298,24 @@ async def get_summary(db: AsyncSession, *, days: int = 7) -> Dict[str, Any]:
         for row in by_inbox_result.fetchall()
     ]
 
+    by_state_result = await db.execute(
+        select(
+            InboxAuditMiss.state,
+            func.count(func.distinct(InboxAuditMiss.conversation_id)).label("cnt"),
+        )
+        .where(InboxAuditMiss.reviewed.is_(False))
+        .group_by(InboxAuditMiss.state)
+        .order_by(func.count(func.distinct(InboxAuditMiss.conversation_id)).desc())
+    )
+    misses_by_state = [
+        {"state": row[0], "count": row[1]} for row in by_state_result.fetchall()
+    ]
+
     return {
         "last_run_at": last_run.run_at if last_run else None,
         "last_run_status": last_run.status if last_run else None,
         "open_misses": open_misses,
         "misses_by_day": misses_by_day,
         "misses_by_inbox": misses_by_inbox,
+        "misses_by_state": misses_by_state,
     }

@@ -188,6 +188,72 @@ def format_money(value: Any) -> str:
         return str(value)
 
 
+def normalize_medpay_status(value: Any) -> Optional[str]:
+    """Reduce med-pay coverage to the only accepted states: Yes, No, or missing."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+
+    normalized = re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+    if not normalized:
+        return None
+
+    unknown_markers = [
+        "not mentioned",
+        "not referenced",
+        "no reference",
+        "not provided",
+        "not stated",
+        "unknown",
+        "unclear",
+        "missing",
+        "cannot determine",
+        "not in",
+        "none stated",
+    ]
+    if normalized in {"n a", "na", "not applicable"} or any(
+        marker in normalized for marker in unknown_markers
+    ):
+        return None
+
+    no_markers = [
+        "no med pay",
+        "no medpay",
+        "no medical payments",
+        "without med pay",
+        "med pay exhausted",
+        "medpay exhausted",
+        "medical payments exhausted",
+        "no coverage",
+        "coverage exhausted",
+    ]
+    if normalized in {"no", "n", "false"} or any(marker in normalized for marker in no_markers):
+        return "No"
+
+    yes_markers = [
+        "yes med pay",
+        "yes medpay",
+        "med pay applies",
+        "medpay applies",
+        "med pay applied",
+        "medpay applied",
+        "medical payments applied",
+        "med pay available",
+        "medpay available",
+        "med pay coverage",
+        "medpay coverage",
+        "will be applied",
+        "has med pay",
+        "has medpay",
+    ]
+    if normalized in {"yes", "y", "true"} or any(marker in normalized for marker in yes_markers):
+        return "Yes"
+
+    return None
+
+
 def _sentences(text: str) -> List[str]:
     normalized = re.sub(r"\s+", " ", text or "").strip()
     if not normalized:
@@ -432,8 +498,57 @@ def _field_from_sentences(
                 evidence=sentence[:500],
                 source="email_body",
                 confidence=confidence,
-            )
+        )
     return None
+
+
+def _looks_like_precise_offer_sentence(sentence: str) -> bool:
+    lower = sentence.lower()
+    if not _first_money_in_text(sentence):
+        return False
+
+    if (
+        "total medical bill" in lower
+        or "total medicals" in lower
+        or "case settled" in lower
+        or "settlement is" in lower
+        or "settled for" in lower
+    ):
+        return False
+
+    explicit_precise = "precise" in lower or "your lien" in lower or "your bill" in lower
+    offer_terms = [
+        "offer",
+        "offering",
+        "offered",
+        "pay",
+        "payment",
+        "toward",
+        "reduction",
+        "reduce",
+        "compromise",
+        "satisfy",
+        "settlement of lien",
+        "settle this lien",
+        "settle the lien",
+        "outstanding charges",
+        "outstanding balance",
+    ]
+    if not any(term in lower for term in offer_terms):
+        return False
+
+    other_provider_terms = [
+        "vbs imaging",
+        "simonmed",
+        "radnet",
+        "renaissance imaging",
+        "beverly radiology",
+        "health diagnostics",
+    ]
+    if not explicit_precise and any(term in lower for term in other_provider_terms):
+        return False
+
+    return True
 
 
 def extract_bill_offer_facts(text: str) -> Dict[str, Dict[str, Any]]:
@@ -470,10 +585,7 @@ def extract_bill_offer_facts(text: str) -> Dict[str, Dict[str, Any]]:
 
     offer = None
     for sentence in _sentences(text):
-        lower = sentence.lower()
-        mentions_precise = "precise" in lower or "your lien" in lower or "imaging" in lower
-        mentions_offer = any(term in lower for term in ["offer", "offering", "offered", "pay", "toward"])
-        if mentions_precise and mentions_offer:
+        if _looks_like_precise_offer_sentence(sentence):
             raw_money = _first_money_in_text(sentence)
             value = normalize_money(raw_money or "")
             if value is not None:
@@ -481,7 +593,7 @@ def extract_bill_offer_facts(text: str) -> Dict[str, Dict[str, Any]]:
                     value=value,
                     evidence=sentence[:500],
                     source="email_body",
-                    confidence=0.95,
+                    confidence=0.9,
                 )
                 break
     if offer:
@@ -505,6 +617,8 @@ def _coerce_field_fact(field: str, raw_fact: Any) -> Optional[Dict[str, Any]]:
             value = float(value)
         else:
             value = None
+    elif field == "medpay_status":
+        value = normalize_medpay_status(value)
 
     confidence = raw_fact.get("confidence")
     try:
@@ -642,15 +756,23 @@ def _build_llm_prompt(context: Dict[str, Any]) -> str:
         "Rules:\n"
         "- Use the complete chronological email conversation and available OCR/document context.\n"
         "- Extract only facts that are supported by evidence in the provided context.\n"
-        "- The Precise Imaging offer amount is critical. If an amount is not clearly an offer toward "
-        "Precise Imaging's lien/bill, return null for precise_offer_amount and mark it ambiguous.\n"
+        "- The Precise Imaging offer amount is critical. Because this workflow only runs on Bill Offer "
+        "emails in Precise Imaging's inbox/tag queue, do not require the sentence to explicitly name "
+        "Precise Imaging. Treat a supported reduction/compromise/payment amount such as 'requesting a "
+        "reduction to $X to satisfy the outstanding charges' as precise_offer_amount unless the evidence "
+        "explicitly names a different provider or shows the amount is not for our lien/bill.\n"
         "- settlement_amount means the total/gross case settlement only. Do not use lien/bill/provider "
         "settlement language such as 'settle this lien', 'full and final payment', 'accept $X as full "
         "payment', or an amount offered toward Precise Imaging's lien as settlement_amount. If the only "
         "settlement-like amount is a lien/bill offer, return null for settlement_amount with notes.\n"
         "- Total medical bills means all providers, not only Precise Imaging.\n"
-        "- Med-pay status can be text, such as 'No med-pay available' or 'Med-pay exhausted'.\n"
+        "- Med-pay status must be exactly Yes, No, or null. Use null for not mentioned, "
+        "unknown, unclear, or anything other than a definitive Yes/No.\n"
         "- Preserve document-derived facts in document_facts even when they are not selected as final facts.\n"
+        "- For patient document fields, use these canonical field names exactly when present: "
+        "patient_name, patient_dob, date_of_loss, patient_doi, patient_id, attorney_name, firm_name. "
+        "Do not invent OCR-suffixed field names such as client_name_ocr; put OCR uncertainty in "
+        "ambiguity_notes instead.\n"
         "- If sources conflict, include the conflict and mark the affected selected fact ambiguous when needed.\n\n"
         "Context JSON:\n"
         f"{json.dumps(compact_context, default=str)[:60000]}"
@@ -734,8 +856,11 @@ def extract_medpay_status(text: str) -> Optional[ExtractedValue]:
         lower = sentence.lower()
         if not any(term in lower for term in ["med-pay", "med pay", "medpay", "medical payments"]):
             continue
+        normalized_status = normalize_medpay_status(sentence)
+        if not normalized_status:
+            continue
         return ExtractedValue(
-            value=sentence[:250],
+            value=normalized_status,
             evidence=sentence[:500],
             source="email_body",
             confidence=0.88,
@@ -751,15 +876,22 @@ def merge_effective_facts(
     effective = dict(extracted_facts or {})
     for field, corrected in (corrected_facts or {}).items():
         if isinstance(corrected, dict) and "value" in corrected:
+            value = corrected.get("value")
+            if field == "medpay_status":
+                value = normalize_medpay_status(value) or ""
             effective[field] = {
                 **effective.get(field, {}),
                 **corrected,
+                "value": value,
                 "source": corrected.get("source") or "user_correction",
             }
         else:
+            value = corrected
+            if field == "medpay_status":
+                value = normalize_medpay_status(value) or ""
             effective[field] = {
                 **effective.get(field, {}),
-                "value": corrected,
+                "value": value,
                 "source": "user_correction",
                 "confidence": 1.0,
             }
@@ -772,6 +904,8 @@ def compute_missing_fields(effective_facts: Dict[str, Any]) -> List[str]:
         value_obj = effective_facts.get(field)
         value = value_obj.get("value") if isinstance(value_obj, dict) else value_obj
         is_ambiguous = bool(value_obj.get("is_ambiguous")) if isinstance(value_obj, dict) else False
+        if field == "medpay_status":
+            value = normalize_medpay_status(value)
         if value is None or value == "":
             missing.append(field)
         elif field == "precise_offer_amount" and is_ambiguous:
@@ -808,10 +942,10 @@ def confidence_summary(facts: Dict[str, Any]) -> Dict[str, Any]:
 
 def build_missing_items_html(missing_fields: List[str]) -> str:
     items = [
-        f"<li>{MISSING_FIELD_LABELS.get(field, field)}</li>"
+        f"<li><strong>{MISSING_FIELD_LABELS.get(field, field)}</strong></li>"
         for field in missing_fields
     ]
-    return "<ol>" + "".join(items) + "</ol>"
+    return "<ul>" + "".join(items) + "</ul>"
 
 
 def build_studies_table(studies: List[Dict[str, Any]]) -> str:
@@ -824,15 +958,25 @@ def build_studies_table(studies: List[Dict[str, Any]]) -> str:
         description = (
             study.get("description")
             or study.get("studyDescription")
+            or study.get("study_description")
             or study.get("study")
             or study.get("modality")
             or "Study"
         )
-        date = study.get("date") or study.get("studyDate") or study.get("dos") or ""
+        date = (
+            study.get("date")
+            or study.get("studyDate")
+            or study.get("studyDateTime")
+            or study.get("study_date_time")
+            or study.get("dos")
+            or ""
+        )
         billed = (
             study.get("billedAmount")
             or study.get("billed_amount")
             or study.get("billAmount")
+            or study.get("billingAmount")
+            or study.get("billing_amount")
             or study.get("amount")
             or 0
         )

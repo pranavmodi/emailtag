@@ -6,7 +6,7 @@ nest_asyncio.apply() # Apply the patch
 import logging
 from typing import Dict, List, Any, Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timedelta
 import asyncio # Add asyncio import
 from contextlib import contextmanager
 
@@ -133,6 +133,130 @@ class TaggingTaskWithRetry(Task):
 
 logger = get_task_logger(__name__)
 
+STALE_PENDING_OCR_AFTER = timedelta(minutes=10)
+
+
+def _extract_front_attachments(raw_data: Any) -> List[Dict[str, Any]]:
+    """Return Front attachment dictionaries from known webhook payload shapes."""
+    if not isinstance(raw_data, dict):
+        return []
+
+    candidates: List[Any] = []
+    target_data = raw_data.get("target", {}).get("data", {}) if isinstance(raw_data.get("target"), dict) else {}
+    if isinstance(target_data, dict):
+        candidates.extend(target_data.get("attachments") or [])
+    candidates.extend(raw_data.get("attachments") or [])
+    candidates.extend(raw_data.get("_attachments") or [])
+
+    attachments: List[Dict[str, Any]] = []
+    seen = set()
+    for index, attachment in enumerate(candidates):
+        if not isinstance(attachment, dict):
+            continue
+        key = attachment.get("url") or attachment.get("id") or attachment.get("uid") or index
+        if key in seen:
+            continue
+        seen.add(key)
+        attachments.append(attachment)
+    return attachments
+
+
+def _queue_attachment_ocr_tasks(email_id: str, attachments_data: List[Dict[str, Any]]) -> int:
+    queued = 0
+    for attachment in attachments_data:
+        attachment_url = attachment.get("url")
+        if not attachment_url:
+            continue
+        filename = attachment.get("filename") or attachment.get("name")
+        content_type = attachment.get("content_type") or attachment.get("type")
+        send_attachment_to_document_processing.apply_async(
+            args=[email_id, attachment_url],
+            kwargs={"filename": filename, "content_type": content_type},
+            queue="ocr",
+        )
+        queued += 1
+    return queued
+
+
+def _queue_stale_incomplete_conversation_ocr(
+    db: Session,
+    *,
+    front_conversation_id: Optional[str],
+    current_email_id: UUID,
+) -> int:
+    """Queue missing OCR for older stored emails in the same conversation.
+
+    New Front messages do not cause older attachments to be OCR'd again. This helper only
+    fills gaps for older stored emails whose attachment OCR never completed or whose pending
+    OCR state is stale.
+    """
+    if not front_conversation_id:
+        return 0
+
+    now = datetime.utcnow()
+    queued_total = 0
+    older_emails = (
+        db.query(Email)
+        .filter(
+            Email.front_conversation_id == front_conversation_id,
+            Email.id != current_email_id,
+            Email.has_attachments.is_(True),
+        )
+        .all()
+    )
+
+    for prior_email in older_emails:
+        attachments_data = _extract_front_attachments(prior_email.raw_data)
+        attachments_with_urls = [item for item in attachments_data if item.get("url")]
+        if not attachments_with_urls:
+            continue
+
+        processed_urls = {
+            item.get("attachment_url")
+            for item in (prior_email.ocr_results or [])
+            if isinstance(item, dict) and item.get("attachment_url")
+        }
+        missing_attachments = [
+            item for item in attachments_with_urls if item.get("url") not in processed_urls
+        ]
+        if not missing_attachments:
+            continue
+
+        completed_count = prior_email.ocr_attachments_completed or len(processed_urls)
+        expected_total = max(
+            prior_email.ocr_attachments_total or 0,
+            completed_count + len(missing_attachments),
+            len(attachments_with_urls),
+        )
+        is_recent_pending = (
+            prior_email.status == "pending_ocr"
+            and prior_email.updated_at
+            and now - prior_email.updated_at < STALE_PENDING_OCR_AFTER
+        )
+        if is_recent_pending:
+            continue
+
+        email_crud_sync.update(
+            db,
+            db_obj=prior_email,
+            obj_in=EmailUpdate(
+                status="pending_ocr",
+                ocr_attachments_total=expected_total,
+                ocr_attachments_completed=completed_count,
+            ),
+        )
+        queued = _queue_attachment_ocr_tasks(str(prior_email.id), missing_attachments)
+        queued_total += queued
+        if queued:
+            logger.info(
+                "Queued %s stale/missing OCR attachment(s) for prior email %s in conversation %s",
+                queued,
+                prior_email.id,
+                front_conversation_id,
+            )
+
+    return queued_total
+
 # Helper function to format conversation history for the agent
 def _format_conversation_history_for_agent(
     structured_messages: List[Dict[str, Any]],
@@ -202,6 +326,18 @@ def process_email(email_id: str) -> Dict:
 
         front_conversation_id = email_obj.front_conversation_id
 
+        queued_prior_ocr = _queue_stale_incomplete_conversation_ocr(
+            db,
+            front_conversation_id=front_conversation_id,
+            current_email_id=email_uuid,
+        )
+        if queued_prior_ocr:
+            logger.info(
+                "Queued %s older conversation attachment(s) for OCR while processing email %s",
+                queued_prior_ocr,
+                email_id,
+            )
+
         # Set up log context for capturing logs to database
         # This must be outside the with block so we can flush on exit
         log_ctx = set_conversation_context(front_conversation_id, email_id)
@@ -238,9 +374,7 @@ def process_email(email_id: str) -> Dict:
             try:
                 # Path to attachments in raw_data might vary based on your webhook structure
                 # Example path assuming FrontApp webhook structure stored in raw_data:
-                if email_obj.raw_data and isinstance(email_obj.raw_data, dict):
-                    target_data = email_obj.raw_data.get('target', {}).get('data', {})
-                    attachments_data = target_data.get('attachments', [])
+                attachments_data = _extract_front_attachments(email_obj.raw_data)
                 
                 if not attachments_data:
                      logger.warning(f"Email {email_id} marked with has_attachments but no attachment data found in raw_data. Skipping OCR.")
@@ -271,11 +405,10 @@ def process_email(email_id: str) -> Dict:
                 if attachment_url:
                     filename = attachment.get("filename") or attachment.get("name")
                     content_type = attachment.get("content_type") or attachment.get("type")
-                    # send_attachment_to_ocr.delay(email_id, attachment_url)
                     send_attachment_to_document_processing.apply_async(
                         args=[email_id, attachment_url],
                         kwargs={"filename": filename, "content_type": content_type},
-                        queue='processing'
+                        queue='ocr'
                     )
                 else:
                     logger.warning(f"Attachment for email {email_id} is missing a URL. Decrementing total.")
@@ -1144,9 +1277,37 @@ def perform_tagging_task(self, email_id: str) -> Dict:
             for tag_name in new_tags:
                 tag_obj = tag_crud_sync.get_or_create(db, name=tag_name)
                 tag_objects.append(tag_obj)
-            email_obj.tags = tag_objects # This updates the email_obj.tags relationship in the current session
-            # Note: The actual commit that saves this relationship change will happen
-            # during the subsequent email_crud_sync.update() calls for status updates.
+
+            # Persist the email's tag associations idempotently. Front can deliver
+            # duplicate webhook events, so two perform_tagging_task runs can process
+            # the same email concurrently and race on inserting the same
+            # (email_id, tag_id) row. The ORM collection assignment
+            # (email_obj.tags = tag_objects) emits a plain INSERT that fails the
+            # loser of that race with a email_tag_association_pkey UniqueViolation.
+            # We instead delete stale associations and insert the new ones with
+            # ON CONFLICT DO NOTHING, which preserves the "tags = the classified set"
+            # semantics while tolerating the concurrent insert.
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+            from app.models.email import email_tag_association
+
+            tag_ids = [t.id for t in tag_objects]
+            db.execute(
+                email_tag_association.delete().where(
+                    email_tag_association.c.email_id == email_obj.id,
+                    email_tag_association.c.tag_id.notin_(tag_ids),
+                )
+            )
+            if tag_ids:
+                db.execute(
+                    pg_insert(email_tag_association)
+                    .values([{"email_id": email_obj.id, "tag_id": tid} for tid in tag_ids])
+                    .on_conflict_do_nothing()
+                )
+            db.commit()
+            # Reload the relationship from committed state so the subsequent
+            # email_crud_sync.update() commits don't try to re-insert these
+            # associations through the ORM (which would re-introduce the race).
+            db.expire(email_obj, ["tags"])
 
             # --- Step 2: Resolve conflicts and attempt to apply tags to Front ---
             # current_front_tags were fetched earlier and represent the state on Front before our changes.

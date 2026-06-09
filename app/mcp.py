@@ -15,6 +15,23 @@ from app.core.config import settings # Import settings
 logger = get_task_logger(__name__)
 
 
+def _parse_mcp_response_text(response_text: str) -> Optional[Dict[str, Any]]:
+    """Parse JSON-RPC from either plain JSON or SSE with optional keepalive comments."""
+    stripped = response_text.strip()
+    if not stripped:
+        return None
+
+    data_lines = []
+    for line in stripped.splitlines():
+        if line.startswith("data:"):
+            data_lines.append(line[len("data:") :].strip())
+
+    if data_lines:
+        return json.loads("\n".join(data_lines))
+
+    return json.loads(stripped)
+
+
 class MCPClient:
     """
     Client for connecting to and interacting with MCP servers.
@@ -68,27 +85,14 @@ class MCPClient:
                     return False
                 
                 response_text = response.text.strip()
-                json_data = None
-
-                # Handle Server-Sent Events (SSE) format from streamable MCP servers
-                if response_text.startswith('event: message'):
-                    for line in response_text.split('\n'):
-                        if line.startswith('data:'):
-                            json_str = line[len('data:'):].strip()
-                            try:
-                                json_data = json.loads(json_str)
-                                break # Found and parsed the data line
-                            except json.JSONDecodeError:
-                                logger.error(f"Failed to decode JSON from SSE data line: '{json_str}'")
-                                return False
-                else:
-                    # Fallback for standard JSON response
-                    try:
-                        json_data = response.json()
-                    except json.JSONDecodeError:
-                        # This covers the previous error: Failed to decode JSON from MCP server response.
-                        logger.error(f"Response was not valid JSON or SSE. Status: 200. Body: '{response_text}'")
-                        return False
+                try:
+                    json_data = _parse_mcp_response_text(response_text)
+                except json.JSONDecodeError:
+                    logger.error(
+                        "Response was not valid JSON or SSE. Status: 200. Body: '%s'",
+                        response_text,
+                    )
+                    return False
 
                 if json_data:
                     if "result" in json_data and "tools" in json_data["result"]:
@@ -170,24 +174,15 @@ class MCPClient:
                 response_text = response.text.strip()
                 json_rpc_response = None
 
-                # Handle Server-Sent Events (SSE) format
-                if response_text.startswith('event: message'):
-                    for line in response_text.split('\n'):
-                        if line.startswith('data:'):
-                            json_str = line[len('data:'):].strip()
-                            try:
-                                json_rpc_response = json.loads(json_str)
-                                break
-                            except json.JSONDecodeError:
-                                logger.error(f"Failed to decode JSON from SSE data line for tool '{tool_name}': '{json_str}'")
-                                return {"success": False, "error": "Invalid SSE JSON from server"}
-                else:
-                    # Fallback for standard JSON response
-                    try:
-                        json_rpc_response = response.json()
-                    except json.JSONDecodeError:
-                        logger.warning(f"Response for tool '{tool_name}' was not JSON or SSE. Returning raw text. Body: '{response_text}'")
-                        return {"success": True, "result": response_text}
+                try:
+                    json_rpc_response = _parse_mcp_response_text(response_text)
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "Response for tool '%s' was not JSON or SSE. Body: '%s'",
+                        tool_name,
+                        response_text,
+                    )
+                    return {"success": False, "error": "Invalid JSON/SSE response from MCP server"}
 
                 if json_rpc_response is None:
                     logger.error(f"Could not extract JSON data from tool '{tool_name}' response: {response_text}")
@@ -338,4 +333,4 @@ async def list_mcp_tools(server_url: Optional[str] = None) -> List[Dict[str, Any
     if not client.is_connected:
         await client.connect()
     
-    return client.get_available_tools() 
+    return client.get_available_tools()

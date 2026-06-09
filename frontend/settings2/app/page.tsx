@@ -19,7 +19,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-import { ApiError, SettingsApi } from "@/lib/api";
+import { ApiError, BillOffersApi, SettingsApi } from "@/lib/api";
 import { useTracking } from "@/lib/useTracking";
 import { cn } from "@/lib/utils";
 import type {
@@ -62,6 +62,13 @@ const APT_STATUS_MODE_OPTIONS: SegmentOption<AptStatusMode>[] = [
   { value: "production", label: "Production", description: "Send via Front API" },
 ];
 
+type BillOfferMode = "off" | "sandbox" | "production";
+const BILL_OFFER_MODE_OPTIONS: SegmentOption<BillOfferMode>[] = [
+  { value: "off", label: "Off", description: "Bill Offer agent disabled" },
+  { value: "sandbox", label: "Sandbox", description: "Process emails and draft replies for review" },
+  { value: "production", label: "Production", description: "Process emails and send eligible replies automatically" },
+];
+
 const easing = { duration: 0.45, ease: [0.16, 1, 0.3, 1] };
 
 const AUTORESPOND_LAYOUT: Array<{
@@ -90,12 +97,7 @@ const AUTORESPOND_LAYOUT: Array<{
     accent: "from-fuchsia-500 to-rose-500",
     icon: FileWarning,
   },
-  {
-    key: "bill_offer",
-    settingKey: "autorespond_bill_offer",
-    accent: "from-amber-500 to-orange-500",
-    icon: PiggyBank,
-  },
+  // Note: bill_offer removed from here - now uses custom 3-way toggle (off/sandbox/production)
   // Note: liens removed from here - now uses custom 3-way toggle (off/sandbox/production)
 ];
 
@@ -132,6 +134,7 @@ export default function Settings2Page() {
   const [lienMode, setLienMode] = useState<LienMode>("off");
   const [billBalanceMode, setBillBalanceMode] = useState<BillBalanceMode>("off");
   const [aptStatusMode, setAptStatusMode] = useState<AptStatusMode>("off");
+  const [billOfferMode, setBillOfferMode] = useState<BillOfferMode>("sandbox");
   const [isLoading, setIsLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [autorespondError, setAutorespondError] = useState<string | null>(null);
@@ -142,6 +145,7 @@ export default function Settings2Page() {
   const [lienModeError, setLienModeError] = useState<string | null>(null);
   const [billBalanceModeError, setBillBalanceModeError] = useState<string | null>(null);
   const [aptStatusModeError, setAptStatusModeError] = useState<string | null>(null);
+  const [billOfferModeError, setBillOfferModeError] = useState<string | null>(null);
   const [noActionList, setNoActionList] = useState<string[]>([]);
   const [noActionError, setNoActionError] = useState<string | null>(null);
   const [newNoActionItem, setNewNoActionItem] = useState<string>("");
@@ -166,7 +170,7 @@ export default function Settings2Page() {
         if (!mounted) return;
         setUser(auth.username ?? "Admin");
 
-        const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, credentialScreeningPayload, lienTestModePayload, billBalanceTestModePayload, aptStatusTestModePayload, noActionPayload] = await Promise.all([
+        const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, credentialScreeningPayload, lienTestModePayload, billBalanceTestModePayload, aptStatusTestModePayload, billOfferSettingsPayload, noActionPayload] = await Promise.all([
           SettingsApi.getProcessingStatus(),
           SettingsApi.getAutorespondSettings(),
           SettingsApi.getWorkspaceSettings(),
@@ -175,6 +179,7 @@ export default function Settings2Page() {
           SettingsApi.getLienTestModeStatus(),
           SettingsApi.getBillBalanceTestModeStatus(),
           SettingsApi.getAptStatusTestModeStatus(),
+          BillOffersApi.getSettings(),
           SettingsApi.getNoActionList(),
         ]);
         if (!mounted) return;
@@ -213,6 +218,14 @@ export default function Settings2Page() {
         } else {
           setAptStatusMode("production");
         }
+        const billOfferEnabled = autorespondPayload.bill_offer?.enabled ?? false;
+        setBillOfferMode(
+          !billOfferEnabled
+            ? "off"
+            : billOfferSettingsPayload.review_required
+              ? "sandbox"
+              : "production"
+        );
         // Set no-action list
         setNoActionList(noActionPayload.no_action_list || []);
         // Store timestamps for optimistic concurrency
@@ -232,6 +245,7 @@ export default function Settings2Page() {
         setLienModeError(null);
         setBillBalanceModeError(null);
         setAptStatusModeError(null);
+        setBillOfferModeError(null);
         setNoActionError(null);
         setConflictMessage(null);
       } catch (error) {
@@ -258,7 +272,7 @@ export default function Settings2Page() {
   // Re-fetch all settings when the tab becomes visible again (handles stale state)
   const refreshSettings = useCallback(async () => {
     try {
-      const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, credentialScreeningPayload, lienTestModePayload, billBalanceTestModePayload, aptStatusTestModePayload, noActionPayload] = await Promise.all([
+      const [processingPayload, autorespondPayload, workspacePayload, internalDomainsPayload, credentialScreeningPayload, lienTestModePayload, billBalanceTestModePayload, aptStatusTestModePayload, billOfferSettingsPayload, noActionPayload] = await Promise.all([
         SettingsApi.getProcessingStatus(),
         SettingsApi.getAutorespondSettings(),
         SettingsApi.getWorkspaceSettings(),
@@ -267,6 +281,7 @@ export default function Settings2Page() {
         SettingsApi.getLienTestModeStatus(),
         SettingsApi.getBillBalanceTestModeStatus(),
         SettingsApi.getAptStatusTestModeStatus(),
+        BillOffersApi.getSettings(),
         SettingsApi.getNoActionList(),
       ]);
       setStatus(processingPayload);
@@ -283,6 +298,14 @@ export default function Settings2Page() {
       const aptStatusEnabled = autorespondPayload.apt_status_req?.enabled ?? false;
       const aptStatusTestMode = aptStatusTestModePayload.apt_status_test_mode ?? false;
       setAptStatusMode(!aptStatusEnabled ? "off" : aptStatusTestMode ? "sandbox" : "production");
+      const billOfferEnabled = autorespondPayload.bill_offer?.enabled ?? false;
+      setBillOfferMode(
+        !billOfferEnabled
+          ? "off"
+          : billOfferSettingsPayload.review_required
+            ? "sandbox"
+            : "production"
+      );
       setNoActionList(noActionPayload.no_action_list || []);
       setSettingTimestamps({
         email_processing: processingPayload.last_updated,
@@ -626,6 +649,60 @@ export default function Settings2Page() {
       trackError(message, "apt_status_mode_change");
     } finally {
       setBusyFlag("apt_status_mode", false);
+    }
+  };
+
+  const handleBillOfferModeChange = async (mode: BillOfferMode) => {
+    setBusyFlag("bill_offer_mode", true);
+    try {
+      const billOfferEnabled = mode !== "off";
+      const reviewRequired = mode !== "production";
+
+      const [autorespondResult] = await Promise.all([
+        SettingsApi.toggleAutorespond(
+          "autorespond_bill_offer",
+          billOfferEnabled,
+          settingTimestamps.autorespond_bill_offer
+        ),
+        BillOffersApi.setReviewRequired(reviewRequired),
+      ]);
+
+      setBillOfferMode(mode);
+      setAutorespond((prev) =>
+        prev
+          ? {
+              ...prev,
+              bill_offer: prev.bill_offer
+                ? { ...prev.bill_offer, enabled: billOfferEnabled }
+                : prev.bill_offer,
+            }
+          : prev
+      );
+      setSettingTimestamps((prev) => ({
+        ...prev,
+        autorespond_bill_offer: autorespondResult.updated_at ?? null,
+      }));
+      setBillOfferModeError(null);
+      setConflictMessage(null);
+      trackAction("bill_offer_mode_change", "BillOfferModeToggle", { new_mode: mode });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      if (error instanceof ApiError && error.status === 409) {
+        setConflictMessage(error.message);
+        await refreshSettings();
+        return;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to update bill offer mode";
+      setBillOfferModeError(message);
+      trackError(message, "bill_offer_mode_change");
+    } finally {
+      setBusyFlag("bill_offer_mode", false);
     }
   };
 
@@ -1099,6 +1176,69 @@ export default function Settings2Page() {
               </motion.div>
             );
           })}
+
+          {/* Bill Offer 3-way toggle (Off / Sandbox / Production) */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...easing, delay: 0.08 }}
+            className="h-full"
+          >
+            <Card className={isGlobalDisabled ? "opacity-60" : "opacity-100"}>
+              <CardContent className="space-y-4 pt-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg">
+                        <PiggyBank className="h-5 w-5" />
+                      </span>
+                      <div>
+                        <p className="text-base font-semibold text-slate-900">
+                          {autorespond?.bill_offer?.label ?? "Bill Offer"}
+                        </p>
+                        <p className="text-xs uppercase tracking-wide text-slate-400">
+                          bill offer
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-500">
+                      {autorespond?.bill_offer?.description ??
+                        "Extracts bill offer details, prepares missing-information replies, and routes completed intakes for Phase 2 review."}
+                    </p>
+                  </div>
+                  <SegmentedControl
+                    options={BILL_OFFER_MODE_OPTIONS}
+                    value={billOfferMode}
+                    onChange={handleBillOfferModeChange}
+                    disabled={isGlobalDisabled || busy.bill_offer_mode}
+                  />
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
+                  <strong>Sandbox:</strong> emails are processed and reply drafts are created for review.
+                  <br />
+                  <strong>Production:</strong> eligible Phase 1 replies are sent automatically.
+                  <br />
+                  <strong>Off:</strong> Bill Offer emails are not handled by this agent.
+                </div>
+                <Badge
+                  className={
+                    billOfferMode === "production"
+                      ? STATUS_BADGE.enabled
+                      : billOfferMode === "sandbox"
+                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : STATUS_BADGE.disabled
+                  }
+                >
+                  {billOfferMode === "production"
+                    ? "Production"
+                    : billOfferMode === "sandbox"
+                      ? "Sandbox"
+                      : "Disabled"}
+                </Badge>
+                {billOfferModeError && <ErrorBanner message={billOfferModeError} />}
+              </CardContent>
+            </Card>
+          </motion.div>
 
           {/* Apt Status 3-way toggle (Off / Sandbox / Production) */}
           <motion.div

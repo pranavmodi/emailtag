@@ -135,6 +135,7 @@ class BillOfferTaggedEmailResponse(BaseModel):
     subject: Optional[str] = None
     sender: str
     received_at: datetime
+    search_text: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
     has_intake: bool = False
     intake: Optional[BillOfferIntakeResponse] = None

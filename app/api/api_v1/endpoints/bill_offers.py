@@ -35,6 +35,7 @@ from app.services.bill_offer_extraction_service import (
     compute_missing_fields,
     confidence_summary,
     merge_effective_facts,
+    normalize_medpay_status,
 )
 
 router = APIRouter()
@@ -129,6 +130,24 @@ def _intake_response(intake: Any) -> Optional[BillOfferIntakeResponse]:
         return None
     response = BillOfferIntakeResponse.model_validate(intake)
     response.extracted_facts = _decorate_extracted_facts_for_response(response.extracted_facts)
+    for facts in (response.extracted_facts, response.corrected_facts):
+        if not isinstance(facts, dict):
+            continue
+        medpay_fact = facts.get("medpay_status")
+        if isinstance(medpay_fact, dict):
+            medpay_fact["value"] = normalize_medpay_status(medpay_fact.get("value")) or ""
+
+    if response.status != BillOfferIntakeStatus.MANUAL_REVIEW:
+        effective = merge_effective_facts(response.extracted_facts, response.corrected_facts)
+        missing_fields = compute_missing_fields(effective) if response.patient_id else []
+        response.missing_fields = missing_fields
+        response.status = (
+            BillOfferIntakeStatus.PENDING_PATIENT
+            if not response.patient_id
+            else BillOfferIntakeStatus.PENDING_DETAILS
+            if missing_fields
+            else BillOfferIntakeStatus.READY_FOR_PHASE_2
+        )
     return response
 
 
@@ -173,9 +192,17 @@ async def list_bill_offer_intakes(
 async def list_bill_offer_tagged_emails(
     skip: int = 0,
     limit: int = Query(100, ge=1, le=500),
+    search: Optional[str] = Query(None, max_length=200),
+    status_filter: Optional[str] = Query(None, alias="status", max_length=50),
     db: AsyncSession = Depends(get_db),
 ) -> BillOfferTaggedEmailListResponse:
-    rows, total = await crud.list_tagged_bill_offer_emails(db, skip=skip, limit=limit)
+    rows, total = await crud.list_tagged_bill_offer_emails(
+        db,
+        skip=skip,
+        limit=limit,
+        search=search,
+        status=status_filter,
+    )
     items = []
     for row in rows:
         email = row["email"]
@@ -187,6 +214,7 @@ async def list_bill_offer_tagged_emails(
                 subject=email.subject,
                 sender=email.sender,
                 received_at=email.created_at,
+                search_text=row.get("search_text"),
                 tags=["Bill Offer"],
                 has_intake=bool(intake),
                 intake=_intake_response(intake) if intake else None,
