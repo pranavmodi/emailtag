@@ -68,6 +68,14 @@ function formatMoney(value: any) {
   return Number.isFinite(parsed) ? `$${parsed.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : String(value);
 }
 
+function studyDateValue(study: any) {
+  return study?.date || study?.studyDate || study?.study_date || study?.studyDateTime || study?.study_date_time || study?.dos || "-";
+}
+
+function studyBilledValue(study: any) {
+  return study?.billedAmount ?? study?.billed_amount ?? study?.billAmount ?? study?.billingAmount ?? study?.billing_amount ?? study?.amount;
+}
+
 function valueOf(facts: Record<string, any> | null | undefined, field: string) {
   const value = facts?.[field];
   if (value && typeof value === "object" && "value" in value) return value.value ?? "";
@@ -772,10 +780,10 @@ export default function BillOffersPage() {
                               </thead>
                               <tbody>
                                 {studies.map((study: any, index: number) => (
-                                  <tr key={`${study.description || study.study || "study"}-${index}`} className="border-t border-slate-100">
+                                  <tr key={`${study.description || study.studyDescription || study.study || "study"}-${index}`} className="border-t border-slate-100">
                                     <td className="px-2 py-2">{study.description || study.studyDescription || study.study || study.modality || "Study"}</td>
-                                    <td className="px-2 py-2">{study.date || study.studyDate || study.dos || "-"}</td>
-                                    <td className="px-2 py-2 text-right">{formatMoney(study.billedAmount || study.billed_amount || study.billAmount || study.amount)}</td>
+                                    <td className="px-2 py-2">{studyDateValue(study)}</td>
+                                    <td className="px-2 py-2 text-right">{formatMoney(studyBilledValue(study))}</td>
                                   </tr>
                                 ))}
                               </tbody>
