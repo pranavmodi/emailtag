@@ -67,6 +67,30 @@ services:
     restart: unless-stopped
 
   # ───────────────────────────────────────────────
+  # Celery research/analysis worker
+  # ───────────────────────────────────────────────
+  research-worker:
+    build: .
+    image: emailtag-worker
+    container_name: emailtag-research-worker
+    network_mode: host
+    mem_limit: 768m
+    mem_reservation: 128m
+    cpus: "0.50"
+    pids_limit: 100
+    env_file:
+      - .env
+    environment:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    volumes:
+      - sandbox-tmp:/tmp
+    command: celery -A app.tasks.worker worker -n emailtag-research@%h -l info -Q research --concurrency=2 --prefetch-multiplier=1
+    restart: unless-stopped
+
+  # ───────────────────────────────────────────────
   # Celery beat: scheduler for periodic tasks (daily inbox audit)
   # ───────────────────────────────────────────────
   beat:

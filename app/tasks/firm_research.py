@@ -44,13 +44,19 @@ class ResearchTask(Task):
     """Base task class for research tasks with error handling."""
 
     autoretry_for = (Exception,)
+    rate_limit = "10/m"
     retry_backoff = True
     retry_backoff_max = 300
     retry_jitter = True
     max_retries = 2
 
 
-@celery_app.task(bind=True, base=ResearchTask, name="app.tasks.firm_research.research_firm_task")
+@celery_app.task(
+    bind=True,
+    base=ResearchTask,
+    name="app.tasks.firm_research.research_firm_task",
+    rate_limit="10/m",
+)
 def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
     """
     Background task to research a firm and its leadership.
@@ -445,7 +451,12 @@ def analyze_leadership_email_history(pif_id: str) -> Dict[str, Any]:
         db.close()
 
 
-@celery_app.task(bind=True, base=ResearchTask, name="app.tasks.firm_research.analyze_leadership_emails_task")
+@celery_app.task(
+    bind=True,
+    base=ResearchTask,
+    name="app.tasks.firm_research.analyze_leadership_emails_task",
+    rate_limit="10/m",
+)
 def analyze_leadership_emails_task(self, pif_id: str) -> Dict[str, Any]:
     """
     Celery task to analyze leadership email history for a PIF firm.
@@ -460,7 +471,12 @@ def analyze_leadership_emails_task(self, pif_id: str) -> Dict[str, Any]:
     return analyze_leadership_email_history(pif_id)
 
 
-@celery_app.task(bind=True, base=ResearchTask, name="app.tasks.firm_research.research_staff_task")
+@celery_app.task(
+    bind=True,
+    base=ResearchTask,
+    name="app.tasks.firm_research.research_staff_task",
+    rate_limit="10/m",
+)
 def research_staff_task(self, pif_id: str) -> Dict[str, Any]:
     """
     Background task to research operational staff at a firm.

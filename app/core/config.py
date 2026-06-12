@@ -103,6 +103,7 @@ class Settings(BaseSettings):
 
     # OpenAI
     OPENAI_API_KEY: str
+    OPENAI_RESEARCH_API_KEY: Optional[str] = None
     
     # Google API
     GOOGLE_API_KEY: str

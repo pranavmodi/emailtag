@@ -216,7 +216,7 @@ def research_firm(
         return None
 
     headers = {
-        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+        "Authorization": f"Bearer {settings.RESEARCH_OPENAI_API_KEY}",
         "Content-Type": "application/json",
     }
 
@@ -350,7 +350,7 @@ async def research_firm_async(
         return None
 
     headers = {
-        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+        "Authorization": f"Bearer {settings.RESEARCH_OPENAI_API_KEY}",
         "Content-Type": "application/json",
     }
 
@@ -634,7 +634,7 @@ def research_firm_staff(
         return None
 
     headers = {
-        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+        "Authorization": f"Bearer {settings.RESEARCH_OPENAI_API_KEY}",
         "Content-Type": "application/json",
     }
 
@@ -934,6 +934,9 @@ def generate_outreach_messages(
     research_context: Optional[Dict[str, Any]] = None,
 ) -> tuple[List[Dict[str, Any]], List[str]]:
     """
+    Deprecated: outreach generation now lives in Possible OS. This helper is
+    retained only for backward compatibility with the legacy pif-info endpoint.
+
     Generate personalized LinkedIn outreach messages for each leadership member.
 
     Uses OpenAI gpt-4o via Chat Completions API to generate 4 message variants
@@ -948,7 +951,7 @@ def generate_outreach_messages(
         Tuple of (list of message result dicts, list of error strings)
     """
     headers = {
-        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+        "Authorization": f"Bearer {settings.RESEARCH_OPENAI_API_KEY}",
         "Content-Type": "application/json",
     }
 
@@ -1110,7 +1113,7 @@ def research_leadership_member(
         return None
 
     headers = {
-        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+        "Authorization": f"Bearer {settings.RESEARCH_OPENAI_API_KEY}",
         "Content-Type": "application/json",
     }
 

@@ -4,13 +4,14 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class ContactPerson(BaseModel):
     """Contact person at the law firm."""
     name: str = Field(default="", description="Full name of the contact person")
     title: str = Field(default="", description="Job title or role")
+    persona: Optional[str] = Field(None, description="Persona taxonomy key")
     email: str = Field(default="", description="Email address")
     phone: str = Field(default="", description="Phone number")
     extension: str = Field(default="", description="Phone extension if any")
@@ -20,6 +21,7 @@ class LeadershipMember(BaseModel):
     """Leadership team member from research."""
     name: str = Field(default="", description="Full name")
     title: str = Field(default="", description="Title/position at the firm")
+    persona: Optional[str] = Field(None, description="Persona taxonomy key")
     email: Optional[str] = Field(None, description="Email address")
     phone: Optional[str] = Field(None, description="Phone number")
     linkedin: Optional[str] = Field(None, description="LinkedIn profile URL")
@@ -35,6 +37,7 @@ class StaffMember(BaseModel):
         default="other",
         description="Role category: intake_specialist, case_manager, paralegal, office_manager, billing_coordinator, medical_records, other"
     )
+    persona: Optional[str] = Field(None, description="Persona taxonomy key")
     email: Optional[str] = Field(None, description="Email address")
     phone: Optional[str] = Field(None, description="Phone number")
     linkedin: Optional[str] = Field(None, description="LinkedIn profile URL")
@@ -82,6 +85,7 @@ class BehavioralData(BaseModel):
     topic_distribution: Dict[str, int] = Field(default_factory=dict)
     primary_pain_point: Optional[str] = None
     sender_roles: Dict[str, int] = Field(default_factory=dict)
+    contact_profiles: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     peak_contact_days: List[str] = Field(default_factory=list)
     after_hours_ratio: float = 0.0
     analyzed_at: Optional[str] = None
@@ -125,6 +129,15 @@ class PifInfoResponse(PifInfoBase):
     class Config:
         from_attributes = True
 
+    @computed_field
+    @property
+    def contact_profiles(self) -> Optional[Dict[str, Any]]:
+        """Expose behavioral_data.contact_profiles at top level for orchestrators."""
+        if not self.behavioral_data:
+            return None
+        profiles = self.behavioral_data.get("contact_profiles")
+        return profiles if isinstance(profiles, dict) else None
+
 
 class ResearchResponse(BaseModel):
     """Schema for research response."""
@@ -154,6 +167,42 @@ class ResearchStatusResponse(BaseModel):
     leadership: Optional[List[LeadershipMember]] = None
     research_data: Optional[Dict[str, Any]] = None
     message: str
+
+
+class ResearchBatchRequest(BaseModel):
+    """Batch research dispatch request for orchestrators."""
+    limit: int = Field(10, ge=1, description="Maximum firms to queue; hard limit 25")
+    kinds: List[str] = Field(
+        default_factory=lambda: ["research"],
+        description="Any of: research, research_staff, analyze_behavior",
+    )
+    order_by: str = Field("icp_score", description="Currently supports icp_score or updated_at")
+    only_unresearched: bool = Field(True, description="Skip firms with completed research")
+
+
+class ResearchBatchItem(BaseModel):
+    """Batch dispatch result for one firm."""
+    pif_id: UUID
+    task_ids: Dict[str, str] = Field(default_factory=dict)
+
+
+class ResearchTaskState(BaseModel):
+    """Bulk research state for one queued/researched firm."""
+    pif_id: UUID
+    firm_name: str
+    research_status: Optional[str] = None
+    staff_research_status: Optional[str] = None
+    behavior_status: Optional[str] = None
+    icp_score: Optional[int] = None
+    icp_tier: Optional[str] = None
+    last_researched_at: Optional[datetime] = None
+    updated_at: datetime
+
+
+class ResearchStatusBulkResponse(BaseModel):
+    """Bulk research polling response."""
+    items: List[ResearchTaskState]
+    total: int
 
 
 class PifInfoListResponse(BaseModel):
@@ -270,6 +319,11 @@ class AnalyzeBehaviorResponse(BaseModel):
     message: str
 
 
+class AnalyzeBehaviorRequest(BaseModel):
+    """Optional behavior-analysis request flags."""
+    signatures: bool = Field(False, description="Run signature extraction after behavior analysis")
+
+
 class BatchTaskResponse(BaseModel):
     """Schema for batch task dispatch response."""
     task_id: str
@@ -295,6 +349,7 @@ class PersonSearchResult(BaseModel):
     linkedin: Optional[str] = None
     bio: Optional[str] = None
     role_category: Optional[str] = None
+    persona: Optional[str] = None
     source: str  # 'leadership' or 'staff'
     firm_id: str
     firm_name: str

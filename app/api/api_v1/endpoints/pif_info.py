@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.pif_info import pif_info as pif_info_crud
@@ -19,8 +19,12 @@ from app.schemas.pif_info import (
     ProcessDayRequest,
     ProcessDayResponse,
     ResearchResponse,
+    ResearchBatchItem,
+    ResearchBatchRequest,
     ResearchStartResponse,
+    ResearchStatusBulkResponse,
     ResearchStatusResponse,
+    ResearchTaskState,
     LeadershipMember,
     OutreachRequest,
     OutreachResponse,
@@ -30,6 +34,7 @@ from app.schemas.pif_info import (
     FirmLookupResponse,
     FirmLookupCreateRequest,
     FirmLookupCreateResponse,
+    AnalyzeBehaviorRequest,
     AnalyzeBehaviorResponse,
     BatchTaskResponse,
     ScoreResponse,
@@ -407,6 +412,115 @@ async def get_autorespond_events_summary(
     """Get aggregate summary of autorespond activity."""
     data = await autorespond_event_crud.get_summary(db)
     return AutorespondEventSummary(**data)
+
+
+@router.post("/research/batch", response_model=List[ResearchBatchItem])
+async def research_batch(
+    request: ResearchBatchRequest,
+    db: AsyncSession = Depends(get_db),
+) -> List[ResearchBatchItem]:
+    """
+    Queue research tasks for up to 25 firms for Possible OS orchestration.
+    """
+    if request.limit > 25:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="limit must be <= 25",
+        )
+
+    allowed_kinds = {"research", "research_staff", "analyze_behavior"}
+    invalid_kinds = [kind for kind in request.kinds if kind not in allowed_kinds]
+    if invalid_kinds:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported research kinds: {', '.join(invalid_kinds)}",
+        )
+
+    from sqlalchemy import select
+    from app.models.pif_info import PifInfo
+    from app.tasks.behavior_analysis import analyze_firm_behavior_task
+    from app.tasks.firm_research import research_firm_task, research_staff_task
+
+    query = select(PifInfo)
+    if request.only_unresearched:
+        query = query.where(
+            (PifInfo.research_status.is_(None))
+            | (~PifInfo.research_status.in_(["completed", "in_progress", "queued"]))
+        )
+
+    if request.order_by == "icp_score":
+        query = query.order_by(PifInfo.icp_score.desc().nullslast(), PifInfo.updated_at.desc())
+    elif request.order_by == "updated_at":
+        query = query.order_by(PifInfo.updated_at.desc())
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="order_by must be 'icp_score' or 'updated_at'",
+        )
+
+    result = await db.execute(query.limit(request.limit))
+    pifs = result.scalars().all()
+
+    queued: List[ResearchBatchItem] = []
+    for pif in pifs:
+        task_ids: Dict[str, str] = {}
+        if "research" in request.kinds:
+            await pif_info_crud.update(db, db_obj=pif, obj_in={"research_status": "queued"})
+            task_ids["research"] = research_firm_task.delay(str(pif.id)).id
+        if "research_staff" in request.kinds:
+            await pif_info_crud.update(db, db_obj=pif, obj_in={"staff_research_status": "queued"})
+            task_ids["research_staff"] = research_staff_task.delay(str(pif.id)).id
+        if "analyze_behavior" in request.kinds:
+            task_ids["analyze_behavior"] = analyze_firm_behavior_task.delay(str(pif.id)).id
+        queued.append(ResearchBatchItem(pif_id=pif.id, task_ids=task_ids))
+
+    return queued
+
+
+@router.get("/research-status", response_model=ResearchStatusBulkResponse)
+async def get_research_status_bulk(
+    since: datetime = Query(None, description="Only include firms updated since this ISO timestamp"),
+    status_filter: str = Query(None, alias="status", description="Filter by research/staff/behavior status"),
+    limit: int = Query(100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+) -> ResearchStatusBulkResponse:
+    """
+    Bulk poll current research/analysis state from PIF records.
+    """
+    from sqlalchemy import select
+    from app.models.pif_info import PifInfo
+
+    query = select(PifInfo)
+    if since:
+        query = query.where(PifInfo.updated_at >= since)
+    if status_filter:
+        if status_filter in {"behavior_completed", "analyzed"}:
+            query = query.where(PifInfo.behavioral_data.is_not(None))
+        else:
+            query = query.where(
+                (PifInfo.research_status == status_filter)
+                | (PifInfo.staff_research_status == status_filter)
+            )
+
+    query = query.order_by(PifInfo.updated_at.desc()).limit(limit)
+    result = await db.execute(query)
+    pifs = result.scalars().all()
+
+    items = [
+        ResearchTaskState(
+            pif_id=pif.id,
+            firm_name=pif.firm_name,
+            research_status=pif.research_status,
+            staff_research_status=pif.staff_research_status,
+            behavior_status="completed" if pif.behavioral_data else None,
+            icp_score=pif.icp_score,
+            icp_tier=pif.icp_tier,
+            last_researched_at=pif.last_researched_at,
+            updated_at=pif.updated_at,
+        )
+        for pif in pifs
+    ]
+    return ResearchStatusBulkResponse(items=items, total=len(items))
 
 
 @router.get("/{pif_id}", response_model=PifInfoResponse)
@@ -922,9 +1036,15 @@ async def research_staff(
 async def generate_outreach(
     pif_id: UUID,
     request: OutreachRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> OutreachResponse:
     """
+    Deprecated: outreach generation now lives in Possible OS.
+
+    Responses include X-Deprecated: true. This endpoint remains for backward
+    compatibility and will not be expanded.
+
     Generate personalized LinkedIn outreach messages for a firm's leadership.
 
     Takes a case study URL and client description, generates 4 message variants
@@ -944,6 +1064,8 @@ async def generate_outreach(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="PIF info not found",
         )
+
+    response.headers["X-Deprecated"] = "true"
 
     if not pif.leadership or len(pif.leadership) == 0:
         raise HTTPException(
@@ -992,6 +1114,7 @@ async def generate_outreach(
 @router.post("/{pif_id}/analyze-behavior", response_model=AnalyzeBehaviorResponse)
 async def analyze_firm_behavior(
     pif_id: UUID,
+    request: AnalyzeBehaviorRequest | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> AnalyzeBehaviorResponse:
     """
@@ -1010,16 +1133,34 @@ async def analyze_firm_behavior(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PIF info not found")
 
     from app.tasks.behavior_analysis import analyze_firm_behavior_task
-    task = analyze_firm_behavior_task.delay(str(pif_id))
+
+    signatures = bool(request and request.signatures)
+    if signatures:
+        from celery import chain
+        from app.tasks.signature_extraction import extract_signatures_task
+
+        task = chain(
+            analyze_firm_behavior_task.s(str(pif_id)),
+            extract_signatures_task.si(str(pif_id)),
+        ).apply_async()
+    else:
+        task = analyze_firm_behavior_task.delay(str(pif_id))
 
     logger.info(f"Behavior analysis task queued for {pif.firm_name}: {task.id}")
+
+    message = f"Behavior analysis queued for '{pif.firm_name}'. Task ID: {task.id}"
+    if signatures:
+        message = (
+            f"Behavior analysis and signature extraction queued for "
+            f"'{pif.firm_name}'. Final task ID: {task.id}"
+        )
 
     return AnalyzeBehaviorResponse(
         pif_id=pif_id,
         firm_name=pif.firm_name,
         task_id=task.id,
         status="queued",
-        message=f"Behavior analysis queued for '{pif.firm_name}'. Task ID: {task.id}",
+        message=message,
     )
 
 

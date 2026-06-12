@@ -101,6 +101,17 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8444 --ssl-keyfile
 celery -A app.tasks.worker worker -l info -Q emails,ocr,processing,tagging
 ```
 
+Research and behavioral-analysis tasks are routed to a separate `research` queue so
+they do not share worker capacity with the live email/autorespond pipeline. Run a
+dedicated worker when using those endpoints:
+
+```bash
+celery -A app.tasks.worker worker -l info -Q research --concurrency=2 --prefetch-multiplier=1
+```
+
+`OPENAI_RESEARCH_API_KEY` can be set for pifstats research, behavior analysis, and
+signature extraction. If it is omitted, those tasks fall back to `OPENAI_API_KEY`.
+
 3. (Optional) Start Flower for monitoring Celery tasks:
 
 ```bash
@@ -399,4 +410,4 @@ Contributions are welcome! Please follow these guidelines:
 
 ## License
 
-This project is licensed under the MIT License. 
+This project is licensed under the MIT License.

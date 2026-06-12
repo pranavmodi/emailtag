@@ -21,7 +21,11 @@ def _get_project_root() -> str:
     return os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
 
-@celery_app.task(bind=True, name="app.tasks.behavior_analysis.analyze_firm_behavior_task")
+@celery_app.task(
+    bind=True,
+    name="app.tasks.behavior_analysis.analyze_firm_behavior_task",
+    rate_limit="10/m",
+)
 def analyze_firm_behavior_task(self, pif_id: str) -> Dict[str, Any]:
     """
     Analyze email behavior for a firm and compute ICP score.
@@ -133,7 +137,11 @@ def analyze_firm_behavior_task(self, pif_id: str) -> Dict[str, Any]:
         db.close()
 
 
-@celery_app.task(bind=True, name="app.tasks.behavior_analysis.analyze_all_firms_task")
+@celery_app.task(
+    bind=True,
+    name="app.tasks.behavior_analysis.analyze_all_firms_task",
+    rate_limit="10/m",
+)
 def analyze_all_firms_task(self) -> Dict[str, Any]:
     """
     Dispatch analyze_firm_behavior_task for every firm in the database.
@@ -166,7 +174,11 @@ def analyze_all_firms_task(self) -> Dict[str, Any]:
         db.close()
 
 
-@celery_app.task(bind=True, name="app.tasks.behavior_analysis.score_all_firms_task")
+@celery_app.task(
+    bind=True,
+    name="app.tasks.behavior_analysis.score_all_firms_task",
+    rate_limit="10/m",
+)
 def score_all_firms_task(self) -> Dict[str, Any]:
     """
     Re-score all firms that already have behavioral_data (synchronously in one task).

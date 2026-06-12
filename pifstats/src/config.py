@@ -16,11 +16,17 @@ class PifStatsSettings(BaseSettings):
 
     # OpenAI
     OPENAI_API_KEY: str
+    OPENAI_RESEARCH_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4o"  # Default model for entity extraction
 
     # Logging
     LOG_LEVEL: str = "INFO"
     DEBUG: bool = False
+
+    @property
+    def RESEARCH_OPENAI_API_KEY(self) -> str:
+        """OpenAI key for non-live research/analysis work."""
+        return self.OPENAI_RESEARCH_API_KEY or self.OPENAI_API_KEY
 
     class Config:
         """Pydantic settings config."""
