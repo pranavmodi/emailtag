@@ -13,7 +13,7 @@ import uvicorn
 from app.api.api_v1.api import api_router
 from app.api.v1.endpoints.classification_rules_api import router as rules_router
 from app.api.v1.endpoints.trace_viewer_api import router as trace_router
-from app.api.api_v1.endpoints.ui import login_ui, email_extraction_ui
+from app.api.api_v1.endpoints.ui import agent_manager_ui, login_ui, email_extraction_ui
 from app.api.api_v1.dependencies import check_authenticated
 from app.core.config import settings
 
@@ -69,6 +69,11 @@ def create_application() -> FastAPI:
     # - /settings → Next.js settings homepage (port 3001 via nginx)
     # - /settings/template-config → Next.js template configuration
     # - /settings/tag-statistics → Next.js tag statistics
+
+    @application.get("/")
+    async def agent_manager_page(request: Request):
+        """Agent Manager landing page (placeholder; links to /settings)."""
+        return await agent_manager_ui(request)
 
     @application.get("/login")
     async def login_page(request: Request):

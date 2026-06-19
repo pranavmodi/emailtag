@@ -36,6 +36,7 @@ from app.services.bill_offer_extraction_service import (
     confidence_summary,
     merge_effective_facts,
     normalize_medpay_status,
+    pi_bill_balance_from_patient_data,
 )
 
 router = APIRouter()
@@ -139,11 +140,18 @@ def _intake_response(intake: Any) -> Optional[BillOfferIntakeResponse]:
 
     if response.status != BillOfferIntakeStatus.MANUAL_REVIEW:
         effective = merge_effective_facts(response.extracted_facts, response.corrected_facts)
-        missing_fields = compute_missing_fields(effective) if response.patient_id else []
+        pi_bill_balance = pi_bill_balance_from_patient_data(intake.patient_data)
+        missing_fields = (
+            compute_missing_fields(effective, pi_bill_balance=pi_bill_balance)
+            if response.patient_id
+            else []
+        )
         response.missing_fields = missing_fields
         response.status = (
             BillOfferIntakeStatus.PENDING_PATIENT
             if not response.patient_id
+            else BillOfferIntakeStatus.MANUAL_REVIEW
+            if "medpay_status" in missing_fields
             else BillOfferIntakeStatus.PENDING_DETAILS
             if missing_fields
             else BillOfferIntakeStatus.READY_FOR_PHASE_2
@@ -314,10 +322,17 @@ async def rerun_bill_offer_check(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Intake not found")
 
     effective = merge_effective_facts(intake.extracted_facts, intake.corrected_facts)
-    missing_fields = compute_missing_fields(effective) if intake.patient_id else []
+    pi_bill_balance = pi_bill_balance_from_patient_data(intake.patient_data)
+    missing_fields = (
+        compute_missing_fields(effective, pi_bill_balance=pi_bill_balance)
+        if intake.patient_id
+        else []
+    )
     new_status = (
         BillOfferIntakeStatus.PENDING_PATIENT
         if not intake.patient_id
+        else BillOfferIntakeStatus.MANUAL_REVIEW
+        if "medpay_status" in missing_fields
         else BillOfferIntakeStatus.PENDING_DETAILS
         if missing_fields
         else BillOfferIntakeStatus.READY_FOR_PHASE_2

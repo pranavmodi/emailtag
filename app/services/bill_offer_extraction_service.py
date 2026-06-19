@@ -20,6 +20,13 @@ REQUIRED_FIELDS = [
     "precise_offer_amount",
 ]
 
+# Precise Imaging's own bill/lien balance (from get_patient_lien_bill_balance) at
+# or above this amount makes MedPay a required intake fact: the lien is large
+# enough that whether MedPay exists as a separate recovery source materially
+# affects the negotiation. Below it, the settlement comfortably covers our lien,
+# so MedPay status is not collected.
+MEDPAY_REQUIRED_BILL_THRESHOLD = 8800.0
+
 MISSING_FIELD_LABELS = {
     "precise_offer_amount": "Offer amount toward Precise Imaging's bill",
     "settlement_amount": "Total settlement amount",
@@ -898,9 +905,39 @@ def merge_effective_facts(
     return effective
 
 
-def compute_missing_fields(effective_facts: Dict[str, Any]) -> List[str]:
+def pi_bill_balance_from_patient_data(
+    patient_data: Optional[Dict[str, Any]],
+) -> Optional[float]:
+    """Precise Imaging's own bill/lien balance, for the MedPay threshold check.
+
+    Returns ``None`` when the balance lookup did not succeed so callers keep MedPay
+    required rather than skipping it on missing/unreliable data.
+    """
+    if not isinstance(patient_data, dict):
+        return None
+    if not patient_data.get("mcp", {}).get("bill_balance_success"):
+        return None
+    return normalize_money(str(patient_data.get("lien_total")))
+
+
+def compute_missing_fields(
+    effective_facts: Dict[str, Any],
+    pi_bill_balance: Optional[float] = None,
+) -> List[str]:
+    """Return the required fields still missing from ``effective_facts``.
+
+    ``pi_bill_balance`` is Precise Imaging's own bill/lien balance. MedPay is only
+    treated as a required fact when that balance is known and at or above
+    ``MEDPAY_REQUIRED_BILL_THRESHOLD``; below the threshold MedPay is skipped. When
+    the balance is unknown (``None``) MedPay stays required, to be conservative.
+    """
+    medpay_required = (
+        pi_bill_balance is None or pi_bill_balance >= MEDPAY_REQUIRED_BILL_THRESHOLD
+    )
     missing = []
     for field in REQUIRED_FIELDS:
+        if field == "medpay_status" and not medpay_required:
+            continue
         value_obj = effective_facts.get(field)
         value = value_obj.get("value") if isinstance(value_obj, dict) else value_obj
         is_ambiguous = bool(value_obj.get("is_ambiguous")) if isinstance(value_obj, dict) else False

@@ -38,6 +38,18 @@ async def document_processor_ui():
 # - /settings/tag-statistics → Next.js tag statistics
 
 
+@router.get("/", response_class=HTMLResponse)
+async def agent_manager_ui(request: Request):
+    """
+    Serve the Agent Manager landing page.
+
+    Placeholder home for the unified agent-manager interface. The email
+    tagging / settings dashboard (served by the Next.js app at /settings) is
+    one of the agents linked from here.
+    """
+    return templates.TemplateResponse("agent_manager.html", {"request": request})
+
+
 @router.get("/login", response_class=HTMLResponse)
 async def login_ui(request: Request):
     """

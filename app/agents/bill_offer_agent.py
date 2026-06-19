@@ -25,6 +25,7 @@ from app.services.bill_offer_extraction_service import (
     confidence_summary,
     extract_bill_offer_facts_structured,
     merge_effective_facts,
+    pi_bill_balance_from_patient_data,
 )
 
 logger = get_task_logger(__name__)
@@ -749,10 +750,21 @@ async def handle_bill_offer_request(
             corrected_facts = intake.corrected_facts if intake else None
 
         effective_facts = merge_effective_facts(extracted_facts, corrected_facts)
-        missing_fields = compute_missing_fields(effective_facts) if patient_id else []
+        pi_bill_balance = pi_bill_balance_from_patient_data(patient_data)
+        missing_fields = (
+            compute_missing_fields(effective_facts, pi_bill_balance=pi_bill_balance)
+            if patient_id
+            else []
+        )
+        # When PI's bill is >= $8,800 MedPay is required; if it is still missing a
+        # human must weigh in on the negotiation rather than the bot auto-asking the
+        # attorney, so route straight to human review.
+        medpay_needs_human = patient_id and "medpay_status" in missing_fields
         status = (
             BillOfferIntakeStatus.PENDING_PATIENT
             if not patient_id
+            else BillOfferIntakeStatus.MANUAL_REVIEW
+            if medpay_needs_human
             else BillOfferIntakeStatus.PENDING_DETAILS
             if missing_fields
             else BillOfferIntakeStatus.READY_FOR_PHASE_2
@@ -776,7 +788,29 @@ async def handle_bill_offer_request(
         )
 
         reply_sent = False
-        if send_reply and status in {
+        human_review_tagged = False
+        if medpay_needs_human:
+            if send_reply:
+                frontapp_service.add_conversation_tags(
+                    front_conversation_id, [HUMAN_REVIEW_TAG]
+                )
+                human_review_tagged = True
+                await run_logger.log(
+                    "front_human_review_tagged",
+                    BillOfferAgentStepStatus.COMPLETED,
+                    output_snapshot={
+                        "tags_to_add": [HUMAN_REVIEW_TAG],
+                        "reason": "medpay_required_but_missing",
+                        "pi_bill_balance": pi_bill_balance,
+                    },
+                )
+            else:
+                await run_logger.log(
+                    "front_human_review_skipped",
+                    BillOfferAgentStepStatus.SKIPPED,
+                    message="MedPay required but missing; reply sending disabled",
+                )
+        elif send_reply and status in {
             BillOfferIntakeStatus.PENDING_PATIENT,
             BillOfferIntakeStatus.PENDING_DETAILS,
         }:
@@ -816,7 +850,13 @@ async def handle_bill_offer_request(
                     "missing_fields": missing_fields,
                     "confidence": confidence_summary(effective_facts),
                     "original_sender_email": email_sender,
-                    "last_agent_action": "reply_sent" if reply_sent else "drafted",
+                    "last_agent_action": (
+                        "reply_sent"
+                        if reply_sent
+                        else "human_review_tagged"
+                        if human_review_tagged
+                        else "drafted"
+                    ),
                     "last_run_id": run_id,
                     "last_agent_run_status": "completed",
                     "reply_draft": reply_draft,
