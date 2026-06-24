@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import ARRAY, DateTime, Integer, String, Text
+from sqlalchemy import ARRAY, CheckConstraint, DateTime, Float, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -15,6 +15,16 @@ class PifInfo(Base):
     """Model for tracking personal injury law firm information extracted from conversations."""
 
     __tablename__ = "pif_info"
+    __table_args__ = (
+        CheckConstraint(
+            "website_status IS NULL OR website_status IN ('resolved', 'pending', 'none')",
+            name="ck_pif_info_website_status",
+        ),
+        CheckConstraint(
+            "website_source IS NULL OR website_source IN ('email_verified', 'web_search', 'human')",
+            name="ck_pif_info_website_source",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -28,6 +38,26 @@ class PifInfo(Base):
     website: Mapped[Optional[str]] = mapped_column(
         String(500), unique=True, nullable=True, index=True,
         comment="Firm website URL - unique identifier when available"
+    )
+
+    canonical_website: Mapped[Optional[str]] = mapped_column(
+        String(500), unique=True, nullable=True, index=True,
+        comment="Canonical registrable website domain from firm identity resolution"
+    )
+
+    website_status: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, index=True,
+        comment="Website resolution status: resolved, pending, none"
+    )
+
+    website_source: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True,
+        comment="Website resolution source: email_verified, web_search, human"
+    )
+
+    website_confidence: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True,
+        comment="Website resolution confidence from 0.0 to 1.0"
     )
 
     firm_name: Mapped[str] = mapped_column(
@@ -131,6 +161,10 @@ class PifInfo(Base):
     # Outreach pipeline relationship
     outreach_pipeline: Mapped[List["PifOutreachPipeline"]] = relationship(  # type: ignore[name-defined]
         "PifOutreachPipeline", back_populates="pif", cascade="all, delete-orphan"
+    )
+
+    aliases: Mapped[List["FirmAlias"]] = relationship(  # type: ignore[name-defined]
+        "FirmAlias", back_populates="firm", cascade="all, delete-orphan"
     )
 
     created_at: Mapped[datetime] = mapped_column(

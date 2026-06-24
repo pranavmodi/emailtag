@@ -77,6 +77,7 @@ celery_app.conf.task_routes = {
     "app.tasks.firm_research.research_firm_task": {"queue": "research"},
     "app.tasks.firm_research.research_staff_task": {"queue": "research"},
     "app.tasks.firm_research.analyze_leadership_emails_task": {"queue": "research"},
+    "app.tasks.website_resolution.resolve_firm_website_task": {"queue": "research"},
     "app.tasks.behavior_analysis.analyze_firm_behavior_task": {"queue": "research"},
     "app.tasks.behavior_analysis.analyze_all_firms_task": {"queue": "research"},
     "app.tasks.behavior_analysis.score_all_firms_task": {"queue": "research"},
