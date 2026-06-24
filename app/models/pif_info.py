@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import ARRAY, CheckConstraint, DateTime, Float, Integer, String, Text
+from sqlalchemy import ARRAY, CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,6 +23,10 @@ class PifInfo(Base):
         CheckConstraint(
             "website_source IS NULL OR website_source IN ('email_verified', 'web_search', 'human')",
             name="ck_pif_info_website_source",
+        ),
+        CheckConstraint(
+            "merge_status IS NULL OR merge_status IN ('active', 'merged')",
+            name="ck_pif_info_merge_status",
         ),
     )
 
@@ -58,6 +62,34 @@ class PifInfo(Base):
     website_confidence: Mapped[Optional[float]] = mapped_column(
         Float, nullable=True,
         comment="Website resolution confidence from 0.0 to 1.0"
+    )
+
+    merged_into: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("pif_info.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Surviving pif_info.id when this row has been soft-merged",
+    )
+
+    merge_status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="active",
+        index=True,
+        comment="Soft-merge status: active or merged",
+    )
+
+    merged_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime,
+        nullable=True,
+        comment="Timestamp when this row was soft-merged into another firm",
+    )
+
+    merged_from: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Provenance for records merged into this survivor",
     )
 
     firm_name: Mapped[str] = mapped_column(
