@@ -222,7 +222,9 @@ function startBatch() {
     fill.style.width = pct + '%';
     statusText.textContent = `Processing ${data.index} / ${data.total} — ${data.firm_name}`;
 
-    if (data.candidate && data.status !== 'skip') {
+    // Only show rows that genuinely need human review (shouldn't happen with auto-assign,
+    // but kept as a safety net for edge cases like un-parseable domains).
+    if (data.candidate && data.status === 'pending') {
       addRow(data.pif_id, data.firm_name, data.candidate, data.source);
     }
   };
