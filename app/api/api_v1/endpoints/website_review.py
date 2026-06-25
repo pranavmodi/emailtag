@@ -1,10 +1,16 @@
-"""Website candidate review endpoints — confirm or reject GPT-found website candidates."""
+"""Website candidate review endpoints — confirm, reject, and stream-batch-resolve."""
+
+import asyncio
+import json
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from sqlalchemy import func, nullslast
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.models.pif_info import PifInfo
+from app.services.website_resolution import resolve_and_persist_firm_website
 
 router = APIRouter()
 
@@ -46,3 +52,78 @@ def reject_website(pif_id: str, db: Session = Depends(get_db)):
     firm.website_status = "none"
     db.commit()
     return {"status": "ok"}
+
+
+@router.get("/run-batch")
+async def run_batch(limit: int = 100):
+    """
+    Stream website resolution for up to `limit` unresolved firms as SSE.
+
+    Emits one JSON event per firm processed. Clients connect via EventSource
+    and receive rows in real time rather than waiting for the full batch.
+    """
+    # Snapshot the firm IDs to process up front (no long-held session).
+    with SessionLocal() as db:
+        rows = (
+            db.query(PifInfo.id, PifInfo.firm_name)
+            .filter(
+                PifInfo.canonical_website.is_(None),
+                PifInfo.website_candidate.is_(None),
+                PifInfo.merge_status != "merged",
+            )
+            .order_by(
+                nullslast(PifInfo.icp_score.desc()),
+                nullslast(func.array_length(PifInfo.conversation_ids, 1).desc()),
+            )
+            .limit(limit)
+            .all()
+        )
+    firm_ids = [(str(r.id), r.firm_name) for r in rows]
+    total = len(firm_ids)
+
+    async def event_stream():
+        for i, (firm_id, firm_name) in enumerate(firm_ids):
+
+            def process_one(fid):
+                db = SessionLocal()
+                try:
+                    firm = db.query(PifInfo).filter(PifInfo.id == fid).first()
+                    if not firm:
+                        return None
+                    result = resolve_and_persist_firm_website(db, firm)
+                    db.commit()
+                    return result
+                finally:
+                    db.close()
+
+            result = await asyncio.to_thread(process_one, firm_id)
+
+            candidate = None
+            status = "skip"
+            source = None
+            if result:
+                status = result.website_status
+                source = result.website_source
+                candidate = result.review_candidate or result.canonical_website
+
+            payload = json.dumps({
+                "pif_id": firm_id,
+                "firm_name": firm_name,
+                "status": status,
+                "candidate": candidate,
+                "source": source,
+                "index": i + 1,
+                "total": total,
+            })
+            yield f"data: {payload}\n\n"
+
+        yield f"data: {json.dumps({'done': True, 'total': total})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )

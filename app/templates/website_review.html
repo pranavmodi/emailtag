@@ -8,43 +8,54 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #0f0f13; color: #d4d4d8; font-family: system-ui, -apple-system, sans-serif; }
 
-  .header { background: #18181b; border-bottom: 1px solid #27272a; padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem; }
+  .header { background: #18181b; border-bottom: 1px solid #27272a; padding: 1rem 1.5rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
   .header h1 { font-size: 1.1rem; color: #e4e4e7; font-weight: 600; }
   .badge { background: #3f3f46; color: #a1a1aa; font-size: 0.75rem; padding: 0.2rem 0.55rem; border-radius: 999px; }
   .badge.count { background: #4c1d95; color: #c4b5fd; }
+  .spacer { flex: 1; }
 
-  .toolbar { padding: 0.75rem 1.5rem; background: #18181b; border-bottom: 1px solid #27272a; font-size: 0.82rem; color: #71717a; }
+  .btn-run { background: #4c1d95; color: #e9d5ff; border: none; border-radius: 6px; padding: 0.45rem 1rem; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+  .btn-run:hover:not(:disabled) { background: #6d28d9; }
+  .btn-run:disabled { opacity: 0.5; cursor: default; }
+
+  .progress-bar { height: 3px; background: #27272a; position: relative; overflow: hidden; }
+  .progress-fill { height: 100%; background: #a78bfa; width: 0%; transition: width 0.3s; }
+
+  .status-bar { padding: 0.5rem 1.5rem; background: #18181b; border-bottom: 1px solid #27272a; font-size: 0.78rem; color: #71717a; min-height: 2rem; display: flex; align-items: center; gap: 0.5rem; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #52525b; flex-shrink: 0; }
+  .status-dot.running { background: #a78bfa; animation: pulse 1s infinite; }
+  .status-dot.done { background: #4ade80; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
   table { width: 100%; border-collapse: collapse; }
   thead th { background: #18181b; color: #71717a; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; padding: 0.6rem 1rem; text-align: left; border-bottom: 1px solid #27272a; position: sticky; top: 0; z-index: 1; }
   tbody tr { border-bottom: 1px solid #1c1c21; transition: background 0.15s; }
   tbody tr:hover { background: #1a1a20; }
+  tr.new-row { animation: slidein 0.3s ease; }
+  @keyframes slidein { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
   td { padding: 0.7rem 1rem; vertical-align: middle; font-size: 0.875rem; }
   td.firm-name { font-weight: 500; color: #e4e4e7; max-width: 220px; }
   td.candidate a { color: #60a5fa; text-decoration: none; font-family: monospace; font-size: 0.82rem; }
   td.candidate a:hover { text-decoration: underline; }
+  .source-tag { font-size: 0.7rem; color: #71717a; margin-top: 2px; }
 
   .score-bar { display: flex; align-items: center; gap: 0.5rem; }
   .score-track { background: #27272a; border-radius: 3px; height: 6px; width: 80px; overflow: hidden; }
-  .score-fill { height: 100%; border-radius: 3px; background: #a78bfa; }
-  .score-fill.high { background: #4ade80; }
-  .score-fill.mid  { background: #fb923c; }
-  .score-fill.low  { background: #71717a; }
+  .score-fill { height: 100%; border-radius: 3px; }
   .score-pct { font-size: 0.78rem; color: #a1a1aa; min-width: 32px; }
 
   .actions { display: flex; gap: 0.5rem; }
-  button { border: none; border-radius: 5px; padding: 0.35rem 0.75rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
-  button:hover { opacity: 0.85; }
+  button.action { border: none; border-radius: 5px; padding: 0.35rem 0.75rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
+  button.action:hover { opacity: 0.85; }
   .btn-confirm { background: #14532d; color: #4ade80; }
   .btn-reject  { background: #431407; color: #f87171; }
-  .btn-confirm:disabled, .btn-reject:disabled { opacity: 0.4; cursor: default; }
+  button.action:disabled { opacity: 0.4; cursor: default; }
 
   tr.confirmed td { background: #0d2d1a !important; }
   tr.rejected td  { background: #1a0e0e !important; opacity: 0.5; }
   tr.fade-out { opacity: 0; transition: opacity 0.4s; }
 
   .empty { padding: 3rem; text-align: center; color: #52525b; font-size: 0.9rem; }
-  .counter { font-weight: 700; color: #c4b5fd; }
 </style>
 </head>
 <body>
@@ -53,14 +64,17 @@
   <h1>Website Review</h1>
   <span class="badge count" id="remaining-badge">{{ firms | length }} to review</span>
   <span class="badge">ordered by name match confidence</span>
+  <div class="spacer"></div>
+  <button class="btn-run" id="run-btn" onclick="startBatch()">Run 100 Firms</button>
 </div>
 
-<div class="toolbar">
-  Confirm the correct website for each firm. Confirmed sites become the canonical website immediately.
-  Reject to mark the firm as unresolvable and skip future auto-search.
+<div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+
+<div class="status-bar">
+  <div class="status-dot" id="status-dot"></div>
+  <span id="status-text">Ready — click "Run 100 Firms" to start resolving.</span>
 </div>
 
-{% if firms %}
 <table>
   <thead>
     <tr>
@@ -75,37 +89,151 @@
     <tr id="row-{{ firm.id }}">
       <td class="firm-name">{{ firm.firm_name or '—' }}</td>
       <td class="candidate">
-        <a href="https://{{ firm.website_candidate }}" target="_blank" rel="noopener noreferrer">
-          {{ firm.website_candidate }}
-        </a>
+        <a href="https://{{ firm.website_candidate }}" target="_blank" rel="noopener noreferrer">{{ firm.website_candidate }}</a>
+        <div class="source-tag">pending review</div>
       </td>
       <td>
         {% set pct = (score * 100) | int %}
         <div class="score-bar">
           <div class="score-track">
             <div class="score-fill {% if score >= 0.6 %}high{% elif score >= 0.3 %}mid{% else %}low{% endif %}"
-                 style="width: {{ pct }}%"></div>
+                 style="width:{{ pct }}%; background: {% if score >= 0.6 %}#4ade80{% elif score >= 0.3 %}#fb923c{% else %}#71717a{% endif %}"></div>
           </div>
           <span class="score-pct">{{ pct }}%</span>
         </div>
       </td>
       <td>
         <div class="actions">
-          <button class="btn-confirm" onclick="review('{{ firm.id }}', 'confirm', this)">Confirm</button>
-          <button class="btn-reject"  onclick="review('{{ firm.id }}', 'reject', this)">Reject</button>
+          <button class="action btn-confirm" onclick="review('{{ firm.id }}', 'confirm', this)">Confirm</button>
+          <button class="action btn-reject"  onclick="review('{{ firm.id }}', 'reject', this)">Reject</button>
         </div>
       </td>
     </tr>
     {% endfor %}
+    {% if not firms %}
+    <tr id="empty-row"><td colspan="4" class="empty">No firms with unverified website candidates. Click "Run 100 Firms" to start.</td></tr>
+    {% endif %}
   </tbody>
 </table>
-{% else %}
-<div class="empty">No firms with unverified website candidates. Run website resolution to populate candidates.</div>
-{% endif %}
 
 <script>
-const total = {{ firms | length }};
-let remaining = total;
+const STOPWORDS = new Set(['a','and','apc','attorney','attorneys','group','inc','injury','law',
+  'lawyer','lawyers','legal','llc','llp','office','offices','pc','pllc','the']);
+
+function nameTokens(name) {
+  return [...name.toLowerCase().matchAll(/[a-z0-9]+/g)]
+    .map(m => m[0])
+    .filter(t => t.length > 2 && !STOPWORDS.has(t));
+}
+
+function candidateScore(firmName, candidate) {
+  const tokens = nameTokens(firmName || '');
+  if (!tokens.length) return 0.5;
+  const domain = candidate.replace(/[.\-]/g, ' ').toLowerCase();
+  const matches = tokens.filter(t => domain.includes(t)).length;
+  return matches / tokens.length;
+}
+
+function scoreColor(s) {
+  if (s >= 0.6) return '#4ade80';
+  if (s >= 0.3) return '#fb923c';
+  return '#71717a';
+}
+
+let remaining = {{ firms | length }};
+
+function updateBadge() {
+  document.getElementById('remaining-badge').textContent = remaining + ' to review';
+}
+
+function addRow(pifId, firmName, candidate, source) {
+  const empty = document.getElementById('empty-row');
+  if (empty) empty.remove();
+
+  const score = candidateScore(firmName, candidate);
+  const pct = Math.round(score * 100);
+
+  const tr = document.createElement('tr');
+  tr.id = 'row-' + pifId;
+  tr.className = 'new-row';
+  tr.innerHTML = `
+    <td class="firm-name">${firmName}</td>
+    <td class="candidate">
+      <a href="https://${candidate}" target="_blank" rel="noopener noreferrer">${candidate}</a>
+      <div class="source-tag">${source || 'web_search'}</div>
+    </td>
+    <td>
+      <div class="score-bar">
+        <div class="score-track">
+          <div class="score-fill" style="width:${pct}%; background:${scoreColor(score)}"></div>
+        </div>
+        <span class="score-pct">${pct}%</span>
+      </div>
+    </td>
+    <td>
+      <div class="actions">
+        <button class="action btn-confirm" onclick="review('${pifId}', 'confirm', this)">Confirm</button>
+        <button class="action btn-reject"  onclick="review('${pifId}', 'reject', this)">Reject</button>
+      </div>
+    </td>`;
+
+  // Insert in score order
+  const tbody = document.getElementById('firm-table');
+  let inserted = false;
+  for (const row of tbody.querySelectorAll('tr[id^="row-"]')) {
+    const rowScore = parseFloat(row.dataset.score || '0');
+    if (score > rowScore) {
+      tbody.insertBefore(tr, row);
+      inserted = true;
+      break;
+    }
+  }
+  if (!inserted) tbody.appendChild(tr);
+  tr.dataset.score = score;
+
+  remaining++;
+  updateBadge();
+}
+
+function startBatch() {
+  const btn = document.getElementById('run-btn');
+  const dot = document.getElementById('status-dot');
+  const statusText = document.getElementById('status-text');
+  const fill = document.getElementById('progress-fill');
+
+  btn.disabled = true;
+  dot.className = 'status-dot running';
+
+  const es = new EventSource('/api/v1/website-review/run-batch?limit=100');
+
+  es.onmessage = function(e) {
+    const data = JSON.parse(e.data);
+
+    if (data.done) {
+      es.close();
+      btn.disabled = false;
+      dot.className = 'status-dot done';
+      statusText.textContent = `Done — processed ${data.total} firms.`;
+      fill.style.width = '100%';
+      return;
+    }
+
+    const pct = Math.round((data.index / data.total) * 100);
+    fill.style.width = pct + '%';
+    statusText.textContent = `Processing ${data.index} / ${data.total} — ${data.firm_name}`;
+
+    if (data.candidate && data.status !== 'skip') {
+      addRow(data.pif_id, data.firm_name, data.candidate, data.source);
+    }
+  };
+
+  es.onerror = function() {
+    es.close();
+    btn.disabled = false;
+    dot.className = 'status-dot';
+    statusText.textContent = 'Connection lost — check server logs.';
+  };
+}
 
 async function review(pifId, action, btn) {
   const row = document.getElementById('row-' + pifId);
@@ -122,7 +250,7 @@ async function review(pifId, action, btn) {
       setTimeout(() => {
         row.remove();
         remaining--;
-        document.getElementById('remaining-badge').textContent = remaining + ' to review';
+        updateBadge();
       }, 400);
     }, 600);
   } catch (err) {
@@ -130,6 +258,13 @@ async function review(pifId, action, btn) {
     alert('Error: ' + err.message);
   }
 }
+
+// Tag existing rows with their score so insertions sort correctly
+document.querySelectorAll('tr[id^="row-"]').forEach(row => {
+  const name = row.querySelector('.firm-name')?.textContent?.trim() || '';
+  const candidate = row.querySelector('.candidate a')?.textContent?.trim() || '';
+  row.dataset.score = candidateScore(name, candidate);
+});
 </script>
 </body>
 </html>
