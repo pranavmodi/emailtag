@@ -260,6 +260,9 @@ def _upsert_alias_sync(
             source=source,
         )
     db.add(alias)
+    # Flush immediately so subsequent calls in the same session see this row and
+    # don't create a duplicate object for the same (alias_type, alias_value) pair.
+    db.flush()
     return alias
 
 
