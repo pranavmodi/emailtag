@@ -7,12 +7,15 @@ from dataclasses import replace
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, nullslast
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.models.pif_info import PifInfo
-from app.services.website_resolution import resolve_and_persist_firm_website
+from app.services.website_resolution import (
+    apply_website_resolution,
+    persist_aliases_for_firm,
+    resolve_firm_website,
+)
 
 router = APIRouter()
 
@@ -92,29 +95,34 @@ async def run_batch(limit: int = 100):
                     firm = db.query(PifInfo).filter(PifInfo.id == fid).first()
                     if not firm:
                         return None
-                    result = resolve_and_persist_firm_website(db, firm)
-                    try:
-                        db.commit()
-                    except IntegrityError:
-                        # Another firm in this batch already claimed the same
-                        # canonical_website. Rollback and demote to candidate
-                        # so a human can resolve the conflict.
-                        db.rollback()
-                        conflicting_domain = result.canonical_website
-                        if conflicting_domain:
-                            firm.canonical_website = None
-                            firm.website_candidate = conflicting_domain
-                            firm.website_status = "pending"
-                            firm.website_source = "human"
-                            firm.website_confidence = result.website_confidence
-                            db.commit()
+
+                    result = resolve_firm_website(firm)
+
+                    # Pre-check: if another firm already owns this canonical domain,
+                    # demote to candidate before touching the DB (avoids flush-time
+                    # UniqueViolation that would crash the SSE stream).
+                    if result.canonical_website:
+                        already_claimed = (
+                            db.query(PifInfo.id)
+                            .filter(
+                                PifInfo.canonical_website == result.canonical_website,
+                                PifInfo.id != firm.id,
+                            )
+                            .first()
+                        )
+                        if already_claimed:
                             result = replace(
                                 result,
                                 canonical_website=None,
                                 website_status="pending",
                                 website_source="human",
-                                review_candidate=conflicting_domain,
+                                review_candidate=result.canonical_website,
                             )
+
+                    apply_website_resolution(firm, result)
+                    persist_aliases_for_firm(db, firm)
+                    db.add(firm)
+                    db.commit()
                     return result
                 finally:
                     db.close()
