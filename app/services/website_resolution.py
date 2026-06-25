@@ -59,6 +59,7 @@ class WebsiteResolutionResult:
     website_source: Optional[str]
     website_confidence: Optional[float]
     review_reason: Optional[str] = None
+    review_candidate: Optional[str] = None
 
 
 def resolve_firm_website(
@@ -98,6 +99,7 @@ def resolve_firm_website(
     return queue_website_human_review_stub(
         firm,
         reason="no_verified_website" if search_candidate else "no_search_result",
+        review_candidate=search_candidate,
     )
 
 
@@ -143,6 +145,7 @@ def apply_website_resolution(pif: PifInfo, result: WebsiteResolutionResult) -> N
     pif.website_status = result.website_status
     pif.website_source = result.website_source
     pif.website_confidence = result.website_confidence
+    pif.website_candidate = result.review_candidate
 
 
 def resolve_and_persist_firm_website(
@@ -193,8 +196,9 @@ def queue_website_human_review_stub(
     firm: PifInfo,
     *,
     reason: str,
+    review_candidate: Optional[str] = None,
 ) -> WebsiteResolutionResult:
-    """Human-review queue stub for E0. No ticket is created in this packet."""
+    """Human-review queue stub. Stores the unverified search candidate for dashboard review."""
     status = "pending" if firm.firm_name else "none"
     return WebsiteResolutionResult(
         canonical_website=None,
@@ -202,6 +206,7 @@ def queue_website_human_review_stub(
         website_source="human",
         website_confidence=0.0,
         review_reason=reason,
+        review_candidate=review_candidate,
     )
 
 

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Website Review — FirmIntel</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f0f13; color: #d4d4d8; font-family: system-ui, -apple-system, sans-serif; }
+
+  .header { background: #18181b; border-bottom: 1px solid #27272a; padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem; }
+  .header h1 { font-size: 1.1rem; color: #e4e4e7; font-weight: 600; }
+  .badge { background: #3f3f46; color: #a1a1aa; font-size: 0.75rem; padding: 0.2rem 0.55rem; border-radius: 999px; }
+  .badge.count { background: #4c1d95; color: #c4b5fd; }
+
+  .toolbar { padding: 0.75rem 1.5rem; background: #18181b; border-bottom: 1px solid #27272a; font-size: 0.82rem; color: #71717a; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th { background: #18181b; color: #71717a; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; padding: 0.6rem 1rem; text-align: left; border-bottom: 1px solid #27272a; position: sticky; top: 0; z-index: 1; }
+  tbody tr { border-bottom: 1px solid #1c1c21; transition: background 0.15s; }
+  tbody tr:hover { background: #1a1a20; }
+  td { padding: 0.7rem 1rem; vertical-align: middle; font-size: 0.875rem; }
+  td.firm-name { font-weight: 500; color: #e4e4e7; max-width: 220px; }
+  td.candidate a { color: #60a5fa; text-decoration: none; font-family: monospace; font-size: 0.82rem; }
+  td.candidate a:hover { text-decoration: underline; }
+
+  .score-bar { display: flex; align-items: center; gap: 0.5rem; }
+  .score-track { background: #27272a; border-radius: 3px; height: 6px; width: 80px; overflow: hidden; }
+  .score-fill { height: 100%; border-radius: 3px; background: #a78bfa; }
+  .score-fill.high { background: #4ade80; }
+  .score-fill.mid  { background: #fb923c; }
+  .score-fill.low  { background: #71717a; }
+  .score-pct { font-size: 0.78rem; color: #a1a1aa; min-width: 32px; }
+
+  .actions { display: flex; gap: 0.5rem; }
+  button { border: none; border-radius: 5px; padding: 0.35rem 0.75rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
+  button:hover { opacity: 0.85; }
+  .btn-confirm { background: #14532d; color: #4ade80; }
+  .btn-reject  { background: #431407; color: #f87171; }
+  .btn-confirm:disabled, .btn-reject:disabled { opacity: 0.4; cursor: default; }
+
+  tr.confirmed td { background: #0d2d1a !important; }
+  tr.rejected td  { background: #1a0e0e !important; opacity: 0.5; }
+  tr.fade-out { opacity: 0; transition: opacity 0.4s; }
+
+  .empty { padding: 3rem; text-align: center; color: #52525b; font-size: 0.9rem; }
+  .counter { font-weight: 700; color: #c4b5fd; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Website Review</h1>
+  <span class="badge count" id="remaining-badge">{{ firms | length }} to review</span>
+  <span class="badge">ordered by name match confidence</span>
+</div>
+
+<div class="toolbar">
+  Confirm the correct website for each firm. Confirmed sites become the canonical website immediately.
+  Reject to mark the firm as unresolvable and skip future auto-search.
+</div>
+
+{% if firms %}
+<table>
+  <thead>
+    <tr>
+      <th>Firm Name</th>
+      <th>Candidate Website</th>
+      <th>Name Match</th>
+      <th>Review</th>
+    </tr>
+  </thead>
+  <tbody id="firm-table">
+    {% for firm, score in firms %}
+    <tr id="row-{{ firm.id }}">
+      <td class="firm-name">{{ firm.firm_name or '—' }}</td>
+      <td class="candidate">
+        <a href="https://{{ firm.website_candidate }}" target="_blank" rel="noopener noreferrer">
+          {{ firm.website_candidate }}
+        </a>
+      </td>
+      <td>
+        {% set pct = (score * 100) | int %}
+        <div class="score-bar">
+          <div class="score-track">
+            <div class="score-fill {% if score >= 0.6 %}high{% elif score >= 0.3 %}mid{% else %}low{% endif %}"
+                 style="width: {{ pct }}%"></div>
+          </div>
+          <span class="score-pct">{{ pct }}%</span>
+        </div>
+      </td>
+      <td>
+        <div class="actions">
+          <button class="btn-confirm" onclick="review('{{ firm.id }}', 'confirm', this)">Confirm</button>
+          <button class="btn-reject"  onclick="review('{{ firm.id }}', 'reject', this)">Reject</button>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty">No firms with unverified website candidates. Run website resolution to populate candidates.</div>
+{% endif %}
+
+<script>
+const total = {{ firms | length }};
+let remaining = total;
+
+async function review(pifId, action, btn) {
+  const row = document.getElementById('row-' + pifId);
+  const buttons = row.querySelectorAll('button');
+  buttons.forEach(b => b.disabled = true);
+
+  try {
+    const res = await fetch('/api/v1/website-review/' + pifId + '/' + action, { method: 'POST' });
+    if (!res.ok) throw new Error(await res.text());
+
+    row.classList.add(action === 'confirm' ? 'confirmed' : 'rejected');
+    setTimeout(() => {
+      row.classList.add('fade-out');
+      setTimeout(() => {
+        row.remove();
+        remaining--;
+        document.getElementById('remaining-badge').textContent = remaining + ' to review';
+      }, 400);
+    }, 600);
+  } catch (err) {
+    buttons.forEach(b => b.disabled = false);
+    alert('Error: ' + err.message);
+  }
+}
+</script>
+</body>
+</html>
