@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.models.pif_info import PifInfo
+from app.services.firm_identity import canonical_domain
 from app.services.website_resolution import (
     apply_website_resolution,
     persist_aliases_for_firm,
@@ -37,11 +38,14 @@ def confirm_website(pif_id: str, db: Session = Depends(get_db)):
     if not firm.website_candidate:
         raise HTTPException(status_code=400, detail="No candidate to confirm")
 
+    # Normalize to bare domain (candidates from web search are full URLs).
+    domain = canonical_domain(firm.website_candidate) or firm.website_candidate
+
     # Check if another firm already owns this domain.
     owner = (
         db.query(PifInfo)
         .filter(
-            PifInfo.canonical_website == firm.website_candidate,
+            PifInfo.canonical_website == domain,
             PifInfo.id != firm.id,
         )
         .first()
@@ -52,7 +56,7 @@ def confirm_website(pif_id: str, db: Session = Depends(get_db)):
             detail=f"Domain already claimed by '{owner.firm_name}' — these may be duplicates. Reject instead.",
         )
 
-    firm.canonical_website = firm.website_candidate
+    firm.canonical_website = domain
     firm.website_status = "resolved"
     firm.website_source = "human_confirmed"
     firm.website_confidence = 1.0
@@ -112,6 +116,12 @@ async def run_batch(limit: int = 100):
                         return None
 
                     result = resolve_firm_website(firm)
+
+                    # Normalize the review candidate to a bare domain.
+                    if result.review_candidate:
+                        normed = canonical_domain(result.review_candidate) or result.review_candidate
+                        if normed != result.review_candidate:
+                            result = replace(result, review_candidate=normed)
 
                     # Pre-check: if another firm already owns this canonical domain,
                     # demote to candidate before touching the DB (avoids flush-time
