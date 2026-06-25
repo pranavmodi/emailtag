@@ -242,7 +242,28 @@ async function review(pifId, action, btn) {
 
   try {
     const res = await fetch('/api/v1/website-review/' + pifId + '/' + action, { method: 'POST' });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const msg = body.detail || res.statusText;
+      buttons.forEach(b => b.disabled = false);
+      // Show inline error under the row instead of a blocking alert
+      let errEl = row.querySelector('.row-error');
+      if (!errEl) {
+        errEl = document.createElement('td');
+        errEl.colSpan = 4;
+        errEl.className = 'row-error';
+        errEl.style.cssText = 'color:#f87171;font-size:0.78rem;padding:0.3rem 1rem 0.6rem;';
+        const errRow = document.createElement('tr');
+        errRow.appendChild(errEl);
+        row.insertAdjacentElement('afterend', errRow);
+      }
+      errEl.textContent = '⚠ ' + msg;
+      return;
+    }
+
+    // Clear any previous error row
+    const next = row.nextElementSibling;
+    if (next && next.querySelector('.row-error')) next.remove();
 
     row.classList.add(action === 'confirm' ? 'confirmed' : 'rejected');
     setTimeout(() => {

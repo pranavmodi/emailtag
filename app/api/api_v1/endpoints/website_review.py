@@ -37,6 +37,21 @@ def confirm_website(pif_id: str, db: Session = Depends(get_db)):
     if not firm.website_candidate:
         raise HTTPException(status_code=400, detail="No candidate to confirm")
 
+    # Check if another firm already owns this domain.
+    owner = (
+        db.query(PifInfo)
+        .filter(
+            PifInfo.canonical_website == firm.website_candidate,
+            PifInfo.id != firm.id,
+        )
+        .first()
+    )
+    if owner:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Domain already claimed by '{owner.firm_name}' — these may be duplicates. Reject instead.",
+        )
+
     firm.canonical_website = firm.website_candidate
     firm.website_status = "resolved"
     firm.website_source = "human_confirmed"
