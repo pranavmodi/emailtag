@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.models.pif_info import PifInfo
 from app.services.firm_identity import canonical_domain
+from app.services.firm_merge import FirmMergePlan, apply_firm_merge_plan
 from app.services.website_resolution import (
     apply_website_resolution,
     persist_aliases_for_firm,
@@ -19,6 +20,21 @@ from app.services.website_resolution import (
 )
 
 router = APIRouter()
+
+
+def _auto_merge_domain_clash(db, winner: PifInfo, loser: PifInfo, domain: str) -> None:
+    """Merge loser into winner when both resolve to the same canonical domain."""
+    plan = FirmMergePlan(
+        canonical_domain=domain,
+        action="auto_merge",
+        confidence=0.95,
+        survivor_id=str(winner.id),
+        survivor_name=winner.firm_name,
+        loser_ids=[str(loser.id)],
+        member_ids=[str(winner.id), str(loser.id)],
+        member_names=[winner.firm_name, loser.firm_name],
+    )
+    apply_firm_merge_plan(db, plan)
 
 
 def get_db():
@@ -41,7 +57,7 @@ def confirm_website(pif_id: str, db: Session = Depends(get_db)):
     # Normalize to bare domain (candidates from web search are full URLs).
     domain = canonical_domain(firm.website_candidate) or firm.website_candidate
 
-    # Check if another firm already owns this domain.
+    # If another firm already owns this domain, auto-merge (current firm is the loser).
     owner = (
         db.query(PifInfo)
         .filter(
@@ -51,10 +67,9 @@ def confirm_website(pif_id: str, db: Session = Depends(get_db)):
         .first()
     )
     if owner:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Domain already claimed by '{owner.firm_name}' — these may be duplicates. Reject instead.",
-        )
+        _auto_merge_domain_clash(db, winner=owner, loser=firm, domain=domain)
+        db.commit()
+        return {"status": "merged", "merged_into": owner.firm_name, "canonical_website": domain}
 
     firm.canonical_website = domain
     firm.website_status = "resolved"
@@ -62,7 +77,7 @@ def confirm_website(pif_id: str, db: Session = Depends(get_db)):
     firm.website_confidence = 1.0
     firm.website_candidate = None
     db.commit()
-    return {"status": "ok", "canonical_website": firm.canonical_website}
+    return {"status": "ok", "canonical_website": domain}
 
 
 @router.post("/{pif_id}/reject")
@@ -124,25 +139,21 @@ async def run_batch(limit: int = 100):
                             result = replace(result, review_candidate=normed)
 
                     # Pre-check: if another firm already owns this canonical domain,
-                    # demote to candidate before touching the DB (avoids flush-time
-                    # UniqueViolation that would crash the SSE stream).
+                    # auto-merge (new firm is the loser) instead of writing a
+                    # conflicting canonical_website that would crash on flush.
                     if result.canonical_website:
-                        already_claimed = (
-                            db.query(PifInfo.id)
+                        owner = (
+                            db.query(PifInfo)
                             .filter(
                                 PifInfo.canonical_website == result.canonical_website,
                                 PifInfo.id != firm.id,
                             )
                             .first()
                         )
-                        if already_claimed:
-                            result = replace(
-                                result,
-                                canonical_website=None,
-                                website_status="pending",
-                                website_source="human",
-                                review_candidate=result.canonical_website,
-                            )
+                        if owner:
+                            _auto_merge_domain_clash(db, winner=owner, loser=firm, domain=result.canonical_website)
+                            db.commit()
+                            return replace(result, website_status="merged")
 
                     apply_website_resolution(firm, result)
                     persist_aliases_for_firm(db, firm)

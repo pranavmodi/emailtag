@@ -242,8 +242,8 @@ async function review(pifId, action, btn) {
 
   try {
     const res = await fetch('/api/v1/website-review/' + pifId + '/' + action, { method: 'POST' });
+    const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
       const msg = body.detail || res.statusText;
       buttons.forEach(b => b.disabled = false);
       // Show inline error under the row instead of a blocking alert
@@ -265,6 +265,9 @@ async function review(pifId, action, btn) {
     const next = row.nextElementSibling;
     if (next && next.querySelector('.row-error')) next.remove();
 
+    if (body.status === 'merged') {
+      row.querySelector('.firm-name').textContent += ' → merged into ' + body.merged_into;
+    }
     row.classList.add(action === 'confirm' ? 'confirmed' : 'rejected');
     setTimeout(() => {
       row.classList.add('fade-out');
