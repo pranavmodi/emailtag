@@ -12,6 +12,8 @@ from .user import User  # noqa
 from .session import Session  # noqa
 from .template_attachment import TemplateAttachment  # noqa
 from .pif_info import PifInfo  # noqa
+from .firm_alias import FirmAlias  # noqa
+from .firm_merge_audit import FirmMergeAudit  # noqa
 from .pif_pipeline import PifOutreachPipeline  # noqa
 from .conversation_log import ConversationLog  # noqa
 from .autorespond_event import AutorespondEvent  # noqa

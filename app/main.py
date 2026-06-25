@@ -11,6 +11,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 
 from app.api.api_v1.api import api_router
+from app.api.api_v2.api import api_v2_router
 from app.api.v1.endpoints.classification_rules_api import router as rules_router
 from app.api.v1.endpoints.trace_viewer_api import router as trace_router
 from app.api.api_v1.endpoints.ui import agent_manager_ui, login_ui, email_extraction_ui
@@ -61,6 +62,7 @@ def create_application() -> FastAPI:
 
     # Add the API router
     application.include_router(api_router, prefix=settings.API_V1_PREFIX)
+    application.include_router(api_v2_router, prefix="/api/v2")
     application.include_router(rules_router, prefix="/admin", tags=["Classification Rules UI"])
     application.include_router(trace_router, prefix="/admin", tags=["Trace Viewer UI"])
 

@@ -6,6 +6,7 @@ def test_research_tasks_route_to_research_queue_and_live_pipeline_stays_processi
         "app.tasks.firm_research.research_firm_task",
         "app.tasks.firm_research.research_staff_task",
         "app.tasks.firm_research.analyze_leadership_emails_task",
+        "app.tasks.website_resolution.resolve_firm_website_task",
         "app.tasks.behavior_analysis.analyze_firm_behavior_task",
         "app.tasks.behavior_analysis.analyze_all_firms_task",
         "app.tasks.behavior_analysis.score_all_firms_task",
@@ -28,6 +29,9 @@ def test_research_tasks_have_rate_limits():
     assert firm_research.research_firm_task.rate_limit == "10/m"
     assert firm_research.research_staff_task.rate_limit == "10/m"
     assert firm_research.analyze_leadership_emails_task.rate_limit == "10/m"
+    import app.tasks.website_resolution as website_resolution
+
+    assert website_resolution.resolve_firm_website_task.rate_limit == "10/m"
     assert behavior_analysis.analyze_firm_behavior_task.rate_limit == "10/m"
     assert behavior_analysis.analyze_all_firms_task.rate_limit == "10/m"
     assert behavior_analysis.score_all_firms_task.rate_limit == "10/m"

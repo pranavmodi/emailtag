@@ -49,6 +49,10 @@ class PifInfoBase(BaseModel):
     firm_name: str = Field(..., description="Name of the personal injury law firm")
     entity_type: str = Field(default="pi_law_firm", description="Entity type classification")
     website: Optional[str] = Field(None, description="Firm website URL")
+    canonical_website: Optional[str] = Field(None, description="Canonical registrable firm website")
+    website_status: Optional[str] = Field(None, description="Website resolution status")
+    website_source: Optional[str] = Field(None, description="Website resolution source")
+    website_confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
     emails: List[str] = Field(default_factory=list, description="Email addresses")
     phones: List[str] = Field(default_factory=list, description="Phone numbers")
     fax: Optional[str] = Field(None, description="Fax number")
@@ -67,6 +71,10 @@ class PifInfoUpdate(BaseModel):
     firm_name: Optional[str] = None
     entity_type: Optional[str] = None
     website: Optional[str] = None
+    canonical_website: Optional[str] = None
+    website_status: Optional[str] = None
+    website_source: Optional[str] = None
+    website_confidence: Optional[float] = None
     emails: Optional[List[str]] = None
     phones: Optional[List[str]] = None
     fax: Optional[str] = None

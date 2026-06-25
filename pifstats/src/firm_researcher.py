@@ -42,6 +42,13 @@ class FirmResearchResult(BaseModel):
     sources: List[str] = Field(default_factory=list)
 
 
+class OfficialWebsiteResult(BaseModel):
+    """Focused official website search result."""
+    website_url: Optional[str] = Field(None, description="Official firm website URL if found")
+    confidence: float = Field(0.0, description="Confidence from 0.0 to 1.0")
+    reasoning: Optional[str] = Field(None, description="Short basis for the selected website")
+
+
 class LeadershipMemberEnriched(BaseModel):
     """Enriched leadership member data from LinkedIn research."""
     name: str = Field(default="", description="Full name")
@@ -144,6 +151,93 @@ RESEARCH_RESULT_SCHEMA = {
     ],
     "additionalProperties": False
 }
+
+
+OFFICIAL_WEBSITE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "website_url": {
+            "type": ["string", "null"],
+            "description": "Official marketing website URL for the firm, or null if ambiguous",
+        },
+        "confidence": {
+            "type": "number",
+            "description": "Confidence from 0.0 to 1.0",
+        },
+        "reasoning": {
+            "type": ["string", "null"],
+            "description": "Brief reason the URL is official or why no result was selected",
+        },
+    },
+    "required": ["website_url", "confidence", "reasoning"],
+    "additionalProperties": False,
+}
+
+
+def find_official_website(
+    firm_name: str,
+    location: Optional[str] = None,
+) -> Optional[str]:
+    """Find a firm's official website using the same Responses web_search_preview path."""
+    if not firm_name:
+        return None
+
+    headers = {
+        "Authorization": f"Bearer {settings.RESEARCH_OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    query = f'"{firm_name}" {location or ""} personal injury official website'.strip()
+    payload = {
+        "model": "gpt-5-nano",
+        "input": [
+            {
+                "role": "system",
+                "content": (
+                    "Find the official marketing website for a law firm. "
+                    "Return null if results are ambiguous, directories, ads, portals, or social profiles."
+                ),
+            },
+            {"role": "user", "content": query},
+        ],
+        "tools": [{"type": "web_search_preview", "search_context_size": "low"}],
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "official_website_result",
+                "strict": True,
+                "schema": OFFICIAL_WEBSITE_SCHEMA,
+            }
+        },
+    }
+
+    try:
+        with httpx.Client(timeout=120.0, verify=False) as client:
+            response = client.post(OPENAI_API_URL, headers=headers, json=payload)
+            response.raise_for_status()
+            result = response.json()
+    except Exception as exc:
+        logger.error("Official website search failed for %s: %s", firm_name, exc)
+        return None
+
+    content = ""
+    for item in result.get("output", []):
+        if item.get("type") == "message":
+            for content_item in item.get("content", []):
+                if content_item.get("type") == "output_text":
+                    content = content_item.get("text", "")
+
+    if not content:
+        return None
+
+    try:
+        parsed = OfficialWebsiteResult(**json.loads(content))
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.error("Official website search parse failed for %s: %s", firm_name, exc)
+        return None
+
+    if parsed.confidence < 0.6:
+        return None
+    return parsed.website_url
 
 
 RESEARCH_PROMPT = """You are an expert legal industry researcher. Research the following personal injury law firm thoroughly using web searches.
