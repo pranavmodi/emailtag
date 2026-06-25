@@ -132,11 +132,24 @@ async def run_batch(limit: int = 100):
 
                     result = resolve_firm_website(firm)
 
-                    # Normalize the review candidate to a bare domain.
-                    if result.review_candidate:
-                        normed = canonical_domain(result.review_candidate) or result.review_candidate
-                        if normed != result.review_candidate:
-                            result = replace(result, review_candidate=normed)
+                    # Auto-assign: if search found a candidate but name-verification
+                    # failed, trust the GPT result and promote it directly to
+                    # canonical_website (no human review queue).
+                    if result.review_candidate and not result.canonical_website:
+                        domain = canonical_domain(result.review_candidate) or result.review_candidate
+                        result = replace(
+                            result,
+                            canonical_website=domain,
+                            website_status="resolved",
+                            website_source="web_search",
+                            review_candidate=None,
+                        )
+
+                    # Normalize bare domain on email-verified path too (safety).
+                    if result.canonical_website:
+                        normed = canonical_domain(result.canonical_website) or result.canonical_website
+                        if normed != result.canonical_website:
+                            result = replace(result, canonical_website=normed)
 
                     # Pre-check: if another firm already owns this canonical domain,
                     # auto-merge (new firm is the loser) instead of writing a
