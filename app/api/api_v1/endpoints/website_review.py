@@ -2,10 +2,12 @@
 
 import asyncio
 import json
+from dataclasses import replace
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, nullslast
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
@@ -91,7 +93,28 @@ async def run_batch(limit: int = 100):
                     if not firm:
                         return None
                     result = resolve_and_persist_firm_website(db, firm)
-                    db.commit()
+                    try:
+                        db.commit()
+                    except IntegrityError:
+                        # Another firm in this batch already claimed the same
+                        # canonical_website. Rollback and demote to candidate
+                        # so a human can resolve the conflict.
+                        db.rollback()
+                        conflicting_domain = result.canonical_website
+                        if conflicting_domain:
+                            firm.canonical_website = None
+                            firm.website_candidate = conflicting_domain
+                            firm.website_status = "pending"
+                            firm.website_source = "human"
+                            firm.website_confidence = result.website_confidence
+                            db.commit()
+                            result = replace(
+                                result,
+                                canonical_website=None,
+                                website_status="pending",
+                                website_source="human",
+                                review_candidate=conflicting_domain,
+                            )
                     return result
                 finally:
                     db.close()
