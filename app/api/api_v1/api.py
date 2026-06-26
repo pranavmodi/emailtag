@@ -17,7 +17,6 @@ from app.api.api_v1.endpoints import (
     usage,
     inbox_audit,
     bill_offers,
-    website_review,
 )
 
 api_router = APIRouter()
@@ -39,4 +38,3 @@ api_router.include_router(pif_pipeline.router, prefix="/pif-pipeline", tags=["pi
 api_router.include_router(usage.router, prefix="/usage", tags=["usage"])
 api_router.include_router(inbox_audit.router, prefix="/inbox-audit", tags=["inbox-audit"])
 api_router.include_router(bill_offers.router, prefix="/bill-offers", tags=["bill-offers"])
-api_router.include_router(website_review.router, prefix="/website-review", tags=["website-review"])

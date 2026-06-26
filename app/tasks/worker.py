@@ -71,7 +71,7 @@ celery_app.conf.task_routes = {
     "app.tasks.email.tag_email": {"queue": "tagging"},
     "app.tasks.email.orchestrate_post_ocr_processing": {"queue": "processing"},
     "app.tasks.email.perform_tagging_task": {"queue": "tagging"},
-    "app.tasks.email.perform_autorespond_task": {"queue": "processing"},
+    "app.tasks.autorespond.perform_autorespond_task": {"queue": "processing"},
     "app.tasks.bill_offer.run_bill_offer_agent_task": {"queue": "processing"},
     "app.tasks.pif_extraction.extract_pif_from_conversation": {"queue": "processing"},
     "app.tasks.firm_research.research_firm_task": {"queue": "research"},

@@ -46,6 +46,7 @@ logs/
 # Database
 *.sqlite3
 *.db
+*.sql
 
 # Celery
 celerybeat-schedule

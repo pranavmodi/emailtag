@@ -14,7 +14,7 @@ from app.api.api_v1.api import api_router
 from app.api.api_v2.api import api_v2_router
 from app.api.v1.endpoints.classification_rules_api import router as rules_router
 from app.api.v1.endpoints.trace_viewer_api import router as trace_router
-from app.api.api_v1.endpoints.ui import agent_manager_ui, login_ui, email_extraction_ui, website_review_ui
+from app.api.api_v1.endpoints.ui import agent_manager_ui, login_ui, email_extraction_ui
 from app.api.api_v1.dependencies import check_authenticated
 from app.core.config import settings
 
@@ -91,16 +91,6 @@ def create_application() -> FastAPI:
         if not is_authenticated:
             return RedirectResponse(url="/login", status_code=303)
         return await email_extraction_ui(request)
-
-    @application.get("/website-review")
-    async def website_review_page(
-        request: Request,
-        is_authenticated: bool = Depends(check_authenticated)
-    ):
-        """Website candidate review dashboard."""
-        if not is_authenticated:
-            return RedirectResponse(url="/login", status_code=303)
-        return await website_review_ui(request)
 
     @application.get("/health")
     async def health_check():
