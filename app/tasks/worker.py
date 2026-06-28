@@ -82,6 +82,7 @@ celery_app.conf.task_routes = {
     "app.tasks.firm_merge.undo_firm_merge_task": {"queue": "research"},
     "app.tasks.behavior_analysis.analyze_firm_behavior_task": {"queue": "research"},
     "app.tasks.behavior_analysis.analyze_all_firms_task": {"queue": "research"},
+    "app.tasks.behavior_analysis.score_firm_task": {"queue": "research"},
     "app.tasks.behavior_analysis.score_all_firms_task": {"queue": "research"},
     "app.tasks.signature_extraction.extract_signatures_task": {"queue": "research"},
     "app.tasks.inbox_audit.audit_all_inboxes": {"queue": "processing"},

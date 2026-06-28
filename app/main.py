@@ -1,12 +1,13 @@
 """Main FastAPI application instance."""
 
 import logging
-from typing import Callable, Optional
 import os
+from typing import Callable
 
-from fastapi import FastAPI, Request, Response, Cookie, Depends
-from fastapi.responses import RedirectResponse
+import httpx
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 
@@ -16,6 +17,7 @@ from app.api.v1.endpoints.classification_rules_api import router as rules_router
 from app.api.v1.endpoints.trace_viewer_api import router as trace_router
 from app.api.api_v1.endpoints.ui import agent_manager_ui, login_ui, email_extraction_ui
 from app.api.api_v1.dependencies import check_authenticated
+from app.api.api_v1.pifstats_auth import PIFSTATS_COOKIE_NAME, verify_pifstats_token
 from app.core.config import settings
 
 # Configure logging
@@ -25,6 +27,15 @@ logging.basicConfig(
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
+
+FRONTEND_ORIGIN = os.getenv("PIFSTATS_FRONTEND_ORIGIN", "http://127.0.0.1:3001").rstrip("/")
+FRONTEND_RESPONSE_HEADERS = {
+    "cache-control",
+    "content-type",
+    "etag",
+    "last-modified",
+    "location",
+}
 
 
 class HTTPSRedirectMiddleware(BaseHTTPMiddleware):
@@ -96,6 +107,52 @@ def create_application() -> FastAPI:
     async def health_check():
         """Health check endpoint."""
         return {"status": "ok", "version": settings.VERSION}
+
+    async def proxy_frontend_request(request: Request) -> Response:
+        """Proxy public Next.js routes when the edge proxy sends them to FastAPI."""
+        url = f"{FRONTEND_ORIGIN}{request.url.path}"
+        if request.url.query:
+            url = f"{url}?{request.url.query}"
+
+        try:
+            async with httpx.AsyncClient(follow_redirects=False, timeout=30.0) as client:
+                headers = {}
+                if request.headers.get("cookie"):
+                    headers["cookie"] = request.headers["cookie"]
+                upstream_response = await client.get(url, headers=headers)
+        except httpx.HTTPError as exc:
+            logger.warning("Unable to proxy frontend route %s: %s", request.url.path, exc)
+            return Response("Frontend route unavailable", status_code=502)
+
+        headers = {
+            key: value
+            for key, value in upstream_response.headers.items()
+            if key.lower() in FRONTEND_RESPONSE_HEADERS
+        }
+        return Response(
+            content=upstream_response.content,
+            status_code=upstream_response.status_code,
+            headers=headers,
+        )
+
+    @application.get("/pifstats")
+    async def pifstats_page(request: Request):
+        """PIFStats page served by the Next.js frontend."""
+        if not verify_pifstats_token(request.cookies.get(PIFSTATS_COOKIE_NAME)):
+            return RedirectResponse(url="/pifstats/login", status_code=303)
+        return await proxy_frontend_request(request)
+
+    @application.get("/pifstats/{path:path}")
+    async def pifstats_asset_or_route(request: Request, path: str):
+        """PIFStats subroutes served by the Next.js frontend."""
+        if path != "login" and not verify_pifstats_token(request.cookies.get(PIFSTATS_COOKIE_NAME)):
+            return RedirectResponse(url="/pifstats/login", status_code=303)
+        return await proxy_frontend_request(request)
+
+    @application.get("/_next/{path:path}")
+    async def next_static_asset(request: Request, path: str):
+        """Next.js static assets for public frontend routes."""
+        return await proxy_frontend_request(request)
 
     return application
 

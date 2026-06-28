@@ -25,6 +25,7 @@ from app.schemas.pif_info import (
     ResearchStatusBulkResponse,
     ResearchStatusResponse,
     ResearchTaskState,
+    FullEnrichmentStatusResponse,
     LeadershipMember,
     OutreachRequest,
     OutreachResponse,
@@ -289,6 +290,30 @@ async def list_pif_info(
         None,
         description="Filter firms researched within the last N days (e.g. 7 for last week)"
     ),
+    website_presence: str = Query(
+        None,
+        description="Filter website coverage: any, has, missing, resolved, unresolved",
+    ),
+    research_presence: str = Query(
+        None,
+        description="Filter research coverage: any, completed, missing, queued_or_running, failed",
+    ),
+    staff_presence: str = Query(
+        None,
+        description="Filter staff research coverage: any, completed, missing, queued_or_running, failed",
+    ),
+    behavior_presence: str = Query(
+        None,
+        description="Filter behavior analysis coverage: any, has, missing",
+    ),
+    icp_presence: str = Query(
+        None,
+        description="Filter ICP score coverage: any, has, missing",
+    ),
+    active_only: bool = Query(
+        True,
+        description="Exclude soft-merged duplicate rows by default",
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> PifInfoListResponse:
     """
@@ -313,6 +338,12 @@ async def list_pif_info(
         research_status=research_status, icp_tier=icp_tier,
         entity_type=entity_type,
         recently_researched_days=recently_researched,
+        website_presence=website_presence,
+        research_presence=research_presence,
+        staff_presence=staff_presence,
+        behavior_presence=behavior_presence,
+        icp_presence=icp_presence,
+        active_only=active_only,
     )
 
     total_pages = (total + page_size - 1) // page_size if total > 0 else 0
@@ -982,6 +1013,111 @@ async def get_research_status(
         )
 
 
+@router.post("/{pif_id}/enrich-all", response_model=ResearchStartResponse)
+async def enrich_firm_all(
+    pif_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> ResearchStartResponse:
+    """
+    Queue the full firm enrichment workflow sequentially.
+
+    Steps:
+    1. Resolve canonical website
+    2. Firm and leadership research
+    3. Leadership email history analysis
+    4. Staff research
+    5. Behavioral analysis
+    6. Signature extraction
+    7. Final ICP scoring
+    """
+    pif = await pif_info_crud.get(db, id=pif_id)
+    if not pif:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PIF info not found",
+        )
+
+    await pif_info_crud.update(
+        db,
+        db_obj=pif,
+        obj_in={
+            "research_status": "queued",
+            "staff_research_status": "queued",
+        },
+    )
+
+    from celery import chain
+    from app.tasks.behavior_analysis import analyze_firm_behavior_task, score_firm_task
+    from app.tasks.firm_research import analyze_leadership_emails_task, research_firm_task, research_staff_task
+    from app.tasks.signature_extraction import extract_signatures_task
+    from app.tasks.website_resolution import resolve_firm_website_task
+
+    workflow = chain(
+        resolve_firm_website_task.si(str(pif_id)),
+        research_firm_task.si(str(pif_id)),
+        analyze_leadership_emails_task.si(str(pif_id)),
+        research_staff_task.si(str(pif_id)),
+        analyze_firm_behavior_task.si(str(pif_id)),
+        extract_signatures_task.si(str(pif_id)),
+        score_firm_task.si(str(pif_id)),
+    ).apply_async()
+
+    logger.info("Full enrichment queued for firm %s: %s", pif.firm_name, workflow.id)
+
+    return ResearchStartResponse(
+        pif_id=pif_id,
+        firm_name=pif.firm_name,
+        task_id=workflow.id,
+        status="queued",
+        message="Full enrichment queued: website, research, staff, behavior, signatures, and ICP scoring.",
+    )
+
+
+@router.get("/enrich-all/status/{task_id}", response_model=FullEnrichmentStatusResponse)
+async def get_full_enrichment_status(task_id: str) -> FullEnrichmentStatusResponse:
+    """Poll the final task in the full enrichment chain."""
+    from celery.result import AsyncResult
+    from app.tasks.worker import celery_app
+
+    result = AsyncResult(task_id, app=celery_app)
+    if result.state == "PENDING":
+        return FullEnrichmentStatusResponse(
+            task_id=task_id,
+            status="queued",
+            message="Full enrichment is queued",
+        )
+    if result.state in {"STARTED", "RETRY"}:
+        return FullEnrichmentStatusResponse(
+            task_id=task_id,
+            status="in_progress",
+            message="Full enrichment is in progress",
+        )
+    if result.state == "FAILURE":
+        return FullEnrichmentStatusResponse(
+            task_id=task_id,
+            status="failed",
+            message=f"Full enrichment failed: {result.result}",
+        )
+    if result.state == "SUCCESS":
+        task_result = result.result or {}
+        status_value = task_result.get("status", "completed") if isinstance(task_result, dict) else "completed"
+        message = task_result.get("message") if isinstance(task_result, dict) else None
+        pif_id_value = task_result.get("pif_id") if isinstance(task_result, dict) else None
+        return FullEnrichmentStatusResponse(
+            task_id=task_id,
+            status=status_value,
+            message=message or "Full enrichment completed",
+            pif_id=UUID(pif_id_value) if pif_id_value else None,
+            firm_name=task_result.get("firm_name") if isinstance(task_result, dict) else None,
+            result=task_result if isinstance(task_result, dict) else {"result": task_result},
+        )
+    return FullEnrichmentStatusResponse(
+        task_id=task_id,
+        status=result.state.lower(),
+        message=f"Full enrichment status: {result.state}",
+    )
+
+
 @router.post("/{pif_id}/research-staff", response_model=ResearchStartResponse)
 async def research_staff(
     pif_id: UUID,
@@ -1284,7 +1420,7 @@ async def score_firm_icp(
     pif_dict = {
         "behavioral_data": pif.behavioral_data or {},
         "research_data": pif.research_data or {},
-        "website": pif.website,
+        "website": pif.canonical_website or pif.website,
         "leadership": pif.leadership or [],
         "phones": pif.phones or [],
     }

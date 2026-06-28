@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import or_, select, func, text, literal_column
+from sqlalchemy import and_, or_, select, func, text, literal_column
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import CRUDBase
@@ -44,6 +44,12 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
         icp_tier: Optional[str] = None,
         entity_type: Optional[str] = None,
         recently_researched_days: Optional[int] = None,
+        website_presence: Optional[str] = None,
+        research_presence: Optional[str] = None,
+        staff_presence: Optional[str] = None,
+        behavior_presence: Optional[str] = None,
+        icp_presence: Optional[str] = None,
+        active_only: bool = True,
     ) -> tuple[List[PifInfo], int]:
         """
         Search PIF info with optional text search, filters, and sorting.
@@ -64,11 +70,16 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
         query = select(PifInfo)
         count_query = select(func.count(PifInfo.id))
 
+        if active_only:
+            query = query.filter(PifInfo.merged_into.is_(None))
+            count_query = count_query.filter(PifInfo.merged_into.is_(None))
+
         if search:
             search_term = f"%{search.lower()}%"
             search_filter = or_(
                 func.lower(PifInfo.firm_name).like(search_term),
                 func.lower(PifInfo.website).like(search_term),
+                func.lower(PifInfo.canonical_website).like(search_term),
                 # Search in emails array - PostgreSQL specific
                 PifInfo.emails.any(search.lower()),
             )
@@ -93,6 +104,18 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
             query = query.filter(PifInfo.last_researched_at >= cutoff)
             count_query = count_query.filter(PifInfo.last_researched_at >= cutoff)
 
+        for field_name, value in (
+            ("website_presence", website_presence),
+            ("research_presence", research_presence),
+            ("staff_presence", staff_presence),
+            ("behavior_presence", behavior_presence),
+            ("icp_presence", icp_presence),
+        ):
+            presence_filter = self._presence_filter(field_name, value)
+            if presence_filter is not None:
+                query = query.filter(presence_filter)
+                count_query = count_query.filter(presence_filter)
+
         # Get total count
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
@@ -116,6 +139,71 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
         items = result.scalars().all()
 
         return items, total
+
+    def _presence_filter(self, field_name: str, value: Optional[str]):
+        """Translate dashboard presence filters into SQLAlchemy predicates."""
+        if value in (None, "", "any"):
+            return None
+
+        if field_name == "website_presence":
+            has_website = or_(
+                PifInfo.canonical_website.is_not(None),
+                PifInfo.website.is_not(None),
+                PifInfo.website_status == "resolved",
+            )
+            missing_website = and_(
+                PifInfo.canonical_website.is_(None),
+                PifInfo.website.is_(None),
+                or_(PifInfo.website_status.is_(None), PifInfo.website_status != "resolved"),
+            )
+            if value == "has":
+                return has_website
+            if value == "missing":
+                return missing_website
+            if value == "resolved":
+                return PifInfo.website_status == "resolved"
+            if value == "unresolved":
+                return or_(PifInfo.website_status.is_(None), PifInfo.website_status != "resolved")
+
+        if field_name == "research_presence":
+            if value == "completed":
+                return PifInfo.research_status == "completed"
+            if value == "missing":
+                return or_(
+                    PifInfo.research_status.is_(None),
+                    ~PifInfo.research_status.in_(["completed", "queued", "in_progress"]),
+                )
+            if value == "queued_or_running":
+                return PifInfo.research_status.in_(["queued", "in_progress"])
+            if value == "failed":
+                return PifInfo.research_status == "failed"
+
+        if field_name == "staff_presence":
+            if value == "completed":
+                return PifInfo.staff_research_status == "completed"
+            if value == "missing":
+                return or_(
+                    PifInfo.staff_research_status.is_(None),
+                    ~PifInfo.staff_research_status.in_(["completed", "queued", "in_progress"]),
+                )
+            if value == "queued_or_running":
+                return PifInfo.staff_research_status.in_(["queued", "in_progress"])
+            if value == "failed":
+                return PifInfo.staff_research_status == "failed"
+
+        if field_name == "behavior_presence":
+            if value == "has":
+                return PifInfo.behavioral_data.is_not(None)
+            if value == "missing":
+                return PifInfo.behavioral_data.is_(None)
+
+        if field_name == "icp_presence":
+            if value == "has":
+                return PifInfo.icp_score.is_not(None)
+            if value == "missing":
+                return PifInfo.icp_score.is_(None)
+
+        return None
 
     async def get_all(
         self,

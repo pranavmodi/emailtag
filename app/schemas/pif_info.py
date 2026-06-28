@@ -177,6 +177,16 @@ class ResearchStatusResponse(BaseModel):
     message: str
 
 
+class FullEnrichmentStatusResponse(BaseModel):
+    """Schema for full firm enrichment workflow polling."""
+    task_id: str
+    status: str
+    message: str
+    pif_id: Optional[UUID] = None
+    firm_name: Optional[str] = None
+    result: Optional[Dict[str, Any]] = None
+
+
 class ResearchBatchRequest(BaseModel):
     """Batch research dispatch request for orchestrators."""
     limit: int = Field(10, ge=1, description="Maximum firms to queue; hard limit 25")

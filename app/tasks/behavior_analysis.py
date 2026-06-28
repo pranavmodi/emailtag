@@ -93,7 +93,7 @@ def analyze_firm_behavior_task(self, pif_id: str) -> Dict[str, Any]:
         pif_dict = {
             "behavioral_data": behavioral_data,
             "research_data": pif.research_data or {},
-            "website": pif.website,
+            "website": pif.canonical_website or pif.website,
             "leadership": pif.leadership or [],
             "phones": pif.phones or [],
             "conversation_ids": conv_ids,
@@ -210,7 +210,7 @@ def score_all_firms_task(self) -> Dict[str, Any]:
                 pif_dict = {
                     "behavioral_data": pif.behavioral_data or {},
                     "research_data": pif.research_data or {},
-                    "website": pif.website,
+                    "website": pif.canonical_website or pif.website,
                     "leadership": pif.leadership or [],
                     "phones": pif.phones or [],
                 }
@@ -232,5 +232,72 @@ def score_all_firms_task(self) -> Dict[str, Any]:
         db.commit()
         return {"status": "completed", "scored": scored, "total": len(pifs)}
 
+    finally:
+        db.close()
+
+
+@celery_app.task(
+    bind=True,
+    name="app.tasks.behavior_analysis.score_firm_task",
+    rate_limit="10/m",
+)
+def score_firm_task(self, pif_id: str) -> Dict[str, Any]:
+    """
+    Re-score one firm that already has behavioral_data.
+
+    This is used as the final explicit step in the full enrichment chain.
+    """
+    project_root = _get_project_root()
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+
+    from app.crud.sync.pif_info import pif_info as pif_info_crud_sync
+    from pifstats.src.icp_scorer import score_firm
+
+    db = SessionLocal()
+    try:
+        pif = pif_info_crud_sync.get(db, id=UUID(pif_id))
+        if not pif:
+            return {"status": "failed", "message": "PIF not found", "pif_id": pif_id}
+
+        if not pif.behavioral_data:
+            return {
+                "status": "skipped",
+                "message": "No behavioral_data available",
+                "pif_id": pif_id,
+                "firm_name": pif.firm_name,
+            }
+
+        pif_dict = {
+            "behavioral_data": pif.behavioral_data or {},
+            "research_data": pif.research_data or {},
+            "website": pif.canonical_website or pif.website,
+            "leadership": pif.leadership or [],
+            "phones": pif.phones or [],
+            "conversation_ids": pif.conversation_ids or [],
+        }
+        score_result = score_firm(pif_dict)
+        pif_info_crud_sync.update(
+            db,
+            db_obj=pif,
+            obj_in={
+                "icp_score": score_result["icp_score"],
+                "icp_tier": score_result["icp_tier"],
+                "score_breakdown": score_result["score_breakdown"],
+                "icp_scored_at": datetime.utcnow(),
+            },
+        )
+        db.commit()
+
+        return {
+            "status": "completed",
+            "pif_id": pif_id,
+            "firm_name": pif.firm_name,
+            "icp_score": score_result["icp_score"],
+            "icp_tier": score_result["icp_tier"],
+        }
+    except Exception as exc:
+        logger.error(f"Single-firm scoring failed for {pif_id}: {exc}", exc_info=True)
+        return {"status": "failed", "pif_id": pif_id, "message": str(exc)}
     finally:
         db.close()
