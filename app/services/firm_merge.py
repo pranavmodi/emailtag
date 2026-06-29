@@ -22,6 +22,7 @@ EXCLUDED_SHARED_DOMAINS = {
     "barracuda.com",
     "cloudflare.com",
     "constantcontact.com",
+    "ccsend.com",
     "google.com",
     "mailchimp.com",
     "mimecast.com",
@@ -674,4 +675,3 @@ def _parse_datetime(value: Any) -> Optional[datetime]:
     if isinstance(value, str):
         return datetime.fromisoformat(value)
     return None
-

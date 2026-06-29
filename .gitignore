@@ -46,6 +46,7 @@ logs/
 # Database
 *.sqlite3
 *.db
+*.sql
 
 # Celery
 celerybeat-schedule
@@ -62,6 +63,7 @@ migrations/versions/*
 !migrations/versions/0b91c2d3e4f5_add_firm_merge_audit.py
 !migrations/versions/1c2d3e4f5a6b_add_firm_event_trigger_engine.py
 !migrations/versions/2d3e4f5a6b7c_add_firm_outcome_attribution.py
+!migrations/versions/j8k9l0m1n2o3_add_website_candidate_to_pif_info.py
 !migrations/versions/.gitkeep
 
 # Debug images and temporary files
@@ -73,3 +75,4 @@ node_modules/
 frontend/settings2/node_modules/
 frontend/settings2/.next/
 frontend/settings2/out/
+!migrations/versions/5de6dc7ca42d_merge_firmintel_heads_website_candidate_.py

@@ -765,7 +765,7 @@ function ClassificationTracesContent() {
   };
 
   const handleBackToList = () => {
-    router.push("/classification-traces");
+    router.push("/settings/classification-traces");
   };
 
   const toggleTrace = (index: number) => {

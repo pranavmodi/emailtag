@@ -11,6 +11,35 @@ from app.models.pif_info import PifInfo
 from app.services.firm_identity import canonical_domain
 
 
+IGNORED_EMAIL_DOMAINS = {
+    "aol.com",
+    "att.net",
+    "barracuda.com",
+    "ccsend.com",
+    "cloudflare.com",
+    "comcast.net",
+    "constantcontact.com",
+    "cox.net",
+    "earthlink.net",
+    "gmail.com",
+    "google.com",
+    "hotmail.com",
+    "icloud.com",
+    "live.com",
+    "mailchimp.com",
+    "me.com",
+    "mimecast.com",
+    "msn.com",
+    "outlook.com",
+    "pacbell.net",
+    "proofpoint.com",
+    "sbcglobal.net",
+    "secureserver.net",
+    "sendgrid.com",
+    "yahoo.com",
+}
+
+
 @dataclass(frozen=True)
 class DedupReviewCluster:
     cluster_key: str
@@ -59,6 +88,6 @@ def _firm_domain(firm: PifInfo) -> Optional[str]:
 def _first_email_domain(firm: PifInfo) -> Optional[str]:
     for email in firm.emails or []:
         domain = canonical_domain(email)
-        if domain:
+        if domain and domain not in IGNORED_EMAIL_DOMAINS:
             return domain
     return None

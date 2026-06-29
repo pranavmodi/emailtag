@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.tasks.worker import celery_app
 from app.db.session import SessionLocal
 from app.models.pif_info import PifInfo
+from app.services.extracted_firm_identity import resolve_extracted_firm_identity
 
 logger = get_task_logger(__name__)
 
@@ -188,7 +189,7 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
         contacts_dicts = [c.model_dump() for c in firm_info.contacts]
         extracted_entity_type = getattr(firm_info, 'entity_type', 'pi_law_firm') or 'pi_law_firm'
 
-        pif, is_new = upsert_pif_sync(
+        identity = resolve_extracted_firm_identity(
             db,
             firm_name=firm_info.firm_name,
             website=firm_info.firm_website or None,
@@ -201,9 +202,18 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
             extraction_notes=firm_info.extraction_notes or None,
             entity_type=extracted_entity_type,
         )
+        db.commit()
+        pif = identity.pif
+        db.refresh(pif)
 
-        action = "created" if is_new else "updated"
-        logger.info(f"PIF extraction complete: {action} firm '{firm_info.firm_name}' (ID: {pif.id})")
+        action = identity.action
+        logger.info(
+            "PIF extraction complete: %s firm '%s' (ID: %s, mapped_via=%s)",
+            action,
+            firm_info.firm_name,
+            pif.id,
+            identity.mapped_via,
+        )
 
         # Auto-trigger research (max 5/day per entity type)
         research_triggered = False
@@ -244,6 +254,10 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
             "pif_id": str(pif.id),
             "firm_name": firm_info.firm_name,
             "entity_type": extracted_entity_type,
+            "mapped_via": identity.mapped_via,
+            "canonical_website": pif.canonical_website,
+            "website_status": pif.website_status,
+            "website_source": pif.website_source,
             "emails_count": len(firm_info.firm_emails),
             "phones_count": len(firm_info.firm_phones),
             "contacts_count": len(firm_info.contacts),

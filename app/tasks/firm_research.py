@@ -81,6 +81,13 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
 
     from pifstats.src.firm_researcher import research_firm, research_leadership_member
     from app.crud.sync.pif_info import pif_info as pif_info_crud_sync
+    from app.models.pif_info import PifInfo
+    from app.services.website_resolution import (
+        WebsiteResolutionResult,
+        apply_website_resolution,
+        persist_aliases_for_firm,
+        resolve_firm_website,
+    )
 
     db = SessionLocal()
 
@@ -90,6 +97,34 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
         if not pif:
             logger.error(f"PIF not found: {pif_id}")
             return {"status": "failed", "message": "PIF not found"}
+
+        if not pif.canonical_website:
+            logger.info(f"Resolving website before research for firm: {pif.firm_name}")
+            website_result = resolve_firm_website(pif)
+            if website_result.canonical_website:
+                owner = (
+                    db.query(PifInfo)
+                    .filter(
+                        PifInfo.canonical_website == website_result.canonical_website,
+                        PifInfo.id != pif.id,
+                    )
+                    .first()
+                )
+                if owner:
+                    website_result = WebsiteResolutionResult(
+                        canonical_website=None,
+                        website_status="pending",
+                        website_source="human",
+                        website_confidence=0.0,
+                        review_reason="canonical_domain_owned_by_another_firm",
+                        review_candidate=website_result.canonical_website,
+                    )
+
+            apply_website_resolution(pif, website_result)
+            persist_aliases_for_firm(db, pif)
+            db.add(pif)
+            db.commit()
+            db.refresh(pif)
 
         # Update status to in_progress
         pif_info_crud_sync.update(
@@ -108,7 +143,7 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
         logger.info(f"Step 1: Initial firm research for {pif.firm_name}")
         result = research_firm(
             firm_name=pif.firm_name,
-            website=pif.website,
+            website=pif.canonical_website or pif.website,
             location=location
         )
 
@@ -151,7 +186,7 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
                         title=leader.get("title", ""),
                         firm_name=pif.firm_name,
                         linkedin_url=leader.get("linkedin"),
-                        firm_website=pif.website
+                        firm_website=pif.canonical_website or pif.website
                     )
                     if enriched:
                         # Merge enriched data with original, sanitizing LinkedIn URL

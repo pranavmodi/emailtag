@@ -745,7 +745,7 @@ export default function SandboxPage() {
                       Clear Search
                     </Button>
                   ) : (
-                    <Link href="/">
+                    <Link href="/settings">
                       <Button variant="primary" className="mt-2">
                         Go to Settings
                       </Button>
@@ -1126,7 +1126,7 @@ export default function SandboxPage() {
                       Clear Search
                     </Button>
                   ) : (
-                    <Link href="/">
+                    <Link href="/settings">
                       <Button variant="primary" className="mt-2">
                         Go to Settings
                       </Button>
@@ -1483,7 +1483,7 @@ export default function SandboxPage() {
                       Clear Search
                     </Button>
                   ) : (
-                    <Link href="/">
+                    <Link href="/settings">
                       <Button variant="primary" className="mt-2">
                         Go to Settings
                       </Button>

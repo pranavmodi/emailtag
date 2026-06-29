@@ -7,7 +7,12 @@ from celery.utils.log import get_task_logger
 
 from app.db.session import SessionLocal
 from app.models.pif_info import PifInfo
-from app.services.website_resolution import resolve_and_persist_firm_website
+from app.services.website_resolution import (
+    WebsiteResolutionResult,
+    apply_website_resolution,
+    persist_aliases_for_firm,
+    resolve_firm_website,
+)
 from app.tasks.worker import celery_app
 
 logger = get_task_logger(__name__)
@@ -34,7 +39,29 @@ def resolve_firm_website_task(self, pif_id: str) -> Dict[str, Any]:
                 "canonical_website": pif.canonical_website,
             }
 
-        result = resolve_and_persist_firm_website(db, pif)
+        result = resolve_firm_website(pif)
+        if result.canonical_website:
+            owner = (
+                db.query(PifInfo)
+                .filter(
+                    PifInfo.canonical_website == result.canonical_website,
+                    PifInfo.id != pif.id,
+                )
+                .first()
+            )
+            if owner:
+                result = WebsiteResolutionResult(
+                    canonical_website=None,
+                    website_status="pending",
+                    website_source="human",
+                    website_confidence=0.0,
+                    review_reason="canonical_domain_owned_by_another_firm",
+                    review_candidate=result.canonical_website,
+                )
+
+        apply_website_resolution(pif, result)
+        persist_aliases_for_firm(db, pif)
+        db.add(pif)
         db.commit()
         db.refresh(pif)
 

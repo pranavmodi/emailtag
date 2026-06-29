@@ -105,6 +105,20 @@ def test_junk_domain_with_dissimilar_names_routes_to_review():
     assert plan.loser_ids == []
 
 
+def test_ccsend_tracking_domain_routes_to_review_even_with_similar_names():
+    firms = [
+        _firm("BellMed", canonical_website="ccsend.com"),
+        _firm("Bell Medical", canonical_website="https://www.ccsend.com/a/b"),
+    ]
+
+    report = build_firm_merge_report(firms)
+
+    assert len(report.plans) == 1
+    plan = report.plans[0]
+    assert plan.auto_merge is False
+    assert "shared_or_junk_domain" in plan.review_reasons
+
+
 def test_undo_restores_pre_merge_state_and_aliases():
     survivor = _firm(
         "Yagman & Yagman",
@@ -177,4 +191,3 @@ def test_dry_run_fixture_report_is_readable_and_does_not_mutate_records():
     assert second.emails == ["b@yaglaw.com"]
     assert second.merged_into is None
     assert second.merge_status == "active"
-

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Building2,
@@ -17,7 +18,6 @@ import {
   ChevronUp,
   ExternalLink,
   Trash2,
-  LogOut,
   Eye,
   Sparkles,
   Linkedin,
@@ -27,9 +27,11 @@ import {
   Copy,
   Check,
   BarChart2,
+  Shield,
+  LogOut,
 } from "lucide-react";
 
-import { ApiError, PifApi } from "@/lib/api";
+import { ApiError, PifApi, PifStatsAuthApi } from "@/lib/api";
 import type { PifInfoResponse, PifInfoListResponse, ProcessDayResponse, ResearchStatusResponse, OutreachMessageResult, FirmLookupResponse, FirmLookupConversation, FirmLookupCreateResponse, AnalyticsSummary, PeopleSearchResponse, PersonSearchResult, AutorespondEventListResponse, AutorespondEventSummary } from "@/lib/types";
 import { ENTITY_TYPE_LABELS, AGENT_TYPE_LABELS } from "@/lib/types";
 import { ResearchModal } from "./ResearchModal";
@@ -44,7 +46,6 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Header } from "@/components/layout/Header";
 
 const easing = { duration: 0.45, ease: [0.16, 1, 0.3, 1] };
 
@@ -60,19 +61,7 @@ const isValidLinkedInUrl = (url: string | null | undefined): boolean => {
          lower.startsWith("www.linkedin.com");
 };
 
-// Simple auth for pifstats page only
-const PIFSTATS_AUTH_KEY = "pifstats_authenticated";
-const VALID_USERNAME = "user";
-const VALID_PASSWORD = "user123";
-
 export default function PifListPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [loginUsername, setLoginUsername] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [loginError, setLoginError] = useState<string | null>(null);
-
-  const [user, setUser] = useState<string>("user");
   const [data, setData] = useState<PifInfoListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -120,35 +109,6 @@ export default function PifListPage() {
 
   // All researched firms (for dropdowns, not paginated)
   const [allResearchedFirms, setAllResearchedFirms] = useState<PifInfoResponse[]>([]);
-
-  // Check if already authenticated on mount
-  useEffect(() => {
-    const authStatus = localStorage.getItem(PIFSTATS_AUTH_KEY);
-    if (authStatus === "true") {
-      setIsAuthenticated(true);
-    }
-    setAuthChecked(true);
-  }, []);
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError(null);
-
-    if (loginUsername === VALID_USERNAME && loginPassword === VALID_PASSWORD) {
-      localStorage.setItem(PIFSTATS_AUTH_KEY, "true");
-      setIsAuthenticated(true);
-      setUser(loginUsername);
-    } else {
-      setLoginError("Invalid username or password");
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem(PIFSTATS_AUTH_KEY);
-    setIsAuthenticated(false);
-    setLoginUsername("");
-    setLoginPassword("");
-  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -203,11 +163,6 @@ export default function PifListPage() {
     let mounted = true;
 
     const bootstrap = async () => {
-      if (!isAuthenticated) {
-        setIsLoading(false);
-        return;
-      }
-
       try {
         await Promise.all([fetchData(), fetchResearchedFirms(), fetchAnalytics()]);
       } catch (err) {
@@ -219,14 +174,12 @@ export default function PifListPage() {
       }
     };
 
-    if (authChecked) {
-      bootstrap();
-    }
+    bootstrap();
     return () => {
       mounted = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, authChecked]);
+  }, []);
 
   // Re-fetch when page, sort, or entity type filter changes
   useEffect(() => {
@@ -280,7 +233,7 @@ export default function PifListPage() {
       await fetchData();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        window.location.href = "/login";
+        window.location.href = "/pifstats/login";
         return;
       }
       const message = err instanceof Error ? err.message : "Failed to process day";
@@ -300,7 +253,7 @@ export default function PifListPage() {
       await fetchData();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        window.location.href = "/login";
+        window.location.href = "/pifstats/login";
         return;
       }
       const message = err instanceof Error ? err.message : "Failed to delete";
@@ -312,81 +265,13 @@ export default function PifListPage() {
     setExpandedId(expandedId === id ? null : id);
   };
 
-  // Show loading while checking auth
-  if (!authChecked) {
-    return (
-      <section className="flex min-h-screen items-center justify-center px-6 py-16 bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={easing}
-          className="rounded-3xl border border-slate-200/80 bg-white/80 px-10 py-12 text-center shadow-2xl"
-        >
-          <Loader2 className="mx-auto h-8 w-8 animate-spin text-indigo-600" />
-          <p className="mt-4 text-base font-medium text-slate-500">Loading...</p>
-        </motion.div>
-      </section>
-    );
-  }
-
-  // Show login form if not authenticated
-  if (!isAuthenticated) {
-    return (
-      <section className="flex min-h-screen items-center justify-center px-6 py-16 bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={easing}
-          className="w-full max-w-md"
-        >
-          <Card className="rounded-2xl border border-slate-200/70 bg-white/90 shadow-xl">
-            <CardContent className="pt-6">
-              <form onSubmit={handleLogin} className="space-y-4">
-                {loginError && (
-                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
-                    {loginError}
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <label htmlFor="username" className="text-sm font-medium text-slate-700">
-                    Username
-                  </label>
-                  <input
-                    type="text"
-                    id="username"
-                    value={loginUsername}
-                    onChange={(e) => setLoginUsername(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    placeholder="Enter username"
-                    autoComplete="username"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="password" className="text-sm font-medium text-slate-700">
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    id="password"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    placeholder="Enter password"
-                    autoComplete="current-password"
-                    required
-                  />
-                </div>
-                <Button type="submit" className="w-full">
-                  Sign In
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </section>
-    );
-  }
+  const handleLogout = async () => {
+    try {
+      await PifStatsAuthApi.logout();
+    } finally {
+      window.location.href = "/pifstats/login";
+    }
+  };
 
   if (isLoading) {
     return (
@@ -406,16 +291,44 @@ export default function PifListPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
-      <Header user={user} currentPage={{ label: "PIF Stats", icon: "🏢" }} extraAction={
-        <Button
-          variant="ghost"
-          onClick={handleLogout}
-          className="text-slate-600 hover:text-slate-800 px-3 py-1.5 text-sm"
-        >
-          <LogOut className="h-4 w-4 mr-1" />
-          Logout
-        </Button>
-      } />
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
+          <div>
+            <h1 className="text-xl font-semibold text-slate-950">PIFStats</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Firm intelligence, outreach, and enrichment workspace
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/pifstats/firms"
+              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-900 hover:text-slate-950"
+            >
+              <Building2 className="h-4 w-4" />
+              Firm Dashboard
+            </Link>
+            <Link
+              href="/pifstats/env"
+              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-900 hover:text-slate-950"
+            >
+              <Shield className="h-4 w-4" />
+              Environment
+            </Link>
+            <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">
+              Protected
+            </Badge>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleLogout}
+              className="gap-2 border border-slate-300 bg-white text-slate-700 hover:border-slate-900 hover:text-slate-950"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </Button>
+          </div>
+        </div>
+      </header>
 
       <main className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-10">
         {/* Tab Navigation */}

@@ -15,91 +15,91 @@ export interface MenuItem {
 
 export const MENU_ITEMS: MenuItem[] = [
   {
-    href: "/",
+    href: "/settings",
     label: "System Settings",
     description: "Configure email processing behavior",
     icon: "⚙️",
     primary: true,
   },
   {
-    href: "/template-config",
+    href: "/settings/template-config",
     label: "Templates",
     description: "Edit message templates",
     icon: "📝",
     primary: true,
   },
   {
-    href: "/tag-statistics",
+    href: "/settings/tag-statistics",
     label: "Tag Statistics",
     description: "Analyze tag retention and changes",
     icon: "📊",
     primary: true,
   },
   {
-    href: "/usage-stats",
+    href: "/settings/usage-stats",
     label: "Usage Stats",
     description: "Admin usage & config change log",
     icon: "📈",
     primary: true,
   },
   {
-    href: "/archived-list",
+    href: "/settings/archived-list",
     label: "Archived",
     description: "View archived conversations by day",
     icon: "📂",
     primary: false,
   },
   {
-    href: "/ai-training",
+    href: "/settings/ai-training",
     label: "AI Training",
     description: "View AI training conversations",
     icon: "🧠",
     primary: false,
   },
   {
-    href: "/sandbox",
+    href: "/settings/sandbox",
     label: "Sandbox",
     description: "Test autorespond outputs locally",
     icon: "🧪",
     primary: false,
   },
   {
-    href: "/test-emails",
+    href: "/settings/test-emails",
     label: "Test Emails",
     description: "Send test email scenarios",
     icon: "📧",
     primary: false,
   },
   {
-    href: "/reprocess",
+    href: "/settings/reprocess",
     label: "Reprocess",
     description: "Trigger conversation processing",
     icon: "🔄",
     primary: false,
   },
   {
-    href: "/classification-traces",
+    href: "/settings/classification-traces",
     label: "Traces",
     description: "View classification traces",
     icon: "🔍",
     primary: false,
   },
   {
-    href: "/conversation-replay",
+    href: "/settings/conversation-replay",
     label: "Replay",
     description: "Replay conversations",
     icon: "▶️",
     primary: false,
   },
   {
-    href: "/inbox-audit",
+    href: "/settings/inbox-audit",
     label: "Inbox Audit",
     description: "Daily reconciliation of Front inboxes vs processed emails",
     icon: "🛡️",
     primary: false,
   },
   {
-    href: "/bill-offers",
+    href: "/settings/bill-offers",
     label: "Bill Offers",
     description: "Review bill offer intakes and agent logs",
     icon: "💵",
@@ -147,8 +147,8 @@ export function Header({ user, currentPage, extraAction }: HeaderProps) {
   }, []);
 
   const isActive = (href: string) => {
-    if (href === "/") {
-      return pathname === "/";
+    if (href === "/settings") {
+      return pathname === "/settings";
     }
     return pathname.startsWith(href);
   };
@@ -270,8 +270,8 @@ export function Header({ user, currentPage, extraAction }: HeaderProps) {
 // Helper to get current page info from pathname
 export function getCurrentPageInfo(pathname: string): MenuItem | undefined {
   return MENU_ITEMS.find((item) => {
-    if (item.href === "/") {
-      return pathname === "/";
+    if (item.href === "/settings") {
+      return pathname === "/settings";
     }
     return pathname.startsWith(item.href);
   });

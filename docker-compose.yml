@@ -14,6 +14,7 @@ services:
       - .env
     volumes:
       - ./certs:/app/certs:ro
+      - ./.env:/app/.env:ro
       - sandbox-tmp:/tmp
     command: uvicorn app.main:app --host 0.0.0.0 --port 8444 --ssl-keyfile certs/privkey.pem --ssl-certfile certs/fullchain.pem
     restart: unless-stopped
@@ -107,7 +108,7 @@ services:
     restart: unless-stopped
 
   # ───────────────────────────────────────────────
-  # Next.js settings frontend (port 3001)
+  # Next.js settings and PIFStats frontend (port 3001)
   # ───────────────────────────────────────────────
   frontend:
     build:

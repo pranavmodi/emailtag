@@ -21,7 +21,7 @@ class PifInfo(Base):
             name="ck_pif_info_website_status",
         ),
         CheckConstraint(
-            "website_source IS NULL OR website_source IN ('email_verified', 'web_search', 'human')",
+            "website_source IS NULL OR website_source IN ('email_verified', 'web_search', 'human', 'human_confirmed')",
             name="ck_pif_info_website_source",
         ),
         CheckConstraint(
@@ -62,6 +62,11 @@ class PifInfo(Base):
     website_confidence: Mapped[Optional[float]] = mapped_column(
         Float, nullable=True,
         comment="Website resolution confidence from 0.0 to 1.0"
+    )
+
+    website_candidate: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True,
+        comment="Unverified website candidate from web search, pending human review"
     )
 
     merged_into: Mapped[Optional[uuid.UUID]] = mapped_column(

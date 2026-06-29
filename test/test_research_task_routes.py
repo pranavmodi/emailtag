@@ -15,10 +15,11 @@ def test_research_tasks_route_to_research_queue_and_live_pipeline_stays_processi
 
     for task_name in research_tasks:
         assert routes[task_name]["queue"] == "research"
+        assert task_name in celery_app.tasks
 
     assert routes["app.tasks.pif_extraction.extract_pif_from_conversation"]["queue"] == "processing"
-    assert routes["app.tasks.email.perform_autorespond_task"]["queue"] == "processing"
-    assert routes.get("app.tasks.autorespond.perform_autorespond_task", {}).get("queue") != "research"
+    assert routes["app.tasks.autorespond.perform_autorespond_task"]["queue"] == "processing"
+    assert "app.tasks.autorespond.perform_autorespond_task" in celery_app.tasks
 
 
 def test_research_tasks_have_rate_limits():
