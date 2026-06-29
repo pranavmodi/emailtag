@@ -62,6 +62,8 @@ class FirmEvent(Base):
     score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, index=True)
     dedup_key: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
     delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    converted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     firm = relationship("PifInfo", back_populates="events")
+    outcomes = relationship("FirmOutcome", back_populates="firm_event")

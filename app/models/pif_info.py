@@ -203,6 +203,10 @@ class PifInfo(Base):
         "FirmEvent", back_populates="firm", cascade="all, delete-orphan"
     )
 
+    outcomes: Mapped[List["FirmOutcome"]] = relationship(  # type: ignore[name-defined]
+        "FirmOutcome", back_populates="firm", cascade="all, delete-orphan"
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False,
         comment="Timestamp when firm was first seen"

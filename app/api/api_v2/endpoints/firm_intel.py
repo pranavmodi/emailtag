@@ -30,6 +30,11 @@ from app.schemas.firm_intel import (
     FirmProfile,
     FirmResolveResponse,
 )
+from app.schemas.firm_outcome import (
+    FirmAttributionResponse,
+    FirmOutcomeIn,
+    FirmOutcomeResponse,
+)
 from app.services.firm_event_detectors import detect_engagement_event
 from app.services.firm_events import (
     FirmEventCandidate,
@@ -39,6 +44,14 @@ from app.services.firm_events import (
 )
 from app.services.firm_identity import canonical_domain
 from app.services.firm_intel import build_firm_profile
+from app.services.firm_outcomes import (
+    apply_positive_outcome_to_scorer_input,
+    build_attribution_report,
+    create_firm_outcome,
+    get_firm_event_by_id,
+    load_outcomes_for_attribution,
+    mark_linked_event_for_outcome,
+)
 
 
 async def require_pifstats_token(
@@ -230,6 +243,64 @@ async def ingest_external_event(
     )
 
 
+@router.post("/outcomes", response_model=FirmOutcomeResponse, status_code=201)
+async def ingest_outcome(
+    payload: FirmOutcomeIn,
+    db: AsyncSession = Depends(get_db),
+) -> FirmOutcomeResponse:
+    resolved = await resolve_outcome_firm(db, payload)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Firm alias not found")
+    firm_id, matched_by, matched_value = resolved
+
+    firm_event = None
+    if payload.firm_event_id:
+        firm_event = await get_firm_event_by_id(db, payload.firm_event_id)
+        if not firm_event:
+            raise HTTPException(status_code=404, detail="Firm event not found")
+        if firm_event.firm_id != firm_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Firm event does not belong to resolved firm",
+            )
+
+    occurred_at = payload.occurred_at or datetime.utcnow()
+    outcome, created = await create_firm_outcome(
+        db,
+        firm_id=firm_id,
+        event=payload.event,
+        occurred_at=occurred_at,
+        channel=payload.channel,
+        detail=payload.detail,
+        firm_event_id=payload.firm_event_id,
+        attribution_snapshot=payload.attribution_snapshot,
+        idempotency_key=payload.idempotency_key,
+    )
+
+    if created:
+        if firm_event:
+            mark_linked_event_for_outcome(firm_event, outcome)
+        firm = await get_firm_by_id(db, firm_id)
+        if not firm:
+            raise HTTPException(status_code=404, detail="Firm not found")
+        apply_positive_outcome_to_scorer_input(firm, outcome)
+        await db.commit()
+        await db.refresh(outcome)
+
+    return FirmOutcomeResponse(
+        outcome=outcome,
+        created=created,
+        matched_by=matched_by,
+        matched_value=matched_value,
+    )
+
+
+@router.get("/attribution", response_model=FirmAttributionResponse)
+async def get_attribution(db: AsyncSession = Depends(get_db)) -> FirmAttributionResponse:
+    rows = await load_outcomes_for_attribution(db)
+    return FirmAttributionResponse(**build_attribution_report(rows))
+
+
 @router.get("/health", response_model=FirmIntelHealthResponse)
 async def get_health(db: AsyncSession = Depends(get_db)) -> FirmIntelHealthResponse:
     total = await _scalar_count(db, select(func.count(PifInfo.id)))
@@ -372,6 +443,28 @@ async def resolve_external_signal_firm(
         domain=signal.domain,
         email=signal.email,
         legacy_pif_id=signal.legacy_pif_id,
+    )
+
+
+async def resolve_outcome_firm(
+    db: AsyncSession,
+    outcome: FirmOutcomeIn,
+) -> Optional[tuple[UUID, str, str]]:
+    if outcome.alias_type and outcome.alias_value:
+        alias = await find_alias_by_values(
+            db,
+            [outcome.alias_type],
+            outcome.alias_value.lower(),
+        )
+        if alias:
+            return alias.firm_id, outcome.alias_type, outcome.alias_value
+
+    return await resolve_firm_id(
+        db,
+        website=outcome.website,
+        domain=outcome.domain,
+        email=outcome.email,
+        legacy_pif_id=outcome.legacy_pif_id,
     )
 
 
