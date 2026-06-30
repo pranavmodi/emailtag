@@ -215,9 +215,12 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
             identity.mapped_via,
         )
 
-        # Auto-trigger research (max 5/day per entity type)
+        # Auto-trigger research (max 50/day per entity type)
+        from app.core.firm_exclusions import NON_PI_FIRM_IDS
         research_triggered = False
-        if pif.research_status not in ("completed", "in_progress", "queued"):
+        if str(pif.id) in NON_PI_FIRM_IDS:
+            logger.info(f"Skipping research for non-PI firm '{firm_info.firm_name}' ({pif.id})")
+        elif pif.research_status not in ("completed", "in_progress", "queued"):
             try:
                 from sqlalchemy import func as sa_func, cast, Date
                 today = datetime.utcnow().date()
@@ -226,7 +229,7 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
                     PifInfo.entity_type == pif.entity_type,
                 ).scalar() or 0
 
-                if researched_today_for_type < 5:
+                if researched_today_for_type < 50:
                     pif.research_status = "queued"
                     pif.last_researched_at = datetime.utcnow()
                     db.add(pif)
@@ -237,12 +240,12 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
                     research_triggered = True
                     logger.info(
                         f"Auto-queued research for '{firm_info.firm_name}' "
-                        f"[{pif.entity_type}] ({researched_today_for_type + 1}/5 today)"
+                        f"[{pif.entity_type}] ({researched_today_for_type + 1}/50 today)"
                     )
                 else:
                     logger.info(
                         f"Skipping auto-research for '{firm_info.firm_name}' — "
-                        f"daily limit reached for {pif.entity_type} ({researched_today_for_type}/5)"
+                        f"daily limit reached for {pif.entity_type} ({researched_today_for_type}/50)"
                     )
             except Exception as e:
                 logger.warning(f"Failed to auto-trigger research for '{firm_info.firm_name}': {e}")

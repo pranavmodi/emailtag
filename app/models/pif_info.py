@@ -195,6 +195,11 @@ class PifInfo(Base):
         comment="Timestamp of last ICP scoring"
     )
 
+    vendor_stack: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(
+        JSONB, nullable=True,
+        comment="Detected practice management vendors: [{vendor, source, confidence}]"
+    )
+
     # Outreach pipeline relationship
     outreach_pipeline: Mapped[List["PifOutreachPipeline"]] = relationship(  # type: ignore[name-defined]
         "PifOutreachPipeline", back_populates="pif", cascade="all, delete-orphan"

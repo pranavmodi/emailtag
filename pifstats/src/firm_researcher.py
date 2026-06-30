@@ -27,6 +27,239 @@ class LeadershipMember(BaseModel):
     image_url: Optional[str] = Field(None, description="Profile image URL")
 
 
+# Known vendor email domain patterns (Phase 1 inbox-based detection)
+VENDOR_EMAIL_DOMAINS: Dict[str, str] = {
+    "filevineapp.com": "filevine",
+    "casepeer.com": "casepeer",
+    "mycase.com": "mycase",
+    "litify.io": "litify",
+    "litify.com": "litify",
+    "smokeball.com": "smokeball",
+    "practicepanther.com": "practicepanther",
+    "neos.ai": "neos",
+    "abacusnext.com": "abacusnext",
+    "needles.com": "needles",
+}
+
+
+def detect_vendor_stack_from_emails(emails: List[str]) -> List[Dict[str, Any]]:
+    """
+    Phase 1: infer practice management vendors from email address domains.
+
+    Filevine, for example, issues @<firm>.filevineapp.com addresses to their
+    clients' staff. These show up in our inbox and are the strongest possible
+    signal — zero LLM cost, near-100% confidence.
+
+    Returns a list of vendor dicts: [{vendor, source, confidence}]
+    """
+    detected: Dict[str, bool] = {}
+    for email in emails:
+        if "@" not in email:
+            continue
+        domain = email.split("@", 1)[1].lower().strip()
+        for pattern, vendor in VENDOR_EMAIL_DOMAINS.items():
+            if domain == pattern or domain.endswith("." + pattern):
+                detected[vendor] = True
+    return [
+        {"vendor": v, "source": "email_domain", "confidence": "high", "known": True}
+        for v in sorted(detected)
+    ]
+
+
+# Canonical vendor names — used to normalize/dedupe, NOT to gate detection.
+# Unknown vendors are still captured (flagged known=false) so we discover new ones.
+KNOWN_VENDORS = {
+    "filevine", "clio", "mycase", "litify", "smokeball", "needles",
+    "practicepanther", "neos", "abacusnext", "casepeer", "trialworks",
+    "assembly", "captorra", "leap", "centerbase",
+}
+
+# Aliases collapse vendor spelling variants onto a canonical key.
+VENDOR_ALIASES = {
+    "case_peer": "casepeer",
+    "filevineapp": "filevine",
+    "assemblyneos": "neos",
+    "assemblysoftware": "neos",
+    "abacus": "abacusnext",
+}
+
+# Generic tools / mail providers an LLM might wrongly emit as a "vendor".
+VENDOR_DENYLIST = {
+    "gmail", "googlemail", "google", "outlook", "office365", "microsoft",
+    "microsoft365", "yahoo", "icloud", "aol", "proton", "protonmail",
+    "docusign", "adobe", "dropbox", "zoom", "slack", "none", "unknown", "n/a",
+}
+
+
+def _canonical_vendor(raw: str) -> Optional[str]:
+    """
+    Normalize a free-text vendor label to a canonical key.
+
+    Returns the canonical name (known or unknown — we keep both), or None only
+    for blank input or denylisted generic tools.
+    """
+    if not raw:
+        return None
+    norm = raw.lower().strip().replace(" ", "").replace("-", "").replace("_", "")
+    norm = VENDOR_ALIASES.get(norm, norm)
+    if not norm or norm in VENDOR_DENYLIST:
+        return None
+    return norm
+
+
+def normalize_vendor_list(vendors: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Canonicalize vendor names, flag known vs newly-discovered, and dedupe.
+
+    Open-vocabulary: vendors not in KNOWN_VENDORS are KEPT with known=false so
+    new/unknown tools surface for review rather than being silently dropped.
+    """
+    out: Dict[str, Dict[str, Any]] = {}
+    for v in vendors:
+        canonical = _canonical_vendor(v.get("vendor", ""))
+        if not canonical:
+            continue
+        out[canonical] = {**v, "vendor": canonical, "known": canonical in KNOWN_VENDORS}
+    return list(out.values())
+
+
+INBOX_VENDOR_SYSTEM_PROMPT = """You identify which legal practice management / case \
+management software a law firm uses, based only on emails their staff sent to a medical \
+imaging company.
+
+Common vendors include (but are NOT limited to): Filevine, Clio, MyCase, Litify, \
+Smokeball, Needles, Practice Panther, Neos (Assembly), AbacusNext, CASEpeer, TrialWorks. \
+If you see evidence of ANY other practice/case management platform — even one not listed \
+— report it by its actual product name.
+
+Evidence to rely on:
+- Email signatures or footers ("Sent via Filevine", "Powered by Clio")
+- Automated notification emails from the system (distinctive sender names or templates)
+- Links to client/case portals (e.g. *.filevineapp.com, clio.com portals, casepeer.com)
+- Sender addresses on a vendor's domain
+
+Rules:
+- Only report a vendor with CONCRETE evidence in the provided emails.
+- Do NOT report generic mail providers or office tools (Gmail, Outlook, Microsoft 365, DocuSign, Adobe, Dropbox, Zoom).
+- Do NOT guess from the mere fact that this is a law firm.
+- Return an empty list if there is no evidence.
+
+Return JSON: {"vendors": [{"vendor": "<name>", "evidence": "<short reason>", "confidence": "high|medium|low"}]}
+Never include patient names, DOBs, claim numbers, or any PHI in your response."""
+
+
+def analyze_inbox_for_vendors(emails: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Tier 2: detect vendors from the content of emails the firm sent us.
+
+    Catches vendors that do NOT issue firm-branded email domains (Clio, MyCase,
+    Litify, etc.) by reading signatures, footers, automated-notification templates,
+    and portal links — data we already hold in our inbox.
+
+    HIPAA note: only sender, subject, and a bounded content slice (header + footer,
+    where signatures/portal links live) are sent to the LLM.
+
+    Args:
+        emails: list of dicts with keys: sender, subject, content_text
+
+    Returns:
+        list of {vendor, source: "inbox_content", confidence, evidence}
+    """
+    if not emails:
+        return []
+
+    # Sample representative emails: prefer distinct senders, cap the batch.
+    seen_senders: set[str] = set()
+    sampled: List[Dict[str, Any]] = []
+    for em in emails:
+        sender = (em.get("sender") or "").lower()
+        if sender in seen_senders:
+            continue
+        seen_senders.add(sender)
+        sampled.append(em)
+        if len(sampled) >= 40:
+            break
+
+    headers = {
+        "Authorization": f"Bearer {settings.RESEARCH_OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    def _slice(text: str) -> str:
+        # Vendor signals live in the header and the footer/signature.
+        text = text or ""
+        if len(text) <= 500:
+            return text
+        return text[:150] + " […] " + text[-350:]
+
+    email_list_text = "\n".join(
+        (
+            f"{i+1}. From: {(e.get('sender') or '')[:120]} | "
+            f"Subject: {(e.get('subject') or '')[:100]} | "
+            f"Body: {_slice(e.get('content_text') or '')}"
+        )
+        for i, e in enumerate(sampled)
+    )
+
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": INBOX_VENDOR_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": f"Emails from this firm's staff:\n\n{email_list_text}\n\nWhich vendors are evidenced?",
+            },
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.0,
+    }
+
+    try:
+        with httpx.Client(timeout=60.0, verify=False) as client:
+            response = client.post(OPENAI_CHAT_API_URL, headers=headers, json=payload)
+            response.raise_for_status()
+            content = response.json()["choices"][0]["message"]["content"]
+            parsed = json.loads(content)
+    except Exception as exc:
+        logger.error("Inbox vendor analysis failed: %s", exc)
+        return []
+
+    raw_vendors = parsed.get("vendors", []) if isinstance(parsed, dict) else []
+    cleaned: List[Dict[str, Any]] = []
+    for item in raw_vendors:
+        if not isinstance(item, dict):
+            continue
+        conf = item.get("confidence", "medium")
+        cleaned.append({
+            "vendor": item.get("vendor", ""),
+            "source": "inbox_content",
+            "confidence": conf if conf in ("high", "medium", "low") else "medium",
+            "evidence": (item.get("evidence") or "")[:200],
+        })
+    return normalize_vendor_list(cleaned)
+
+
+def merge_vendor_stacks(
+    domain_vendors: List[Dict[str, Any]],
+    inbox_vendors: List[Dict[str, Any]],
+    web_vendors: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Merge the three detection tiers, deduplicating by vendor name.
+
+    Authority order (later overrides earlier): web < inbox_content < email_domain.
+    The email-domain signal is the most authoritative (near-100% precision).
+    """
+    merged: Dict[str, Dict[str, Any]] = {}
+    for v in web_vendors:
+        merged[v["vendor"]] = v
+    for v in inbox_vendors:
+        merged[v["vendor"]] = v
+    for v in domain_vendors:
+        merged[v["vendor"]] = v
+    return list(merged.values())
+
+
 class FirmResearchResult(BaseModel):
     """Result of deep firm research."""
     leadership: List[LeadershipMember] = Field(default_factory=list)
@@ -40,6 +273,7 @@ class FirmResearchResult(BaseModel):
     social_media: Dict[str, str] = Field(default_factory=dict)
     additional_info: Optional[str] = Field(None)
     sources: List[str] = Field(default_factory=list)
+    vendor_stack: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class OfficialWebsiteResult(BaseModel):
@@ -142,12 +376,27 @@ RESEARCH_RESULT_SCHEMA = {
             "type": "array",
             "items": {"type": "string"},
             "description": "URLs of sources used for research"
+        },
+        "vendor_stack": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "vendor": {"type": "string", "description": "Vendor name, e.g. filevine, clio, mycase, litify, smokeball, needles, practicepanther, neos"},
+                    "source": {"type": "string", "description": "How it was detected: job_posting, website, app_review, partner_page, news_article"},
+                    "confidence": {"type": "string", "enum": ["high", "medium", "low"]}
+                },
+                "required": ["vendor", "source", "confidence"],
+                "additionalProperties": False
+            },
+            "description": "Practice management / case management software the firm uses. Look for mentions in job postings ('experience with Filevine required'), website integrations (Clio Grow intake forms), partner pages, app reviews on G2/Capterra, or news articles. Return empty array if nothing found."
         }
     },
     "required": [
         "leadership", "practice_areas", "founded_year", "firm_size",
         "office_locations", "notable_cases", "awards_recognition",
-        "bar_associations", "social_media_links", "additional_info", "sources"
+        "bar_associations", "social_media_links", "additional_info", "sources",
+        "vendor_stack"
     ],
     "additionalProperties": False
 }
@@ -240,6 +489,109 @@ def find_official_website(
     return parsed.website_url
 
 
+VENDOR_STACK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "vendor_stack": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "vendor": {"type": "string"},
+                    "source": {"type": "string", "enum": ["job_posting", "website", "app_review", "partner_page", "news_article"]},
+                    "confidence": {"type": "string", "enum": ["high", "medium", "low"]}
+                },
+                "required": ["vendor", "source", "confidence"],
+                "additionalProperties": False
+            }
+        }
+    },
+    "required": ["vendor_stack"],
+    "additionalProperties": False,
+}
+
+
+def research_vendor_stack(
+    firm_name: str,
+    website: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Phase 2: focused web search to detect practice management vendors for a firm.
+
+    Used by the standalone detect_vendor_stack_task. Also called implicitly via
+    research_firm() which includes vendor_stack in its main schema.
+
+    Returns a list of vendor dicts: [{vendor, source, confidence}]
+    """
+    if not firm_name:
+        return []
+
+    headers = {
+        "Authorization": f"Bearer {settings.RESEARCH_OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    site_hint = f" ({website})" if website else ""
+    query = (
+        f'What practice management or case management software does "{firm_name}" '
+        f"law firm{site_hint} use? Check job postings, their website, "
+        f"app reviews on G2/Capterra, and vendor partner pages. "
+        f"Common vendors include Filevine, Clio, MyCase, Litify, Smokeball, Needles, Practice Panther, "
+        f"Neos, AbacusNext — but report ANY practice/case management platform you find evidence of, even if not listed."
+    )
+
+    payload = {
+        "model": "gpt-5-nano",
+        "input": [
+            {
+                "role": "system",
+                "content": (
+                    "Identify which practice management or case management software a law firm uses. "
+                    "Report any such platform you find real evidence of, including ones not explicitly named. "
+                    "Do not report generic mail/office tools (Gmail, Outlook, Microsoft 365). "
+                    "Only report vendors you find actual evidence of. Return empty array if nothing found."
+                ),
+            },
+            {"role": "user", "content": query},
+        ],
+        "tools": [{"type": "web_search_preview", "search_context_size": "medium"}],
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "vendor_stack_result",
+                "strict": True,
+                "schema": VENDOR_STACK_SCHEMA,
+            }
+        },
+    }
+
+    try:
+        with httpx.Client(timeout=120.0, verify=False) as client:
+            response = client.post(OPENAI_API_URL, headers=headers, json=payload)
+            response.raise_for_status()
+            result = response.json()
+    except Exception as exc:
+        logger.error("Vendor stack web search failed for %s: %s", firm_name, exc)
+        return []
+
+    content = ""
+    for item in result.get("output", []):
+        if item.get("type") == "message":
+            for ci in item.get("content", []):
+                if ci.get("type") == "output_text":
+                    content = ci.get("text", "")
+
+    if not content:
+        return []
+
+    try:
+        parsed = json.loads(content)
+        return normalize_vendor_list(parsed.get("vendor_stack", []))
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.error("Vendor stack parse failed for %s: %s", firm_name, exc)
+        return []
+
+
 RESEARCH_PROMPT = """You are an expert legal industry researcher. Research the following personal injury law firm thoroughly using web searches.
 
 Firm Name: {firm_name}
@@ -270,6 +622,11 @@ Your task is to find comprehensive information about this firm, focusing on:
    - LinkedIn company page
    - Facebook, Twitter/X, Instagram
    - YouTube channel
+
+5. **Vendor / Tech Stack**
+   - What practice management or case management software do they use?
+   - Target vendors: Filevine, Clio, MyCase, Litify, Smokeball, Needles, Practice Panther, Neos, AbacusNext
+   - Look for mentions in: job postings ("experience with X required"), their website (intake forms, client portals), app reviews on G2/Capterra, vendor partner pages, news articles, LinkedIn job listings
 
 Search strategies to use:
 - Search "[Firm Name] attorneys"
@@ -394,7 +751,8 @@ def research_firm(
                 bar_associations=research_data.get("bar_associations", []),
                 social_media=social_media,
                 additional_info=research_data.get("additional_info"),
-                sources=research_data.get("sources", [])
+                sources=research_data.get("sources", []),
+                vendor_stack=research_data.get("vendor_stack", []),
             )
 
             # Log token usage (Responses API uses input_tokens/output_tokens)
@@ -406,7 +764,7 @@ def research_firm(
                     f"Total: {usage.get('total_tokens', 0)}"
                 )
 
-            logger.info(f"Research complete for {firm_name}: found {len(leadership)} leadership members")
+            logger.info(f"Research complete for {firm_name}: found {len(leadership)} leadership members, {len(research_result.vendor_stack)} vendors")
             return research_result
 
     except httpx.HTTPStatusError as e:
@@ -526,7 +884,8 @@ async def research_firm_async(
                 bar_associations=research_data.get("bar_associations", []),
                 social_media=social_media,
                 additional_info=research_data.get("additional_info"),
-                sources=research_data.get("sources", [])
+                sources=research_data.get("sources", []),
+                vendor_stack=research_data.get("vendor_stack", []),
             )
 
             # Log token usage (Responses API uses input_tokens/output_tokens)
@@ -538,7 +897,7 @@ async def research_firm_async(
                     f"Total: {usage.get('total_tokens', 0)}"
                 )
 
-            logger.info(f"Async research complete for {firm_name}: found {len(leadership)} leadership members")
+            logger.info(f"Async research complete for {firm_name}: found {len(leadership)} leadership members, {len(research_result.vendor_stack)} vendors")
             return research_result
 
     except httpx.HTTPStatusError as e:

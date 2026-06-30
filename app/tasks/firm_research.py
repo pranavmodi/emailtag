@@ -40,6 +40,36 @@ def sanitize_linkedin_url(url: str | None) -> str | None:
     return None
 
 
+def _fetch_firm_emails(db, pif, limit: int = 200) -> list[dict]:
+    """
+    Fetch a bounded sample of inbound emails for a firm, for vendor scanning.
+
+    Returns the most recent `limit` emails (sender/subject/content_text) across
+    the firm's conversation_ids. Bounded to keep memory/latency in check on
+    high-volume firms.
+    """
+    from sqlalchemy import select, desc
+    from app.models.email import Email
+
+    conv_ids = pif.conversation_ids or []
+    if not conv_ids:
+        return []
+    rows = db.execute(
+        select(Email)
+        .where(Email.front_conversation_id.in_(conv_ids))
+        .order_by(desc(Email.created_at))
+        .limit(limit)
+    ).scalars().all()
+    return [
+        {
+            "sender": em.sender or "",
+            "subject": em.subject or "",
+            "content_text": em.content_text or "",
+        }
+        for em in rows
+    ]
+
+
 class ResearchTask(Task):
     """Base task class for research tasks with error handling."""
 
@@ -218,6 +248,24 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
 
                 enriched_leadership.append(leader)
 
+        # Vendor stack detection — three tiers, merged and deduped.
+        from pifstats.src.firm_researcher import (
+            detect_vendor_stack_from_emails,
+            analyze_inbox_for_vendors,
+            normalize_vendor_list,
+            merge_vendor_stacks,
+        )
+        # Tier 1: inbox email domains (free, high precision)
+        domain_vendors = detect_vendor_stack_from_emails(pif.emails or [])
+        # Tier 2: LLM over our own inbox content (catches self-domain vendors)
+        inbox_vendors = analyze_inbox_for_vendors(_fetch_firm_emails(db, pif))
+        # Tier 3: web research vendors already gathered by research_firm()
+        web_vendors = normalize_vendor_list(result.vendor_stack)
+
+        vendor_stack = merge_vendor_stacks(domain_vendors, inbox_vendors, web_vendors)
+
+        logger.info(f"Vendor stack for {pif.firm_name}: {[v['vendor'] for v in vendor_stack]}")
+
         # Prepare research data
         research_data = {
             "practice_areas": result.practice_areas,
@@ -239,6 +287,7 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
             obj_in={
                 "leadership": enriched_leadership,
                 "research_data": research_data,
+                "vendor_stack": vendor_stack or None,
                 "research_status": "completed",
                 "last_researched_at": datetime.utcnow()
             }
@@ -618,5 +667,85 @@ def research_staff_task(self, pif_id: str) -> Dict[str, Any]:
             "pif_id": pif_id,
             "message": f"Staff research failed: {str(e)}"
         }
+    finally:
+        db.close()
+
+
+@celery_app.task(
+    bind=True,
+    base=ResearchTask,
+    name="app.tasks.firm_research.detect_vendor_stack_task",
+    rate_limit="30/m",
+)
+def detect_vendor_stack_task(self, pif_id: str) -> Dict[str, Any]:
+    """
+    Standalone vendor stack detection for a single firm.
+
+    Runs both detection phases and merges results:
+      Phase 1 (inbox): pattern-match known vendor domains in pif.emails — free, high confidence.
+      Phase 2 (web):   ask gpt-5-nano+web_search to find vendor mentions in job postings,
+                       website, app reviews, partner pages — costs one search call.
+
+    Safe to run on already-researched firms; never clobbers research_status.
+    """
+    import sys
+    import os
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+
+    from pifstats.src.firm_researcher import (
+        detect_vendor_stack_from_emails,
+        analyze_inbox_for_vendors,
+        research_vendor_stack,
+        merge_vendor_stacks,
+    )
+    from app.crud.sync.pif_info import pif_info as pif_info_crud_sync
+
+    db = SessionLocal()
+    try:
+        pif = pif_info_crud_sync.get(db, id=UUID(pif_id))
+        if not pif:
+            return {"status": "failed", "message": "PIF not found", "pif_id": pif_id}
+
+        # Tier 1: inbox email domains (free, high precision)
+        domain_vendors = detect_vendor_stack_from_emails(pif.emails or [])
+
+        # Tier 2: LLM over our own inbox content (catches self-domain vendors)
+        inbox_emails = _fetch_firm_emails(db, pif)
+        inbox_vendors = analyze_inbox_for_vendors(inbox_emails)
+
+        # Tier 3: web research (public signals)
+        web_vendors = research_vendor_stack(
+            firm_name=pif.firm_name,
+            website=pif.canonical_website or pif.website,
+        )
+
+        vendor_stack = merge_vendor_stacks(domain_vendors, inbox_vendors, web_vendors)
+
+        pif_info_crud_sync.update(
+            db,
+            db_obj=pif,
+            obj_in={"vendor_stack": vendor_stack or None},
+        )
+        db.commit()
+
+        logger.info(
+            f"Vendor stack detection complete for {pif.firm_name}: "
+            f"{[v['vendor'] for v in vendor_stack]}"
+        )
+        return {
+            "status": "completed",
+            "pif_id": pif_id,
+            "firm_name": pif.firm_name,
+            "vendors": [v["vendor"] for v in vendor_stack],
+            "domain_detected": [v["vendor"] for v in domain_vendors],
+            "inbox_detected": [v["vendor"] for v in inbox_vendors],
+            "web_detected": [v["vendor"] for v in web_vendors],
+        }
+
+    except Exception as e:
+        logger.error(f"Vendor stack detection failed for {pif_id}: {e}", exc_info=True)
+        return {"status": "failed", "pif_id": pif_id, "message": str(e)}
     finally:
         db.close()

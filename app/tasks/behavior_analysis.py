@@ -155,8 +155,14 @@ def analyze_all_firms_task(self) -> Dict[str, Any]:
 
     db = SessionLocal()
     try:
-        result = db.execute(select(PifInfo.id))
-        pif_ids = [str(row[0]) for row in result.fetchall()]
+        from app.core.firm_exclusions import NON_PI_FIRM_IDS
+        result = db.execute(
+            select(PifInfo.id).where(PifInfo.merge_status != "merged")
+        )
+        pif_ids = [
+            str(row[0]) for row in result.fetchall()
+            if str(row[0]) not in NON_PI_FIRM_IDS
+        ]
 
         logger.info(f"Dispatching behavior analysis for {len(pif_ids)} firms")
 
