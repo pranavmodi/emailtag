@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -14,6 +15,41 @@ logger = logging.getLogger(__name__)
 
 # OpenAI API endpoint for responses with tools (web search requires the responses API)
 OPENAI_API_URL = "https://api.openai.com/v1/responses"
+
+# Transient upstream statuses worth retrying (OpenAI/Cloudflare blips).
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504, 520, 522, 524}
+
+
+def _post_openai_with_retry(client, url, headers, payload, attempts=3, backoff=5.0):
+    """
+    POST to OpenAI, retrying transient failures (timeouts, connection errors,
+    and retryable 5xx/429 statuses from OpenAI's Cloudflare edge).
+
+    Returns the httpx.Response (already status-checked) or raises the last error.
+    Without this, a single 502/520/timeout permanently fails a research task.
+    """
+    last_exc = None
+    for attempt in range(1, attempts + 1):
+        try:
+            response = client.post(url, headers=headers, json=payload)
+            if response.status_code in _RETRYABLE_STATUS:
+                raise httpx.HTTPStatusError(
+                    f"retryable status {response.status_code}",
+                    request=response.request,
+                    response=response,
+                )
+            response.raise_for_status()
+            return response
+        except (httpx.TimeoutException, httpx.TransportError, httpx.HTTPStatusError) as exc:
+            # Don't retry non-retryable HTTP statuses (e.g. 400/401/404).
+            if isinstance(exc, httpx.HTTPStatusError) and exc.response is not None \
+                    and exc.response.status_code not in _RETRYABLE_STATUS:
+                raise
+            last_exc = exc
+            if attempt < attempts:
+                logger.warning("OpenAI transient error (attempt %d/%d): %s", attempt, attempts, exc)
+                time.sleep(backoff * attempt)
+    raise last_exc
 
 
 class LeadershipMember(BaseModel):
@@ -684,8 +720,7 @@ def research_firm(
     try:
         with httpx.Client(timeout=300.0, verify=False) as client:
             logger.info(f"Starting deep research for firm: {firm_name}")
-            response = client.post(OPENAI_API_URL, headers=headers, json=payload)
-            response.raise_for_status()
+            response = _post_openai_with_retry(client, OPENAI_API_URL, headers, payload)
 
             result = response.json()
             # Responses API returns output array with text content
