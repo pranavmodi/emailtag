@@ -40,6 +40,23 @@ def sanitize_linkedin_url(url: str | None) -> str | None:
     return None
 
 
+def strip_nul(obj):
+    """
+    Recursively remove NUL (\\u0000) characters from researched data.
+
+    PostgreSQL cannot store NUL in text/JSONB columns and raises
+    UntranslatableCharacter. LLM responses occasionally contain them, so we
+    scrub before persisting any researched payload.
+    """
+    if isinstance(obj, str):
+        return obj.replace("\x00", "")
+    if isinstance(obj, dict):
+        return {k: strip_nul(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [strip_nul(v) for v in obj]
+    return obj
+
+
 def _fetch_firm_emails(db, pif, limit: int = 200) -> list[dict]:
     """
     Fetch a bounded sample of inbound emails for a firm, for vendor scanning.
@@ -270,8 +287,8 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
             db,
             db_obj=pif,
             obj_in={
-                "leadership": enriched_leadership,
-                "research_data": research_data,
+                "leadership": strip_nul(enriched_leadership),
+                "research_data": strip_nul(research_data),
                 "research_status": "completed",
                 "last_researched_at": datetime.utcnow()
             }
@@ -298,6 +315,7 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Research task error for {pif_id}: {str(e)}")
         try:
+            db.rollback()
             pif = pif_info_crud_sync.get(db, id=UUID(pif_id))
             if pif:
                 pif_info_crud_sync.update(
@@ -616,7 +634,7 @@ def research_staff_task(self, pif_id: str) -> Dict[str, Any]:
             db,
             db_obj=pif,
             obj_in={
-                "staff": staff_dicts,
+                "staff": strip_nul(staff_dicts),
                 "staff_research_status": "completed"
             }
         )
@@ -635,6 +653,9 @@ def research_staff_task(self, pif_id: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Staff research task error for {pif_id}: {str(e)}")
         try:
+            # Roll back the poisoned transaction first, else the status update
+            # below also fails and leaves staff_research_status stuck mid-flight.
+            db.rollback()
             pif = pif_info_crud_sync.get(db, id=UUID(pif_id))
             if pif:
                 pif_info_crud_sync.update(
