@@ -273,7 +273,6 @@ class FirmResearchResult(BaseModel):
     social_media: Dict[str, str] = Field(default_factory=dict)
     additional_info: Optional[str] = Field(None)
     sources: List[str] = Field(default_factory=list)
-    vendor_stack: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class OfficialWebsiteResult(BaseModel):
@@ -376,27 +375,12 @@ RESEARCH_RESULT_SCHEMA = {
             "type": "array",
             "items": {"type": "string"},
             "description": "URLs of sources used for research"
-        },
-        "vendor_stack": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "vendor": {"type": "string", "description": "Vendor name, e.g. filevine, clio, mycase, litify, smokeball, needles, practicepanther, neos"},
-                    "source": {"type": "string", "description": "How it was detected: job_posting, website, app_review, partner_page, news_article"},
-                    "confidence": {"type": "string", "enum": ["high", "medium", "low"]}
-                },
-                "required": ["vendor", "source", "confidence"],
-                "additionalProperties": False
-            },
-            "description": "Practice management / case management software the firm uses. Look for mentions in job postings ('experience with Filevine required'), website integrations (Clio Grow intake forms), partner pages, app reviews on G2/Capterra, or news articles. Return empty array if nothing found."
         }
     },
     "required": [
         "leadership", "practice_areas", "founded_year", "firm_size",
         "office_locations", "notable_cases", "awards_recognition",
-        "bar_associations", "social_media_links", "additional_info", "sources",
-        "vendor_stack"
+        "bar_associations", "social_media_links", "additional_info", "sources"
     ],
     "additionalProperties": False
 }
@@ -516,10 +500,9 @@ def research_vendor_stack(
     website: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Phase 2: focused web search to detect practice management vendors for a firm.
+    Tier 3: focused web search to detect practice management vendors for a firm.
 
-    Used by the standalone detect_vendor_stack_task. Also called implicitly via
-    research_firm() which includes vendor_stack in its main schema.
+    Used by the standalone detect_vendor_stack_task (which owns all three tiers).
 
     Returns a list of vendor dicts: [{vendor, source, confidence}]
     """
@@ -622,11 +605,6 @@ Your task is to find comprehensive information about this firm, focusing on:
    - LinkedIn company page
    - Facebook, Twitter/X, Instagram
    - YouTube channel
-
-5. **Vendor / Tech Stack**
-   - What practice management or case management software do they use?
-   - Target vendors: Filevine, Clio, MyCase, Litify, Smokeball, Needles, Practice Panther, Neos, AbacusNext
-   - Look for mentions in: job postings ("experience with X required"), their website (intake forms, client portals), app reviews on G2/Capterra, vendor partner pages, news articles, LinkedIn job listings
 
 Search strategies to use:
 - Search "[Firm Name] attorneys"
@@ -751,8 +729,7 @@ def research_firm(
                 bar_associations=research_data.get("bar_associations", []),
                 social_media=social_media,
                 additional_info=research_data.get("additional_info"),
-                sources=research_data.get("sources", []),
-                vendor_stack=research_data.get("vendor_stack", []),
+                sources=research_data.get("sources", [])
             )
 
             # Log token usage (Responses API uses input_tokens/output_tokens)
@@ -764,7 +741,7 @@ def research_firm(
                     f"Total: {usage.get('total_tokens', 0)}"
                 )
 
-            logger.info(f"Research complete for {firm_name}: found {len(leadership)} leadership members, {len(research_result.vendor_stack)} vendors")
+            logger.info(f"Research complete for {firm_name}: found {len(leadership)} leadership members")
             return research_result
 
     except httpx.HTTPStatusError as e:
@@ -884,8 +861,7 @@ async def research_firm_async(
                 bar_associations=research_data.get("bar_associations", []),
                 social_media=social_media,
                 additional_info=research_data.get("additional_info"),
-                sources=research_data.get("sources", []),
-                vendor_stack=research_data.get("vendor_stack", []),
+                sources=research_data.get("sources", [])
             )
 
             # Log token usage (Responses API uses input_tokens/output_tokens)
@@ -897,7 +873,7 @@ async def research_firm_async(
                     f"Total: {usage.get('total_tokens', 0)}"
                 )
 
-            logger.info(f"Async research complete for {firm_name}: found {len(leadership)} leadership members, {len(research_result.vendor_stack)} vendors")
+            logger.info(f"Async research complete for {firm_name}: found {len(leadership)} leadership members")
             return research_result
 
     except httpx.HTTPStatusError as e:

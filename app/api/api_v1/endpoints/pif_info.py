@@ -1048,12 +1048,18 @@ async def enrich_firm_all(
 
     from celery import chain
     from app.tasks.behavior_analysis import analyze_firm_behavior_task, score_firm_task
-    from app.tasks.firm_research import analyze_leadership_emails_task, research_firm_task, research_staff_task
+    from app.tasks.firm_research import (
+        analyze_leadership_emails_task,
+        detect_vendor_stack_task,
+        research_firm_task,
+        research_staff_task,
+    )
     from app.tasks.signature_extraction import extract_signatures_task
     from app.tasks.website_resolution import resolve_firm_website_task
 
     workflow = chain(
         resolve_firm_website_task.si(str(pif_id)),
+        detect_vendor_stack_task.si(str(pif_id)),
         research_firm_task.si(str(pif_id)),
         analyze_leadership_emails_task.si(str(pif_id)),
         research_staff_task.si(str(pif_id)),
@@ -1069,7 +1075,7 @@ async def enrich_firm_all(
         firm_name=pif.firm_name,
         task_id=workflow.id,
         status="queued",
-        message="Full enrichment queued: website, research, staff, behavior, signatures, and ICP scoring.",
+        message="Full enrichment queued: website, vendor stack, research, staff, behavior, signatures, and ICP scoring.",
     )
 
 

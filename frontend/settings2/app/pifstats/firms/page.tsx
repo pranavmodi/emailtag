@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 
 import { ApiError, PifApi, PifStatsAuthApi } from "@/lib/api";
-import type { PifInfoListResponse, PifInfoResponse } from "@/lib/types";
+import type { PifInfoListResponse, PifInfoResponse, VendorStackEntry } from "@/lib/types";
 import { ENTITY_TYPE_LABELS } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -758,6 +758,10 @@ function FirmDetail({
         </DetailSection>
       </div>
 
+      <div className="mt-4">
+        <VendorStackSection vendors={firm.vendor_stack ?? []} />
+      </div>
+
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <PeopleSection title="Leadership" people={firm.leadership ?? []} />
         <PeopleSection title="Staff" people={firm.staff ?? []} />
@@ -1043,6 +1047,48 @@ function PeopleSection({ title, people }: { title: string; people: Array<Record<
       ) : (
         <div className="rounded-md border border-dashed border-slate-200 px-3 py-4 text-sm text-slate-500">
           No records.
+        </div>
+      )}
+    </section>
+  );
+}
+
+function VendorStackSection({ vendors }: { vendors: VendorStackEntry[] }) {
+  return (
+    <section className="rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
+        <Database className="h-4 w-4" />
+        Vendor Stack
+        <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+          {vendors.length}
+        </span>
+      </h2>
+      {vendors.length ? (
+        <div className="flex flex-wrap gap-2">
+          {vendors.map((v, index) => (
+            <div
+              key={`vendor-${index}`}
+              className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5"
+              title={v.evidence || undefined}
+            >
+              <span className="text-sm font-medium capitalize text-slate-900">{v.vendor}</span>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                {v.source}
+              </span>
+              {v.confidence && (
+                <span className="text-xs text-slate-400">{v.confidence}</span>
+              )}
+              {v.known === false && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                  new
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-md border border-dashed border-slate-200 px-3 py-4 text-sm text-slate-500">
+          No vendors detected.
         </div>
       )}
     </section>

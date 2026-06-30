@@ -248,23 +248,8 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
 
                 enriched_leadership.append(leader)
 
-        # Vendor stack detection — three tiers, merged and deduped.
-        from pifstats.src.firm_researcher import (
-            detect_vendor_stack_from_emails,
-            analyze_inbox_for_vendors,
-            normalize_vendor_list,
-            merge_vendor_stacks,
-        )
-        # Tier 1: inbox email domains (free, high precision)
-        domain_vendors = detect_vendor_stack_from_emails(pif.emails or [])
-        # Tier 2: LLM over our own inbox content (catches self-domain vendors)
-        inbox_vendors = analyze_inbox_for_vendors(_fetch_firm_emails(db, pif))
-        # Tier 3: web research vendors already gathered by research_firm()
-        web_vendors = normalize_vendor_list(result.vendor_stack)
-
-        vendor_stack = merge_vendor_stacks(domain_vendors, inbox_vendors, web_vendors)
-
-        logger.info(f"Vendor stack for {pif.firm_name}: {[v['vendor'] for v in vendor_stack]}")
+        # Vendor stack detection is its own chain step (detect_vendor_stack_task),
+        # so it runs independently even if firm research degrades.
 
         # Prepare research data
         research_data = {
@@ -287,7 +272,6 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
             obj_in={
                 "leadership": enriched_leadership,
                 "research_data": research_data,
-                "vendor_stack": vendor_stack or None,
                 "research_status": "completed",
                 "last_researched_at": datetime.utcnow()
             }

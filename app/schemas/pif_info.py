@@ -131,6 +131,7 @@ class PifInfoResponse(PifInfoBase):
     icp_tier: Optional[str] = Field(None, description="ICP tier: A/B/C/D")
     score_breakdown: Optional[Dict[str, Any]] = Field(None, description="Score breakdown by category")
     icp_scored_at: Optional[datetime] = Field(None, description="When last scored")
+    vendor_stack: Optional[List[Dict[str, Any]]] = Field(None, description="Detected practice management vendors")
     created_at: datetime
     updated_at: datetime
 
