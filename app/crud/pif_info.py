@@ -49,6 +49,7 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
         staff_presence: Optional[str] = None,
         behavior_presence: Optional[str] = None,
         icp_presence: Optional[str] = None,
+        vendor_presence: Optional[str] = None,
         active_only: bool = True,
     ) -> tuple[List[PifInfo], int]:
         """
@@ -110,6 +111,7 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
             ("staff_presence", staff_presence),
             ("behavior_presence", behavior_presence),
             ("icp_presence", icp_presence),
+            ("vendor_presence", vendor_presence),
         ):
             presence_filter = self._presence_filter(field_name, value)
             if presence_filter is not None:
@@ -202,6 +204,13 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
                 return PifInfo.icp_score.is_not(None)
             if value == "missing":
                 return PifInfo.icp_score.is_(None)
+
+        if field_name == "vendor_presence":
+            # vendor_stack is NULL when no vendors were detected, non-empty otherwise.
+            if value == "has":
+                return PifInfo.vendor_stack.is_not(None)
+            if value == "missing":
+                return PifInfo.vendor_stack.is_(None)
 
         return None
 

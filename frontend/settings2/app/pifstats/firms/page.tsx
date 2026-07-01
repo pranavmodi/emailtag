@@ -103,6 +103,8 @@ export default function FirmsDashboardPage() {
   const [staffPresence, setStaffPresence] = useState<StatusFilter>("any");
   const [behaviorPresence, setBehaviorPresence] = useState("any");
   const [icpPresence, setIcpPresence] = useState("any");
+  const [vendorPresence, setVendorPresence] = useState("any");
+  const [vendorBusy, setVendorBusy] = useState<Record<string, boolean>>({});
   const [activeOnly, setActiveOnly] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,6 +124,7 @@ export default function FirmsDashboardPage() {
         staffPresence,
         behaviorPresence,
         icpPresence,
+        vendorPresence,
         activeOnly,
       });
       setData(payload);
@@ -147,6 +150,7 @@ export default function FirmsDashboardPage() {
     search,
     sortBy,
     staffPresence,
+    vendorPresence,
     websitePresence,
   ]);
 
@@ -184,6 +188,26 @@ export default function FirmsDashboardPage() {
           message,
         },
       }));
+    }
+  };
+
+  const startVendorDetection = async (firm: PifInfoResponse) => {
+    setVendorBusy((current) => ({ ...current, [firm.id]: true }));
+    const before = firm.updated_at;
+    try {
+      await PifApi.detectVendors(firm.id);
+      // Vendor detection is async (all 3 tiers). Poll until the row's
+      // updated_at bumps — reliable even when no vendors are found (stays null).
+      for (let i = 0; i < 30; i += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 4000));
+        const fresh = await PifApi.get(firm.id);
+        if (fresh.updated_at !== before) break;
+      }
+      await loadFirms();
+    } catch {
+      // Surface nothing intrusive; button re-enables in finally.
+    } finally {
+      setVendorBusy((current) => ({ ...current, [firm.id]: false }));
     }
   };
 
@@ -268,6 +292,7 @@ export default function FirmsDashboardPage() {
     setStaffPresence("any");
     setBehaviorPresence("any");
     setIcpPresence("any");
+    setVendorPresence("any");
     setActiveOnly(true);
     setSortBy("updated_at");
     setPage(1);
@@ -390,6 +415,12 @@ export default function FirmsDashboardPage() {
               options={binaryOptions}
               prefix="ICP"
             />
+            <FilterSelect
+              value={vendorPresence}
+              onChange={(value) => resetToFirstPage(setVendorPresence, value)}
+              options={binaryOptions}
+              prefix="Vendors"
+            />
             <select
               value={entityType}
               onChange={(event) => resetToFirstPage(setEntityType, event.target.value)}
@@ -479,6 +510,8 @@ export default function FirmsDashboardPage() {
                               firm={firm}
                               enrichmentRun={enrichmentRuns[firm.id]}
                               onRunFullEnrichment={() => startFullEnrichment(firm)}
+                              onDetectVendors={() => startVendorDetection(firm)}
+                              vendorBusy={Boolean(vendorBusy[firm.id])}
                             />
                           </td>
                         </tr>
@@ -615,10 +648,14 @@ function FirmDetail({
   firm,
   enrichmentRun,
   onRunFullEnrichment,
+  onDetectVendors,
+  vendorBusy,
 }: {
   firm: PifInfoResponse;
   enrichmentRun?: EnrichmentRun;
   onRunFullEnrichment: () => void;
+  onDetectVendors: () => void;
+  vendorBusy: boolean;
 }) {
   const website = displayWebsite(firm);
   const contactCount = (firm.contacts?.length ?? 0) + (firm.leadership?.length ?? 0) + (firm.staff?.length ?? 0);
@@ -759,7 +796,11 @@ function FirmDetail({
       </div>
 
       <div className="mt-4">
-        <VendorStackSection vendors={firm.vendor_stack ?? []} />
+        <VendorStackSection
+          vendors={firm.vendor_stack ?? []}
+          onDetect={onDetectVendors}
+          busy={vendorBusy}
+        />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -1053,15 +1094,36 @@ function PeopleSection({ title, people }: { title: string; people: Array<Record<
   );
 }
 
-function VendorStackSection({ vendors }: { vendors: VendorStackEntry[] }) {
+function VendorStackSection({
+  vendors,
+  onDetect,
+  busy,
+}: {
+  vendors: VendorStackEntry[];
+  onDetect: () => void;
+  busy: boolean;
+}) {
   return (
     <section className="rounded-lg border border-slate-200 bg-slate-50/60 p-4">
       <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
         <Database className="h-4 w-4" />
         Vendor Stack
-        <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
           {vendors.length}
         </span>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDetect();
+          }}
+          disabled={busy}
+          className="ml-auto h-8 gap-2 border border-slate-300 px-3 text-xs"
+        >
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          {busy ? "Detecting..." : "Detect vendors"}
+        </Button>
       </h2>
       {vendors.length ? (
         <div className="flex flex-wrap gap-2">

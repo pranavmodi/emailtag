@@ -868,6 +868,7 @@ export const PifApi = {
     staffPresence?: string;
     behaviorPresence?: string;
     icpPresence?: string;
+    vendorPresence?: string;
     activeOnly?: boolean;
   }) => {
     const searchParams = new URLSearchParams();
@@ -881,6 +882,7 @@ export const PifApi = {
     if (params.staffPresence) searchParams.set("staff_presence", params.staffPresence);
     if (params.behaviorPresence) searchParams.set("behavior_presence", params.behaviorPresence);
     if (params.icpPresence) searchParams.set("icp_presence", params.icpPresence);
+    if (params.vendorPresence) searchParams.set("vendor_presence", params.vendorPresence);
     if (params.activeOnly !== undefined) searchParams.set("active_only", String(params.activeOnly));
     return request<PifInfoListResponse>(
       `/api/v1/pif-info/?${searchParams.toString()}`
@@ -939,6 +941,11 @@ export const PifApi = {
   startStaffResearch: (pifId: string) =>
     request<ResearchStartResponse>(
       `/api/v1/pif-info/${encodeURIComponent(pifId)}/research-staff`,
+      { method: "POST" }
+    ),
+  detectVendors: (pifId: string) =>
+    request<ResearchStartResponse>(
+      `/api/v1/pif-info/${encodeURIComponent(pifId)}/detect-vendors`,
       { method: "POST" }
     ),
   enrichAll: (pifId: string) =>

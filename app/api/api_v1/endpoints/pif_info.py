@@ -310,6 +310,10 @@ async def list_pif_info(
         None,
         description="Filter ICP score coverage: any, has, missing",
     ),
+    vendor_presence: str = Query(
+        None,
+        description="Filter vendor stack coverage: any, has, missing",
+    ),
     active_only: bool = Query(
         True,
         description="Exclude soft-merged duplicate rows by default",
@@ -343,6 +347,7 @@ async def list_pif_info(
         staff_presence=staff_presence,
         behavior_presence=behavior_presence,
         icp_presence=icp_presence,
+        vendor_presence=vendor_presence,
         active_only=active_only,
     )
 
@@ -1171,6 +1176,45 @@ async def research_staff(
         task_id=task.id,
         status="queued",
         message="Staff research task queued. Poll /research-status/{task_id} for progress."
+    )
+
+
+@router.post("/{pif_id}/detect-vendors", response_model=ResearchStartResponse)
+async def detect_vendors(
+    pif_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> ResearchStartResponse:
+    """
+    Trigger vendor stack detection for a single firm.
+
+    Runs all three tiers (inbox email domains, inbox content via LLM, and web
+    search) and persists the merged result to vendor_stack. Safe to run on
+    already-researched firms; does not touch research_status.
+
+    Args:
+        pif_id: PIF info ID
+        db: Database session
+
+    Returns:
+        Task ID and status
+    """
+    pif = await pif_info_crud.get(db, id=pif_id)
+    if not pif:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PIF info not found",
+        )
+
+    from app.tasks.firm_research import detect_vendor_stack_task
+
+    task = detect_vendor_stack_task.delay(str(pif_id))
+
+    return ResearchStartResponse(
+        pif_id=pif_id,
+        firm_name=pif.firm_name,
+        task_id=task.id,
+        status="queued",
+        message="Vendor detection queued.",
     )
 
 
