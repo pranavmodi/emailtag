@@ -13,6 +13,7 @@ import {
   ChevronRight,
   CheckCircle2,
   Database,
+  Download,
   ExternalLink,
   Globe,
   Loader2,
@@ -105,6 +106,7 @@ export default function FirmsDashboardPage() {
   const [icpPresence, setIcpPresence] = useState("any");
   const [vendorPresence, setVendorPresence] = useState("any");
   const [vendorBusy, setVendorBusy] = useState<Record<string, boolean>>({});
+  const [exportBusy, setExportBusy] = useState(false);
   const [activeOnly, setActiveOnly] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -188,6 +190,17 @@ export default function FirmsDashboardPage() {
           message,
         },
       }));
+    }
+  };
+
+  const handleExportAll = async (format: "json" | "csv") => {
+    setExportBusy(true);
+    try {
+      await PifApi.exportAll(format);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Export failed");
+    } finally {
+      setExportBusy(false);
     }
   };
 
@@ -345,6 +358,29 @@ export default function FirmsDashboardPage() {
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               Refresh
             </Button>
+            <div className="flex items-center overflow-hidden rounded-md border border-slate-300">
+              <span className="px-2 text-xs font-medium text-slate-500">Export all</span>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => handleExportAll("json")}
+                disabled={exportBusy}
+                className="h-9 gap-1 rounded-none border-l border-slate-300 px-3 text-xs"
+              >
+                {exportBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                JSON
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => handleExportAll("csv")}
+                disabled={exportBusy}
+                className="h-9 gap-1 rounded-none border-l border-slate-300 px-3 text-xs"
+              >
+                <Download className="h-3.5 w-3.5" />
+                CSV
+              </Button>
+            </div>
             <Button type="button" variant="ghost" onClick={handleLogout} className="gap-2 border border-slate-300">
               <LogOut className="h-4 w-4" />
               Logout
@@ -692,6 +728,33 @@ function FirmDetail({
             )}
             {workflowRunning ? "Enriching..." : "Run full enrichment"}
           </Button>
+          <div className="flex items-center overflow-hidden rounded-md border border-slate-300">
+            <span className="px-2 text-xs font-medium text-slate-500">Export</span>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={(event) => {
+                event.stopPropagation();
+                void PifApi.exportFirm(firm.id, "json");
+              }}
+              className="h-9 gap-1 rounded-none border-l border-slate-300 px-3 text-xs"
+            >
+              <Download className="h-3.5 w-3.5" />
+              JSON
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={(event) => {
+                event.stopPropagation();
+                void PifApi.exportFirm(firm.id, "csv");
+              }}
+              className="h-9 gap-1 rounded-none border-l border-slate-300 px-3 text-xs"
+            >
+              <Download className="h-3.5 w-3.5" />
+              CSV
+            </Button>
+          </div>
           {website && (
             <a
               href={normalizeWebsiteHref(website)}

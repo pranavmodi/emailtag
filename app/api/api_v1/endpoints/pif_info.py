@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.pif_info import pif_info as pif_info_crud
@@ -362,6 +363,98 @@ async def list_pif_info(
     )
 
 
+def _serialize_firm_row(pif) -> Dict[str, Any]:
+    """Serialize every column of a PifInfo row into a JSON-safe dict (all data)."""
+    row: Dict[str, Any] = {}
+    for col in pif.__table__.columns:
+        val = getattr(pif, col.name)
+        if isinstance(val, (datetime, date)):
+            val = val.isoformat()
+        elif isinstance(val, UUID):
+            val = str(val)
+        row[col.name] = val
+    return row
+
+
+def _firm_to_csv_cells(data: Dict[str, Any], columns: List[str]) -> List[str]:
+    """Flatten one serialized firm into CSV cells; nested blobs -> JSON strings."""
+    import json as json_mod
+    cells: List[str] = []
+    for name in columns:
+        v = data.get(name)
+        if isinstance(v, (list, dict)):
+            v = json_mod.dumps(v, ensure_ascii=False)
+        elif v is None:
+            v = ""
+        cells.append(v)
+    return cells
+
+
+@router.get("/export")
+async def export_all_firms(
+    format: str = Query("json", description="Export format: 'json' (lossless, nested) or 'csv'"),
+    include_merged: bool = Query(False, description="Include soft-merged duplicate rows"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    One-click export of every firm and ALL its data — identity, contacts,
+    leadership, staff, vendor_stack, research_data, behavioral_data, ICP, and
+    every status/timestamp field.
+
+    format=json streams a complete, lossless array (nested structures intact).
+    format=csv streams a flat table; nested blobs are JSON-encoded into cells.
+    Response is streamed to stay within the web container's memory limit.
+    """
+    import csv as csv_mod
+    import io
+    import json as json_mod
+    from sqlalchemy import select, or_
+    from app.models.pif_info import PifInfo
+
+    stmt = select(PifInfo)
+    if not include_merged:
+        stmt = stmt.where(or_(PifInfo.merge_status != "merged", PifInfo.merge_status.is_(None)))
+    stmt = stmt.order_by(PifInfo.firm_name)
+
+    columns = [c.name for c in PifInfo.__table__.columns]
+    today = datetime.utcnow().date().isoformat()
+
+    if format == "csv":
+        async def gen_csv():
+            buf = io.StringIO()
+            writer = csv_mod.writer(buf)
+            writer.writerow(columns)
+            yield buf.getvalue()
+            buf.seek(0); buf.truncate(0)
+            result = await db.stream_scalars(stmt)
+            async for pif in result:
+                writer.writerow(_firm_to_csv_cells(_serialize_firm_row(pif), columns))
+                yield buf.getvalue()
+                buf.seek(0); buf.truncate(0)
+
+        return StreamingResponse(
+            gen_csv(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="firms-export-{today}.csv"'},
+        )
+
+    async def gen_json():
+        yield "["
+        first = True
+        result = await db.stream_scalars(stmt)
+        async for pif in result:
+            chunk = json_mod.dumps(_serialize_firm_row(pif), ensure_ascii=False)
+            yield chunk if first else ("," + chunk)
+            first = False
+        yield "]"
+
+    return StreamingResponse(
+        gen_json(),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="firms-export-{today}.json"'},
+    )
+
+
 @router.get("/people", response_model=PeopleSearchResponse)
 async def search_people(
     title: str = Query(None, description="Search term for person title (e.g. 'CMO', 'intake', 'paralegal')"),
@@ -581,6 +674,52 @@ async def get_pif_info(
             detail="PIF info not found",
         )
     return pif
+
+
+@router.get("/{pif_id}/export")
+async def export_single_firm(
+    pif_id: UUID,
+    format: str = Query("json", description="Export format: 'json' (lossless, nested) or 'csv'"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Export ALL data for a single firm — same complete field set as the bulk
+    export, for one firm. json = lossless nested; csv = flat (nested blobs
+    JSON-encoded into cells).
+    """
+    import csv as csv_mod
+    import io
+    import json as json_mod
+
+    pif = await pif_info_crud.get(db, id=pif_id)
+    if not pif:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PIF info not found",
+        )
+
+    data = _serialize_firm_row(pif)
+    columns = [c.name for c in pif.__table__.columns]
+    slug = (pif.firm_name or "firm").lower().replace(" ", "-")[:40]
+    slug = "".join(ch for ch in slug if ch.isalnum() or ch == "-")
+    today = datetime.utcnow().date().isoformat()
+
+    if format == "csv":
+        buf = io.StringIO()
+        writer = csv_mod.writer(buf)
+        writer.writerow(columns)
+        writer.writerow(_firm_to_csv_cells(data, columns))
+        return StreamingResponse(
+            iter([buf.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{slug}-{today}.csv"'},
+        )
+
+    return Response(
+        content=json_mod.dumps(data, ensure_ascii=False, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{slug}-{today}.json"'},
+    )
 
 
 @router.post("/", response_model=PifInfoResponse, status_code=status.HTTP_201_CREATED)

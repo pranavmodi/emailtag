@@ -102,6 +102,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function downloadFile(path: string, fallbackName: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}${path}`, { credentials: "include" });
+  if (!response.ok) {
+    throw new ApiError(`Export failed`, response.status);
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match ? match[1] : fallbackName;
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export const SettingsApi = {
   getAuthStatus: () => request<AuthCheckResponse>("/api/v1/auth/check"),
   logout: () => request("/api/v1/auth/logout", { method: "POST" }),
@@ -947,6 +966,16 @@ export const PifApi = {
     request<ResearchStartResponse>(
       `/api/v1/pif-info/${encodeURIComponent(pifId)}/detect-vendors`,
       { method: "POST" }
+    ),
+  exportAll: (format: "json" | "csv", includeMerged = false) =>
+    downloadFile(
+      `/api/v1/pif-info/export?format=${format}&include_merged=${includeMerged}`,
+      `firms-export.${format}`
+    ),
+  exportFirm: (pifId: string, format: "json" | "csv") =>
+    downloadFile(
+      `/api/v1/pif-info/${encodeURIComponent(pifId)}/export?format=${format}`,
+      `firm.${format}`
     ),
   enrichAll: (pifId: string) =>
     request<ResearchStartResponse>(
