@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import ARRAY, CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import ARRAY, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -198,6 +198,21 @@ class PifInfo(Base):
     vendor_stack: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(
         JSONB, nullable=True,
         comment="Detected practice management vendors: [{vendor, source, confidence}]"
+    )
+
+    profile_completeness: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+        comment="Count of populated core firm_profile fields used by outreach readiness gate",
+    )
+
+    outreach_ready: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        index=True,
+        comment="True when must-have firm_profile fields are present and completeness >= 8",
     )
 
     # Outreach pipeline relationship

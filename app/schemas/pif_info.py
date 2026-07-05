@@ -131,7 +131,9 @@ class PifInfoResponse(PifInfoBase):
     icp_tier: Optional[str] = Field(None, description="ICP tier: A/B/C/D")
     score_breakdown: Optional[Dict[str, Any]] = Field(None, description="Score breakdown by category")
     icp_scored_at: Optional[datetime] = Field(None, description="When last scored")
-    vendor_stack: Optional[List[Dict[str, Any]]] = Field(None, description="Detected practice management vendors")
+    vendor_stack: Optional[Any] = Field(None, description="Detected practice management vendors")
+    profile_completeness: Optional[int] = Field(None, description="Populated core firm_profile field count")
+    outreach_ready: bool = Field(False, description="Whether required profile fields are ready for outreach")
     created_at: datetime
     updated_at: datetime
 

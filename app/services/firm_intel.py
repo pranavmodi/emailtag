@@ -118,7 +118,7 @@ def build_firm_profile(
             after_hours_ratio=float(behavioral_data.get("after_hours_ratio") or 0.0),
             peak_contact_days=_safe_string_list(behavioral_data.get("peak_contact_days")),
         ),
-        vendor_stack=_serialize_vendor_stack(behavioral_data, research_data, aliases),
+        vendor_stack=_serialize_vendor_stack(pif.vendor_stack, behavioral_data, research_data, aliases),
         icp=FirmIcp(
             score=pif.icp_score,
             tier=pif.icp_tier,
@@ -294,12 +294,17 @@ def _upsert_person(
 
 
 def _serialize_vendor_stack(
+    stored_vendor_stack: Any,
     behavioral_data: Dict[str, Any],
     research_data: Dict[str, Any],
     aliases: List[FirmAlias],
 ) -> VendorStack:
     tech_signals = _safe_dict(behavioral_data.get("tech_signals") or research_data.get("tech_signals"))
-    vendor_stack = _safe_dict(behavioral_data.get("vendor_stack") or research_data.get("vendor_stack"))
+    vendor_stack = _coerce_vendor_stack(
+        stored_vendor_stack
+        or behavioral_data.get("vendor_stack")
+        or research_data.get("vendor_stack")
+    )
     case_mgmt = _safe_string(vendor_stack.get("case_mgmt") or tech_signals.get("case_mgmt"))
     other = _safe_dict(vendor_stack.get("other"))
     evidence = _safe_vendor_evidence(vendor_stack.get("evidence") or tech_signals.get("evidence"))
@@ -314,6 +319,30 @@ def _serialize_vendor_stack(
             )
 
     return VendorStack(case_mgmt=case_mgmt, other=other, evidence=evidence)
+
+
+def _coerce_vendor_stack(value: Any) -> Dict[str, Any]:
+    if isinstance(value, dict):
+        return _safe_dict(value)
+    if not isinstance(value, list):
+        return {}
+
+    case_mgmt: Optional[str] = None
+    evidence: List[Dict[str, Any]] = []
+    other: Dict[str, Any] = {}
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        vendor = _safe_string(item.get("vendor") or item.get("case_mgmt"))
+        if vendor and not case_mgmt:
+            case_mgmt = vendor
+        signal = _safe_string(item.get("evidence") or item.get("source"))
+        confidence = _confidence_to_float(item.get("confidence"))
+        if signal:
+            evidence.append({"signal": signal, "confidence": confidence})
+        if vendor and item.get("known") is False:
+            other[vendor] = item
+    return {"case_mgmt": case_mgmt, "other": other, "evidence": evidence}
 
 
 def _build_inbox_breakdown(
@@ -398,9 +427,24 @@ def _safe_vendor_evidence(value: Any) -> List[VendorEvidence]:
         if not signal:
             continue
         evidence.append(
-            VendorEvidence(signal=signal, confidence=float(item.get("confidence") or 0.0))
+            VendorEvidence(signal=signal, confidence=_confidence_to_float(item.get("confidence")))
         )
     return evidence
+
+
+def _confidence_to_float(value: Any) -> float:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized == "high":
+            return 0.9
+        if normalized == "medium":
+            return 0.6
+        if normalized == "low":
+            return 0.3
+    try:
+        return max(0.0, min(1.0, float(value or 0.0)))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _safe_sources(value: Any) -> List[str]:

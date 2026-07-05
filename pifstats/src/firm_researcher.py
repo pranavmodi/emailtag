@@ -318,6 +318,18 @@ class OfficialWebsiteResult(BaseModel):
     reasoning: Optional[str] = Field(None, description="Short basis for the selected website")
 
 
+class FirmProfileResearchResult(BaseModel):
+    """One-pass external firm profile research result."""
+
+    canonical_website: Optional[str] = Field(None)
+    website_confidence: float = Field(0.0)
+    firmographics: Dict[str, Any] = Field(default_factory=dict)
+    leadership: List[LeadershipMember] = Field(default_factory=list)
+    vendor_stack: Dict[str, Any] = Field(default_factory=dict)
+    competitive_context: Dict[str, Any] = Field(default_factory=dict)
+    sources: List[str] = Field(default_factory=list)
+
+
 class LeadershipMemberEnriched(BaseModel):
     """Enriched leadership member data from LinkedIn research."""
     name: str = Field(default="", description="Full name")
@@ -441,6 +453,193 @@ OFFICIAL_WEBSITE_SCHEMA = {
     "required": ["website_url", "confidence", "reasoning"],
     "additionalProperties": False,
 }
+
+
+FIRM_PROFILE_RESEARCH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "canonical_website": {
+            "type": ["string", "null"],
+            "description": "Official firm marketing website domain or URL; never a directory, social profile, or vendor portal",
+        },
+        "website_confidence": {"type": "number"},
+        "firmographics": {
+            "type": "object",
+            "properties": {
+                "size_hint": {"type": ["string", "null"]},
+                "practice_areas": {"type": "array", "items": {"type": "string"}},
+                "case_mix": {"type": "object", "additionalProperties": True},
+                "metro": {"type": ["string", "null"]},
+                "city": {"type": ["string", "null"]},
+                "state": {"type": ["string", "null"]},
+                "office_locations": {"type": "array", "items": {"type": "string"}},
+                "value_tier": {"type": ["string", "null"]},
+            },
+            "required": [
+                "size_hint",
+                "practice_areas",
+                "case_mix",
+                "metro",
+                "city",
+                "state",
+                "office_locations",
+                "value_tier",
+            ],
+            "additionalProperties": False,
+        },
+        "leadership": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "title": {"type": "string"},
+                    "email": {"type": ["string", "null"]},
+                    "phone": {"type": ["string", "null"]},
+                    "linkedin": {"type": ["string", "null"]},
+                    "bio": {"type": ["string", "null"]},
+                    "image_url": {"type": ["string", "null"]},
+                },
+                "required": ["name", "title", "email", "phone", "linkedin", "bio", "image_url"],
+                "additionalProperties": False,
+            },
+        },
+        "vendor_stack": {
+            "type": "object",
+            "properties": {
+                "case_mgmt": {"type": ["string", "null"]},
+                "other": {"type": "object", "additionalProperties": True},
+                "evidence": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "signal": {"type": "string"},
+                            "confidence": {"type": "number"},
+                        },
+                        "required": ["signal", "confidence"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["case_mgmt", "other", "evidence"],
+            "additionalProperties": False,
+        },
+        "competitive_context": {
+            "type": "object",
+            "properties": {
+                "summary": {"type": ["string", "null"]},
+                "nearby_competitors": {"type": "array", "items": {"type": "string"}},
+                "positioning": {"type": ["string", "null"]},
+            },
+            "required": ["summary", "nearby_competitors", "positioning"],
+            "additionalProperties": False,
+        },
+        "sources": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": [
+        "canonical_website",
+        "website_confidence",
+        "firmographics",
+        "leadership",
+        "vendor_stack",
+        "competitive_context",
+        "sources",
+    ],
+    "additionalProperties": False,
+}
+
+
+def research_firm_profile_once(
+    firm_name: str,
+    website: Optional[str] = None,
+    location: Optional[str] = None,
+) -> Optional[FirmProfileResearchResult]:
+    """
+    Run one external Responses web_search call for the public firm profile.
+
+    This consolidates website resolution, firmographics, leadership, vendor
+    stack, and competitive context into a single web_search_preview request.
+    """
+    if not firm_name:
+        return None
+
+    headers = {
+        "Authorization": f"Bearer {settings.RESEARCH_OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    prompt = (
+        f'Firm: "{firm_name}"\n'
+        f"Known website/domain: {website or 'not provided'}\n"
+        f"Known location: {location or 'not provided'}\n\n"
+        "Research this personal-injury law firm once and return the structured profile. "
+        "Find the official marketing website, public firmographics, public leadership, "
+        "practice/case mix, legal software/vendor stack, and competitive context. "
+        "Vendor stack should focus on legal case/practice management tools such as "
+        "Filevine, Litify, CASEpeer, SmartAdvocate, EvenUp, and any other evidenced tools. "
+        "Use only public evidence. Do not include directories, social profiles, ads, or "
+        "vendor portals as canonical websites."
+    )
+    payload = {
+        "model": "gpt-5-nano",
+        "input": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a legal-industry researcher. Return accurate structured JSON only. "
+                    "Do not guess; use null or empty objects/lists when evidence is absent."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+        "tools": [{"type": "web_search_preview", "search_context_size": "high"}],
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "firm_profile_research_result",
+                "strict": True,
+                "schema": FIRM_PROFILE_RESEARCH_SCHEMA,
+            }
+        },
+    }
+
+    try:
+        with httpx.Client(timeout=300.0, verify=False) as client:
+            response = _post_openai_with_retry(client, OPENAI_API_URL, headers, payload)
+            result = response.json()
+    except Exception as exc:
+        logger.error("One-pass firm profile research failed for %s: %s", firm_name, exc)
+        return None
+
+    content = ""
+    for item in result.get("output", []):
+        if item.get("type") == "message":
+            for content_item in item.get("content", []):
+                if content_item.get("type") == "output_text":
+                    content = content_item.get("text", "")
+
+    if not content:
+        return None
+
+    try:
+        parsed = json.loads(content)
+        leadership = [
+            LeadershipMember(**member)
+            for member in parsed.get("leadership", [])
+            if isinstance(member, dict)
+        ]
+        return FirmProfileResearchResult(
+            canonical_website=parsed.get("canonical_website"),
+            website_confidence=float(parsed.get("website_confidence") or 0.0),
+            firmographics=parsed.get("firmographics") or {},
+            leadership=leadership,
+            vendor_stack=parsed.get("vendor_stack") or {},
+            competitive_context=parsed.get("competitive_context") or {},
+            sources=parsed.get("sources") or [],
+        )
+    except (json.JSONDecodeError, ValueError, TypeError) as exc:
+        logger.error("One-pass firm profile research parse failed for %s: %s", firm_name, exc)
+        return None
 
 
 def find_official_website(
