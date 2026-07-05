@@ -161,6 +161,70 @@ def test_external_job_posting_ingest_resolves_alias_and_creates_event(client, mo
     )
 
 
+def test_external_report_viewed_ingest_resolves_alias_and_creates_event(client, monkeypatch):
+    firm_id = uuid4()
+    observed = {}
+
+    async def fake_find_alias_by_values(db, alias_types, alias_value):
+        return FirmAlias(
+            alias_type=alias_types[0],
+            alias_value=alias_value,
+            firm_id=firm_id,
+            confidence=0.95,
+            source="test",
+        )
+
+    async def fake_create_firm_event(db, candidate):
+        observed["candidate"] = candidate
+        event = FirmEvent(
+            firm_id=candidate.firm_id,
+            event_type=candidate.event_type,
+            occurred_at=candidate.occurred_at,
+            source=candidate.source,
+            detail=candidate.detail,
+            score=candidate.score,
+            dedup_key=candidate.dedup_key,
+            created_at=datetime.utcnow(),
+        )
+        event.id = uuid4()
+        return event, True
+
+    monkeypatch.setattr(firm_intel_endpoint, "find_alias_by_values", fake_find_alias_by_values)
+    monkeypatch.setattr(firm_intel_endpoint, "create_firm_event", fake_create_firm_event)
+
+    response = client.post(
+        "/api/v2/firm-intel/events/external",
+        headers=AUTH_HEADERS,
+        json={
+            "vendor": "lexvisibility",
+            "signal_type": "report_viewed",
+            "domain": "smithlaw.com",
+            "score": 88,
+            "detail": {"sensor_event_id": "view_123", "report_id": "rpt_123"},
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["created"] is True
+    assert payload["event"]["event_type"] == "report_viewed"
+    assert payload["event"]["source"] == "external:lexvisibility"
+    assert payload["event"]["detail"]["vendor"] == "lexvisibility"
+    assert observed["candidate"].event_type == "report_viewed"
+    assert observed["candidate"].source == "external:lexvisibility"
+    assert observed["candidate"].dedup_key.startswith(
+        f"external:lexvisibility:report_viewed:{firm_id}:"
+    )
+
+
+def test_event_catalog_lists_report_engagement_events(client):
+    response = client.get("/api/v2/firm-intel/events/catalog", headers=AUTH_HEADERS)
+
+    assert response.status_code == 200
+    assert "report_viewed" in response.json()["event_types"]
+    assert "report_engaged" in response.json()["event_types"]
+
+
 def test_get_firm_events_returns_read_only_events(client, monkeypatch):
     firm_id = uuid4()
     event = _event(firm_id, event_type="went_quiet")

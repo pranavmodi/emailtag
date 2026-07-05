@@ -128,6 +128,13 @@ def build_firm_profile(
             summary=_safe_string(research_data.get("summary") or research_data.get("description")),
             practice_areas=_safe_string_list(research_data.get("practice_areas")),
             sources=_safe_sources(research_data.get("sources")),
+            founded_year=_safe_int(research_data.get("founded_year"), fallback=None),
+            firm_size=_safe_string(research_data.get("firm_size")),
+            office_locations=_safe_public_list(research_data.get("office_locations")),
+            notable_cases=_safe_public_list(research_data.get("notable_cases")),
+            awards_recognition=_safe_public_list(research_data.get("awards_recognition")),
+            bar_associations=_safe_public_list(research_data.get("bar_associations")),
+            social_media=_safe_dict(research_data.get("social_media")),
             research_status=_map_research_status(pif.research_status),
             last_researched_at=pif.last_researched_at,
         ),
@@ -167,10 +174,17 @@ def _serialize_aliases(pif: PifInfo, aliases: List[FirmAlias]) -> FirmAliases:
 
 def _serialize_identity(pif: PifInfo, research_data: Dict[str, Any]) -> FirmIdentity:
     location = _safe_dict(research_data.get("location"))
+    office_location = _first_office_location(research_data.get("office_locations"))
     return FirmIdentity(
-        metro=_safe_string(research_data.get("metro") or location.get("metro")),
-        city=_safe_string(research_data.get("city") or location.get("city")),
-        state=_safe_string(research_data.get("state") or location.get("state")),
+        metro=_safe_string(
+            research_data.get("metro") or location.get("metro") or office_location.get("metro")
+        ),
+        city=_safe_string(
+            research_data.get("city") or location.get("city") or office_location.get("city")
+        ),
+        state=_safe_string(
+            research_data.get("state") or location.get("state") or office_location.get("state")
+        ),
         size_hint=_safe_string(research_data.get("size_hint") or research_data.get("firm_size")),
         icp_tier=pif.icp_tier,
         case_mix=_safe_dict(research_data.get("case_mix")),
@@ -251,8 +265,10 @@ def _upsert_person(
     name = _safe_string(item.get("name"))
     title = _safe_string(item.get("title"))
     phone = _safe_string(item.get("phone"))
+    linkedin = _safe_string(item.get("linkedin"))
+    bio = _safe_string(item.get("bio"))
     persona = _safe_string(item.get("persona") or item.get("role_category") or item.get("role"))
-    if not any([email, name, title, phone]):
+    if not any([email, name, title, phone, linkedin, bio]):
         return
 
     key = (email or f"{name}|{title}|{source}").lower()
@@ -268,6 +284,11 @@ def _upsert_person(
         title=title,
         email=email,
         phone=phone,
+        linkedin=linkedin,
+        bio=bio,
+        publications=_safe_public_list(item.get("publications")),
+        cases_handled=_safe_public_list(item.get("cases_handled")),
+        bar_admissions=_safe_public_list(item.get("bar_admissions")),
         persona=persona,
         is_decision_maker=is_decision_maker,
         freshness=FirmPersonFreshness(last_seen_at=last_seen_at, source=freshness_source),
@@ -284,6 +305,11 @@ def _upsert_person(
         title=existing.title or person.title,
         email=existing.email or person.email,
         phone=existing.phone or person.phone,
+        linkedin=existing.linkedin or person.linkedin,
+        bio=existing.bio or person.bio,
+        publications=existing.publications or person.publications,
+        cases_handled=existing.cases_handled or person.cases_handled,
+        bar_admissions=existing.bar_admissions or person.bar_admissions,
         persona=existing.persona or person.persona,
         is_decision_maker=existing.is_decision_maker or person.is_decision_maker,
         freshness=person.freshness
@@ -430,6 +456,31 @@ def _safe_vendor_evidence(value: Any) -> List[VendorEvidence]:
             VendorEvidence(signal=signal, confidence=_confidence_to_float(item.get("confidence")))
         )
     return evidence
+
+
+def _first_office_location(value: Any) -> Dict[str, Any]:
+    if not isinstance(value, list) or not value:
+        return {}
+    first = value[0]
+    if isinstance(first, dict):
+        return _safe_dict(first)
+    if isinstance(first, str):
+        return {"city": first}
+    return {}
+
+
+def _safe_public_list(value: Any) -> List[Any]:
+    if not isinstance(value, list):
+        return []
+    result: List[Any] = []
+    for item in value:
+        if isinstance(item, dict):
+            result.append(_sanitize_public_dict(item))
+        elif isinstance(item, list):
+            result.append(_safe_public_list(item))
+        elif not isinstance(item, (bytes, bytearray)):
+            result.append(item)
+    return result
 
 
 def _confidence_to_float(value: Any) -> float:

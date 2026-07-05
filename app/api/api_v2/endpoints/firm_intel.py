@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +24,8 @@ from app.schemas.firm_event import (
     FirmEventRead,
 )
 from app.schemas.firm_intel import (
+    CandidateFirmIn,
+    CandidateFirmResponse,
     FirmDeltaResponse,
     FirmIntelHealthResponse,
     FirmPeopleResponse,
@@ -112,6 +114,51 @@ async def list_firms(
 
     profiles = [await build_profile_for_firm(db, firm) for firm in firms]
     return FirmDeltaResponse(items=profiles, next_cursor=next_cursor, total=total)
+
+
+@router.post("/firms", response_model=CandidateFirmResponse, status_code=201)
+async def create_candidate_firm(
+    candidate: CandidateFirmIn,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+) -> CandidateFirmResponse:
+    domain_aliases = _candidate_domain_aliases(candidate)
+    canonical_website = _first_domain_alias_value(domain_aliases)
+
+    if canonical_website:
+        resolved = await resolve_domain_identity(db, canonical_website)
+        if resolved:
+            firm_id, matched_by, matched_value = resolved
+            response.status_code = status.HTTP_200_OK
+            return CandidateFirmResponse(
+                firm_id=firm_id,
+                created=False,
+                matched_by=_candidate_match_label(matched_by),
+                canonical_website=matched_value,
+            )
+    else:
+        name_match = await find_active_firm_by_exact_name(db, candidate.firm_name)
+        if name_match:
+            response.status_code = status.HTTP_200_OK
+            return CandidateFirmResponse(
+                firm_id=name_match.id,
+                created=False,
+                matched_by="name",
+                canonical_website=name_match.canonical_website,
+            )
+
+    firm = await insert_candidate_firm(
+        db,
+        candidate,
+        canonical_website=canonical_website,
+        domain_aliases=domain_aliases,
+    )
+    return CandidateFirmResponse(
+        firm_id=firm.id,
+        created=True,
+        matched_by="none",
+        canonical_website=firm.canonical_website,
+    )
 
 
 @router.get("/firms/resolve", response_model=FirmResolveResponse)
@@ -397,6 +444,13 @@ async def resolve_firm_id(
     if not normalized_domain:
         return None
 
+    return await resolve_domain_identity(db, normalized_domain)
+
+
+async def resolve_domain_identity(
+    db: AsyncSession,
+    normalized_domain: str,
+) -> Optional[tuple[UUID, str, str]]:
     alias = await find_alias_by_values(
         db,
         ["domain", "email_domain", "alt_domain"],
@@ -466,6 +520,101 @@ async def resolve_outcome_firm(
         email=outcome.email,
         legacy_pif_id=outcome.legacy_pif_id,
     )
+
+
+async def find_active_firm_by_exact_name(db: AsyncSession, firm_name: str) -> Optional[PifInfo]:
+    normalized = " ".join(firm_name.strip().lower().split())
+    result = await db.execute(
+        select(PifInfo).where(
+            func.lower(func.trim(PifInfo.firm_name)) == normalized,
+            PifInfo.merge_status == "active",
+        )
+    )
+    return result.scalars().first()
+
+
+async def insert_candidate_firm(
+    db: AsyncSession,
+    candidate: CandidateFirmIn,
+    *,
+    canonical_website: Optional[str],
+    domain_aliases: List[tuple[str, str]],
+) -> PifInfo:
+    research_data = {
+        key: value
+        for key, value in {
+            "metro": candidate.metro,
+            "city": candidate.city,
+            "state": candidate.state,
+            "candidate_source": candidate.source,
+            "candidate_detail": candidate.detail,
+        }.items()
+        if value not in (None, {}, [])
+    }
+    firm = PifInfo(
+        firm_name=candidate.firm_name,
+        entity_type="pi_law_firm",
+        canonical_website=canonical_website,
+        emails=[],
+        phones=[],
+        addresses=[],
+        contacts=[],
+        conversation_ids=[],
+        extraction_notes=f"candidate created via {candidate.source}",
+        research_data=research_data or None,
+    )
+    db.add(firm)
+    await db.flush()
+
+    for alias_type, alias_value in domain_aliases:
+        db.add(
+            FirmAlias(
+                alias_type=alias_type,
+                alias_value=alias_value,
+                firm_id=firm.id,
+                confidence=1.0,
+                source=candidate.source,
+            )
+        )
+
+    await db.commit()
+    await db.refresh(firm)
+    return firm
+
+
+def _candidate_domain_aliases(candidate: CandidateFirmIn) -> List[tuple[str, str]]:
+    observed = [
+        ("domain", candidate.website),
+        ("domain", candidate.domain),
+        ("email_domain", candidate.email),
+    ]
+    aliases: List[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for alias_type, raw_value in observed:
+        domain = canonical_domain(raw_value)
+        if not domain:
+            continue
+        key = (alias_type, domain)
+        if key in seen:
+            continue
+        seen.add(key)
+        aliases.append(key)
+    return aliases
+
+
+def _first_domain_alias_value(domain_aliases: List[tuple[str, str]]) -> Optional[str]:
+    for alias_type, alias_value in domain_aliases:
+        if alias_type == "domain":
+            return alias_value
+    return domain_aliases[0][1] if domain_aliases else None
+
+
+def _candidate_match_label(resolve_matched_by: str) -> str:
+    if resolve_matched_by == "canonical_website":
+        return "domain"
+    if resolve_matched_by == "canonical_domain":
+        return "alias"
+    return "none"
 
 
 async def _scalar_count(db: AsyncSession, query) -> int:

@@ -72,10 +72,15 @@ def _firm() -> PifInfo:
             "summary": "Personal injury firm in Los Angeles.",
             "practice_areas": ["Personal Injury"],
             "sources": [{"url": "https://smithlaw.com/about"}],
-            "city": "Los Angeles",
-            "state": "CA",
-            "metro": "los-angeles",
+            "founded_year": 1998,
             "firm_size": "5-30",
+            "office_locations": [
+                {"city": "Los Angeles", "state": "CA", "metro": "los-angeles"}
+            ],
+            "notable_cases": ["Doe v. Delivery Co."],
+            "awards_recognition": ["Top PI Firm"],
+            "bar_associations": ["CA Bar"],
+            "social_media": {"linkedin": "https://linkedin.example/smithlaw"},
             "case_mix": {"auto": 1},
             "value_tier": "mid",
             "volume_proxy": 16,
@@ -88,6 +93,11 @@ def _firm() -> PifInfo:
                 "name": "Jane Smith",
                 "title": "Managing Partner",
                 "email": "jane@smithlaw.com",
+                "linkedin": "https://linkedin.example/jane",
+                "bio": "Founder and managing partner.",
+                "publications": ["PI intake guide"],
+                "cases_handled": ["Auto collision"],
+                "bar_admissions": ["California"],
             }
         ],
         staff=[],
@@ -146,6 +156,21 @@ def test_firm_profile_contract_mapping_and_phi_boundary():
     assert "case_mix" in payload["identity"]
     assert "value_tier" in payload["identity"]
     assert "volume_proxy" in payload["identity"]
+    assert payload["identity"]["metro"] == "los-angeles"
+    assert payload["identity"]["city"] == "Los Angeles"
+    assert payload["identity"]["state"] == "CA"
+    assert payload["research"]["founded_year"] == 1998
+    assert payload["research"]["firm_size"] == "5-30"
+    assert payload["research"]["office_locations"][0]["city"] == "Los Angeles"
+    assert payload["research"]["notable_cases"] == ["Doe v. Delivery Co."]
+    assert payload["research"]["awards_recognition"] == ["Top PI Firm"]
+    assert payload["research"]["bar_associations"] == ["CA Bar"]
+    assert payload["research"]["social_media"]["linkedin"] == "https://linkedin.example/smithlaw"
+    assert payload["people"][0]["linkedin"] == "https://linkedin.example/jane"
+    assert payload["people"][0]["bio"] == "Founder and managing partner."
+    assert payload["people"][0]["publications"] == ["PI intake guide"]
+    assert payload["people"][0]["cases_handled"] == ["Auto collision"]
+    assert payload["people"][0]["bar_admissions"] == ["California"]
 
     serialized = str(payload)
     for forbidden in [
@@ -163,6 +188,30 @@ def test_firm_profile_contract_mapping_and_phi_boundary():
         "Raw conversation body",
     ]:
         assert forbidden not in serialized
+
+
+def test_sparse_firm_profile_includes_empty_optional_research_and_people_fields():
+    firm = PifInfo(
+        firm_name="Sparse Injury Law",
+        entity_type="pi_law_firm",
+        emails=[],
+        phones=[],
+        addresses=[],
+        contacts=[],
+        conversation_ids=[],
+    )
+    firm.id = uuid4()
+
+    payload = build_firm_profile(firm).model_dump(mode="json")
+
+    assert payload["research"]["founded_year"] is None
+    assert payload["research"]["firm_size"] is None
+    assert payload["research"]["office_locations"] == []
+    assert payload["research"]["notable_cases"] == []
+    assert payload["research"]["awards_recognition"] == []
+    assert payload["research"]["bar_associations"] == []
+    assert payload["research"]["social_media"] == {}
+    assert payload["people"] == []
 
 
 @pytest.fixture
@@ -241,3 +290,232 @@ def test_resolve_email_uses_canonical_domain_and_firm_alias(client, monkeypatch)
         "alias_types": ["domain", "email_domain", "alt_domain"],
         "alias_value": "smithlaw.com",
     }
+
+
+def test_create_candidate_firm_with_unknown_domain_persists_firm_and_aliases(client, monkeypatch):
+    observed = {}
+
+    async def fake_resolve_domain_identity(db, normalized_domain):
+        observed["resolved_domain"] = normalized_domain
+        return None
+
+    async def fake_insert_candidate_firm(db, candidate, *, canonical_website, domain_aliases):
+        firm = PifInfo(
+            firm_name=candidate.firm_name,
+            entity_type="pi_law_firm",
+            canonical_website=canonical_website,
+            emails=[],
+            phones=[],
+            addresses=[],
+            contacts=[],
+            conversation_ids=[],
+            extraction_notes=f"candidate created via {candidate.source}",
+        )
+        firm.id = uuid4()
+        aliases = [
+            FirmAlias(
+                alias_type=alias_type,
+                alias_value=alias_value,
+                firm_id=firm.id,
+                confidence=1.0,
+                source=candidate.source,
+            )
+            for alias_type, alias_value in domain_aliases
+        ]
+        observed["firm"] = firm
+        observed["aliases"] = aliases
+        return firm
+
+    monkeypatch.setattr(firm_intel_endpoint, "resolve_domain_identity", fake_resolve_domain_identity)
+    monkeypatch.setattr(firm_intel_endpoint, "insert_candidate_firm", fake_insert_candidate_firm)
+
+    response = client.post(
+        "/api/v2/firm-intel/firms",
+        headers=AUTH_HEADERS,
+        json={
+            "firm_name": "New Trial Lawyers",
+            "website": "https://www.newtriallaw.com/contact",
+            "email": "hello@newtriallaw.com",
+            "source": "LexVisibility",
+            "detail": {"scan_id": "scan_123"},
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["created"] is True
+    assert payload["matched_by"] == "none"
+    assert payload["canonical_website"] == "newtriallaw.com"
+    assert payload["firm_id"] == str(observed["firm"].id)
+    assert observed["resolved_domain"] == "newtriallaw.com"
+    assert observed["firm"].firm_name == "New Trial Lawyers"
+    assert observed["firm"].entity_type == "pi_law_firm"
+    assert observed["firm"].emails == []
+    assert observed["firm"].contacts == []
+    assert observed["firm"].extraction_notes == "candidate created via lexvisibility"
+    assert {(alias.alias_type, alias.alias_value) for alias in observed["aliases"]} == {
+        ("domain", "newtriallaw.com"),
+        ("email_domain", "newtriallaw.com"),
+    }
+
+
+def test_create_candidate_firm_is_idempotent_for_same_domain(client, monkeypatch):
+    firm_id = uuid4()
+
+    async def fake_resolve_domain_identity(db, normalized_domain):
+        assert normalized_domain == "smithlaw.com"
+        return firm_id, "canonical_domain", normalized_domain
+
+    monkeypatch.setattr(firm_intel_endpoint, "resolve_domain_identity", fake_resolve_domain_identity)
+
+    response = client.post(
+        "/api/v2/firm-intel/firms",
+        headers=AUTH_HEADERS,
+        json={
+            "firm_name": "Smith Law",
+            "domain": "smithlaw.com",
+            "source": "lexvisibility",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "firm_id": str(firm_id),
+        "created": False,
+        "matched_by": "alias",
+        "canonical_website": "smithlaw.com",
+    }
+
+
+def test_create_candidate_firm_matches_by_canonical_website(client, monkeypatch):
+    firm_id = uuid4()
+
+    async def fake_resolve_domain_identity(db, normalized_domain):
+        return firm_id, "canonical_website", normalized_domain
+
+    monkeypatch.setattr(firm_intel_endpoint, "resolve_domain_identity", fake_resolve_domain_identity)
+
+    response = client.post(
+        "/api/v2/firm-intel/firms",
+        headers=AUTH_HEADERS,
+        json={
+            "firm_name": "Smith Law",
+            "website": "https://smithlaw.com",
+            "source": "lexvisibility",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["matched_by"] == "domain"
+    assert response.json()["firm_id"] == str(firm_id)
+
+
+def test_create_candidate_firm_name_only_create_and_exact_name_match(client, monkeypatch):
+    created_firm_id = uuid4()
+    existing_firm_id = uuid4()
+    observed = {"name_lookups": 0}
+
+    async def fake_find_active_firm_by_exact_name(db, firm_name):
+        observed["name_lookups"] += 1
+        if observed["name_lookups"] == 1:
+            return None
+        firm = PifInfo(
+            firm_name=firm_name,
+            entity_type="pi_law_firm",
+            emails=[],
+            phones=[],
+            addresses=[],
+            contacts=[],
+            conversation_ids=[],
+        )
+        firm.id = existing_firm_id
+        return firm
+
+    async def fake_insert_candidate_firm(db, candidate, *, canonical_website, domain_aliases):
+        assert canonical_website is None
+        assert domain_aliases == []
+        firm = PifInfo(
+            firm_name=candidate.firm_name,
+            entity_type="pi_law_firm",
+            emails=[],
+            phones=[],
+            addresses=[],
+            contacts=[],
+            conversation_ids=[],
+        )
+        firm.id = created_firm_id
+        return firm
+
+    monkeypatch.setattr(
+        firm_intel_endpoint,
+        "find_active_firm_by_exact_name",
+        fake_find_active_firm_by_exact_name,
+    )
+    monkeypatch.setattr(firm_intel_endpoint, "insert_candidate_firm", fake_insert_candidate_firm)
+
+    create_response = client.post(
+        "/api/v2/firm-intel/firms",
+        headers=AUTH_HEADERS,
+        json={"firm_name": "Name Only Law", "source": "lexvisibility"},
+    )
+    match_response = client.post(
+        "/api/v2/firm-intel/firms",
+        headers=AUTH_HEADERS,
+        json={"firm_name": "Name Only Law", "source": "lexvisibility"},
+    )
+
+    assert create_response.status_code == 201
+    assert create_response.json()["firm_id"] == str(created_firm_id)
+    assert match_response.status_code == 200
+    assert match_response.json()["created"] is False
+    assert match_response.json()["matched_by"] == "name"
+    assert match_response.json()["firm_id"] == str(existing_firm_id)
+
+
+def test_create_candidate_firm_skips_vendor_and_consumer_domains_for_identity(
+    client,
+    monkeypatch,
+):
+    observed = {}
+
+    async def fake_find_active_firm_by_exact_name(db, firm_name):
+        observed["name_lookup"] = firm_name
+        return None
+
+    async def fake_insert_candidate_firm(db, candidate, *, canonical_website, domain_aliases):
+        observed["canonical_website"] = canonical_website
+        observed["domain_aliases"] = domain_aliases
+        firm = PifInfo(
+            firm_name=candidate.firm_name,
+            entity_type="pi_law_firm",
+            emails=[],
+            phones=[],
+            addresses=[],
+            contacts=[],
+            conversation_ids=[],
+        )
+        firm.id = uuid4()
+        return firm
+
+    monkeypatch.setattr(
+        firm_intel_endpoint,
+        "find_active_firm_by_exact_name",
+        fake_find_active_firm_by_exact_name,
+    )
+    monkeypatch.setattr(firm_intel_endpoint, "insert_candidate_firm", fake_insert_candidate_firm)
+
+    response = client.post(
+        "/api/v2/firm-intel/firms",
+        headers=AUTH_HEADERS,
+        json={
+            "firm_name": "Portal Only Law",
+            "domain": "smithlaw.filevineapp.com",
+            "email": "owner@gmail.com",
+            "source": "lexvisibility",
+        },
+    )
+
+    assert response.status_code == 201
+    assert observed["name_lookup"] == "Portal Only Law"
+    assert observed["canonical_website"] is None
+    assert observed["domain_aliases"] == []

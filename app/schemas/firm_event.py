@@ -24,6 +24,8 @@ FirmEventType = Literal[
     "pe_backed",
     "new_office",
     "news_mention",
+    "report_viewed",
+    "report_engaged",
 ]
 
 
@@ -81,11 +83,13 @@ class ExternalFirmSignalIn(BaseModel):
             "news_mention",
             "link_opened",
             "link_clicked",
+            "report_viewed",
+            "report_engaged",
         }
         if value not in allowed:
             raise ValueError(
                 "external ingest accepts job_posting, pe_backed, new_office, "
-                "news_mention, link_opened, or link_clicked"
+                "news_mention, link_opened, link_clicked, report_viewed, or report_engaged"
             )
         return value
 

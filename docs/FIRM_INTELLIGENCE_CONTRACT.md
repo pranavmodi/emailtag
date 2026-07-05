@@ -1,13 +1,14 @@
-# Firm Intelligence Contract (v0.1 — draft for co-design)
+# Firm Intelligence Contract (v2 — implemented)
 
 > **The single interface between EmailTag (the refinery) and possibleos (the
 > engine).** EmailTag publishes firm intelligence as a versioned, non-PHI data
 > product; possibleos and every future Possible Minds tool (aiscan, aiaudit,
 > Ghost Lead Test, the browser extension) consume it. This document is the
-> keystone: both repos build backward from it. Nothing here is implemented yet.
+> keystone: both repos build backward from it.
 
-Status: **draft / proposal.** Owner of the contract: EmailTag (producer).
-Primary consumer: possibleos. Companion design notes:
+Status: **v2 endpoints implemented + deployed (2026-07-05). Token auth is live.**
+Owner of the contract: EmailTag (producer). Primary consumer: possibleos.
+Companion design notes:
 `possibleos/docs/product/` co-design discussion.
 
 ---
@@ -128,7 +129,9 @@ from. No current data is discarded.
 
   "people": [                              // decision-makers + staff
     { "person_id": "uuid", "name": "...", "title": "...",
-      "email": "...", "phone": "...",
+      "email": "...", "phone": "...", "linkedin": "...", "bio": "...",
+      "publications": [...], "cases_handled": [...],
+      "bar_admissions": [...],
       "persona": "owner|managing_partner|coo_ops|intake|records|...",
       "is_decision_maker": true,
       "freshness": { "last_seen_at": "...", "source": "signature|sender" },
@@ -165,6 +168,10 @@ from. No current data is discarded.
 
   "research": {                            // firm_researcher output (refined)
     "summary": "...", "practice_areas": [...], "sources": [...],
+    "founded_year": 1998, "firm_size": "5-30",
+    "office_locations": [...], "notable_cases": [...],
+    "awards_recognition": [...], "bar_associations": [...],
+    "social_media": { ... },
     "research_status": "done|pending|none", "last_researched_at": "..."
   },
 
@@ -176,18 +183,30 @@ from. No current data is discarded.
 }
 ```
 
+Research detail is passed through from `pif_info.research_data` when present:
+`founded_year`, `firm_size`, `office_locations`, `notable_cases`,
+`awards_recognition`, `bar_associations`, and `social_media`. People detail is
+passed through from leadership/staff records when present: `linkedin`, `bio`,
+`publications`, `cases_handled`, and `bar_admissions`. If dedicated
+`identity.metro` / `city` / `state` fields are absent, the first
+`office_locations` entry is used as a string passthrough source.
+
 ---
 
 ## 5. Events / moments (push — phase 2)
 
-EmailTag pushes a webhook to possibleos when a firm materially changes, so
-outreach can be timing-aware:
+EmailTag emits firm moments when a firm materially changes, and accepts external
+moments from approved consumers so outreach can be timing-aware:
 
 ```jsonc
-{ "event": "new_referral|became_warm|first_interaction|went_quiet|new_decision_maker|vendor_detected",
+{ "event": "new_referral|became_warm|first_interaction|went_quiet|new_decision_maker|vendor_detected|report_viewed|report_engaged",
   "firm_id": "uuid", "canonical_website": "...", "occurred_at": "...",
   "detail": { ... } }
 ```
+
+LexVisibility report engagement moments arrive via `POST /events/external`
+with source `external:lexvisibility` and event types `report_viewed` and
+`report_engaged`.
 
 Phase 1 may skip push and rely on `updated_since` polling.
 
@@ -217,8 +236,11 @@ Auth: existing `PIFSTATS_AUTH_TOKEN` (header). Versioned under `/v2`.
 |---|---|---|
 | GET | `/firms/{firm_id}` | full `firm_profile` |
 | GET | `/firms?updated_since=<ts>&cursor=` | **delta sync** (replaces watermark poll) |
+| POST | `/firms` | create or resolve a candidate firm from consumer-discovered identity |
 | GET | `/firms/resolve?website=|domain=|email=|legacy_pif_id=` | alias → `firm_id` |
 | GET | `/firms/{firm_id}/people` | people only |
+| GET | `/events/catalog` | supported event vocabulary |
+| POST | `/events/external` | external firm signal ingest |
 | GET | `/health` | coverage + freshness (replaces `front_status`) |
 | POST | `/outcomes` | possibleos → outcome feedback (§6) |
 

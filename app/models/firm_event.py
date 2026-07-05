@@ -26,6 +26,8 @@ FIRM_EVENT_TYPES = (
     "pe_backed",
     "new_office",
     "news_mention",
+    "report_viewed",
+    "report_engaged",
 )
 
 
@@ -39,7 +41,8 @@ class FirmEvent(Base):
             "'new_referral', 'records_surge', 'became_warm', 'went_quiet', "
             "'first_interaction', 'new_decision_maker', 'vendor_detected', "
             "'vendor_changed', 'link_opened', 'link_clicked', 'job_posting', "
-            "'pe_backed', 'new_office', 'news_mention')",
+            "'pe_backed', 'new_office', 'news_mention', 'report_viewed', "
+            "'report_engaged')",
             name="ck_firm_event_type",
         ),
         CheckConstraint(
