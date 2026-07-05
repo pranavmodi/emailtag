@@ -85,6 +85,8 @@ celery_app.conf.task_routes = {
     "app.tasks.behavior_analysis.analyze_all_firms_task": {"queue": "research"},
     "app.tasks.behavior_analysis.score_firm_task": {"queue": "research"},
     "app.tasks.behavior_analysis.score_all_firms_task": {"queue": "research"},
+    "app.tasks.firm_events.detect_firm_events_task": {"queue": "research"},
+    "app.tasks.firm_events.detect_all_firm_events_task": {"queue": "research"},
     "app.tasks.signature_extraction.extract_signatures_task": {"queue": "research"},
     "app.tasks.inbox_audit.audit_all_inboxes": {"queue": "processing"},
     "app.tasks.inbox_audit.audit_single_inbox": {"queue": "processing"},

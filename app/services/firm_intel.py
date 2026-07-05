@@ -122,7 +122,7 @@ def build_firm_profile(
         icp=FirmIcp(
             score=pif.icp_score,
             tier=pif.icp_tier,
-            score_breakdown=_safe_dict(pif.score_breakdown),
+            score_breakdown=_public_score_breakdown(pif.score_breakdown),
         ),
         research=FirmResearch(
             summary=_safe_string(research_data.get("summary") or research_data.get("description")),
@@ -376,6 +376,15 @@ def _sanitize_public_dict(value: Any) -> Dict[str, Any]:
         elif not isinstance(child, (bytes, bytearray)):
             cleaned[key_str] = child
     return cleaned
+
+
+def _public_score_breakdown(value: Any) -> Dict[str, Any]:
+    breakdown = _safe_dict(value)
+    return {
+        key: child
+        for key, child in breakdown.items()
+        if not str(key).startswith("outcome_supervision")
+    }
 
 
 def _safe_vendor_evidence(value: Any) -> List[VendorEvidence]:

@@ -1,4 +1,4 @@
-"""Read-only v2 firm intelligence contract endpoints."""
+"""V2 firm intelligence contract endpoints."""
 
 from __future__ import annotations
 
@@ -16,6 +16,13 @@ from app.models.autorespond_event import AutorespondEvent
 from app.models.email import Email
 from app.models.firm_alias import FirmAlias
 from app.models.pif_info import PifInfo
+from app.schemas.firm_event import (
+    ExternalFirmSignalIn,
+    ExternalFirmSignalResponse,
+    FirmEventCatalogResponse,
+    FirmEventListResponse,
+    FirmEventRead,
+)
 from app.schemas.firm_intel import (
     FirmDeltaResponse,
     FirmIntelHealthResponse,
@@ -23,8 +30,28 @@ from app.schemas.firm_intel import (
     FirmProfile,
     FirmResolveResponse,
 )
+from app.schemas.firm_outcome import (
+    FirmAttributionResponse,
+    FirmOutcomeIn,
+    FirmOutcomeResponse,
+)
+from app.services.firm_event_detectors import detect_engagement_event
+from app.services.firm_events import (
+    FirmEventCandidate,
+    build_dedup_key,
+    create_firm_event,
+    list_recent_events_for_firm,
+)
 from app.services.firm_identity import canonical_domain
 from app.services.firm_intel import build_firm_profile
+from app.services.firm_outcomes import (
+    apply_positive_outcome_to_scorer_input,
+    build_attribution_report,
+    create_firm_outcome,
+    get_firm_event_by_id,
+    load_outcomes_for_attribution,
+    mark_linked_event_for_outcome,
+)
 
 
 async def require_pifstats_token(
@@ -136,6 +163,142 @@ async def get_firm_people(
         raise HTTPException(status_code=404, detail="Firm not found")
     profile = await build_profile_for_firm(db, firm)
     return FirmPeopleResponse(firm_id=firm.id, people=profile.people)
+
+
+@router.get("/firms/{firm_id}/events", response_model=FirmEventListResponse)
+async def get_firm_events(
+    firm_id: UUID,
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+) -> FirmEventListResponse:
+    firm = await get_firm_by_id(db, firm_id)
+    if not firm:
+        raise HTTPException(status_code=404, detail="Firm not found")
+    events = await list_recent_events_for_firm(db, firm_id, limit=limit, mark_delivered=True)
+    return FirmEventListResponse(
+        firm_id=firm_id,
+        items=[FirmEventRead.model_validate(event) for event in events],
+        total=len(events),
+    )
+
+
+@router.get("/events/catalog", response_model=FirmEventCatalogResponse)
+async def get_event_catalog() -> FirmEventCatalogResponse:
+    return FirmEventCatalogResponse()
+
+
+@router.post("/events/external", response_model=ExternalFirmSignalResponse, status_code=201)
+async def ingest_external_event(
+    signal: ExternalFirmSignalIn,
+    db: AsyncSession = Depends(get_db),
+) -> ExternalFirmSignalResponse:
+    resolved = await resolve_external_signal_firm(db, signal)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Firm alias not found")
+    firm_id, matched_by, matched_value = resolved
+
+    occurred_at = signal.occurred_at or datetime.utcnow()
+    detail = {
+        **signal.detail,
+        "vendor": signal.vendor,
+        "sensor_signal_type": signal.signal_type,
+        "matched_by": matched_by,
+        "matched_value": matched_value,
+    }
+    if signal.signal_type in {"link_opened", "link_clicked"}:
+        source = "engagement"
+        source_id = signal.dedup_key or _external_signal_material(signal)
+        candidate = detect_engagement_event(
+            firm_id=firm_id,
+            event_type=signal.signal_type,
+            occurred_at=occurred_at,
+            source_id=f"{signal.vendor}:{source_id}",
+            detail=detail,
+            score=signal.score,
+        )
+    else:
+        source = f"external:{signal.vendor}"
+        dedup_key = signal.dedup_key or build_dedup_key(
+            source=source,
+            event_type=signal.signal_type,
+            firm_id=firm_id,
+            material=_external_signal_material(signal),
+        )
+        candidate = FirmEventCandidate(
+            firm_id=firm_id,
+            event_type=signal.signal_type,
+            occurred_at=occurred_at,
+            source=source,
+            detail=detail,
+            score=signal.score,
+            dedup_key=dedup_key.lower(),
+        )
+
+    event, created = await create_firm_event(db, candidate)
+    return ExternalFirmSignalResponse(
+        event=FirmEventRead.model_validate(event),
+        created=created,
+        matched_by=matched_by,
+        matched_value=matched_value,
+    )
+
+
+@router.post("/outcomes", response_model=FirmOutcomeResponse, status_code=201)
+async def ingest_outcome(
+    payload: FirmOutcomeIn,
+    db: AsyncSession = Depends(get_db),
+) -> FirmOutcomeResponse:
+    resolved = await resolve_outcome_firm(db, payload)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Firm alias not found")
+    firm_id, matched_by, matched_value = resolved
+
+    firm_event = None
+    if payload.firm_event_id:
+        firm_event = await get_firm_event_by_id(db, payload.firm_event_id)
+        if not firm_event:
+            raise HTTPException(status_code=404, detail="Firm event not found")
+        if firm_event.firm_id != firm_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Firm event does not belong to resolved firm",
+            )
+
+    occurred_at = payload.occurred_at or datetime.utcnow()
+    outcome, created = await create_firm_outcome(
+        db,
+        firm_id=firm_id,
+        event=payload.event,
+        occurred_at=occurred_at,
+        channel=payload.channel,
+        detail=payload.detail,
+        firm_event_id=payload.firm_event_id,
+        attribution_snapshot=payload.attribution_snapshot,
+        idempotency_key=payload.idempotency_key,
+    )
+
+    if created:
+        if firm_event:
+            mark_linked_event_for_outcome(firm_event, outcome)
+        firm = await get_firm_by_id(db, firm_id)
+        if not firm:
+            raise HTTPException(status_code=404, detail="Firm not found")
+        apply_positive_outcome_to_scorer_input(firm, outcome)
+        await db.commit()
+        await db.refresh(outcome)
+
+    return FirmOutcomeResponse(
+        outcome=outcome,
+        created=created,
+        matched_by=matched_by,
+        matched_value=matched_value,
+    )
+
+
+@router.get("/attribution", response_model=FirmAttributionResponse)
+async def get_attribution(db: AsyncSession = Depends(get_db)) -> FirmAttributionResponse:
+    rows = await load_outcomes_for_attribution(db)
+    return FirmAttributionResponse(**build_attribution_report(rows))
 
 
 @router.get("/health", response_model=FirmIntelHealthResponse)
@@ -265,6 +428,46 @@ async def find_alias_by_values(
     return result.scalars().first()
 
 
+async def resolve_external_signal_firm(
+    db: AsyncSession,
+    signal: ExternalFirmSignalIn,
+) -> Optional[tuple[UUID, str, str]]:
+    if signal.alias_type and signal.alias_value:
+        alias = await find_alias_by_values(db, [signal.alias_type], signal.alias_value.lower())
+        if alias:
+            return alias.firm_id, signal.alias_type, signal.alias_value
+
+    return await resolve_firm_id(
+        db,
+        website=signal.website,
+        domain=signal.domain,
+        email=signal.email,
+        legacy_pif_id=signal.legacy_pif_id,
+    )
+
+
+async def resolve_outcome_firm(
+    db: AsyncSession,
+    outcome: FirmOutcomeIn,
+) -> Optional[tuple[UUID, str, str]]:
+    if outcome.alias_type and outcome.alias_value:
+        alias = await find_alias_by_values(
+            db,
+            [outcome.alias_type],
+            outcome.alias_value.lower(),
+        )
+        if alias:
+            return alias.firm_id, outcome.alias_type, outcome.alias_value
+
+    return await resolve_firm_id(
+        db,
+        website=outcome.website,
+        domain=outcome.domain,
+        email=outcome.email,
+        legacy_pif_id=outcome.legacy_pif_id,
+    )
+
+
 async def _scalar_count(db: AsyncSession, query) -> int:
     result = await db.execute(query)
     return int(result.scalar() or 0)
@@ -285,3 +488,13 @@ def _decode_cursor(cursor: Optional[str]) -> int:
 def _coverage(count: int, total: int) -> dict:
     pct = round(count / total, 4) if total else 0.0
     return {"count": count, "percent": pct}
+
+
+def _external_signal_material(signal: ExternalFirmSignalIn) -> str:
+    for key in ("sensor_event_id", "event_id", "url", "posting_url", "news_url"):
+        value = signal.detail.get(key)
+        if value:
+            return str(value)
+    identity = signal.alias_value or signal.website or signal.domain or signal.email or signal.legacy_pif_id
+    occurred = signal.occurred_at.isoformat() if signal.occurred_at else "unknown-time"
+    return f"{identity}:{signal.signal_type}:{occurred}"

@@ -179,8 +179,24 @@ def score_firm(pif_data: Dict[str, Any]) -> Dict[str, Any]:
         f"Has: {', '.join(comp_reasons)}" if comp_reasons else "Missing key data"
     )
 
+    # --- Supervised Outcome Signal (10 pts) ---
+    # Private GTM feedback sharpens the neutral score without becoming a published fact.
+    positive_outcomes = behavioral.get("positive_outcomes") or {}
+    positive_total = int(positive_outcomes.get("total") or 0)
+    if positive_total >= 3:
+        outcome_score, outcome_reason = 10, f"{positive_total} positive outcomes"
+    elif positive_total == 2:
+        outcome_score, outcome_reason = 7, "2 positive outcomes"
+    elif positive_total == 1:
+        outcome_score, outcome_reason = 4, "1 positive outcome"
+    else:
+        outcome_score, outcome_reason = 0, "No positive outcome feedback"
+
+    score_breakdown["outcome_supervision_score"] = outcome_score
+    score_breakdown["outcome_supervision_reason"] = outcome_reason
+
     # --- Total ---
-    total = vol_score + rec_score + pain_score + size_score + comp_score
+    total = vol_score + rec_score + pain_score + size_score + comp_score + outcome_score
     total = max(0, min(100, total))
 
     # Determine tier
