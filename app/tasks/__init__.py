@@ -11,5 +11,7 @@ import app.tasks.firm_research
 import app.tasks.website_resolution
 import app.tasks.firm_merge
 import app.tasks.behavior_analysis
+import app.tasks.firm_enrichment
+import app.tasks.firm_events
 import app.tasks.signature_extraction
 import app.tasks.inbox_audit
