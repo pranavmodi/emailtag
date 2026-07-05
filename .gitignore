@@ -55,21 +55,6 @@ celerybeat.pid
 # Docker
 .dockerignore
 
-# Alembic
-migrations/versions/*
-!migrations/versions/e2f3a4b5c6d7_add_bill_offer_phase1_tables.py
-!migrations/versions/d1a2b3c4e5f6_baseline_before_bill_offer_phase1.py
-!migrations/versions/f0a1b2c3d4e5_add_firm_alias_and_website_identity.py
-!migrations/versions/0b91c2d3e4f5_add_firm_merge_audit.py
-!migrations/versions/1c2d3e4f5a6b_add_firm_event_trigger_engine.py
-!migrations/versions/2d3e4f5a6b7c_add_firm_outcome_attribution.py
-!migrations/versions/5de6dc7ca42d_merge_firmintel_heads_website_candidate_.py
-!migrations/versions/58a965ee4a52_merge_firmintel_vendor_stack_heads.py
-!migrations/versions/j8k9l0m1n2o3_add_website_candidate_to_pif_info.py
-!migrations/versions/7f8a9b0c1d2e_add_firm_profile_completeness_gate.py
-!migrations/versions/8a9b0c1d2e3f_add_report_engagement_firm_events.py
-!migrations/versions/.gitkeep
-
 # Debug images and temporary files
 tmp/
 
