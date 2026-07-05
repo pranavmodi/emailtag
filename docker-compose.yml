@@ -6,8 +6,8 @@ services:
     build: .
     container_name: emailtag-web
     network_mode: host
-    mem_limit: 512m        # added
-    mem_reservation: 128m  # added
+    mem_limit: 2g
+    mem_reservation: 512m
     cpus: "0.50"           # added
     pids_limit: 100        # added
     env_file:
@@ -16,7 +16,7 @@ services:
       - ./certs:/app/certs:ro
       - ./.env:/app/.env:ro
       - sandbox-tmp:/tmp
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8444 --ssl-keyfile certs/privkey.pem --ssl-certfile certs/fullchain.pem
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8444 --ssl-keyfile certs/privkey.pem --ssl-certfile certs/fullchain.pem --limit-max-requests 75 --timeout-keep-alive 5
     restart: unless-stopped
 
   # ───────────────────────────────────────────────
