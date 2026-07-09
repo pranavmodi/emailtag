@@ -73,6 +73,12 @@ const binaryOptions = [
   { value: "missing", label: "Missing" },
 ];
 
+const firstContactOptions = [
+  { value: "any", label: "Any first contact" },
+  { value: "has", label: "First contacted" },
+  { value: "missing", label: "Not contacted" },
+];
+
 const entityOptions = Object.entries(ENTITY_TYPE_LABELS);
 
 const formatDate = (value: string | null | undefined) =>
@@ -105,6 +111,7 @@ export default function FirmsDashboardPage() {
   const [behaviorPresence, setBehaviorPresence] = useState("any");
   const [icpPresence, setIcpPresence] = useState("any");
   const [vendorPresence, setVendorPresence] = useState("any");
+  const [firstContactPresence, setFirstContactPresence] = useState("any");
   const [vendorBusy, setVendorBusy] = useState<Record<string, boolean>>({});
   const [exportBusy, setExportBusy] = useState(false);
   const [activeOnly, setActiveOnly] = useState(true);
@@ -127,6 +134,7 @@ export default function FirmsDashboardPage() {
         behaviorPresence,
         icpPresence,
         vendorPresence,
+        firstContactPresence,
         activeOnly,
       });
       setData(payload);
@@ -146,6 +154,7 @@ export default function FirmsDashboardPage() {
     activeOnly,
     behaviorPresence,
     entityType,
+    firstContactPresence,
     icpPresence,
     page,
     researchPresence,
@@ -306,6 +315,7 @@ export default function FirmsDashboardPage() {
     setBehaviorPresence("any");
     setIcpPresence("any");
     setVendorPresence("any");
+    setFirstContactPresence("any");
     setActiveOnly(true);
     setSortBy("updated_at");
     setPage(1);
@@ -323,6 +333,7 @@ export default function FirmsDashboardPage() {
     const items = data?.items ?? [];
     return {
       missingWebsite: items.filter((firm) => !displayWebsite(firm)).length,
+      firstContacted: items.filter((firm) => firm.first_contacted_precise_at).length,
       researched: items.filter((firm) => firm.research_status === "completed").length,
       scored: items.filter((firm) => firm.icp_score != null).length,
     };
@@ -394,7 +405,7 @@ export default function FirmsDashboardPage() {
           <MetricTile icon={<Database className="h-4 w-4" />} label="Matching firms" value={data?.total ?? 0} />
           <MetricTile icon={<SlidersHorizontal className="h-4 w-4" />} label="Showing" value={visibleRange} />
           <MetricTile icon={<Globe className="h-4 w-4" />} label="Missing websites on page" value={pageSummary.missingWebsite} />
-          <MetricTile icon={<BarChart3 className="h-4 w-4" />} label="Scored on page" value={pageSummary.scored} />
+          <MetricTile icon={<Mail className="h-4 w-4" />} label="First contacted on page" value={pageSummary.firstContacted} />
         </div>
 
         <div className="mt-5 rounded-lg border border-slate-200 bg-white p-4">
@@ -457,6 +468,11 @@ export default function FirmsDashboardPage() {
               options={binaryOptions}
               prefix="Vendors"
             />
+            <FilterSelect
+              value={firstContactPresence}
+              onChange={(value) => resetToFirstPage(setFirstContactPresence, value)}
+              options={firstContactOptions}
+            />
             <select
               value={entityType}
               onChange={(event) => resetToFirstPage(setEntityType, event.target.value)}
@@ -473,6 +489,7 @@ export default function FirmsDashboardPage() {
               className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
             >
               <option value="updated_at">Recently updated</option>
+              <option value="first_contacted_precise_at">First contacted</option>
               <option value="firm_name">Firm name</option>
               <option value="conversation_count">Conversation count</option>
             </select>
@@ -509,6 +526,7 @@ export default function FirmsDashboardPage() {
                   <th className="min-w-[220px] px-4 py-3">Website</th>
                   <th className="px-4 py-3">Research</th>
                   <th className="px-4 py-3">Staff</th>
+                  <th className="px-4 py-3">First contacted</th>
                   <th className="px-4 py-3">ICP</th>
                   <th className="px-4 py-3">Signals</th>
                   <th className="px-4 py-3">Updated</th>
@@ -517,7 +535,7 @@ export default function FirmsDashboardPage() {
               <tbody className="divide-y divide-slate-100">
                 {isLoading && (
                   <tr>
-                    <td className="px-4 py-10 text-center text-slate-500" colSpan={8}>
+                    <td className="px-4 py-10 text-center text-slate-500" colSpan={9}>
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                       Loading firms
                     </td>
@@ -525,7 +543,7 @@ export default function FirmsDashboardPage() {
                 )}
                 {!isLoading && data?.items.length === 0 && (
                   <tr>
-                    <td className="px-4 py-10 text-center text-slate-500" colSpan={8}>
+                    <td className="px-4 py-10 text-center text-slate-500" colSpan={9}>
                       No firms match these filters.
                     </td>
                   </tr>
@@ -541,7 +559,7 @@ export default function FirmsDashboardPage() {
                       />
                       {expanded && (
                         <tr className="bg-slate-50">
-                          <td colSpan={8} className="px-4 pb-5 pt-0">
+                          <td colSpan={9} className="px-4 pb-5 pt-0">
                             <FirmDetail
                               firm={firm}
                               enrichmentRun={enrichmentRuns[firm.id]}
@@ -655,6 +673,16 @@ function FirmRow({
       </td>
       <td className="px-4 py-4 align-top">
         <StatusBadge status={firm.staff_research_status} />
+      </td>
+      <td className="px-4 py-4 align-top text-slate-500">
+        {firm.first_contacted_precise_at ? (
+          <div>
+            <div className="text-slate-700">{formatDate(firm.first_contacted_precise_at)}</div>
+            <div className="mt-1 text-xs text-slate-400">from linked email</div>
+          </div>
+        ) : (
+          <span className="text-slate-400">Not contacted</span>
+        )}
       </td>
       <td className="px-4 py-4 align-top">
         {firm.icp_score == null ? (
@@ -833,6 +861,7 @@ function FirmDetail({
             <DetailItem label="Status" value={firm.website_status || "Missing"} />
             <DetailItem label="Source" value={firm.website_source || "Unknown"} />
             <DetailItem label="Confidence" value={firm.website_confidence?.toString() ?? "Unknown"} />
+            <DetailItem label="First contacted" value={formatDate(firm.first_contacted_precise_at)} />
             <DetailItem label="Updated" value={formatDate(firm.updated_at)} />
           </dl>
         </DetailSection>

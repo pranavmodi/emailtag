@@ -1,7 +1,7 @@
 """CRUD operations for PIF (Personal Injury Firm) information."""
 
 import logging
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -51,6 +51,9 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
         behavior_presence: Optional[str] = None,
         icp_presence: Optional[str] = None,
         vendor_presence: Optional[str] = None,
+        first_contact_presence: Optional[str] = None,
+        first_contacted_from: Optional[date] = None,
+        first_contacted_to: Optional[date] = None,
         active_only: bool = True,
     ) -> tuple[List[PifInfo], int]:
         """
@@ -101,10 +104,19 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
             count_query = count_query.filter(PifInfo.entity_type == entity_type)
 
         if recently_researched_days is not None:
-            from datetime import datetime, timedelta
             cutoff = datetime.utcnow() - timedelta(days=recently_researched_days)
             query = query.filter(PifInfo.last_researched_at >= cutoff)
             count_query = count_query.filter(PifInfo.last_researched_at >= cutoff)
+
+        if first_contacted_from is not None:
+            cutoff = datetime.combine(first_contacted_from, datetime.min.time())
+            query = query.filter(PifInfo.first_contacted_precise_at >= cutoff)
+            count_query = count_query.filter(PifInfo.first_contacted_precise_at >= cutoff)
+
+        if first_contacted_to is not None:
+            cutoff = datetime.combine(first_contacted_to + timedelta(days=1), datetime.min.time())
+            query = query.filter(PifInfo.first_contacted_precise_at < cutoff)
+            count_query = count_query.filter(PifInfo.first_contacted_precise_at < cutoff)
 
         for field_name, value in (
             ("website_presence", website_presence),
@@ -113,6 +125,7 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
             ("behavior_presence", behavior_presence),
             ("icp_presence", icp_presence),
             ("vendor_presence", vendor_presence),
+            ("first_contact_presence", first_contact_presence),
         ):
             presence_filter = self._presence_filter(field_name, value)
             if presence_filter is not None:
@@ -132,6 +145,11 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
             )
         elif sort_by == "firm_name":
             query = query.order_by(PifInfo.firm_name.asc())
+        elif sort_by == "first_contacted_precise_at":
+            query = query.order_by(
+                PifInfo.first_contacted_precise_at.desc().nullslast(),
+                PifInfo.firm_name.asc(),
+            )
         else:
             # Default: sort by updated_at descending
             query = query.order_by(PifInfo.updated_at.desc())
@@ -212,6 +230,12 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
                 return PifInfo.vendor_stack.is_not(None)
             if value == "missing":
                 return PifInfo.vendor_stack.is_(None)
+
+        if field_name == "first_contact_presence":
+            if value == "has":
+                return PifInfo.first_contacted_precise_at.is_not(None)
+            if value == "missing":
+                return PifInfo.first_contacted_precise_at.is_(None)
 
         return None
 

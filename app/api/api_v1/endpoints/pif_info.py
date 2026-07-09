@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -320,6 +320,18 @@ async def list_pif_info(
         None,
         description="Filter vendor stack coverage: any, has, missing",
     ),
+    first_contact_presence: str = Query(
+        None,
+        description="Filter first contacted Precise timestamp coverage: any, has, missing",
+    ),
+    first_contacted_from: Optional[date] = Query(
+        None,
+        description="Filter firms first contacted Precise on or after this date (YYYY-MM-DD)",
+    ),
+    first_contacted_to: Optional[date] = Query(
+        None,
+        description="Filter firms first contacted Precise on or before this date (YYYY-MM-DD)",
+    ),
     active_only: bool = Query(
         True,
         description="Exclude soft-merged duplicate rows by default",
@@ -354,6 +366,9 @@ async def list_pif_info(
         behavior_presence=behavior_presence,
         icp_presence=icp_presence,
         vendor_presence=vendor_presence,
+        first_contact_presence=first_contact_presence,
+        first_contacted_from=first_contacted_from,
+        first_contacted_to=first_contacted_to,
         active_only=active_only,
     )
 

@@ -638,6 +638,7 @@ export interface PifInfoResponse {
   fax: string | null;
   addresses: string[];
   contacts: PifContact[];
+  first_contacted_precise_at: string | null;
   conversation_ids: string[];
   extraction_notes: string | null;
   leadership: LeadershipMember[] | null;

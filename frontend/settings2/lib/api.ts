@@ -888,6 +888,7 @@ export const PifApi = {
     behaviorPresence?: string;
     icpPresence?: string;
     vendorPresence?: string;
+    firstContactPresence?: string;
     activeOnly?: boolean;
   }) => {
     const searchParams = new URLSearchParams();
@@ -902,6 +903,7 @@ export const PifApi = {
     if (params.behaviorPresence) searchParams.set("behavior_presence", params.behaviorPresence);
     if (params.icpPresence) searchParams.set("icp_presence", params.icpPresence);
     if (params.vendorPresence) searchParams.set("vendor_presence", params.vendorPresence);
+    if (params.firstContactPresence) searchParams.set("first_contact_presence", params.firstContactPresence);
     if (params.activeOnly !== undefined) searchParams.set("active_only", String(params.activeOnly));
     return request<PifInfoListResponse>(
       `/api/v1/pif-info/?${searchParams.toString()}`
