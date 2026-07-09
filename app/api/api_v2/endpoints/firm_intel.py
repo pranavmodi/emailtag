@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -94,6 +94,7 @@ async def list_firms(
     db: AsyncSession = Depends(get_db),
 ) -> FirmDeltaResponse:
     offset = _decode_cursor(cursor)
+    updated_since = _as_db_naive_utc(updated_since)
     query = select(PifInfo)
     count_query = select(func.count(PifInfo.id))
     if updated_since:
@@ -114,6 +115,13 @@ async def list_firms(
 
     profiles = [await build_profile_for_firm(db, firm) for firm in firms]
     return FirmDeltaResponse(items=profiles, next_cursor=next_cursor, total=total)
+
+
+def _as_db_naive_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Normalize API datetimes for timestamp-without-time-zone DB columns."""
+    if value is None or value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 @router.post("/firms", response_model=CandidateFirmResponse, status_code=201)

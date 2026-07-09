@@ -45,6 +45,7 @@ LIST_FIELDS = (
     "staff",
 )
 DICT_FIELDS = ("behavioral_data", "research_data", "score_breakdown")
+MIN_DATETIME_FIELDS = ("first_contacted_precise_at",)
 SCALAR_FIELDS = (
     "entity_type",
     "website",
@@ -62,7 +63,7 @@ SCALAR_FIELDS = (
     "icp_tier",
     "icp_scored_at",
 )
-MERGE_FIELDS = LIST_FIELDS + DICT_FIELDS + SCALAR_FIELDS + (
+MERGE_FIELDS = LIST_FIELDS + DICT_FIELDS + MIN_DATETIME_FIELDS + SCALAR_FIELDS + (
     "merged_into",
     "merge_status",
     "merged_at",
@@ -460,6 +461,12 @@ def _merge_lists_and_dicts(survivor: PifInfo, loser: PifInfo) -> None:
     for field_name in DICT_FIELDS:
         merged = _merge_dict(getattr(survivor, field_name, None), getattr(loser, field_name, None))
         setattr(survivor, field_name, merged)
+    for field_name in MIN_DATETIME_FIELDS:
+        merged = _earliest_datetime(
+            getattr(survivor, field_name, None),
+            getattr(loser, field_name, None),
+        )
+        setattr(survivor, field_name, merged)
 
 
 def _loser_provenance(
@@ -573,6 +580,12 @@ def _merge_dict(left: Any, right: Any) -> Optional[dict[str, Any]]:
     return left or right
 
 
+def _earliest_datetime(left: Optional[datetime], right: Optional[datetime]) -> Optional[datetime]:
+    if left and right:
+        return min(left, right)
+    return left or right
+
+
 def _dict_additions_and_conflicts(
     left: Any,
     right: Any,
@@ -612,7 +625,12 @@ def _snapshot_firm(firm: PifInfo) -> dict[str, Any]:
 def _restore_firm(firm: PifInfo, snapshot: dict[str, Any]) -> None:
     for field_name in MERGE_FIELDS:
         value = snapshot.get(field_name)
-        if field_name in {"last_researched_at", "icp_scored_at", "merged_at"}:
+        if field_name in {
+            "last_researched_at",
+            "icp_scored_at",
+            "merged_at",
+            "first_contacted_precise_at",
+        }:
             value = _parse_datetime(value)
         elif field_name == "merged_into" and value:
             value = uuid.UUID(value)

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models.firm_alias import FirmAlias
 from app.models.pif_info import PifInfo
+from app.services.firm_contact_dates import refresh_first_contacted_precise_at_sync
 from app.services.firm_identity import canonical_domain
 from app.services.firm_merge import FirmMergePlan, apply_firm_merge_plan
 from app.services.website_resolution import (
@@ -90,6 +91,7 @@ def resolve_extracted_firm_identity(
         extraction_notes=extraction_notes,
         entity_type=entity_type,
     )
+    refresh_first_contacted_precise_at_sync(db, pif)
     db.add(pif)
     db.flush()
 

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -212,6 +212,24 @@ def test_sparse_firm_profile_includes_empty_optional_research_and_people_fields(
     assert payload["research"]["bar_associations"] == []
     assert payload["research"]["social_media"] == {}
     assert payload["people"] == []
+
+
+def test_updated_since_normalizes_aware_datetime_to_db_naive_utc():
+    aware = datetime(2026, 7, 5, 2, 12, 26, 967126, tzinfo=timezone.utc)
+
+    normalized = firm_intel_endpoint._as_db_naive_utc(aware)
+
+    assert normalized == datetime(2026, 7, 5, 2, 12, 26, 967126)
+    assert normalized.tzinfo is None
+
+
+def test_updated_since_normalizes_non_utc_offset_to_db_naive_utc():
+    aware = datetime.fromisoformat("2026-07-04T19:12:26.967126-07:00")
+
+    normalized = firm_intel_endpoint._as_db_naive_utc(aware)
+
+    assert normalized == datetime(2026, 7, 5, 2, 12, 26, 967126)
+    assert normalized.tzinfo is None
 
 
 @pytest.fixture

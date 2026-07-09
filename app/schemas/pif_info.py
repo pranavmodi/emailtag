@@ -58,6 +58,10 @@ class PifInfoBase(BaseModel):
     fax: Optional[str] = Field(None, description="Fax number")
     addresses: List[str] = Field(default_factory=list, description="Physical addresses")
     contacts: List[ContactPerson] = Field(default_factory=list, description="Contact persons")
+    first_contacted_precise_at: Optional[datetime] = Field(
+        None,
+        description="Earliest linked email timestamp from a non-internal sender",
+    )
     extraction_notes: Optional[str] = Field(None, description="Notes from extraction")
 
 
@@ -80,6 +84,7 @@ class PifInfoUpdate(BaseModel):
     fax: Optional[str] = None
     addresses: Optional[List[str]] = None
     contacts: Optional[List[ContactPerson]] = None
+    first_contacted_precise_at: Optional[datetime] = None
     conversation_ids: Optional[List[str]] = None
     extraction_notes: Optional[str] = None
 

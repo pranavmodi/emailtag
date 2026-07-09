@@ -132,6 +132,13 @@ class PifInfo(Base):
         comment="Front conversation IDs involving this firm"
     )
 
+    first_contacted_precise_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime,
+        nullable=True,
+        index=True,
+        comment="Earliest linked email timestamp from a non-internal sender",
+    )
+
     extraction_notes: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True,
         comment="Notes from extraction process"

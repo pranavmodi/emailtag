@@ -241,6 +241,11 @@ async def firm_lookup_create(
         )
         pif = await pif_info_crud.create(db, obj_in=pif_create)
 
+    if request.selected_conversation_ids:
+        from app.services.firm_contact_dates import refresh_first_contacted_precise_at
+
+        await refresh_first_contacted_precise_at(db, pif)
+
     # Optionally start research
     task_id = None
     if request.start_research:

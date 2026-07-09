@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.base import CRUDBase
 from app.models.pif_info import PifInfo
 from app.schemas.pif_info import PifInfoCreate, PifInfoUpdate
+from app.services.firm_contact_dates import first_external_email_at
 
 logger = logging.getLogger(__name__)
 
@@ -276,6 +277,7 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
             existing.addresses = merged_addresses
             existing.conversation_ids = merged_conv_ids
             existing.contacts = merged_contacts
+            existing.first_contacted_precise_at = await first_external_email_at(db, merged_conv_ids)
 
             # Update website if not set but now provided
             if website and not existing.website:
@@ -307,6 +309,7 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
                 conversation_ids=[conversation_id],
                 extraction_notes=extraction_notes,
             )
+            new_pif.first_contacted_precise_at = await first_external_email_at(db, [conversation_id])
 
             db.add(new_pif)
             await db.commit()
