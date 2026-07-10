@@ -131,6 +131,13 @@ async def save_rule_api(
         }, status_code=500)
 
 
+@router.post("/rules/api/load_model")
+async def load_model_api():
+    """Placeholder endpoint for model loading."""
+    print("hello world")
+    return JSONResponse(content={"message": "hello world"})
+
+
 @router.post("/rules/add", name="add_classification_rule")
 async def add_rule(
     request: Request,

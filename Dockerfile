@@ -11,6 +11,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # - gcc: compiling Python C extensions
 # - tesseract-ocr: OCR processing (pytesseract)
 # - poppler-utils: PDF to image conversion (pdf2image)
+# - pandoc + texlive-latex-base/recommended + lmodern: document-to-PDF conversion for webhook-triggered RX processing
 # - libzbar0: barcode/QR code reading (pyzbar)
 # - libgl1-mesa-glue, libglib2.0-0: OpenCV runtime deps
 RUN apt-get update \
@@ -18,6 +19,10 @@ RUN apt-get update \
        gcc \
        tesseract-ocr \
        poppler-utils \
+       pandoc \
+       texlive-latex-base \
+       texlive-latex-recommended \
+       lmodern \
        libzbar0 \
        libgl1 \
        libglib2.0-0 \

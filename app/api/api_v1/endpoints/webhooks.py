@@ -12,6 +12,7 @@ import random
 import re
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -21,7 +22,7 @@ from app.crud.system_settings import system_settings_crud
 from app.db.session import get_db
 from app.schemas.email import EmailCreate, FrontAppWebhook, PreprocessingWebhook, EmailUpdate, Email, FrontOutboundMessageWebhook
 from app.schemas.patient_conversation_data import PatientConversationDataCreate
-from app.tasks.email import process_email
+from app.tasks.email import process_email, process_email_rx
 from app.tasks.pif_extraction import extract_pif_from_conversation
 from app.services.patient import fetch_patient_by_id
 from app.helpers.patient_extraction import extract_and_log_patient_info
@@ -32,6 +33,11 @@ from app.services.frontapp_service import get_conversation_async, get_conversati
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+class ProcessEmailRxRequest(BaseModel):
+    template_name: str
+    user_id: str
 
 
 def verify_webhook_signature(
@@ -528,6 +534,21 @@ async def frontapp_outbound_webhook(
         # Still return 202
 
     return {"status": "outbound_payload_logged"}
+
+
+@router.post("/processemail", status_code=status.HTTP_202_ACCEPTED)
+async def process_email_rx_webhook(payload: ProcessEmailRxRequest) -> Dict[str, Any]:
+    """Queue placeholder RX email processing."""
+    task = process_email_rx.apply_async(
+        args=[payload.template_name, payload.user_id],
+        queue="processing",
+    )
+    return {
+        "status": "queued",
+        "task_id": task.id,
+        "template_name": payload.template_name,
+        "user_id": payload.user_id,
+    }
 
 
 @router.post("/reprocess/{conversation_id}", status_code=status.HTTP_202_ACCEPTED)

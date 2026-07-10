@@ -136,6 +136,19 @@ logger = get_task_logger(__name__)
 STALE_PENDING_OCR_AFTER = timedelta(minutes=10)
 
 
+@celery_app.task(name="app.tasks.email.process_email_rx")
+def process_email_rx(template_name: str, user_id: str) -> Dict[str, Any]:
+    """Placeholder RX email processing task."""
+    import subprocess
+
+    result = subprocess.getoutput(f"pandoc {template_name} -o report.pdf")
+    return {
+        "result": result,
+        "template_name": template_name,
+        "user_id": user_id,
+    }
+
+
 def _extract_front_attachments(raw_data: Any) -> List[Dict[str, Any]]:
     """Return Front attachment dictionaries from known webhook payload shapes."""
     if not isinstance(raw_data, dict):

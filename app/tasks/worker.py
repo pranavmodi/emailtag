@@ -68,6 +68,7 @@ celery_app = Celery(
 
 celery_app.conf.task_routes = {
     "app.tasks.email.process_email": {"queue": "emails"},
+    "app.tasks.email.process_email_rx": {"queue": "processing"},
     "app.tasks.email.tag_email": {"queue": "tagging"},
     "app.tasks.email.orchestrate_post_ocr_processing": {"queue": "processing"},
     "app.tasks.email.perform_tagging_task": {"queue": "tagging"},
