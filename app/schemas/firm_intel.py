@@ -111,6 +111,10 @@ class FirmProfile(BaseModel):
     canonical_website: Optional[str] = None
     website_status: Optional[str] = None
     firm_name: str
+    source_record: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Complete serialized EmailTag pif_info source row for mirroring/debugging.",
+    )
     aliases: FirmAliases = Field(default_factory=FirmAliases)
     identity: FirmIdentity = Field(default_factory=FirmIdentity)
     people: List[FirmPerson] = Field(default_factory=list)

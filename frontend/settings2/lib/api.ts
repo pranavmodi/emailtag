@@ -889,6 +889,8 @@ export const PifApi = {
     icpPresence?: string;
     vendorPresence?: string;
     firstContactPresence?: string;
+    firstContactedFrom?: string;
+    firstContactedTo?: string;
     activeOnly?: boolean;
   }) => {
     const searchParams = new URLSearchParams();
@@ -904,6 +906,8 @@ export const PifApi = {
     if (params.icpPresence) searchParams.set("icp_presence", params.icpPresence);
     if (params.vendorPresence) searchParams.set("vendor_presence", params.vendorPresence);
     if (params.firstContactPresence) searchParams.set("first_contact_presence", params.firstContactPresence);
+    if (params.firstContactedFrom) searchParams.set("first_contacted_from", params.firstContactedFrom);
+    if (params.firstContactedTo) searchParams.set("first_contacted_to", params.firstContactedTo);
     if (params.activeOnly !== undefined) searchParams.set("active_only", String(params.activeOnly));
     return request<PifInfoListResponse>(
       `/api/v1/pif-info/?${searchParams.toString()}`

@@ -109,14 +109,17 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
             count_query = count_query.filter(PifInfo.last_researched_at >= cutoff)
 
         if first_contacted_from is not None:
-            cutoff = datetime.combine(first_contacted_from, datetime.min.time())
-            query = query.filter(PifInfo.first_contacted_precise_at >= cutoff)
-            count_query = count_query.filter(PifInfo.first_contacted_precise_at >= cutoff)
+            start = datetime.combine(first_contacted_from, datetime.min.time())
+            query = query.filter(PifInfo.first_contacted_precise_at >= start)
+            count_query = count_query.filter(PifInfo.first_contacted_precise_at >= start)
 
         if first_contacted_to is not None:
-            cutoff = datetime.combine(first_contacted_to + timedelta(days=1), datetime.min.time())
-            query = query.filter(PifInfo.first_contacted_precise_at < cutoff)
-            count_query = count_query.filter(PifInfo.first_contacted_precise_at < cutoff)
+            end_exclusive = datetime.combine(
+                first_contacted_to + timedelta(days=1),
+                datetime.min.time(),
+            )
+            query = query.filter(PifInfo.first_contacted_precise_at < end_exclusive)
+            count_query = count_query.filter(PifInfo.first_contacted_precise_at < end_exclusive)
 
         for field_name, value in (
             ("website_presence", website_presence),

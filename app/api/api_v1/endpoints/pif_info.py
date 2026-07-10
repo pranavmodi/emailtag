@@ -278,7 +278,7 @@ async def list_pif_info(
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     sort_by: str = Query(
         None,
-        description="Sort order: 'conversation_count' (most conversations first), 'firm_name' (alphabetical), or 'updated_at' (most recent first, default)"
+        description="Sort order: 'conversation_count' (most conversations first), 'firm_name' (alphabetical), 'first_contacted_precise_at' (newest first), or 'updated_at' (most recent first, default)"
     ),
     research_status: str = Query(
         None,
@@ -345,7 +345,7 @@ async def list_pif_info(
         search: Optional search term
         page: Page number (1-indexed)
         page_size: Number of items per page
-        sort_by: Sort order (conversation_count, firm_name, updated_at)
+        sort_by: Sort order (conversation_count, firm_name, first_contacted_precise_at, updated_at)
         research_status: Filter by research_status (e.g. 'completed')
         icp_tier: Filter by ICP tier ('A', 'B', 'C', 'D')
         recently_researched: Filter firms researched within the last N days

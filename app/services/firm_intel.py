@@ -88,6 +88,7 @@ def build_firm_profile(
         canonical_website=pif.canonical_website,
         website_status=pif.website_status or ("resolved" if pif.canonical_website else None),
         firm_name=pif.firm_name,
+        source_record=serialize_pif_source_record(pif),
         aliases=_serialize_aliases(pif, aliases),
         identity=_serialize_identity(pif, research_data),
         people=_serialize_people(pif, behavioral_data),
@@ -146,6 +147,32 @@ def build_firm_profile(
             source="emailtag",
         ),
     )
+
+
+def serialize_pif_source_record(pif: PifInfo) -> Dict[str, Any]:
+    """Serialize every pif_info DB column for downstream mirrors.
+
+    This intentionally follows the SQLAlchemy mapper instead of a curated field list so future
+    pif_info columns are mirrored without needing to update the v2 FirmIntel contract code.
+    """
+    return {
+        column.key: _json_safe(getattr(pif, column.key))
+        for column in PifInfo.__mapper__.columns
+    }
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    return value
 
 
 def _serialize_aliases(pif: PifInfo, aliases: List[FirmAlias]) -> FirmAliases:

@@ -10,7 +10,7 @@ from app.main import app
 from app.models.email import Email
 from app.models.firm_alias import FirmAlias
 from app.models.pif_info import PifInfo
-from app.services.firm_intel import build_firm_profile
+from app.services.firm_intel import build_firm_profile, serialize_pif_source_record
 
 
 AUTH_HEADERS = {"X-PIFStats-Auth-Token": "test-pifstats-token"}
@@ -39,6 +39,7 @@ def _firm() -> PifInfo:
             }
         ],
         conversation_ids=["cnv_1"],
+        first_contacted_precise_at=now - timedelta(days=12),
         behavioral_data={
             "warm_score": 42,
             "trajectory": "heating",
@@ -105,6 +106,7 @@ def _firm() -> PifInfo:
         icp_tier="A",
         score_breakdown={"total": 77},
         icp_scored_at=now,
+        merge_status="active",
         created_at=now - timedelta(days=30),
         updated_at=now,
     )
@@ -172,7 +174,8 @@ def test_firm_profile_contract_mapping_and_phi_boundary():
     assert payload["people"][0]["cases_handled"] == ["Auto collision"]
     assert payload["people"][0]["bar_admissions"] == ["California"]
 
-    serialized = str(payload)
+    curated_payload = {key: value for key, value in payload.items() if key != "source_record"}
+    serialized = str(curated_payload)
     for forbidden in [
         "patient_name",
         "patient_dob",
@@ -188,6 +191,29 @@ def test_firm_profile_contract_mapping_and_phi_boundary():
         "Raw conversation body",
     ]:
         assert forbidden not in serialized
+
+
+def test_firm_profile_includes_complete_source_record_for_mirror():
+    firm = _firm()
+    payload = build_firm_profile(firm).model_dump(mode="json")
+    source_record = payload["source_record"]
+
+    assert set(source_record) == {column.key for column in PifInfo.__mapper__.columns}
+    assert source_record["id"] == str(firm.id)
+    assert source_record["firm_name"] == "Smith Injury Law"
+    assert source_record["first_contacted_precise_at"] == firm.first_contacted_precise_at.isoformat()
+    assert source_record["canonical_website"] == "smithlaw.com"
+    assert source_record["merge_status"] == "active"
+    assert source_record["conversation_ids"] == ["cnv_1"]
+    assert source_record["research_data"]["summary"] == "Personal injury firm in Los Angeles."
+
+
+def test_source_record_serializer_tracks_all_pif_info_columns():
+    firm = _firm()
+
+    source_record = serialize_pif_source_record(firm)
+
+    assert set(source_record) == {column.key for column in PifInfo.__mapper__.columns}
 
 
 def test_sparse_firm_profile_includes_empty_optional_research_and_people_fields():
