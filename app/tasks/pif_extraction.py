@@ -108,6 +108,18 @@ def upsert_pif_sync(
         db.add(existing)
         db.commit()
         db.refresh(existing)
+        try:
+            from app.services.firm_email_volume import refresh_firm_email_monthly_volume_sync
+
+            refresh_firm_email_monthly_volume_sync(db, existing.id)
+            db.commit()
+        except Exception as volume_exc:
+            db.rollback()
+            logger.warning(
+                "Failed to refresh firm email monthly volume for %s: %s",
+                existing.id,
+                volume_exc,
+            )
 
         logger.info(f"Updated existing PIF info for '{firm_name}' (ID: {existing.id})")
         return existing, False
@@ -129,6 +141,18 @@ def upsert_pif_sync(
         db.add(new_pif)
         db.commit()
         db.refresh(new_pif)
+        try:
+            from app.services.firm_email_volume import refresh_firm_email_monthly_volume_sync
+
+            refresh_firm_email_monthly_volume_sync(db, new_pif.id)
+            db.commit()
+        except Exception as volume_exc:
+            db.rollback()
+            logger.warning(
+                "Failed to refresh firm email monthly volume for %s: %s",
+                new_pif.id,
+                volume_exc,
+            )
 
         logger.info(f"Created new PIF info for '{firm_name}' (ID: {new_pif.id})")
         return new_pif, True
@@ -205,6 +229,18 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
         db.commit()
         pif = identity.pif
         db.refresh(pif)
+        try:
+            from app.services.firm_email_volume import refresh_firm_email_monthly_volume_sync
+
+            refresh_firm_email_monthly_volume_sync(db, pif.id)
+            db.commit()
+        except Exception as volume_exc:
+            db.rollback()
+            logger.warning(
+                "Failed to refresh firm email monthly volume for %s: %s",
+                pif.id,
+                volume_exc,
+            )
 
         action = identity.action
         logger.info(

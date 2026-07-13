@@ -104,6 +104,13 @@ class BehavioralData(BaseModel):
     analyzed_at: Optional[str] = None
 
 
+class FirmMonthlyEmailVolumePoint(BaseModel):
+    """One calendar month of cached firm email volume."""
+
+    month: str = Field(..., description="Calendar month in YYYY-MM format")
+    count: int = Field(0, ge=0, description="Stored email messages linked to the firm")
+
+
 class ScoreBreakdown(BaseModel):
     """ICP score breakdown by category."""
     email_volume_score: int = 0
@@ -137,6 +144,10 @@ class PifInfoResponse(PifInfoBase):
     score_breakdown: Optional[Dict[str, Any]] = Field(None, description="Score breakdown by category")
     icp_scored_at: Optional[datetime] = Field(None, description="When last scored")
     vendor_stack: Optional[Any] = Field(None, description="Detected practice management vendors")
+    monthly_email_volume: List[FirmMonthlyEmailVolumePoint] = Field(
+        default_factory=list,
+        description="Last 12 calendar months of stored email volume, oldest first",
+    )
     profile_completeness: Optional[int] = Field(None, description="Populated core firm_profile field count")
     outreach_ready: bool = Field(False, description="Whether required profile fields are ready for outreach")
     created_at: datetime

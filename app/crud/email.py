@@ -1,5 +1,6 @@
 """CRUD operations for email data."""
 
+import logging
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 from uuid import UUID
@@ -12,9 +13,24 @@ from app.crud.base import CRUDBase
 from app.models.email import Email
 from app.schemas.email import EmailCreate, EmailUpdate
 
+logger = logging.getLogger(__name__)
+
 
 class CRUDEmail(CRUDBase[Email, EmailCreate, EmailUpdate]):
     """CRUD operations for emails."""
+
+    async def create(self, db: AsyncSession, *, obj_in: EmailCreate) -> Email:
+        """Create an email and update cached firm email volume if the firm is linked."""
+        db_obj = await super().create(db, obj_in=obj_in)
+        try:
+            from app.services.firm_email_volume import increment_email_monthly_volume_for_email
+
+            await increment_email_monthly_volume_for_email(db, db_obj)
+            await db.commit()
+        except Exception as exc:
+            await db.rollback()
+            logger.warning("Failed to update firm email monthly volume: %s", exc)
+        return db_obj
 
     async def get_by_front_conversation_id(
         self, db: AsyncSession, *, front_conversation_id: str, load_tags: bool = False

@@ -15,6 +15,7 @@ from .pif_info import PifInfo  # noqa
 from .firm_alias import FirmAlias  # noqa
 from .firm_event import FirmEvent  # noqa
 from .firm_outcome import FirmOutcome  # noqa
+from .firm_email_volume import FirmEmailMonthlyVolume  # noqa
 from .firm_merge_audit import FirmMergeAudit  # noqa
 from .pif_pipeline import PifOutreachPipeline  # noqa
 from .conversation_log import ConversationLog  # noqa

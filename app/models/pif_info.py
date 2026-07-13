@@ -239,6 +239,10 @@ class PifInfo(Base):
         "FirmOutcome", back_populates="firm", cascade="all, delete-orphan"
     )
 
+    email_monthly_volume: Mapped[List["FirmEmailMonthlyVolume"]] = relationship(  # type: ignore[name-defined]
+        "FirmEmailMonthlyVolume", back_populates="firm", cascade="all, delete-orphan"
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False,
         comment="Timestamp when firm was first seen"

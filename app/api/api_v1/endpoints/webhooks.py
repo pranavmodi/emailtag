@@ -198,6 +198,23 @@ async def process_inbound_message(db: AsyncSession, webhook_data: FrontAppWebhoo
                 return
             
             output_data["conversation_id"] = conversation_id
+
+
+        with tracer.trace_step(
+            step_name="AUTO_ENABLED_CHECK",
+            step_type=StepTypes.BUSINESS_LOGIC,
+            input_data={"conversation_id": conversation_id}
+        ) as (trace_id, output_data):
+            output_data["is_auto_enabled"] = settings.IS_AUTO_ENABLED
+            if not settings.IS_AUTO_ENABLED:
+                logger.info(
+                    "inbound email ingestion for conversation %s",
+                    conversation_id,
+                )
+
+                return
+
+            output_data["action"] = "processing"
         
         # Extract message data and attachments from target.data
         message = webhook_data.target.get("data", {})

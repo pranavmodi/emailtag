@@ -373,6 +373,7 @@ async def list_pif_info(
     )
 
     total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+    await _attach_monthly_email_volume(db, items)
 
     return PifInfoListResponse(
         items=items,
@@ -381,6 +382,23 @@ async def list_pif_info(
         page_size=page_size,
         total_pages=total_pages,
     )
+
+
+async def _attach_monthly_email_volume(db: AsyncSession, items: List[Any]) -> None:
+    """Attach dense monthly email volume series to PIF ORM objects for response serialization."""
+    if not items:
+        return
+
+    try:
+        from app.services.firm_email_volume import get_monthly_email_volume_for_firms
+
+        volume_by_firm = await get_monthly_email_volume_for_firms(db, [item.id for item in items])
+    except Exception as exc:
+        logger.warning("Unable to load firm monthly email volume: %s", exc)
+        volume_by_firm = {}
+
+    for item in items:
+        setattr(item, "monthly_email_volume", volume_by_firm.get(str(item.id), []))
 
 
 def _serialize_firm_row(pif) -> Dict[str, Any]:
@@ -693,6 +711,7 @@ async def get_pif_info(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="PIF info not found",
         )
+    await _attach_monthly_email_volume(db, [pif])
     return pif
 
 

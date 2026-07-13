@@ -2,7 +2,7 @@
 
 import logging
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
 from sqlalchemy import and_, or_, select, func, text, literal_column
@@ -18,6 +18,23 @@ logger = logging.getLogger(__name__)
 
 class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
     """CRUD operations for PIF info."""
+
+    async def update(
+        self,
+        db: AsyncSession,
+        *,
+        db_obj: PifInfo,
+        obj_in: Union[PifInfoUpdate, Dict[str, Any]],
+    ) -> PifInfo:
+        """Update a PIF row and rebuild email volume if linked conversations changed."""
+        update_data = obj_in if isinstance(obj_in, dict) else obj_in.model_dump(exclude_unset=True)
+        conversation_ids_changed = "conversation_ids" in update_data
+        updated = await super().update(db, db_obj=db_obj, obj_in=obj_in)
+
+        if conversation_ids_changed:
+            await self._refresh_email_volume(db, updated.id)
+
+        return updated
 
     async def get_by_website(self, db: AsyncSession, website: str) -> Optional[PifInfo]:
         """Get PIF info by website URL."""
@@ -319,6 +336,7 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
             db.add(existing)
             await db.commit()
             await db.refresh(existing)
+            await self._refresh_email_volume(db, existing.id)
 
             logger.info(f"Updated existing PIF info for '{firm_name}' (ID: {existing.id})")
             return existing, False
@@ -341,6 +359,7 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
             db.add(new_pif)
             await db.commit()
             await db.refresh(new_pif)
+            await self._refresh_email_volume(db, new_pif.id)
 
             logger.info(f"Created new PIF info for '{firm_name}' (ID: {new_pif.id})")
             return new_pif, True
@@ -419,8 +438,20 @@ class CRUDPifInfo(CRUDBase[PifInfo, PifInfoCreate, PifInfoUpdate]):
             db.add(pif)
             await db.commit()
             await db.refresh(pif)
+            await self._refresh_email_volume(db, pif.id)
 
         return pif
+
+    async def _refresh_email_volume(self, db: AsyncSession, pif_id: UUID) -> None:
+        """Best-effort refresh of cached monthly volume for a firm."""
+        try:
+            from app.services.firm_email_volume import refresh_firm_email_monthly_volume
+
+            await refresh_firm_email_monthly_volume(db, pif_id)
+            await db.commit()
+        except Exception as exc:
+            await db.rollback()
+            logger.warning("Failed to refresh firm email monthly volume for %s: %s", pif_id, exc)
 
 
     async def search_people(

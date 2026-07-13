@@ -535,6 +535,11 @@ export interface ScoreBreakdown {
   scored_at: string | null;
 }
 
+export interface MonthlyEmailVolumePoint {
+  month: string;
+  count: number;
+}
+
 export interface PipelineRecord {
   id: string;
   pif_id: string;
@@ -654,6 +659,7 @@ export interface PifInfoResponse {
   score_breakdown: ScoreBreakdown | null;
   icp_scored_at: string | null;
   vendor_stack: VendorStackEntry[] | null;
+  monthly_email_volume: MonthlyEmailVolumePoint[];
   created_at: string;
   updated_at: string;
 }

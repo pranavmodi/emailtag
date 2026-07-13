@@ -98,6 +98,24 @@ const safeJson = (value: unknown) => {
   return JSON.stringify(value, null, 2);
 };
 
+const totalMonthlyEmailVolume = (firm: PifInfoResponse) =>
+  (firm.monthly_email_volume ?? []).reduce((sum, point) => sum + point.count, 0);
+
+const averageMonthlyEmailVolume = (firm: PifInfoResponse) => {
+  const points = firm.monthly_email_volume ?? [];
+  if (!points.length) return 0;
+  return Math.round(points.reduce((sum, point) => sum + point.count, 0) / points.length);
+};
+
+const formatMonthLabel = (month: string) => {
+  const [year, monthNumber] = month.split("-").map(Number);
+  if (!year || !monthNumber) return month;
+  return new Date(Date.UTC(year, monthNumber - 1, 1)).toLocaleDateString(undefined, {
+    month: "short",
+    year: "2-digit",
+  });
+};
+
 export default function FirmsDashboardPage() {
   const [data, setData] = useState<PifInfoListResponse | null>(null);
   const [expandedFirmId, setExpandedFirmId] = useState<string | null>(null);
@@ -615,6 +633,7 @@ function FirmRow({
   const website = displayWebsite(firm);
   const hasBehavior = Boolean(firm.behavioral_data);
   const conversationCount = firm.conversation_ids?.length ?? 0;
+  const emailVolumeTotal = totalMonthlyEmailVolume(firm);
 
   return (
     <tr
@@ -698,8 +717,10 @@ function FirmRow({
           <SignalPill icon={<Mail className="h-3 w-3" />} value={firm.emails?.length ?? 0} label="emails" />
           <SignalPill icon={<Users className="h-3 w-3" />} value={firm.contacts?.length ?? 0} label="contacts" />
           <SignalPill icon={<Activity className="h-3 w-3" />} value={conversationCount} label="conversations" />
+          <SignalPill icon={<BarChart3 className="h-3 w-3" />} value={emailVolumeTotal} label="12mo msgs" />
           {hasBehavior && <SignalPill icon={<BarChart3 className="h-3 w-3" />} value="yes" label="behavior" />}
         </div>
+        <EmailVolumeSparkline firm={firm} />
       </td>
       <td className="px-4 py-4 align-top text-slate-500">
         {formatDate(firm.updated_at)}
@@ -820,6 +841,8 @@ function FirmDetail({
           <div className="mt-3 text-xs text-slate-500">{enrichmentRun.message}</div>
         )}
       </section>
+
+      <EmailVolumeDetail firm={firm} />
 
       <section className="mt-5 rounded-lg border border-slate-200 bg-white p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -1090,6 +1113,79 @@ function WebsiteStatusBadge({ status }: { status: string | null }) {
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
       : "border-amber-200 bg-amber-50 text-amber-700";
   return <Badge className={className}>{status}</Badge>;
+}
+
+function EmailVolumeSparkline({ firm }: { firm: PifInfoResponse }) {
+  const points = firm.monthly_email_volume ?? [];
+  const maxCount = Math.max(1, ...points.map((point) => point.count));
+
+  return (
+    <div
+      className="mt-2 flex h-8 w-36 items-end gap-0.5"
+      title={`${totalMonthlyEmailVolume(firm)} stored messages in the last 12 months`}
+    >
+      {points.map((point) => (
+        <span
+          key={point.month}
+          className="block w-2 rounded-sm bg-slate-300"
+          style={{ height: `${Math.max(2, Math.round((point.count / maxCount) * 28))}px` }}
+          title={`${formatMonthLabel(point.month)}: ${point.count}`}
+        />
+      ))}
+      {!points.length && <span className="text-xs text-slate-400">No volume</span>}
+    </div>
+  );
+}
+
+function EmailVolumeDetail({ firm }: { firm: PifInfoResponse }) {
+  const points = firm.monthly_email_volume ?? [];
+  const maxCount = Math.max(1, ...points.map((point) => point.count));
+  const total = totalMonthlyEmailVolume(firm);
+  const average = averageMonthlyEmailVolume(firm);
+
+  return (
+    <section className="mt-5 rounded-lg border border-slate-200 bg-white p-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <BarChart3 className="h-4 w-4" />
+          Monthly Email Volume
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          <Badge className="border-slate-200 bg-slate-50 text-slate-600">
+            {total} last 12 months
+          </Badge>
+          <Badge className="border-slate-200 bg-slate-50 text-slate-600">
+            {average} avg/month
+          </Badge>
+        </div>
+      </div>
+      {points.length ? (
+        <div className="grid h-44 grid-cols-12 items-end gap-2">
+          {points.map((point) => (
+            <div key={point.month} className="flex h-full min-w-0 flex-col justify-end gap-1">
+              <div className="flex min-h-6 items-center justify-center text-xs font-medium text-slate-600">
+                {point.count}
+              </div>
+              <div className="flex h-28 items-end">
+                <div
+                  className="w-full rounded-t bg-slate-800"
+                  style={{ height: `${Math.max(3, Math.round((point.count / maxCount) * 112))}px` }}
+                  title={`${formatMonthLabel(point.month)}: ${point.count}`}
+                />
+              </div>
+              <div className="truncate text-center text-[11px] text-slate-500" title={formatMonthLabel(point.month)}>
+                {formatMonthLabel(point.month)}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-md border border-dashed border-slate-200 px-3 py-4 text-sm text-slate-500">
+          No stored email volume for this firm.
+        </div>
+      )}
+    </section>
+  );
 }
 
 function SignalPill({
