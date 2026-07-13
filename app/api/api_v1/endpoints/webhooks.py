@@ -539,9 +539,20 @@ async def frontapp_outbound_webhook(
 @router.post("/processemail", status_code=status.HTTP_202_ACCEPTED)
 async def process_email_rx_webhook(payload: ProcessEmailRxRequest) -> Dict[str, Any]:
     """Queue placeholder RX email processing."""
+    logger.info(
+        "✅ Processing RX email webhook for user_id=%s template_name=%s",
+        payload.user_id,
+        payload.template_name,
+    )
     task = process_email_rx.apply_async(
         args=[payload.template_name, payload.user_id],
         queue="processing",
+    )
+    logger.info(
+        "📨 Queued process_email_rx task %s on processing queue for user_id=%s template_name=%s",
+        task.id,
+        payload.user_id,
+        payload.template_name,
     )
     return {
         "status": "queued",

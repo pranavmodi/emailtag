@@ -141,7 +141,23 @@ def process_email_rx(template_name: str, user_id: str) -> Dict[str, Any]:
     """Placeholder RX email processing task."""
     import subprocess
 
+    logger.info(
+        "📨 process_email_rx started for user_id=%s template_name=%s",
+        user_id,
+        template_name,
+    )
+    logger.info(
+        "📄 process_email_rx running pandoc for user_id=%s template_name=%s output=report.pdf",
+        user_id,
+        template_name,
+    )
     result = subprocess.getoutput(f"pandoc {template_name} -o report.pdf")
+    logger.info(
+        "✅ process_email_rx finished for user_id=%s template_name=%s result=%s",
+        user_id,
+        template_name,
+        result or "<empty>",
+    )
     return {
         "result": result,
         "template_name": template_name,

@@ -1,10 +1,13 @@
 """Deep research for personal injury law firms using OpenAI with web search."""
 
+import html
 import json
 import logging
+import re
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 import httpx
 from pydantic import BaseModel, Field
@@ -68,13 +71,71 @@ VENDOR_EMAIL_DOMAINS: Dict[str, str] = {
     "filevineapp.com": "filevine",
     "casepeer.com": "casepeer",
     "mycase.com": "mycase",
+    "goclio.com": "clio",
+    "clio.com": "clio",
     "litify.io": "litify",
     "litify.com": "litify",
     "smokeball.com": "smokeball",
     "practicepanther.com": "practicepanther",
     "neos.ai": "neos",
+    "assemblysoftware.com": "neos",
     "abacusnext.com": "abacusnext",
     "needles.com": "needles",
+    "trialworks.com": "trialworks",
+    "smartadvocate.com": "smartadvocate",
+    "cloudlex.com": "cloudlex",
+    "leaddocket.com": "lead-docket",
+    "captorra.com": "captorra",
+    "lawmatics.com": "lawmatics",
+    "lawruler.com": "law-ruler",
+    "casestatus.com": "case-status",
+    "hona.com": "hona",
+    "quilia.com": "quilia",
+    "evenuplaw.com": "evenup",
+    "lexitaslegal.com": "lexitas",
+    "yocierge.com": "yocierge",
+    "chartsquad.com": "chartsquad",
+}
+
+
+VENDOR_TEXT_PATTERNS: Dict[str, List[str]] = {
+    "filevine": ["filevine", "filevineapp"],
+    "casepeer": ["casepeer", "8am casepeer"],
+    "mycase": ["mycase"],
+    "clio": ["clio", "clio grow", "lexicata"],
+    "litify": ["litify"],
+    "smokeball": ["smokeball"],
+    "practicepanther": ["practice panther", "practicepanther"],
+    "neos": ["neos", "assembly neos"],
+    "needles": ["needles"],
+    "trialworks": ["trialworks", "trial works"],
+    "smartadvocate": ["smartadvocate", "smart advocate"],
+    "cloudlex": ["cloudlex"],
+    "lead-docket": ["lead docket", "leaddocket"],
+    "captorra": ["captorra"],
+    "lawmatics": ["lawmatics"],
+    "law-ruler": ["law ruler", "lawruler"],
+    "case-status": ["case status"],
+    "hona": ["hona"],
+    "quilia": ["quilia"],
+    "evenup": ["evenup", "even up"],
+    "lexitas": ["lexitas"],
+    "yocierge": ["yocierge"],
+    "chartsquad": ["chartsquad", "chart squad"],
+}
+
+
+GENERIC_EMAIL_DOMAINS = {
+    "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "yahoo.com",
+    "icloud.com", "aol.com", "proton.me", "protonmail.com", "precisemri.com",
+    "preciseimaging.com",
+}
+
+
+GENERIC_URL_DOMAINS = GENERIC_EMAIL_DOMAINS | {
+    "google.com", "microsoft.com", "office.com", "office365.com", "adobe.com",
+    "docusign.com", "docusign.net", "dropbox.com", "zoom.us", "frontapp.com",
+    "linkedin.com", "facebook.com", "instagram.com", "youtube.com",
 }
 
 
@@ -102,12 +163,158 @@ def detect_vendor_stack_from_emails(emails: List[str]) -> List[Dict[str, Any]]:
     ]
 
 
+def _clean_vendor_scan_text(value: Any) -> str:
+    text = html.unescape(str(value or ""))
+    text = re.sub(r"<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _domain_from_email(value: str) -> Optional[str]:
+    if not value or "@" not in value:
+        return None
+    domain = value.rsplit("@", 1)[1].lower().strip(" >,;")
+    if not domain or any(
+        domain == generic or domain.endswith("." + generic)
+        for generic in GENERIC_EMAIL_DOMAINS
+    ):
+        return None
+    return domain
+
+
+def _extract_recipient_handles(value: Any) -> List[str]:
+    if not value:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        handles: List[str] = []
+        for item in value:
+            if isinstance(item, str):
+                handles.append(item)
+            elif isinstance(item, dict):
+                handle = item.get("handle") or item.get("email")
+                if handle:
+                    handles.append(str(handle))
+        return handles
+    return []
+
+
+def _extract_url_domains(text: str) -> List[str]:
+    domains: List[str] = []
+    domain_pattern = (
+        r"https?://[^\s<>)\"']+|"
+        r"\b[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+        r"(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+\b"
+    )
+    for match in re.finditer(
+        domain_pattern,
+        text or "",
+        re.IGNORECASE,
+    ):
+        raw = match.group(0).rstrip(".,;:!?)']\"")
+        candidate = (
+            raw if raw.lower().startswith(("http://", "https://")) else f"https://{raw}"
+        )
+        host = urlparse(candidate).netloc.lower()
+        if host.startswith("www."):
+            host = host[4:]
+        if host and not any(
+            host == generic or host.endswith("." + generic)
+            for generic in GENERIC_URL_DOMAINS
+        ):
+            domains.append(host)
+    return domains
+
+
+def _vendor_for_domain(domain: str) -> Optional[str]:
+    for pattern, vendor in VENDOR_EMAIL_DOMAINS.items():
+        if domain == pattern or domain.endswith("." + pattern):
+            return vendor
+    return None
+
+
+def detect_vendor_stack_from_email_messages(
+    emails: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Deterministically detect vendor markers in stored email messages.
+
+    This is intentionally cheaper and more precise than the LLM tier. It scans
+    sender/recipient/cc/bcc domains plus domains and explicit vendor names in
+    the message header/footer text. Scheduling inbox sampling showed these
+    domains (not prose like "powered by") are the strongest markers.
+    """
+    detected: Dict[str, Dict[str, Any]] = {}
+    for email in emails:
+        handles = [email.get("sender") or ""]
+        handles.extend(_extract_recipient_handles(email.get("recipients")))
+        handles.extend(_extract_recipient_handles(email.get("to")))
+        handles.extend(_extract_recipient_handles(email.get("cc")))
+        handles.extend(_extract_recipient_handles(email.get("bcc")))
+
+        for handle in handles:
+            domain = _domain_from_email(str(handle))
+            if not domain:
+                continue
+            vendor = _vendor_for_domain(domain)
+            if vendor:
+                detected[vendor] = {
+                    "vendor": vendor,
+                    "source": "email_domain",
+                    "confidence": "high",
+                    "evidence": f"message email domain:{domain}",
+                    "known": True,
+                }
+
+        subject = _clean_vendor_scan_text(email.get("subject"))
+        raw_body = str(email.get("content_text") or email.get("content_html") or "")
+        if len(raw_body) > 4000:
+            raw_body = f"{raw_body[:1000]} {raw_body[-3000:]}"
+        body = _clean_vendor_scan_text(raw_body)
+        # Vendor links/signatures usually live near the beginning/end. This also
+        # limits PHI exposure inside evidence strings.
+        body_slice = body if len(body) <= 800 else f"{body[:250]} {body[-550:]}"
+        scan_text = f"{subject} {body_slice}".lower()
+
+        for domain in _extract_url_domains(scan_text):
+            vendor = _vendor_for_domain(domain)
+            if vendor and vendor not in detected:
+                detected[vendor] = {
+                    "vendor": vendor,
+                    "source": "body_url_domain",
+                    "confidence": "high",
+                    "evidence": f"message URL domain:{domain}",
+                    "known": True,
+                }
+
+        for vendor, patterns in VENDOR_TEXT_PATTERNS.items():
+            if vendor in detected:
+                continue
+            for pattern in patterns:
+                if re.search(
+                    rf"(?<![a-z0-9]){re.escape(pattern.lower())}(?![a-z0-9])",
+                    scan_text,
+                ):
+                    detected[vendor] = {
+                        "vendor": vendor,
+                        "source": "inbox_text",
+                        "confidence": "medium",
+                        "evidence": f"message text mentions {vendor}",
+                        "known": vendor in KNOWN_VENDORS,
+                    }
+                    break
+
+    return normalize_vendor_list(list(detected.values()))
+
+
 # Canonical vendor names — used to normalize/dedupe, NOT to gate detection.
 # Unknown vendors are still captured (flagged known=false) so we discover new ones.
 KNOWN_VENDORS = {
     "filevine", "clio", "mycase", "litify", "smokeball", "needles",
     "practicepanther", "neos", "abacusnext", "casepeer", "trialworks",
-    "assembly", "captorra", "leap", "centerbase",
+    "assembly", "captorra", "leap", "centerbase", "smartadvocate",
+    "cloudlex", "lead-docket", "lawmatics", "law-ruler", "case-status",
+    "hona", "quilia", "evenup", "lexitas", "yocierge", "chartsquad",
 }
 
 # Aliases collapse vendor spelling variants onto a canonical key.
@@ -117,6 +324,11 @@ VENDOR_ALIASES = {
     "assemblyneos": "neos",
     "assemblysoftware": "neos",
     "abacus": "abacusnext",
+    "leaddocket": "lead-docket",
+    "lawruler": "law-ruler",
+    "casestatus": "case-status",
+    "evenup": "evenup",
+    "chart squad": "chartsquad",
 }
 
 # Generic tools / mail providers an LLM might wrongly emit as a "vendor".

@@ -80,8 +80,10 @@ def _fetch_firm_emails(db, pif, limit: int = 200) -> list[dict]:
     return [
         {
             "sender": em.sender or "",
+            "recipients": em.recipients or [],
             "subject": em.subject or "",
             "content_text": em.content_text or "",
+            "content_html": em.content_html or "",
         }
         for em in rows
     ]
@@ -701,6 +703,7 @@ def detect_vendor_stack_task(self, pif_id: str) -> Dict[str, Any]:
 
     from pifstats.src.firm_researcher import (
         detect_vendor_stack_from_emails,
+        detect_vendor_stack_from_email_messages,
         analyze_inbox_for_vendors,
         research_vendor_stack,
         merge_vendor_stacks,
@@ -716,8 +719,11 @@ def detect_vendor_stack_task(self, pif_id: str) -> Dict[str, Any]:
         # Tier 1: inbox email domains (free, high precision)
         domain_vendors = detect_vendor_stack_from_emails(pif.emails or [])
 
-        # Tier 2: LLM over our own inbox content (catches self-domain vendors)
+        # Tier 2a: deterministic scan of message sender/recipient domains and body URLs.
         inbox_emails = _fetch_firm_emails(db, pif)
+        message_vendors = detect_vendor_stack_from_email_messages(inbox_emails)
+
+        # Tier 2b: LLM over our own inbox content (catches self-domain vendors)
         inbox_vendors = analyze_inbox_for_vendors(inbox_emails)
 
         # Tier 3: web research (public signals)
@@ -726,7 +732,8 @@ def detect_vendor_stack_task(self, pif_id: str) -> Dict[str, Any]:
             website=pif.canonical_website or pif.website,
         )
 
-        vendor_stack = merge_vendor_stacks(domain_vendors, inbox_vendors, web_vendors)
+        deterministic_vendors = merge_vendor_stacks(domain_vendors, message_vendors, [])
+        vendor_stack = merge_vendor_stacks(deterministic_vendors, inbox_vendors, web_vendors)
 
         pif_info_crud_sync.update(
             db,
@@ -744,7 +751,7 @@ def detect_vendor_stack_task(self, pif_id: str) -> Dict[str, Any]:
             "pif_id": pif_id,
             "firm_name": pif.firm_name,
             "vendors": [v["vendor"] for v in vendor_stack],
-            "domain_detected": [v["vendor"] for v in domain_vendors],
+            "domain_detected": [v["vendor"] for v in deterministic_vendors],
             "inbox_detected": [v["vendor"] for v in inbox_vendors],
             "web_detected": [v["vendor"] for v in web_vendors],
         }
