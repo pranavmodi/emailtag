@@ -1,6 +1,8 @@
 # Data directories
 /home/fret/data/emailtag/
 scripts/getraces/
+pinfo/
+unique_pre_ids.txt
 
 # Python
 __pycache__/

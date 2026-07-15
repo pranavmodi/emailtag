@@ -1,7 +1,7 @@
 """PIF (Personal Injury Firm) extraction task."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 
 from celery.utils.log import get_task_logger
@@ -14,6 +14,9 @@ from app.models.pif_info import PifInfo
 from app.services.extracted_firm_identity import resolve_extracted_firm_identity
 
 logger = get_task_logger(__name__)
+
+FIRM_RESEARCH_STALE_AFTER = timedelta(days=30)
+RUNNING_RESEARCH_STATUSES = {"queued", "in_progress"}
 
 
 def get_by_website_sync(db: Session, website: str) -> Optional[PifInfo]:
@@ -54,6 +57,60 @@ def merge_contacts(
                         existing[field] = contact[field]
 
     return list(contacts_by_key.values())
+
+
+def should_queue_full_enrichment(pif: PifInfo, *, now: Optional[datetime] = None) -> bool:
+    """Return true when a detected firm needs the full enrichment workflow."""
+    if pif.research_status in RUNNING_RESEARCH_STATUSES:
+        return False
+    if pif.staff_research_status in RUNNING_RESEARCH_STATUSES:
+        return False
+
+    has_research = pif.research_status == "completed" and bool(pif.research_data)
+    if not has_research:
+        return True
+
+    if not pif.last_researched_at:
+        return True
+
+    reference = now or datetime.utcnow()
+    return reference - pif.last_researched_at > FIRM_RESEARCH_STALE_AFTER
+
+
+def queue_full_firm_enrichment(db: Session, pif: PifInfo) -> Optional[str]:
+    """Queue the same full enrichment chain used by the PIFStats UI."""
+    if not should_queue_full_enrichment(pif):
+        return None
+
+    from celery import chain
+    from app.tasks.behavior_analysis import analyze_firm_behavior_task, score_firm_task
+    from app.tasks.firm_research import (
+        analyze_leadership_emails_task,
+        detect_vendor_stack_task,
+        research_firm_task,
+        research_staff_task,
+    )
+    from app.tasks.signature_extraction import extract_signatures_task
+    from app.tasks.website_resolution import resolve_firm_website_task
+
+    pif.research_status = "queued"
+    pif.staff_research_status = "queued"
+    pif.last_researched_at = datetime.utcnow()
+    db.add(pif)
+    db.commit()
+
+    workflow = chain(
+        resolve_firm_website_task.si(str(pif.id)),
+        detect_vendor_stack_task.si(str(pif.id)),
+        research_firm_task.si(str(pif.id)),
+        analyze_leadership_emails_task.si(str(pif.id)),
+        research_staff_task.si(str(pif.id)),
+        analyze_firm_behavior_task.si(str(pif.id)),
+        extract_signatures_task.si(str(pif.id)),
+        score_firm_task.si(str(pif.id)),
+    ).apply_async()
+
+    return workflow.id
 
 
 def upsert_pif_sync(
@@ -251,40 +308,38 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
             identity.mapped_via,
         )
 
-        # Auto-trigger research (max 50/day per entity type)
+        # Auto-trigger full enrichment when research is missing or stale.
         from app.core.firm_exclusions import NON_PI_FIRM_IDS
-        research_triggered = False
+        enrichment_triggered = False
+        enrichment_task_id = None
         if str(pif.id) in NON_PI_FIRM_IDS:
-            logger.info(f"Skipping research for non-PI firm '{firm_info.firm_name}' ({pif.id})")
-        elif pif.research_status not in ("completed", "in_progress", "queued"):
+            logger.info(
+                "Skipping enrichment for non-PI firm '%s' (%s)",
+                firm_info.firm_name,
+                pif.id,
+            )
+        elif should_queue_full_enrichment(pif):
             try:
-                from sqlalchemy import func as sa_func, cast, Date
-                today = datetime.utcnow().date()
-                researched_today_for_type = db.query(sa_func.count(PifInfo.id)).filter(
-                    cast(PifInfo.last_researched_at, Date) == today,
-                    PifInfo.entity_type == pif.entity_type,
-                ).scalar() or 0
-
-                if researched_today_for_type < 50:
-                    pif.research_status = "queued"
-                    pif.last_researched_at = datetime.utcnow()
-                    db.add(pif)
-                    db.commit()
-
-                    from app.tasks.firm_research import research_firm_task
-                    research_firm_task.delay(str(pif.id))
-                    research_triggered = True
+                enrichment_task_id = queue_full_firm_enrichment(db, pif)
+                enrichment_triggered = enrichment_task_id is not None
+                if enrichment_triggered:
                     logger.info(
-                        f"Auto-queued research for '{firm_info.firm_name}' "
-                        f"[{pif.entity_type}] ({researched_today_for_type + 1}/50 today)"
-                    )
-                else:
-                    logger.info(
-                        f"Skipping auto-research for '{firm_info.firm_name}' — "
-                        f"daily limit reached for {pif.entity_type} ({researched_today_for_type}/50)"
+                        "Auto-queued full enrichment for '%s' [%s], task_id=%s",
+                        firm_info.firm_name,
+                        pif.entity_type,
+                        enrichment_task_id,
                     )
             except Exception as e:
-                logger.warning(f"Failed to auto-trigger research for '{firm_info.firm_name}': {e}")
+                logger.warning(
+                    "Failed to auto-trigger full enrichment for '%s': %s",
+                    firm_info.firm_name,
+                    e,
+                )
+        else:
+            logger.info(
+                "Skipping enrichment for '%s' because research is already fresh or queued",
+                firm_info.firm_name,
+            )
 
         return {
             "conversation_id": conversation_id,
@@ -300,7 +355,9 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
             "emails_count": len(firm_info.firm_emails),
             "phones_count": len(firm_info.firm_phones),
             "contacts_count": len(firm_info.contacts),
-            "research_triggered": research_triggered,
+            "research_triggered": enrichment_triggered,
+            "enrichment_triggered": enrichment_triggered,
+            "enrichment_task_id": enrichment_task_id,
         }
 
     except Exception as e:

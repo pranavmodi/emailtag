@@ -1,8 +1,14 @@
+from datetime import datetime, timedelta
+from uuid import uuid4
+
 from app.models.pif_info import PifInfo
 from app.services.extracted_firm_identity import (
     extracted_identity_domains,
     merge_extracted_firm_data,
+    resolve_extracted_firm_identity,
 )
+from app.services.website_resolution import WebsiteResolutionResult
+from app.tasks.pif_extraction import should_queue_full_enrichment
 
 
 def test_extracted_identity_domains_prefers_website_and_rejects_consumer_domains():
@@ -99,3 +105,103 @@ def test_merge_extracted_firm_data_merges_contacts_by_email():
             "phone": "555-0100",
         }
     ]
+
+
+def test_resolved_website_is_used_before_name_fallback(monkeypatch):
+    firm = PifInfo(
+        id=uuid4(),
+        firm_name="Resolved Injury Law",
+        entity_type="pi_law_firm",
+        canonical_website="resolvedlaw.com",
+        emails=[],
+        phones=[],
+        addresses=[],
+        contacts=[],
+        conversation_ids=[],
+        merge_status="active",
+    )
+
+    class FakeDb:
+        def add(self, obj):
+            pass
+
+        def flush(self):
+            pass
+
+    def fake_resolve_website(probe, **kwargs):
+        return WebsiteResolutionResult(
+            canonical_website="resolvedlaw.com",
+            website_status="resolved",
+            website_source="web_search",
+            website_confidence=0.78,
+        )
+
+    def fake_find_existing(db, *, firm_name, domains):
+        assert domains[0] == "resolvedlaw.com"
+        return firm, "canonical_website"
+
+    monkeypatch.setattr(
+        "app.services.extracted_firm_identity.resolve_firm_website",
+        fake_resolve_website,
+    )
+    monkeypatch.setattr(
+        "app.services.extracted_firm_identity._find_existing_firm",
+        fake_find_existing,
+    )
+    monkeypatch.setattr(
+        "app.services.extracted_firm_identity.persist_aliases_for_firm",
+        lambda db, pif: None,
+    )
+    monkeypatch.setattr(
+        "app.services.extracted_firm_identity.refresh_first_contacted_precise_at_sync",
+        lambda db, pif: None,
+    )
+
+    result = resolve_extracted_firm_identity(
+        FakeDb(),
+        firm_name="Resolved Injury Law",
+        website=None,
+        emails=[],
+        phones=[],
+        fax=None,
+        addresses=[],
+        contacts=[],
+        conversation_id="cnv_1",
+    )
+
+    assert result.pif is firm
+    assert result.mapped_via == "canonical_website"
+
+
+def test_full_enrichment_needed_for_missing_or_stale_research():
+    fresh = PifInfo(
+        firm_name="Fresh Firm",
+        entity_type="pi_law_firm",
+        research_status="completed",
+        research_data={"sources": ["example"]},
+        last_researched_at=datetime.utcnow() - timedelta(days=4),
+    )
+    stale = PifInfo(
+        firm_name="Stale Firm",
+        entity_type="pi_law_firm",
+        research_status="completed",
+        research_data={"sources": ["example"]},
+        last_researched_at=datetime.utcnow() - timedelta(days=31),
+    )
+    missing = PifInfo(
+        firm_name="Missing Firm",
+        entity_type="pi_law_firm",
+        research_status=None,
+        research_data=None,
+    )
+    running = PifInfo(
+        firm_name="Running Firm",
+        entity_type="pi_law_firm",
+        research_status="queued",
+        research_data=None,
+    )
+
+    assert should_queue_full_enrichment(fresh) is False
+    assert should_queue_full_enrichment(stale) is True
+    assert should_queue_full_enrichment(missing) is True
+    assert should_queue_full_enrichment(running) is False

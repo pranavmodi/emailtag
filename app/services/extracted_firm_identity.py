@@ -54,10 +54,26 @@ def resolve_extracted_firm_identity(
     """
     Resolve an extracted firm to an existing active row or create one, then resolve its website.
 
-    Matching is intentionally domain-first. Firm names are useful as a final fallback, but the
-    canonical website/alias spine is the stable identity boundary for FirmIntel.
+    Matching is intentionally website/domain-first. Firm names are useful as a final fallback,
+    but the canonical website/alias spine is the stable identity boundary for FirmIntel.
     """
     domains = extracted_identity_domains(website=website, emails=emails, contacts=contacts)
+    website_probe = _build_extracted_firm_probe(
+        firm_name=firm_name,
+        website=website,
+        emails=emails,
+        phones=phones,
+        fax=fax,
+        addresses=addresses,
+        contacts=contacts,
+        conversation_id=conversation_id,
+        extraction_notes=extraction_notes,
+        entity_type=entity_type,
+    )
+    website_result = resolve_firm_website(website_probe, http_get=http_get, search=search)
+    if website_result.canonical_website and website_result.canonical_website not in domains:
+        domains.insert(0, website_result.canonical_website)
+
     pif, mapped_via = _find_existing_firm(db, firm_name=firm_name, domains=domains)
     is_new = pif is None
 
@@ -106,7 +122,6 @@ def resolve_extracted_firm_identity(
             mapped_via=mapped_via,
         )
 
-    website_result = resolve_firm_website(pif, http_get=http_get, search=search)
     if website_result.canonical_website:
         owner = _find_domain_owner(
             db,
@@ -146,6 +161,35 @@ def resolve_extracted_firm_identity(
         action="created" if is_new else "updated",
         mapped_via=mapped_via,
         website_result=website_result,
+    )
+
+
+def _build_extracted_firm_probe(
+    *,
+    firm_name: str,
+    website: Optional[str],
+    emails: list[str],
+    phones: list[str],
+    fax: Optional[str],
+    addresses: list[str],
+    contacts: list[dict[str, Any]],
+    conversation_id: str,
+    extraction_notes: Optional[str],
+    entity_type: str,
+) -> PifInfo:
+    """Build a transient PIF-like object for website resolution before DB matching."""
+    return PifInfo(
+        firm_name=firm_name,
+        entity_type=entity_type,
+        website=website,
+        emails=emails or [],
+        phones=phones or [],
+        fax=fax,
+        addresses=addresses or [],
+        contacts=contacts or [],
+        conversation_ids=[conversation_id] if conversation_id else [],
+        extraction_notes=extraction_notes,
+        merge_status="active",
     )
 
 

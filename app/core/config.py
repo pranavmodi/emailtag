@@ -127,7 +127,7 @@ class Settings(BaseSettings):
     
     # Autoresponse Settings
     AUTORESPOND_ENABLED: bool = True  # Enable/disable all autorespond functionality
-    IS_AUTO_ENABLED: bool = True  # Enable/disable inbound email ingestion and processing
+    IS_AUTO_ENABLED: bool = False  # Enable/disable inbound email ingestion and processing
     AUTORESPONSE_SIGNATURE: Optional[str] = None  # Optional footer appended to bot replies
     
     # Document Processing Model Settings
