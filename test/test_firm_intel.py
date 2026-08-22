@@ -89,6 +89,28 @@ def _firm() -> PifInfo:
         },
         research_status="completed",
         last_researched_at=now - timedelta(days=4),
+        job_postings={
+            "has_recent_openings": True,
+            "window_days": 30,
+            "window_start": "2026-07-24",
+            "window_end": "2026-08-22",
+            "researched_at": "2026-08-22T04:00:00+00:00",
+            "postings": [
+                {
+                    "title": "Intake Specialist",
+                    "location": "Los Angeles, CA",
+                    "employment_type": "Full-time",
+                    "posted_date": "2026-08-15",
+                    "description_summary": "Handles prospective-client intake.",
+                    "responsibilities": ["Answer prospective-client calls"],
+                    "qualifications": ["One year of intake experience"],
+                    "source_name": "Firm careers page",
+                    "source_url": "https://smithlaw.com/careers/intake-specialist",
+                }
+            ],
+        },
+        job_postings_research_status="completed",
+        last_job_postings_researched_at=now - timedelta(hours=1),
         leadership=[
             {
                 "name": "Jane Smith",
@@ -168,6 +190,11 @@ def test_firm_profile_contract_mapping_and_phi_boundary():
     assert payload["research"]["awards_recognition"] == ["Top PI Firm"]
     assert payload["research"]["bar_associations"] == ["CA Bar"]
     assert payload["research"]["social_media"]["linkedin"] == "https://linkedin.example/smithlaw"
+    assert payload["research"]["job_postings_research_status"] == "completed"
+    assert payload["research"]["last_job_postings_researched_at"]
+    assert payload["research"]["job_postings"]["has_recent_openings"] is True
+    assert payload["research"]["job_postings"]["postings"][0]["title"] == "Intake Specialist"
+    assert payload["research"]["job_postings"]["postings"][0]["source_url"] == "https://smithlaw.com/careers/intake-specialist"
     assert payload["people"][0]["linkedin"] == "https://linkedin.example/jane"
     assert payload["people"][0]["bio"] == "Founder and managing partner."
     assert payload["people"][0]["publications"] == ["PI intake guide"]

@@ -138,6 +138,9 @@ def build_firm_profile(
             social_media=_safe_dict(research_data.get("social_media")),
             research_status=_map_research_status(pif.research_status),
             last_researched_at=pif.last_researched_at,
+            job_postings=_safe_dict(pif.job_postings),
+            job_postings_research_status=pif.job_postings_research_status,
+            last_job_postings_researched_at=pif.last_job_postings_researched_at,
         ),
         provenance=FirmProvenance(
             profile_version=PROFILE_VERSION,

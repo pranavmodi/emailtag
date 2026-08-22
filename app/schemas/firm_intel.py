@@ -96,6 +96,9 @@ class FirmResearch(BaseModel):
     social_media: Dict[str, Any] = Field(default_factory=dict)
     research_status: Optional[str] = None
     last_researched_at: Optional[datetime] = None
+    job_postings: Dict[str, Any] = Field(default_factory=dict)
+    job_postings_research_status: Optional[str] = None
+    last_job_postings_researched_at: Optional[datetime] = None
 
 
 class FirmProvenance(BaseModel):
