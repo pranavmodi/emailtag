@@ -415,6 +415,325 @@ export interface AITrainingConversationsResponse {
   error?: string;
 }
 
+export interface ModelEvaluationAction {
+  action_type: string;
+  label: string;
+  source: string;
+  timestamp: string | null;
+  details: Record<string, unknown>;
+}
+
+export interface ModelEvaluationClassification {
+  step_name: string;
+  step_order: number;
+  classification_path: string | null;
+  chosen_option: string | null;
+  classification_reason: string | null;
+  llm_model: string | null;
+  total_tokens: number | null;
+  created_at: string | null;
+}
+
+export interface ModelEvaluationGroundTruth {
+  status: "unreviewed" | "in_review" | "reviewed";
+  reviewed_tags: string[];
+  reviewed_actions: string[];
+  notes: string | null;
+}
+
+export interface ModelEvaluationConversation {
+  conversation_id: string;
+  sample_tags: string[];
+  subject: string | null;
+  front_url: string;
+  created_at: string | null;
+  status: string | null;
+  assignee: string | null;
+  current_tags: string[];
+  stored_tags: string[];
+  emailtag_statuses: string[];
+  messages: ConversationReplayMessage[];
+  classifications: ModelEvaluationClassification[];
+  actions: ModelEvaluationAction[];
+  email_record_count: number;
+  outbound_reply_count: number;
+  attachment_count: number;
+  ocr_result_count: number;
+  ground_truth: ModelEvaluationGroundTruth;
+  load_error: string | null;
+}
+
+export interface ModelEvaluationPilotResponse {
+  source_population: string;
+  selection_criteria: string;
+  candidates_scanned: number;
+  examples_per_tag: number;
+  configured_tag_count: number;
+  requested_example_count: number;
+  tag_coverage: Array<{
+    tag_name: string;
+    requested: number;
+    found: number;
+    missing: number;
+  }>;
+  conversation_count: number;
+  loaded_count: number;
+  failed_count: number;
+  generated_at: string;
+  conversations: ModelEvaluationConversation[];
+}
+
+export interface VisionEvaluationExample {
+  example_id: string;
+  email_id: string;
+  conversation_id: string;
+  objective: "rx" | "lien";
+  filename: string;
+  content_type: string | null;
+  document_type: string;
+  created_at: string | null;
+  page_count: number;
+  has_extracted_text: boolean;
+  current_output: Record<string, unknown>;
+  preview_url: string;
+  ground_truth_status: string;
+  evaluation_summary: {
+    total_runs: number;
+    evaluated_models: number;
+    reviewed_models: number;
+    completed_models: number;
+    problem_models: number;
+    preferred_model: string | null;
+    minimum_cost_usd: number | null;
+    maximum_cost_usd: number | null;
+    latest_run_at: string | null;
+  };
+}
+
+export interface VisionEvaluationResponse {
+  examples_per_objective: number;
+  generated_at: string;
+  coverage: Array<{
+    objective: "rx" | "lien";
+    requested: number;
+    found: number;
+    description: string;
+    metrics: string[];
+  }>;
+  examples: VisionEvaluationExample[];
+  rankings: Record<"rx" | "lien", VisionModelRanking[]>;
+}
+
+export interface VisionModelRanking {
+  model_key: string;
+  provider: string;
+  model: string;
+  attempted_cases: number;
+  completed_cases: number;
+  scored_cases: number;
+  average_accuracy: number | null;
+  average_cost_usd: number | null;
+  average_cost_per_page_usd?: number | null;
+  completion_rate: number;
+}
+
+export interface EvaluationModelOption {
+  key: string;
+  provider: string;
+  model: string;
+  display_name: string;
+  case_types: Array<"classification" | "vision">;
+  input_price_per_million: number;
+  output_price_per_million: number;
+  available: boolean;
+  enabled: boolean;
+  availability_note: string | null;
+}
+
+export interface EvaluationModelCatalogResponse {
+  models: EvaluationModelOption[];
+}
+
+export interface ModelEvaluationRunRequest {
+  case_type: "classification" | "vision";
+  model_keys: string[];
+  conversation_id?: string;
+  email_id?: string;
+  result_index?: number;
+  objective?: "rx" | "lien";
+}
+
+export interface ModelEvaluationRunResult {
+  id: string;
+  case_type: "classification" | "vision";
+  case_id: string;
+  conversation_id: string | null;
+  email_id: string | null;
+  result_index: number | null;
+  objective: string | null;
+  provider: string;
+  model: string;
+  model_key: string;
+  status: "completed" | "incomplete" | "error";
+  output: Record<string, unknown> | null;
+  raw_usage: Record<string, unknown> | null;
+  request_metadata: Record<string, unknown> | null;
+  input_tokens: number;
+  cached_input_tokens: number;
+  cache_write_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+  error_text: string | null;
+  human_rating: "correct" | "minor_errors" | "major_errors" | "incorrect" | null;
+  human_notes: string | null;
+  is_preferred: boolean;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface ModelEvaluationRunResponse {
+  case_id: string;
+  runs: ModelEvaluationRunResult[];
+}
+
+export interface ModelEvaluationJobStartResponse {
+  job_id: string;
+  case_id: string;
+  status: "queued" | "running";
+}
+
+export interface ModelEvaluationJobStatusResponse {
+  job_id: string;
+  case_id: string;
+  status: "queued" | "running" | "completed" | "error";
+  runs: ModelEvaluationRunResult[];
+  error: string | null;
+}
+
+export interface ClassificationBulkJobStartResponse {
+  job_id: string;
+  status: "queued" | "running";
+  total_cases: number;
+  total_models: number;
+}
+
+export interface ClassificationBulkJobStatusResponse {
+  job_id: string;
+  status: "queued" | "running" | "completed" | "error";
+  total_cases: number;
+  completed_cases: number;
+  failed_cases: number;
+  total_models: number;
+  current_case_id: string | null;
+  errors: Array<{ case_id: string; error: string }>;
+  error: string | null;
+}
+
+export interface VisionBulkCase {
+  email_id: string;
+  result_index: number;
+}
+
+export interface VisionBulkJobStartResponse {
+  job_id: string;
+  objective: "rx" | "lien";
+  status: "queued" | "running";
+  total_cases: number;
+  total_models: number;
+}
+
+export interface VisionBulkJobStatusResponse {
+  job_id: string;
+  objective: "rx" | "lien";
+  status: "queued" | "running" | "completed" | "error";
+  total_cases: number;
+  completed_cases: number;
+  failed_cases: number;
+  total_models: number;
+  current_case_id: string | null;
+  errors: Array<{ case_id: string; error: string }>;
+  error: string | null;
+}
+
+export interface ClassificationModelRanking {
+  model_key: string;
+  provider: string;
+  model: string;
+  attempted_cases: number;
+  completed_cases: number;
+  scored_cases: number;
+  exact_matches: number;
+  classification_mismatches?: number;
+  execution_errors?: number;
+  final_tag_matches: number;
+  accuracy: number | null;
+  final_tag_accuracy: number | null;
+  average_cost_usd: number | null;
+  total_cost_usd: number;
+  average_tokens: number;
+  completion_rate: number;
+  tag_accuracy: Record<string, { matches: number; cases: number; accuracy: number }>;
+}
+
+export interface ClassificationRankingResponse {
+  shortlisted_cases: number;
+  reference_cases: number;
+  rankings: ClassificationModelRanking[];
+}
+
+export interface LegacyRxCase {
+  case_id: string;
+  email_id: string;
+  result_index: number;
+  legacy_model_keys: string[];
+}
+
+export interface LegacyRxCasesResponse {
+  total_cases: number;
+  cases: LegacyRxCase[];
+}
+
+export interface LegacyRxBulkJobStartResponse {
+  job_id: string;
+  status: "queued" | "running";
+  total_cases: number;
+  total_models: number;
+}
+
+export interface LegacyRxBulkJobStatusResponse {
+  job_id: string;
+  status: "queued" | "running" | "completed" | "error";
+  total_cases: number;
+  completed_cases: number;
+  failed_cases: number;
+  total_models: number;
+  current_case_id: string | null;
+  errors: Array<{ case_id: string; error: string }>;
+  error: string | null;
+}
+
+export interface ModelEvaluationGroundTruth {
+  case_type: "classification" | "vision";
+  case_id: string;
+  reference_output: Record<string, unknown> | null;
+  reference_text: string | null;
+  notes: string | null;
+  reference_source: "human" | "ai_seeded" | "ai_seeded_human_edited" | "unknown";
+  seed_model_key: string | null;
+  seed_run_id: string | null;
+  reviewed_by: string | null;
+  updated_at: string | null;
+}
+
+export interface ModelEvaluationRunReviewUpdate {
+  human_rating: "correct" | "minor_errors" | "major_errors" | "incorrect" | null;
+  human_notes: string | null;
+  is_preferred: boolean;
+}
+
 export interface ClassificationTrace {
   id: string;
   trace_type: string;

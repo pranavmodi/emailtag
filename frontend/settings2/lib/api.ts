@@ -12,6 +12,25 @@ import type {
   ExtractConversationResponse,
   GlobalAutorespondToggleResponse,
   MessageTemplateResponse,
+  ModelEvaluationPilotResponse,
+  EvaluationModelCatalogResponse,
+  ModelEvaluationRunRequest,
+  ModelEvaluationRunResponse,
+  ModelEvaluationJobStartResponse,
+  ModelEvaluationJobStatusResponse,
+  ClassificationBulkJobStartResponse,
+  ClassificationBulkJobStatusResponse,
+  ClassificationRankingResponse,
+  VisionBulkCase,
+  VisionBulkJobStartResponse,
+  VisionBulkJobStatusResponse,
+  LegacyRxCasesResponse,
+  LegacyRxBulkJobStartResponse,
+  LegacyRxBulkJobStatusResponse,
+  ModelEvaluationGroundTruth,
+  ModelEvaluationRunResult,
+  ModelEvaluationRunReviewUpdate,
+  VisionEvaluationResponse,
   NoActionListResponse,
   NoActionListUpdateResponse,
   FirmLookupCreateRequest,
@@ -80,6 +99,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     try {
       // Read as text first to avoid consuming the stream twice
       const text = await response.text();
+      const contentType = response.headers.get("content-type") || "";
+      if (
+        response.status >= 500 &&
+        (contentType.includes("text/html") || /^\s*<!doctype html/i.test(text))
+      ) {
+        throw new ApiError(
+          "The server was temporarily unavailable. Check saved results, then retry.",
+          response.status
+        );
+      }
       try {
         // Try to parse as JSON
         const body = JSON.parse(text);
@@ -89,6 +118,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         detail = text || response.statusText;
       }
     } catch (err) {
+      if (err instanceof ApiError) throw err;
       // If we can't read the response at all, use statusText
       detail = response.statusText;
     }
@@ -790,6 +820,147 @@ export const ConversationReplayApi = {
       },
       body: JSON.stringify(payload),
     }),
+};
+
+export const ModelEvaluationApi = {
+  getPilot: (
+    examplesPerTag: number = 5,
+    singleMessageOnly: boolean = true,
+    refresh: boolean = false
+  ) => {
+    const params = new URLSearchParams({
+      examples_per_tag: String(examplesPerTag),
+      single_message_only: String(singleMessageOnly),
+      refresh: String(refresh),
+    });
+    return request<ModelEvaluationPilotResponse>(
+      `/api/v1/model-evaluation/pilot?${params.toString()}`
+    );
+  },
+  getVisionEvaluation: (examplesPerObjective: number = 10) => {
+    const params = new URLSearchParams({
+      examples_per_objective: String(examplesPerObjective),
+    });
+    return request<VisionEvaluationResponse>(
+      `/api/v1/model-evaluation/vision?${params.toString()}`
+    );
+  },
+  getVisionPreviewUrl: (previewPath: string) => `${API_BASE_URL}${previewPath}`,
+  getModels: (caseType?: "classification" | "vision") =>
+    request<EvaluationModelCatalogResponse>(
+      `/api/v1/model-evaluation/models${caseType ? `?case_type=${encodeURIComponent(caseType)}` : ""}`
+    ),
+  setModelEnabled: (modelKey: string, enabled: boolean) =>
+    request<import("./types").EvaluationModelOption>(
+      "/api/v1/model-evaluation/models/settings",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model_key: modelKey, enabled }),
+      }
+    ),
+  getRuns: (caseType: "classification" | "vision", caseId: string) => {
+    const params = new URLSearchParams({ case_type: caseType, case_id: caseId });
+    return request<ModelEvaluationRunResponse>(
+      `/api/v1/model-evaluation/runs?${params.toString()}`
+    );
+  },
+  run: (payload: ModelEvaluationRunRequest) =>
+    request<ModelEvaluationRunResponse>("/api/v1/model-evaluation/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  startRun: (payload: ModelEvaluationRunRequest) =>
+    request<ModelEvaluationJobStartResponse>("/api/v1/model-evaluation/runs/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  getRunJob: (jobId: string) =>
+    request<ModelEvaluationJobStatusResponse>(
+      `/api/v1/model-evaluation/runs/jobs/${encodeURIComponent(jobId)}`
+    ),
+  startClassificationBulkRun: (conversationIds: string[]) =>
+    request<ClassificationBulkJobStartResponse>(
+      "/api/v1/model-evaluation/classification/bulk/start",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversation_ids: conversationIds }),
+      }
+    ),
+  getClassificationBulkJob: (jobId: string) =>
+    request<ClassificationBulkJobStatusResponse>(
+      `/api/v1/model-evaluation/classification/bulk/jobs/${encodeURIComponent(jobId)}`
+    ),
+  getActiveClassificationBulkJob: () =>
+    request<ClassificationBulkJobStatusResponse | null>(
+      "/api/v1/model-evaluation/classification/bulk/active"
+    ),
+  getClassificationRankings: (conversationIds: string[]) =>
+    request<ClassificationRankingResponse>(
+      "/api/v1/model-evaluation/classification/rankings",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversation_ids: conversationIds }),
+      }
+    ),
+  startVisionBulkRun: (objective: "rx" | "lien", cases: VisionBulkCase[]) =>
+    request<VisionBulkJobStartResponse>(
+      "/api/v1/model-evaluation/vision/bulk/start",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ objective, cases }),
+      }
+    ),
+  getVisionBulkJob: (jobId: string) =>
+    request<VisionBulkJobStatusResponse>(
+      `/api/v1/model-evaluation/vision/bulk/jobs/${encodeURIComponent(jobId)}`
+    ),
+  getLegacyRxCases: () =>
+    request<LegacyRxCasesResponse>("/api/v1/model-evaluation/vision/rx/legacy"),
+  startLegacyRxBulkRerun: () =>
+    request<LegacyRxBulkJobStartResponse>(
+      "/api/v1/model-evaluation/vision/rx/legacy/rerun/start",
+      { method: "POST" }
+    ),
+  getLegacyRxBulkRerunJob: (jobId: string) =>
+    request<LegacyRxBulkJobStatusResponse>(
+      `/api/v1/model-evaluation/vision/rx/legacy/rerun/jobs/${encodeURIComponent(jobId)}`
+    ),
+  getGroundTruth: (caseType: "classification" | "vision", caseId: string) => {
+    const params = new URLSearchParams({ case_type: caseType, case_id: caseId });
+    return request<ModelEvaluationGroundTruth>(
+      `/api/v1/model-evaluation/ground-truth?${params.toString()}`
+    );
+  },
+  saveGroundTruth: (payload: {
+    case_type: "classification" | "vision";
+    case_id: string;
+    reference_output: Record<string, unknown> | null;
+    reference_text: string | null;
+    notes: string | null;
+    reference_source: "human" | "ai_seeded" | "ai_seeded_human_edited" | "unknown";
+    seed_model_key: string | null;
+    seed_run_id: string | null;
+  }) =>
+    request<ModelEvaluationGroundTruth>("/api/v1/model-evaluation/ground-truth", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  reviewRun: (runId: string, payload: ModelEvaluationRunReviewUpdate) =>
+    request<ModelEvaluationRunResult>(
+      `/api/v1/model-evaluation/runs/${encodeURIComponent(runId)}/review`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    ),
 };
 
 export type ReprocessResponse = {

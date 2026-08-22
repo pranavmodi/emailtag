@@ -105,6 +105,13 @@ class Settings(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str
     OPENAI_RESEARCH_API_KEY: Optional[str] = None
+
+    # Manual model-evaluation runner only (never used by production tasks).
+    MODEL_EVAL_TOGETHER_API_KEY: Optional[str] = None
+    MODEL_EVAL_XAI_API_KEY: Optional[str] = None
+    MODEL_EVAL_GEMINI_API_KEY: Optional[str] = None
+    MODEL_EVAL_FIREWORKS_API_KEY: Optional[str] = None
+    OPENROUTER_API_KEY: Optional[str] = None
     
     # Google API
     GOOGLE_API_KEY: str

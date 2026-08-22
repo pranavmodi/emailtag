@@ -6,9 +6,9 @@ services:
     build: .
     container_name: emailtag-web
     network_mode: host
-    mem_limit: 2g
-    mem_reservation: 512m
-    cpus: "0.50"           # added
+    mem_limit: 4g          # was 2g
+    mem_reservation: 1g    # was 512m
+    cpus: "1.0"           # added
     pids_limit: 100        # added
     env_file:
       - .env
@@ -16,7 +16,7 @@ services:
       - ./certs:/app/certs:ro
       - ./.env:/app/.env:ro
       - sandbox-tmp:/tmp
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8444 --ssl-keyfile certs/privkey.pem --ssl-certfile certs/fullchain.pem --limit-max-requests 75 --timeout-keep-alive 5
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8444 --ssl-keyfile certs/privkey.pem --ssl-certfile certs/fullchain.pem --timeout-keep-alive 5
     restart: unless-stopped
 
   # ───────────────────────────────────────────────
@@ -27,8 +27,8 @@ services:
     image: emailtag-worker
     container_name: emailtag-worker
     network_mode: host
-    mem_limit: 2g
-    mem_reservation: 256m
+    mem_limit: 4g          # was 2g
+    mem_reservation: 512m  # was 256m
     cpus: "0.50"
     pids_limit: 200        # higher - handles multiple queues
     env_file:
@@ -51,8 +51,8 @@ services:
     image: emailtag-ocr-worker
     container_name: emailtag-ocr-worker
     network_mode: host
-    mem_limit: 2g
-    mem_reservation: 256m
+    mem_limit: 4g          # was 2g
+    mem_reservation: 512m  # was 256m
     cpus: "0.50"
     pids_limit: 200
     env_file:
@@ -75,8 +75,8 @@ services:
     image: emailtag-worker
     container_name: emailtag-research-worker
     network_mode: host
-    mem_limit: 768m
-    mem_reservation: 128m
+    mem_limit: 1536m       # was 768m
+    mem_reservation: 256m  # was 128m
     cpus: "0.50"
     pids_limit: 100
     env_file:
@@ -98,8 +98,8 @@ services:
     build: .
     container_name: emailtag-beat
     network_mode: host
-    mem_limit: 256m        # added
-    mem_reservation: 64m   # added
+    mem_limit: 512m        # was 256m
+    mem_reservation: 128m  # was 64m
     cpus: "0.25"           # added
     pids_limit: 50         # added (lightweight scheduler)
     env_file:
@@ -116,8 +116,8 @@ services:
       dockerfile: Dockerfile
     container_name: emailtag-frontend
     network_mode: host
-    mem_limit: 256m        # added
-    mem_reservation: 64m   # added
+    mem_limit: 512m        # was 256m
+    mem_reservation: 128m  # was 64m
     cpus: "0.25"           # added
     pids_limit: 50         # added
     environment:
@@ -132,8 +132,8 @@ services:
     build: .
     container_name: emailtag-flower
     network_mode: host
-    mem_limit: 256m        # added
-    mem_reservation: 64m   # added
+    mem_limit: 1g          # was 256m
+    mem_reservation: 128m  # was 64m
     cpus: "0.25"           # added
     pids_limit: 50         # added
     env_file:
@@ -150,8 +150,8 @@ services:
       dockerfile: Dockerfile
     container_name: precisemcp
     network_mode: host
-    mem_limit: 256m        # added
-    mem_reservation: 64m   # added
+    mem_limit: 1g          # was 256m
+    mem_reservation: 256m  # was 64m
     cpus: "0.25"           # added
     pids_limit: 50         # added
     env_file:

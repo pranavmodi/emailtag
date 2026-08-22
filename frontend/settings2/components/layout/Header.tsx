@@ -57,6 +57,13 @@ export const MENU_ITEMS: MenuItem[] = [
     primary: false,
   },
   {
+    href: "/settings/model-evaluation",
+    label: "Model Evaluation",
+    description: "Review pilot data, replies, tags, and actions",
+    icon: "⚖️",
+    primary: false,
+  },
+  {
     href: "/settings/sandbox",
     label: "Sandbox",
     description: "Test autorespond outputs locally",

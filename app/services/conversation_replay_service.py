@@ -170,6 +170,11 @@ async def _fetch_conversation_messages(conversation_id: str) -> List[Dict[str, A
     return replay_messages
 
 
+async def fetch_conversation_messages(conversation_id: str) -> List[Dict[str, Any]]:
+    """Public read-only wrapper shared by replay and evaluation tooling."""
+    return await _fetch_conversation_messages(conversation_id)
+
+
 async def _fetch_message_details(message_id: str) -> Dict[str, Any]:
     _require_front_credentials()
 

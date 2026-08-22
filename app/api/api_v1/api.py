@@ -20,6 +20,7 @@ from app.api.api_v1.endpoints import (
     usage,
     inbox_audit,
     bill_offers,
+    model_evaluation,
 )
 from app.api.api_v1.pifstats_auth import require_pifstats_auth
 
@@ -59,3 +60,8 @@ api_router.include_router(
 api_router.include_router(usage.router, prefix="/usage", tags=["usage"])
 api_router.include_router(inbox_audit.router, prefix="/inbox-audit", tags=["inbox-audit"])
 api_router.include_router(bill_offers.router, prefix="/bill-offers", tags=["bill-offers"])
+api_router.include_router(
+    model_evaluation.router,
+    prefix="/model-evaluation",
+    tags=["model-evaluation"],
+)

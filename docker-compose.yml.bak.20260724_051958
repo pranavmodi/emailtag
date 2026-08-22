@@ -1,0 +1,164 @@
+services:
+  # ───────────────────────────────────────────────
+  # FastAPI backend (port 8444)
+  # ───────────────────────────────────────────────
+  web:
+    build: .
+    container_name: emailtag-web
+    network_mode: host
+    mem_limit: 2g
+    mem_reservation: 512m
+    cpus: "0.50"           # added
+    pids_limit: 100        # added
+    env_file:
+      - .env
+    volumes:
+      - ./certs:/app/certs:ro
+      - ./.env:/app/.env:ro
+      - sandbox-tmp:/tmp
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8444 --ssl-keyfile certs/privkey.pem --ssl-certfile certs/fullchain.pem --limit-max-requests 75 --timeout-keep-alive 5
+    restart: unless-stopped
+
+  # ───────────────────────────────────────────────
+  # Celery worker: non-OCR queues
+  # ───────────────────────────────────────────────
+  worker:
+    build: .
+    image: emailtag-worker
+    container_name: emailtag-worker
+    network_mode: host
+    mem_limit: 2g
+    mem_reservation: 256m
+    cpus: "0.50"
+    pids_limit: 200        # higher - handles multiple queues
+    env_file:
+      - .env
+    environment:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    volumes:
+      - sandbox-tmp:/tmp
+    command: celery -A app.tasks.worker worker -n emailtag-worker@%h -l info -Q emails,tagging,processing --concurrency=8 --prefetch-multiplier=1
+    restart: unless-stopped
+
+  # ───────────────────────────────────────────────
+  # Celery OCR/document-processing worker
+  # ───────────────────────────────────────────────
+  ocr-worker:
+    build: .
+    image: emailtag-ocr-worker
+    container_name: emailtag-ocr-worker
+    network_mode: host
+    mem_limit: 2g
+    mem_reservation: 256m
+    cpus: "0.50"
+    pids_limit: 200
+    env_file:
+      - .env
+    environment:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    volumes:
+      - sandbox-tmp:/tmp
+    command: celery -A app.tasks.worker worker -n emailtag-ocr@%h -l info -Q ocr --concurrency=4 --prefetch-multiplier=1
+    restart: unless-stopped
+
+  # ───────────────────────────────────────────────
+  # Celery research/analysis worker
+  # ───────────────────────────────────────────────
+  research-worker:
+    build: .
+    image: emailtag-worker
+    container_name: emailtag-research-worker
+    network_mode: host
+    mem_limit: 768m
+    mem_reservation: 128m
+    cpus: "0.50"
+    pids_limit: 100
+    env_file:
+      - .env
+    environment:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    volumes:
+      - sandbox-tmp:/tmp
+    command: celery -A app.tasks.worker worker -n emailtag-research@%h -l info -Q research --concurrency=2 --prefetch-multiplier=1
+    restart: unless-stopped
+
+  # ───────────────────────────────────────────────
+  # Celery beat: scheduler for periodic tasks (daily inbox audit)
+  # ───────────────────────────────────────────────
+  beat:
+    build: .
+    container_name: emailtag-beat
+    network_mode: host
+    mem_limit: 256m        # added
+    mem_reservation: 64m   # added
+    cpus: "0.25"           # added
+    pids_limit: 50         # added (lightweight scheduler)
+    env_file:
+      - .env
+    command: celery -A app.tasks.worker beat -l info
+    restart: unless-stopped
+
+  # ───────────────────────────────────────────────
+  # Next.js settings and PIFStats frontend (port 3001)
+  # ───────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend/settings2
+      dockerfile: Dockerfile
+    container_name: emailtag-frontend
+    network_mode: host
+    mem_limit: 256m        # added
+    mem_reservation: 64m   # added
+    cpus: "0.25"           # added
+    pids_limit: 50         # added
+    environment:
+      - PORT=3001
+      - HOSTNAME=0.0.0.0
+    restart: unless-stopped
+
+  # ───────────────────────────────────────────────
+  # Flower - Celery monitoring (port 5555)
+  # ───────────────────────────────────────────────
+  flower:
+    build: .
+    container_name: emailtag-flower
+    network_mode: host
+    mem_limit: 256m        # added
+    mem_reservation: 64m   # added
+    cpus: "0.25"           # added
+    pids_limit: 50         # added
+    env_file:
+      - .env
+    command: celery -A app.tasks.worker flower --port=5555
+    restart: unless-stopped
+
+  # ───────────────────────────────────────────────
+  # PreciseMCP server (port 8001)
+  # ───────────────────────────────────────────────
+  mcp:
+    build:
+      context: ../precisemcp
+      dockerfile: Dockerfile
+    container_name: precisemcp
+    network_mode: host
+    mem_limit: 256m        # added
+    mem_reservation: 64m   # added
+    cpus: "0.25"           # added
+    pids_limit: 50         # added
+    env_file:
+      - ../precisemcp/.env
+    environment:
+      - PORT=8001
+    restart: unless-stopped
+
+volumes:
+  sandbox-tmp:
