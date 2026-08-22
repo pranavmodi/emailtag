@@ -76,6 +76,7 @@ celery_app.conf.task_routes = {
     "app.tasks.bill_offer.run_bill_offer_agent_task": {"queue": "processing"},
     "app.tasks.pif_extraction.extract_pif_from_conversation": {"queue": "processing"},
     "app.tasks.firm_research.research_firm_task": {"queue": "research"},
+    "app.tasks.firm_research.research_job_postings_task": {"queue": "research"},
     "app.tasks.firm_research.research_staff_task": {"queue": "research"},
     "app.tasks.firm_research.analyze_leadership_emails_task": {"queue": "research"},
     "app.tasks.firm_research.detect_vendor_stack_task": {"queue": "research"},

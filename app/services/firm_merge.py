@@ -44,7 +44,7 @@ LIST_FIELDS = (
     "contacts",
     "staff",
 )
-DICT_FIELDS = ("behavioral_data", "research_data", "score_breakdown")
+DICT_FIELDS = ("behavioral_data", "research_data", "job_postings", "score_breakdown")
 MIN_DATETIME_FIELDS = ("first_contacted_precise_at",)
 SCALAR_FIELDS = (
     "entity_type",
@@ -58,6 +58,8 @@ SCALAR_FIELDS = (
     "extraction_notes",
     "research_status",
     "last_researched_at",
+    "job_postings_research_status",
+    "last_job_postings_researched_at",
     "staff_research_status",
     "icp_score",
     "icp_tier",
@@ -627,6 +629,7 @@ def _restore_firm(firm: PifInfo, snapshot: dict[str, Any]) -> None:
         value = snapshot.get(field_name)
         if field_name in {
             "last_researched_at",
+            "last_job_postings_researched_at",
             "icp_scored_at",
             "merged_at",
             "first_contacted_precise_at",

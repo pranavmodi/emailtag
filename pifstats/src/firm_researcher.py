@@ -5,7 +5,7 @@ import json
 import logging
 import re
 import time
-from datetime import datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -940,6 +940,157 @@ VENDOR_STACK_SCHEMA = {
     "required": ["vendor_stack"],
     "additionalProperties": False,
 }
+
+
+JOB_POSTINGS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "postings": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "location": {"type": ["string", "null"]},
+                    "employment_type": {"type": ["string", "null"]},
+                    "posted_date": {"type": "string"},
+                    "description_summary": {"type": "string"},
+                    "responsibilities": {"type": "array", "items": {"type": "string"}},
+                    "qualifications": {"type": "array", "items": {"type": "string"}},
+                    "source_name": {"type": "string"},
+                    "source_url": {"type": "string"},
+                },
+                "required": [
+                    "title",
+                    "location",
+                    "employment_type",
+                    "posted_date",
+                    "description_summary",
+                    "responsibilities",
+                    "qualifications",
+                    "source_name",
+                    "source_url",
+                ],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["postings"],
+    "additionalProperties": False,
+}
+
+
+def research_recent_job_postings(
+    firm_name: str,
+    website: Optional[str] = None,
+    *,
+    as_of_date: Optional[date] = None,
+    window_days: int = 30,
+) -> Optional[Dict[str, Any]]:
+    """Find and validate job postings published by a firm in a recent date window."""
+    if not firm_name or window_days < 1:
+        return None
+
+    window_end = as_of_date or datetime.now(UTC).date()
+    window_start = window_end - timedelta(days=window_days - 1)
+    website_hint = website or "Not provided"
+    prompt = f"""Find job openings posted by this law firm from {window_start.isoformat()} through
+{window_end.isoformat()}, inclusive.
+
+Firm name: {firm_name}
+Official website/domain: {website_hint}
+
+Search the firm's careers page and reputable job sites such as LinkedIn, Indeed, Glassdoor,
+ZipRecruiter, and legal-industry job boards. Confirm that every result belongs to this exact firm,
+using the official domain and location where possible. Include only postings with a verifiable
+publication date inside the date window. Do not include undated postings, inferred dates, jobs at
+similarly named firms, or pages that only show that a job is currently active. Return the direct
+posting URL and concise details supported by the source. Return an empty postings array when no
+qualifying posting is found."""
+
+    payload = {
+        "model": "gpt-5-nano",
+        "input": [
+            {
+                "role": "system",
+                "content": (
+                    "You research recent law-firm hiring using web search. Report only dated, "
+                    "source-backed job postings for the exact firm. Never infer missing facts."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+        "tools": [{"type": "web_search_preview", "search_context_size": "high"}],
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "recent_job_postings_result",
+                "strict": True,
+                "schema": JOB_POSTINGS_SCHEMA,
+            }
+        },
+    }
+    headers = {
+        "Authorization": f"Bearer {settings.RESEARCH_OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        with httpx.Client(timeout=180.0, verify=False) as client:
+            response = _post_openai_with_retry(client, OPENAI_API_URL, headers, payload)
+            result = response.json()
+    except Exception as exc:
+        logger.error("Job-posting web search failed for %s: %s", firm_name, exc)
+        return None
+
+    content = ""
+    for item in result.get("output", []):
+        if item.get("type") == "message":
+            for content_item in item.get("content", []):
+                if content_item.get("type") == "output_text":
+                    content = content_item.get("text", "")
+
+    if not content:
+        logger.error("Job-posting search returned no content for %s", firm_name)
+        return None
+
+    try:
+        parsed = json.loads(content)
+        raw_postings = parsed.get("postings", [])
+    except (json.JSONDecodeError, AttributeError) as exc:
+        logger.error("Job-posting search parse failed for %s: %s", firm_name, exc)
+        return None
+    if not isinstance(raw_postings, list):
+        logger.error("Job-posting search returned invalid postings for %s", firm_name)
+        return None
+
+    postings = []
+    seen = set()
+    for posting in raw_postings:
+        try:
+            posted_date = date.fromisoformat(posting["posted_date"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        source_url = str(posting.get("source_url") or "").strip()
+        if not window_start <= posted_date <= window_end:
+            continue
+        if not source_url.lower().startswith(("http://", "https://")):
+            continue
+        dedupe_key = (source_url.lower(), str(posting.get("title") or "").lower())
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        postings.append(posting)
+
+    researched_at = datetime.now(UTC).isoformat()
+    return {
+        "has_recent_openings": bool(postings),
+        "window_days": window_days,
+        "window_start": window_start.isoformat(),
+        "window_end": window_end.isoformat(),
+        "researched_at": researched_at,
+        "postings": postings,
+    }
 
 
 def research_vendor_stack(

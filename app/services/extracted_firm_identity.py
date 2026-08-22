@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Iterable, Optional
@@ -21,6 +22,8 @@ from app.services.website_resolution import (
     persist_aliases_for_firm,
     resolve_firm_website,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -75,13 +78,18 @@ def resolve_extracted_firm_identity(
         domains.insert(0, website_result.canonical_website)
 
     pif, mapped_via = _find_existing_firm(db, firm_name=firm_name, domains=domains)
+    website_owner = _find_website_owner(db, website)
+    if pif is None and website_owner is not None:
+        pif = website_owner
+        mapped_via = "legacy_website"
+
     is_new = pif is None
 
     if pif is None:
         pif = PifInfo(
             firm_name=firm_name,
             entity_type=entity_type,
-            website=website,
+            website=None,
             emails=[],
             phones=[],
             fax=None,
@@ -94,10 +102,11 @@ def resolve_extracted_firm_identity(
         db.add(pif)
         mapped_via = "created"
 
+    assignable_website = _assignable_website(db, website=website, pif=pif)
     merge_extracted_firm_data(
         pif,
         firm_name=firm_name,
-        website=website,
+        website=assignable_website,
         emails=emails,
         phones=phones,
         fax=fax,
@@ -298,6 +307,62 @@ def _find_existing_firm(
             return firm, "firm_name"
 
     return None, "created"
+
+
+def _assignable_website(db: Session, *, website: Optional[str], pif: PifInfo) -> Optional[str]:
+    """Return website only when assigning it cannot collide with another active row."""
+    if not website:
+        return None
+
+    owner = _find_website_owner(db, website, exclude_id=pif.id)
+    if owner is None:
+        return website
+
+    logger.warning(
+        "Skipping website assignment for firm '%s' (%s): website %r is already owned by "
+        "active firm '%s' (%s)",
+        pif.firm_name,
+        pif.id,
+        website,
+        owner.firm_name,
+        owner.id,
+    )
+    return None
+
+
+def _find_website_owner(
+    db: Session,
+    website: Optional[str],
+    *,
+    exclude_id: Optional[UUID] = None,
+) -> Optional[PifInfo]:
+    """Find an active firm that already owns this exact website or its canonical domain."""
+    exact = _find_by_exact_website(db, website, exclude_id=exclude_id)
+    if exact is not None:
+        return exact
+
+    domain = canonical_domain(website)
+    if not domain:
+        return None
+    return _find_by_legacy_website_domain(db, domain, exclude_id=exclude_id)
+
+
+def _find_by_exact_website(
+    db: Session,
+    website: Optional[str],
+    *,
+    exclude_id: Optional[UUID] = None,
+) -> Optional[PifInfo]:
+    if not website:
+        return None
+
+    query = db.query(PifInfo).filter(
+        _active_firm_filter(),
+        func.lower(PifInfo.website) == str(website).strip().lower(),
+    )
+    if exclude_id:
+        query = query.filter(PifInfo.id != exclude_id)
+    return query.first()
 
 
 def _find_by_canonical_domain(

@@ -1,9 +1,9 @@
 """Firm research background tasks using Celery."""
 
-import logging
 import json
+import logging
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 from uuid import UUID
 
 from celery import Task
@@ -337,6 +337,118 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
             "pif_id": pif_id,
             "message": f"Research failed: {str(e)}"
         }
+    finally:
+        db.close()
+
+
+@celery_app.task(
+    bind=True,
+    base=ResearchTask,
+    name="app.tasks.firm_research.research_job_postings_task",
+    rate_limit="10/m",
+)
+def research_job_postings_task(self, pif_id: str) -> Dict[str, Any]:
+    """Research source-backed job postings published by a firm in the last 30 days."""
+    import os
+    import sys
+
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+
+    from app.crud.sync.pif_info import pif_info as pif_info_crud_sync
+    from app.models.pif_info import PifInfo
+    from app.services.website_resolution import (
+        WebsiteResolutionResult,
+        apply_website_resolution,
+        persist_aliases_for_firm,
+        resolve_firm_website,
+    )
+    from pifstats.src.firm_researcher import research_recent_job_postings
+
+    db = SessionLocal()
+    try:
+        pif = pif_info_crud_sync.get(db, id=UUID(pif_id))
+        if not pif:
+            return {"status": "failed", "message": "PIF not found", "pif_id": pif_id}
+
+        if not pif.canonical_website:
+            website_result = resolve_firm_website(pif)
+            if website_result.canonical_website:
+                owner = (
+                    db.query(PifInfo)
+                    .filter(
+                        PifInfo.canonical_website == website_result.canonical_website,
+                        PifInfo.id != pif.id,
+                    )
+                    .first()
+                )
+                if owner:
+                    website_result = WebsiteResolutionResult(
+                        canonical_website=None,
+                        website_status="pending",
+                        website_source="human",
+                        website_confidence=0.0,
+                        review_reason="canonical_domain_owned_by_another_firm",
+                        review_candidate=website_result.canonical_website,
+                    )
+            apply_website_resolution(pif, website_result)
+            persist_aliases_for_firm(db, pif)
+
+        pif.job_postings_research_status = "in_progress"
+        db.add(pif)
+        db.commit()
+        db.refresh(pif)
+
+        result = research_recent_job_postings(
+            firm_name=pif.firm_name,
+            website=pif.canonical_website or pif.website,
+            window_days=30,
+        )
+        checked_at = datetime.utcnow()
+        if result is None:
+            pif.job_postings_research_status = "failed"
+            pif.last_job_postings_researched_at = checked_at
+            db.add(pif)
+            db.commit()
+            return {
+                "status": "failed",
+                "pif_id": pif_id,
+                "message": "Job-posting research returned no usable result",
+            }
+
+        pif.job_postings = strip_nul(result)
+        pif.job_postings_research_status = "completed"
+        pif.last_job_postings_researched_at = checked_at
+        db.add(pif)
+        db.commit()
+
+        posting_count = len(result.get("postings", []))
+        logger.info(
+            "Job-posting research completed for %s: %s recent openings",
+            pif.firm_name,
+            posting_count,
+        )
+        return {
+            "status": "completed",
+            "pif_id": pif_id,
+            "firm_name": pif.firm_name,
+            "has_recent_openings": result.get("has_recent_openings", False),
+            "posting_count": posting_count,
+        }
+    except Exception as exc:
+        logger.error("Job-posting research failed for %s: %s", pif_id, exc, exc_info=True)
+        try:
+            db.rollback()
+            pif = pif_info_crud_sync.get(db, id=UUID(pif_id))
+            if pif:
+                pif.job_postings_research_status = "failed"
+                pif.last_job_postings_researched_at = datetime.utcnow()
+                db.add(pif)
+                db.commit()
+        except Exception:
+            pass
+        return {"status": "failed", "pif_id": pif_id, "message": str(exc)}
     finally:
         db.close()
 

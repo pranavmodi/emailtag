@@ -165,6 +165,21 @@ class PifInfo(Base):
         comment="Timestamp of last research"
     )
 
+    job_postings: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True,
+        comment="Recent job-posting research snapshot with source-backed posting details",
+    )
+
+    job_postings_research_status: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True,
+        comment="Job-posting research status: queued, in_progress, completed, failed",
+    )
+
+    last_job_postings_researched_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True,
+        comment="Timestamp of the last recent job-posting search",
+    )
+
     # Staff research fields
     staff: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(
         JSONB, nullable=True,

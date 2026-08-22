@@ -135,6 +135,11 @@ class PifInfoResponse(PifInfoBase):
     research_data: Optional[Dict[str, Any]] = Field(None, description="Additional research findings")
     research_status: Optional[str] = Field(None, description="Research status")
     last_researched_at: Optional[datetime] = Field(None, description="Last research timestamp")
+    job_postings: Optional[Dict[str, Any]] = Field(None, description="Recent job-posting research")
+    job_postings_research_status: Optional[str] = Field(None, description="Job-posting research status")
+    last_job_postings_researched_at: Optional[datetime] = Field(
+        None, description="Last job-posting research timestamp"
+    )
     staff: Optional[List[Dict[str, Any]]] = Field(None, description="Operational staff members")
     staff_research_status: Optional[str] = Field(None, description="Staff research status")
     # Behavioral intelligence
@@ -211,7 +216,7 @@ class ResearchBatchRequest(BaseModel):
     limit: int = Field(10, ge=1, description="Maximum firms to queue; hard limit 25")
     kinds: List[str] = Field(
         default_factory=lambda: ["research"],
-        description="Any of: research, research_staff, analyze_behavior",
+        description="Any of: research, research_job_postings, research_staff, analyze_behavior",
     )
     order_by: str = Field("icp_score", description="Currently supports icp_score or updated_at")
     only_unresearched: bool = Field(True, description="Skip firms with completed research")
@@ -228,11 +233,13 @@ class ResearchTaskState(BaseModel):
     pif_id: UUID
     firm_name: str
     research_status: Optional[str] = None
+    job_postings_research_status: Optional[str] = None
     staff_research_status: Optional[str] = None
     behavior_status: Optional[str] = None
     icp_score: Optional[int] = None
     icp_tier: Optional[str] = None
     last_researched_at: Optional[datetime] = None
+    last_job_postings_researched_at: Optional[datetime] = None
     updated_at: datetime
 
 

@@ -595,7 +595,12 @@ async def research_batch(
             detail="limit must be <= 25",
         )
 
-    allowed_kinds = {"research", "research_staff", "analyze_behavior"}
+    allowed_kinds = {
+        "research",
+        "research_job_postings",
+        "research_staff",
+        "analyze_behavior",
+    }
     invalid_kinds = [kind for kind in request.kinds if kind not in allowed_kinds]
     if invalid_kinds:
         raise HTTPException(
@@ -606,14 +611,31 @@ async def research_batch(
     from sqlalchemy import select
     from app.models.pif_info import PifInfo
     from app.tasks.behavior_analysis import analyze_firm_behavior_task
-    from app.tasks.firm_research import research_firm_task, research_staff_task
+    from app.tasks.firm_research import (
+        research_firm_task,
+        research_job_postings_task,
+        research_staff_task,
+    )
 
     query = select(PifInfo)
     if request.only_unresearched:
-        query = query.where(
-            (PifInfo.research_status.is_(None))
-            | (~PifInfo.research_status.in_(["completed", "in_progress", "queued"]))
-        )
+        if set(request.kinds) == {"research_job_postings"}:
+            job_cutoff = datetime.utcnow() - timedelta(days=1)
+            query = query.where(
+                (
+                    PifInfo.job_postings_research_status.is_(None)
+                    | (~PifInfo.job_postings_research_status.in_(["in_progress", "queued"]))
+                )
+                & (
+                    PifInfo.last_job_postings_researched_at.is_(None)
+                    | (PifInfo.last_job_postings_researched_at <= job_cutoff)
+                )
+            )
+        else:
+            query = query.where(
+                (PifInfo.research_status.is_(None))
+                | (~PifInfo.research_status.in_(["completed", "in_progress", "queued"]))
+            )
 
     if request.order_by == "icp_score":
         query = query.order_by(PifInfo.icp_score.desc().nullslast(), PifInfo.updated_at.desc())
@@ -634,6 +656,11 @@ async def research_batch(
         if "research" in request.kinds:
             await pif_info_crud.update(db, db_obj=pif, obj_in={"research_status": "queued"})
             task_ids["research"] = research_firm_task.delay(str(pif.id)).id
+        if "research_job_postings" in request.kinds:
+            await pif_info_crud.update(
+                db, db_obj=pif, obj_in={"job_postings_research_status": "queued"}
+            )
+            task_ids["research_job_postings"] = research_job_postings_task.delay(str(pif.id)).id
         if "research_staff" in request.kinds:
             await pif_info_crud.update(db, db_obj=pif, obj_in={"staff_research_status": "queued"})
             task_ids["research_staff"] = research_staff_task.delay(str(pif.id)).id
@@ -666,6 +693,7 @@ async def get_research_status_bulk(
         else:
             query = query.where(
                 (PifInfo.research_status == status_filter)
+                | (PifInfo.job_postings_research_status == status_filter)
                 | (PifInfo.staff_research_status == status_filter)
             )
 
@@ -678,11 +706,13 @@ async def get_research_status_bulk(
             pif_id=pif.id,
             firm_name=pif.firm_name,
             research_status=pif.research_status,
+            job_postings_research_status=pif.job_postings_research_status,
             staff_research_status=pif.staff_research_status,
             behavior_status="completed" if pif.behavioral_data else None,
             icp_score=pif.icp_score,
             icp_tier=pif.icp_tier,
             last_researched_at=pif.last_researched_at,
+            last_job_postings_researched_at=pif.last_job_postings_researched_at,
             updated_at=pif.updated_at,
         )
         for pif in pifs
@@ -1112,6 +1142,37 @@ async def research_firm(
     )
 
 
+@router.post("/{pif_id}/research-job-postings", response_model=ResearchStartResponse)
+async def start_job_postings_research(
+    pif_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> ResearchStartResponse:
+    """Queue only the firm's recent job-posting web research."""
+    pif = await pif_info_crud.get(db, id=pif_id)
+    if not pif:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PIF info not found",
+        )
+
+    await pif_info_crud.update(
+        db,
+        db_obj=pif,
+        obj_in={"job_postings_research_status": "queued"},
+    )
+
+    from app.tasks.firm_research import research_job_postings_task
+
+    task = research_job_postings_task.delay(str(pif_id))
+    return ResearchStartResponse(
+        pif_id=pif_id,
+        firm_name=pif.firm_name,
+        task_id=task.id,
+        status="queued",
+        message="Recent job-posting research queued.",
+    )
+
+
 @router.get("/research-status/{task_id}", response_model=ResearchStatusResponse)
 async def get_research_status(
     task_id: str,
@@ -1206,12 +1267,14 @@ async def enrich_firm_all(
 
     Steps:
     1. Resolve canonical website
-    2. Firm and leadership research
-    3. Leadership email history analysis
-    4. Staff research
-    5. Behavioral analysis
-    6. Signature extraction
-    7. Final ICP scoring
+    2. Recent job-posting research
+    3. Vendor-stack detection
+    4. Firm and leadership research
+    5. Leadership email history analysis
+    6. Staff research
+    7. Behavioral analysis
+    8. Signature extraction
+    9. Final ICP scoring
     """
     pif = await pif_info_crud.get(db, id=pif_id)
     if not pif:
@@ -1225,6 +1288,7 @@ async def enrich_firm_all(
         db_obj=pif,
         obj_in={
             "research_status": "queued",
+            "job_postings_research_status": "queued",
             "staff_research_status": "queued",
         },
     )
@@ -1235,6 +1299,7 @@ async def enrich_firm_all(
         analyze_leadership_emails_task,
         detect_vendor_stack_task,
         research_firm_task,
+        research_job_postings_task,
         research_staff_task,
     )
     from app.tasks.signature_extraction import extract_signatures_task
@@ -1242,6 +1307,7 @@ async def enrich_firm_all(
 
     workflow = chain(
         resolve_firm_website_task.si(str(pif_id)),
+        research_job_postings_task.si(str(pif_id)),
         detect_vendor_stack_task.si(str(pif_id)),
         research_firm_task.si(str(pif_id)),
         analyze_leadership_emails_task.si(str(pif_id)),
@@ -1258,7 +1324,7 @@ async def enrich_firm_all(
         firm_name=pif.firm_name,
         task_id=workflow.id,
         status="queued",
-        message="Full enrichment queued: website, vendor stack, research, staff, behavior, signatures, and ICP scoring.",
+        message="Full enrichment queued: website, job postings, vendor stack, research, staff, behavior, signatures, and ICP scoring.",
     )
 
 

@@ -4,6 +4,7 @@ def test_research_tasks_route_to_research_queue_and_live_pipeline_stays_processi
     routes = celery_app.conf.task_routes
     research_tasks = [
         "app.tasks.firm_research.research_firm_task",
+        "app.tasks.firm_research.research_job_postings_task",
         "app.tasks.firm_research.research_staff_task",
         "app.tasks.firm_research.analyze_leadership_emails_task",
         "app.tasks.website_resolution.resolve_firm_website_task",
@@ -28,6 +29,7 @@ def test_research_tasks_have_rate_limits():
     import app.tasks.signature_extraction as signature_extraction
 
     assert firm_research.research_firm_task.rate_limit == "10/m"
+    assert firm_research.research_job_postings_task.rate_limit == "10/m"
     assert firm_research.research_staff_task.rate_limit == "10/m"
     assert firm_research.analyze_leadership_emails_task.rate_limit == "10/m"
     import app.tasks.website_resolution as website_resolution

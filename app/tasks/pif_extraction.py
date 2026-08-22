@@ -16,6 +16,7 @@ from app.services.extracted_firm_identity import resolve_extracted_firm_identity
 logger = get_task_logger(__name__)
 
 FIRM_RESEARCH_STALE_AFTER = timedelta(days=30)
+JOB_POSTINGS_REFRESH_AFTER = timedelta(days=1)
 RUNNING_RESEARCH_STATUSES = {"queued", "in_progress"}
 
 
@@ -77,6 +78,38 @@ def should_queue_full_enrichment(pif: PifInfo, *, now: Optional[datetime] = None
     return reference - pif.last_researched_at > FIRM_RESEARCH_STALE_AFTER
 
 
+def should_queue_job_postings_research(
+    pif: PifInfo, *, now: Optional[datetime] = None
+) -> bool:
+    """Return true when the independent job-posting snapshot should be refreshed."""
+    if pif.job_postings_research_status in RUNNING_RESEARCH_STATUSES:
+        return False
+    if not pif.last_job_postings_researched_at:
+        return True
+
+    reference = now or datetime.utcnow()
+    return reference - pif.last_job_postings_researched_at >= JOB_POSTINGS_REFRESH_AFTER
+
+
+def queue_job_postings_research(db: Session, pif: PifInfo) -> Optional[str]:
+    """Queue only recent job-posting research for a firm."""
+    if not should_queue_job_postings_research(pif):
+        return None
+
+    from app.tasks.firm_research import research_job_postings_task
+
+    pif.job_postings_research_status = "queued"
+    db.add(pif)
+    db.commit()
+    try:
+        return research_job_postings_task.delay(str(pif.id)).id
+    except Exception:
+        pif.job_postings_research_status = "failed"
+        db.add(pif)
+        db.commit()
+        raise
+
+
 def queue_full_firm_enrichment(db: Session, pif: PifInfo) -> Optional[str]:
     """Queue the same full enrichment chain used by the PIFStats UI."""
     if not should_queue_full_enrichment(pif):
@@ -88,6 +121,7 @@ def queue_full_firm_enrichment(db: Session, pif: PifInfo) -> Optional[str]:
         analyze_leadership_emails_task,
         detect_vendor_stack_task,
         research_firm_task,
+        research_job_postings_task,
         research_staff_task,
     )
     from app.tasks.signature_extraction import extract_signatures_task
@@ -95,12 +129,14 @@ def queue_full_firm_enrichment(db: Session, pif: PifInfo) -> Optional[str]:
 
     pif.research_status = "queued"
     pif.staff_research_status = "queued"
+    pif.job_postings_research_status = "queued"
     pif.last_researched_at = datetime.utcnow()
     db.add(pif)
     db.commit()
 
     workflow = chain(
         resolve_firm_website_task.si(str(pif.id)),
+        research_job_postings_task.si(str(pif.id)),
         detect_vendor_stack_task.si(str(pif.id)),
         research_firm_task.si(str(pif.id)),
         analyze_leadership_emails_task.si(str(pif.id)),
@@ -312,6 +348,8 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
         from app.core.firm_exclusions import NON_PI_FIRM_IDS
         enrichment_triggered = False
         enrichment_task_id = None
+        job_postings_research_triggered = False
+        job_postings_research_task_id = None
         if str(pif.id) in NON_PI_FIRM_IDS:
             logger.info(
                 "Skipping enrichment for non-PI firm '%s' (%s)",
@@ -322,6 +360,7 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
             try:
                 enrichment_task_id = queue_full_firm_enrichment(db, pif)
                 enrichment_triggered = enrichment_task_id is not None
+                job_postings_research_triggered = enrichment_triggered
                 if enrichment_triggered:
                     logger.info(
                         "Auto-queued full enrichment for '%s' [%s], task_id=%s",
@@ -335,9 +374,25 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
                     firm_info.firm_name,
                     e,
                 )
+        elif should_queue_job_postings_research(pif):
+            try:
+                job_postings_research_task_id = queue_job_postings_research(db, pif)
+                job_postings_research_triggered = job_postings_research_task_id is not None
+                if job_postings_research_triggered:
+                    logger.info(
+                        "Auto-queued job-posting research for fresh firm '%s', task_id=%s",
+                        firm_info.firm_name,
+                        job_postings_research_task_id,
+                    )
+            except Exception as e:
+                logger.warning(
+                    "Failed to auto-trigger job-posting research for '%s': %s",
+                    firm_info.firm_name,
+                    e,
+                )
         else:
             logger.info(
-                "Skipping enrichment for '%s' because research is already fresh or queued",
+                "Skipping enrichment for '%s' because all research is fresh or queued",
                 firm_info.firm_name,
             )
 
@@ -358,6 +413,8 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
             "research_triggered": enrichment_triggered,
             "enrichment_triggered": enrichment_triggered,
             "enrichment_task_id": enrichment_task_id,
+            "job_postings_research_triggered": job_postings_research_triggered,
+            "job_postings_research_task_id": job_postings_research_task_id,
         }
 
     except Exception as e:
