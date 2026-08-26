@@ -17,6 +17,7 @@ class PifStatsSettings(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str
     OPENAI_RESEARCH_API_KEY: Optional[str] = None
+    OPENAI_WEB_SEARCH_ENABLED: bool = False
     OPENAI_MODEL: str = "gpt-4o"  # Default model for entity extraction
 
     # Logging

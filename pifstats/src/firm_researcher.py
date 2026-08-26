@@ -23,6 +23,14 @@ OPENAI_API_URL = "https://api.openai.com/v1/responses"
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504, 520, 522, 524}
 
 
+def _web_search_enabled(operation: str) -> bool:
+    """Return whether OpenAI web search is enabled, logging disabled calls."""
+    if settings.OPENAI_WEB_SEARCH_ENABLED:
+        return True
+    logger.info("OpenAI web search disabled; skipping %s", operation)
+    return False
+
+
 def _post_openai_with_retry(client, url, headers, payload, attempts=3, backoff=5.0):
     """
     POST to OpenAI, retrying transient failures (timeouts, connection errors,
@@ -775,6 +783,8 @@ def research_firm_profile_once(
     """
     if not firm_name:
         return None
+    if not _web_search_enabled("one-pass firm profile research"):
+        return None
 
     headers = {
         "Authorization": f"Bearer {settings.RESEARCH_OPENAI_API_KEY}",
@@ -860,6 +870,8 @@ def find_official_website(
 ) -> Optional[str]:
     """Find a firm's official website using the same Responses web_search_preview path."""
     if not firm_name:
+        return None
+    if not _web_search_enabled("official website research"):
         return None
 
     headers = {
@@ -990,6 +1002,8 @@ def research_recent_job_postings(
     """Find and validate job postings published by a firm in a recent date window."""
     if not firm_name or window_days < 1:
         return None
+    if not _web_search_enabled("recent job-posting research"):
+        return None
 
     window_end = as_of_date or datetime.now(UTC).date()
     window_start = window_end - timedelta(days=window_days - 1)
@@ -1105,6 +1119,8 @@ def research_vendor_stack(
     Returns a list of vendor dicts: [{vendor, source, confidence}]
     """
     if not firm_name:
+        return []
+    if not _web_search_enabled("vendor-stack research"):
         return []
 
     headers = {
@@ -1241,6 +1257,8 @@ def research_firm(
     if not firm_name:
         logger.warning("No firm name provided for research")
         return None
+    if not _web_search_enabled("firm research"):
+        return None
 
     headers = {
         "Authorization": f"Bearer {settings.RESEARCH_OPENAI_API_KEY}",
@@ -1373,6 +1391,8 @@ async def research_firm_async(
     """
     if not firm_name:
         logger.warning("No firm name provided for research")
+        return None
+    if not _web_search_enabled("async firm research"):
         return None
 
     headers = {
@@ -1657,6 +1677,8 @@ def research_firm_staff(
     """
     if not firm_name:
         logger.warning("No firm name provided for staff research")
+        return None
+    if not _web_search_enabled("staff research"):
         return None
 
     headers = {
@@ -2136,6 +2158,8 @@ def research_leadership_member(
     """
     if not name:
         logger.warning("No name provided for leadership research")
+        return None
+    if not _web_search_enabled("leadership-member research"):
         return None
 
     headers = {

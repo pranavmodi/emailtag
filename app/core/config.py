@@ -105,6 +105,7 @@ class Settings(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str
     OPENAI_RESEARCH_API_KEY: Optional[str] = None
+    OPENAI_WEB_SEARCH_ENABLED: bool = False
 
     # Manual model-evaluation runner only (never used by production tasks).
     MODEL_EVAL_TOGETHER_API_KEY: Optional[str] = None

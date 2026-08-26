@@ -1,6 +1,8 @@
 import json
 from datetime import date
 
+import pytest
+
 from pifstats.src import firm_researcher
 
 
@@ -21,6 +23,22 @@ class FakeClient:
 
     def __exit__(self, exc_type, exc, traceback):
         return False
+
+
+@pytest.fixture(autouse=True)
+def enable_web_search(monkeypatch):
+    monkeypatch.setattr(firm_researcher.settings, "OPENAI_WEB_SEARCH_ENABLED", True)
+
+
+def test_recent_job_postings_skip_when_web_search_is_disabled(monkeypatch):
+    monkeypatch.setattr(firm_researcher.settings, "OPENAI_WEB_SEARCH_ENABLED", False)
+    monkeypatch.setattr(
+        firm_researcher,
+        "_post_openai_with_retry",
+        lambda *args, **kwargs: pytest.fail("OpenAI must not be called"),
+    )
+
+    assert firm_researcher.research_recent_job_postings("Example Injury Law") is None
 
 
 def test_recent_job_postings_are_date_filtered_and_deduplicated(monkeypatch):
