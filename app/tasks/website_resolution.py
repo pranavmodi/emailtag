@@ -5,6 +5,7 @@ from uuid import UUID
 
 from celery.utils.log import get_task_logger
 
+from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.pif_info import PifInfo
 from app.services.website_resolution import (
@@ -25,6 +26,12 @@ logger = get_task_logger(__name__)
 )
 def resolve_firm_website_task(self, pif_id: str) -> Dict[str, Any]:
     """Resolve and persist the canonical website for one PIF firm."""
+    if not settings.PIF_DOWNSTREAM_ENRICHMENT_ENABLED:
+        return {
+            "status": "skipped",
+            "message": "PIF downstream enrichment is owned by Possible OS",
+            "pif_id": pif_id,
+        }
     db = SessionLocal()
     try:
         pif = db.query(PifInfo).filter(PifInfo.id == UUID(pif_id)).first()

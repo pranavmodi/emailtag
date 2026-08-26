@@ -16,9 +16,33 @@ from app.core.config import settings
 logger = get_task_logger(__name__)
 
 
-def _disabled_result(pif_id: str) -> Dict[str, Any] | None:
+def _disabled_result(
+    pif_id: str,
+    *,
+    status_field: Optional[str] = None,
+) -> Dict[str, Any] | None:
     if settings.PIF_DOWNSTREAM_ENRICHMENT_ENABLED:
         return None
+    if status_field:
+        from app.models.pif_info import PifInfo
+
+        db = SessionLocal()
+        try:
+            pif = db.query(PifInfo).filter(PifInfo.id == UUID(pif_id)).first()
+            if pif and getattr(pif, status_field, None) in {"queued", "in_progress"}:
+                setattr(pif, status_field, None)
+                db.add(pif)
+                db.commit()
+        except Exception as exc:
+            db.rollback()
+            logger.warning(
+                "Could not clear disabled %s for %s: %s",
+                status_field,
+                pif_id,
+                exc,
+            )
+        finally:
+            db.close()
     return {
         "status": "skipped",
         "pif_id": pif_id,
@@ -118,7 +142,7 @@ class ResearchTask(Task):
     rate_limit="10/m",
 )
 def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
-    if disabled := _disabled_result(pif_id):
+    if disabled := _disabled_result(pif_id, status_field="research_status"):
         return disabled
     """
     Background task to research a firm and its leadership.
@@ -361,7 +385,7 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
     rate_limit="10/m",
 )
 def research_job_postings_task(self, pif_id: str) -> Dict[str, Any]:
-    if disabled := _disabled_result(pif_id):
+    if disabled := _disabled_result(pif_id, status_field="job_postings_research_status"):
         return disabled
     """Research source-backed job postings published by a firm in the last 30 days."""
     import os
@@ -695,7 +719,7 @@ def analyze_leadership_emails_task(self, pif_id: str) -> Dict[str, Any]:
     rate_limit="10/m",
 )
 def research_staff_task(self, pif_id: str) -> Dict[str, Any]:
-    if disabled := _disabled_result(pif_id):
+    if disabled := _disabled_result(pif_id, status_field="staff_research_status"):
         return disabled
     """
     Background task to research operational staff at a firm.

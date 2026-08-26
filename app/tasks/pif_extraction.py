@@ -94,6 +94,8 @@ def should_queue_job_postings_research(
 
 def queue_job_postings_research(db: Session, pif: PifInfo) -> Optional[str]:
     """Queue only recent job-posting research for a firm."""
+    if not settings.PIF_DOWNSTREAM_ENRICHMENT_ENABLED:
+        return None
     if not should_queue_job_postings_research(pif):
         return None
 
@@ -113,6 +115,8 @@ def queue_job_postings_research(db: Session, pif: PifInfo) -> Optional[str]:
 
 def queue_full_firm_enrichment(db: Session, pif: PifInfo) -> Optional[str]:
     """Queue the same full enrichment chain used by the PIFStats UI."""
+    if not settings.PIF_DOWNSTREAM_ENRICHMENT_ENABLED:
+        return None
     if not should_queue_full_enrichment(pif):
         return None
 

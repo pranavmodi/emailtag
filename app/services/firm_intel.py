@@ -29,6 +29,9 @@ from app.schemas.firm_intel import (
 
 PROFILE_VERSION = 1
 
+INTERNAL_SCORER_KEYS = {"positive_outcomes"}
+INTERNAL_SCORER_KEY_PREFIXES = ("outcome_supervision",)
+
 PHI_DENY_KEY_FRAGMENTS = (
     "patient",
     "dob",
@@ -157,11 +160,31 @@ def serialize_pif_source_record(pif: PifInfo) -> Dict[str, Any]:
 
     This intentionally follows the SQLAlchemy mapper instead of a curated field list so future
     pif_info columns are mirrored without needing to update the v2 FirmIntel contract code.
+    Internal outcome-derived scorer inputs are excluded from nested JSON fields because they are
+    supervision state, not published firm facts.
     """
     return {
-        column.key: _json_safe(getattr(pif, column.key))
+        column.key: _json_safe_source_value(getattr(pif, column.key))
         for column in PifInfo.__mapper__.columns
     }
+
+
+def _json_safe_source_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _json_safe_source_value(item)
+            for key, item in value.items()
+            if not _is_internal_scorer_key(str(key))
+        }
+    if isinstance(value, list):
+        return [_json_safe_source_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe_source_value(item) for item in value]
+    return _json_safe(value)
+
+
+def _is_internal_scorer_key(key: str) -> bool:
+    return key in INTERNAL_SCORER_KEYS or key.startswith(INTERNAL_SCORER_KEY_PREFIXES)
 
 
 def _json_safe(value: Any) -> Any:

@@ -600,7 +600,6 @@ async def research_batch(
     """
     Queue research tasks for up to 25 firms for Possible OS orchestration.
     """
-    _require_emailtag_downstream_enabled()
     if request.limit > 25:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -619,6 +618,7 @@ async def research_batch(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported research kinds: {', '.join(invalid_kinds)}",
         )
+    _require_emailtag_downstream_enabled()
 
     from sqlalchemy import select
     from app.models.pif_info import PifInfo

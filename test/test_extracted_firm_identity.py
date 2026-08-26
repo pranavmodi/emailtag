@@ -9,6 +9,8 @@ from app.services.extracted_firm_identity import (
 )
 from app.services.website_resolution import WebsiteResolutionResult
 from app.tasks.pif_extraction import (
+    queue_full_firm_enrichment,
+    queue_job_postings_research,
     should_queue_full_enrichment,
     should_queue_job_postings_research,
 )
@@ -25,6 +27,37 @@ def test_extracted_identity_domains_prefers_website_and_rejects_consumer_domains
     )
 
     assert domains == ["smithlaw.com"]
+
+
+def test_downstream_queue_helpers_are_noops_when_disabled(monkeypatch):
+    import app.tasks.pif_extraction as pif_extraction
+
+    class FailDb:
+        def add(self, obj):
+            raise AssertionError("disabled queue helper must not update the database")
+
+        def commit(self):
+            raise AssertionError("disabled queue helper must not commit")
+
+    firm = PifInfo(
+        id=uuid4(),
+        firm_name="Smith Law",
+        entity_type="pi_law_firm",
+        emails=[],
+        phones=[],
+        addresses=[],
+        contacts=[],
+        conversation_ids=["cnv_1"],
+        merge_status="active",
+    )
+    monkeypatch.setattr(
+        pif_extraction.settings,
+        "PIF_DOWNSTREAM_ENRICHMENT_ENABLED",
+        False,
+    )
+
+    assert queue_job_postings_research(FailDb(), firm) is None
+    assert queue_full_firm_enrichment(FailDb(), firm) is None
 
 
 def test_merge_extracted_firm_data_merges_without_duplicate_values():

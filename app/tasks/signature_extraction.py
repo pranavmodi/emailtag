@@ -9,6 +9,7 @@ from uuid import UUID
 from celery.utils.log import get_task_logger
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.email import Email
 from app.tasks.worker import celery_app
@@ -33,6 +34,13 @@ def extract_signatures_task(self, pif_id: str) -> Dict[str, Any]:
     Only non-consumer sender domains are considered. Patient/case-looking values
     are dropped by the pifstats post-filter before persistence.
     """
+    if not settings.PIF_DOWNSTREAM_ENRICHMENT_ENABLED:
+        return {
+            "status": "skipped",
+            "message": "PIF downstream enrichment is owned by Possible OS",
+            "pif_id": pif_id,
+        }
+
     project_root = _get_project_root()
     if project_root not in sys.path:
         sys.path.insert(0, project_root)

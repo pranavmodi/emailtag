@@ -116,7 +116,10 @@ class FirmProfile(BaseModel):
     firm_name: str
     source_record: Dict[str, Any] = Field(
         default_factory=dict,
-        description="Complete serialized EmailTag pif_info source row for mirroring/debugging.",
+        description=(
+            "Serialized EmailTag pif_info source row for mirroring/debugging, excluding "
+            "internal outcome-derived scorer state."
+        ),
     )
     aliases: FirmAliases = Field(default_factory=FirmAliases)
     identity: FirmIdentity = Field(default_factory=FirmIdentity)

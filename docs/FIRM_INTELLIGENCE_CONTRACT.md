@@ -236,7 +236,7 @@ Auth: existing `PIFSTATS_AUTH_TOKEN` (header). Versioned under `/v2`.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/extractions?updated_since=<ts>&cursor=` | Raw PIF extraction delta for Possible OS; excludes canonical research, leadership, staff, vendors, scoring, and job postings |
+| GET | `/extractions?updated_since=<ts>&cursor=` | Non-PHI PIF extraction delta for Possible OS; excludes free-form extraction notes, canonical research, leadership, staff, vendors, scoring, and job postings |
 | GET | `/firms/{firm_id}` | full `firm_profile` |
 | GET | `/firms?updated_since=<ts>&cursor=` | **delta sync** (replaces watermark poll) |
 | POST | `/firms` | create or resolve a candidate firm from consumer-discovered identity |
@@ -251,6 +251,9 @@ Auth: existing `PIFSTATS_AUTH_TOKEN` (header). Versioned under `/v2`.
 read-only compatibility surface during rollout. Downstream mutation routes are
 disabled by default with `PIF_DOWNSTREAM_ENRICHMENT_ENABLED=false`; Possible OS
 must execute and persist that work locally.
+
+Extraction cursors are opaque keyset cursors ordered by `(updated_at, id)`.
+Consumers must return them unchanged and must not interpret them as offsets.
 
 Phase additions beyond today's `pif-info`: **inbox-split recency**,
 **vendor_stack**, **`updated_since` delta**, **neutral warm score**, **resolve**.

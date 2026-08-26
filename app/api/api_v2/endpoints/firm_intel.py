@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
+import json
 from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -96,23 +99,33 @@ async def list_firm_extractions(
     db: AsyncSession = Depends(get_db),
 ) -> FirmExtractionDeltaResponse:
     """Publish only facts produced by PIF extraction, without enrichment."""
-    offset = _decode_cursor(cursor)
+    cursor_updated_at, cursor_id, legacy_offset = _decode_extraction_cursor(cursor)
     updated_since = _as_db_naive_utc(updated_since)
-    query = select(PifInfo)
-    count_query = select(func.count(PifInfo.id))
+    extraction_filter = func.cardinality(PifInfo.conversation_ids) > 0
+    query = select(PifInfo).where(extraction_filter)
+    count_query = select(func.count(PifInfo.id)).where(extraction_filter)
     if updated_since:
         query = query.where(PifInfo.updated_at >= updated_since)
         count_query = count_query.where(PifInfo.updated_at >= updated_since)
+    if cursor_updated_at and cursor_id:
+        query = query.where(
+            or_(
+                PifInfo.updated_at > cursor_updated_at,
+                and_(PifInfo.updated_at == cursor_updated_at, PifInfo.id > cursor_id),
+            )
+        )
 
     total = (await db.execute(count_query)).scalar() or 0
-    result = await db.execute(
-        query.order_by(PifInfo.updated_at.asc(), PifInfo.id.asc())
-        .offset(offset)
-        .limit(limit + 1)
-    )
+    query = query.order_by(PifInfo.updated_at.asc(), PifInfo.id.asc())
+    if legacy_offset:
+        query = query.offset(legacy_offset)
+    result = await db.execute(query.limit(limit + 1))
     firms = result.scalars().all()
-    next_cursor = str(offset + limit) if len(firms) > limit else None
     items = [_firm_extraction(firm) for firm in firms[:limit]]
+    next_cursor = None
+    if len(firms) > limit and items:
+        last_firm = firms[limit - 1]
+        next_cursor = _encode_extraction_cursor(last_firm.updated_at, last_firm.id)
     return FirmExtractionDeltaResponse(items=items, next_cursor=next_cursor, total=total)
 
 
@@ -126,9 +139,11 @@ def _firm_extraction(firm: PifInfo) -> FirmExtraction:
         phones=list(firm.phones or []),
         fax=firm.fax,
         addresses=list(firm.addresses or []),
-        contacts=list(firm.contacts or []),
+        contacts=_safe_extraction_contacts(firm.contacts),
         conversation_ids=list(firm.conversation_ids or []),
-        extraction_notes=firm.extraction_notes,
+        # Free-form notes are generated from PHI-bearing conversations and are
+        # intentionally not published across the system boundary.
+        extraction_notes=None,
         first_contacted_precise_at=firm.first_contacted_precise_at,
         merge_status=firm.merge_status or "active",
         merged_into=firm.merged_into,
@@ -691,6 +706,60 @@ def _decode_cursor(cursor: Optional[str]) -> int:
     if offset < 0:
         raise HTTPException(status_code=400, detail="Invalid cursor")
     return offset
+
+
+def _encode_extraction_cursor(updated_at: datetime, firm_id: UUID) -> str:
+    payload = json.dumps(
+        {"updated_at": updated_at.isoformat(), "id": str(firm_id)},
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+
+def _decode_extraction_cursor(
+    cursor: Optional[str],
+) -> tuple[Optional[datetime], Optional[UUID], int]:
+    if not cursor:
+        return None, None, 0
+
+    # Accept numeric cursors emitted by the first release so an in-flight sync
+    # can finish. Every newly emitted cursor uses stable keyset pagination.
+    try:
+        legacy_offset = int(cursor)
+    except ValueError:
+        legacy_offset = None
+    if legacy_offset is not None:
+        if legacy_offset < 0:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        return None, None, legacy_offset
+
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+        updated_at = datetime.fromisoformat(str(payload["updated_at"]))
+        firm_id = UUID(str(payload["id"]))
+    except (ValueError, TypeError, KeyError, json.JSONDecodeError, binascii.Error) as exc:
+        raise HTTPException(status_code=400, detail="Invalid cursor") from exc
+    return _as_db_naive_utc(updated_at), firm_id, 0
+
+
+def _safe_extraction_contacts(value: object) -> List[dict]:
+    """Publish only the declared firm-contact shape, never arbitrary JSON keys."""
+    if not isinstance(value, list):
+        return []
+    allowed_fields = ("name", "title", "email", "phone", "extension")
+    contacts: List[dict] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        contact = {
+            field: str(item[field])
+            for field in allowed_fields
+            if item.get(field) not in (None, "")
+        }
+        if contact:
+            contacts.append(contact)
+    return contacts
 
 
 def _coverage(count: int, total: int) -> dict:
