@@ -11,8 +11,19 @@ from celery.utils.log import get_task_logger
 
 from app.tasks.worker import celery_app
 from app.db.session import SessionLocal
+from app.core.config import settings
 
 logger = get_task_logger(__name__)
+
+
+def _disabled_result(pif_id: str) -> Dict[str, Any] | None:
+    if settings.PIF_DOWNSTREAM_ENRICHMENT_ENABLED:
+        return None
+    return {
+        "status": "skipped",
+        "pif_id": pif_id,
+        "message": "PIF downstream enrichment is owned by Possible OS",
+    }
 
 
 def is_valid_linkedin_url(url: str | None) -> bool:
@@ -107,6 +118,8 @@ class ResearchTask(Task):
     rate_limit="10/m",
 )
 def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
+    if disabled := _disabled_result(pif_id):
+        return disabled
     """
     Background task to research a firm and its leadership.
 
@@ -348,6 +361,8 @@ def research_firm_task(self, pif_id: str) -> Dict[str, Any]:
     rate_limit="10/m",
 )
 def research_job_postings_task(self, pif_id: str) -> Dict[str, Any]:
+    if disabled := _disabled_result(pif_id):
+        return disabled
     """Research source-backed job postings published by a firm in the last 30 days."""
     import os
     import sys
@@ -658,6 +673,8 @@ def analyze_leadership_email_history(pif_id: str) -> Dict[str, Any]:
     rate_limit="10/m",
 )
 def analyze_leadership_emails_task(self, pif_id: str) -> Dict[str, Any]:
+    if disabled := _disabled_result(pif_id):
+        return disabled
     """
     Celery task to analyze leadership email history for a PIF firm.
 
@@ -678,6 +695,8 @@ def analyze_leadership_emails_task(self, pif_id: str) -> Dict[str, Any]:
     rate_limit="10/m",
 )
 def research_staff_task(self, pif_id: str) -> Dict[str, Any]:
+    if disabled := _disabled_result(pif_id):
+        return disabled
     """
     Background task to research operational staff at a firm.
 
@@ -797,6 +816,8 @@ def research_staff_task(self, pif_id: str) -> Dict[str, Any]:
     rate_limit="30/m",
 )
 def detect_vendor_stack_task(self, pif_id: str) -> Dict[str, Any]:
+    if disabled := _disabled_result(pif_id):
+        return disabled
     """
     Standalone vendor stack detection for a single firm.
 

@@ -51,10 +51,19 @@ from app.schemas.autorespond_event import (
     AutorespondEventSummary,
 )
 from app.crud import autorespond_event as autorespond_event_crud
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _require_emailtag_downstream_enabled() -> None:
+    if not settings.PIF_DOWNSTREAM_ENRICHMENT_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="PIF downstream enrichment is owned by Possible OS",
+        )
 
 
 @router.post("/firm-lookup", response_model=FirmLookupResponse)
@@ -186,6 +195,8 @@ async def firm_lookup_create(
     Returns:
         Created/updated firm and optional research task ID
     """
+    if request.start_research:
+        _require_emailtag_downstream_enabled()
     logger.info(f"Creating firm from lookup: {request.firm_name}")
 
     # Check for existing firm by name or website
@@ -589,6 +600,7 @@ async def research_batch(
     """
     Queue research tasks for up to 25 firms for Possible OS orchestration.
     """
+    _require_emailtag_downstream_enabled()
     if request.limit > 25:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1111,6 +1123,7 @@ async def research_firm(
     Returns:
         Task ID and status for polling
     """
+    _require_emailtag_downstream_enabled()
     # Get the PIF record
     pif = await pif_info_crud.get(db, id=pif_id)
     if not pif:
@@ -1148,6 +1161,7 @@ async def start_job_postings_research(
     db: AsyncSession = Depends(get_db),
 ) -> ResearchStartResponse:
     """Queue only the firm's recent job-posting web research."""
+    _require_emailtag_downstream_enabled()
     pif = await pif_info_crud.get(db, id=pif_id)
     if not pif:
         raise HTTPException(
@@ -1276,6 +1290,7 @@ async def enrich_firm_all(
     8. Signature extraction
     9. Final ICP scoring
     """
+    _require_emailtag_downstream_enabled()
     pif = await pif_info_crud.get(db, id=pif_id)
     if not pif:
         raise HTTPException(
@@ -1391,6 +1406,7 @@ async def research_staff(
     Returns:
         Task ID and status for polling
     """
+    _require_emailtag_downstream_enabled()
     pif = await pif_info_crud.get(db, id=pif_id)
     if not pif:
         raise HTTPException(
@@ -1442,6 +1458,7 @@ async def detect_vendors(
     Returns:
         Task ID and status
     """
+    _require_emailtag_downstream_enabled()
     pif = await pif_info_crud.get(db, id=pif_id)
     if not pif:
         raise HTTPException(
@@ -1488,6 +1505,7 @@ async def generate_outreach(
     Returns:
         OutreachResponse with generated messages for all leaders
     """
+    _require_emailtag_downstream_enabled()
     pif = await pif_info_crud.get(db, id=pif_id)
     if not pif:
         raise HTTPException(
@@ -1558,6 +1576,7 @@ async def analyze_firm_behavior(
 
     Returns immediately with task_id for polling.
     """
+    _require_emailtag_downstream_enabled()
     pif = await pif_info_crud.get(db, id=pif_id)
     if not pif:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PIF info not found")
@@ -1610,6 +1629,7 @@ async def analyze_leadership_emails(
 
     Returns immediately with task_id for polling.
     """
+    _require_emailtag_downstream_enabled()
     pif = await pif_info_crud.get(db, id=pif_id)
     if not pif:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PIF info not found")
@@ -1665,6 +1685,7 @@ async def analyze_behavior_batch(
 
     Dispatches analyze_all_firms_task which fans out individual tasks per firm.
     """
+    _require_emailtag_downstream_enabled()
     from app.tasks.behavior_analysis import analyze_all_firms_task
     task = analyze_all_firms_task.delay()
 
@@ -1691,6 +1712,7 @@ async def score_firm_icp(
 
     Requires behavioral_data to be present (run analyze-behavior first).
     """
+    _require_emailtag_downstream_enabled()
     import sys
     import os
     project_root = os.path.dirname(
@@ -1749,6 +1771,7 @@ async def score_batch(
     """
     Re-score all firms that have behavioral_data (runs as a Celery task).
     """
+    _require_emailtag_downstream_enabled()
     from app.tasks.behavior_analysis import score_all_firms_task
     task = score_all_firms_task.delay()
 

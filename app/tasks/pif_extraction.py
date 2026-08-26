@@ -12,6 +12,7 @@ from app.tasks.worker import celery_app
 from app.db.session import SessionLocal
 from app.models.pif_info import PifInfo
 from app.services.extracted_firm_identity import resolve_extracted_firm_identity
+from app.core.config import settings
 
 logger = get_task_logger(__name__)
 
@@ -344,13 +345,19 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
             identity.mapped_via,
         )
 
-        # Auto-trigger full enrichment when research is missing or stale.
+        # Possible OS owns all processing after extraction. The legacy switch is
+        # retained only for an emergency rollback during the ownership cutover.
         from app.core.firm_exclusions import NON_PI_FIRM_IDS
         enrichment_triggered = False
         enrichment_task_id = None
         job_postings_research_triggered = False
         job_postings_research_task_id = None
-        if str(pif.id) in NON_PI_FIRM_IDS:
+        if not settings.PIF_DOWNSTREAM_ENRICHMENT_ENABLED:
+            logger.info(
+                "Downstream PIF enrichment is owned by Possible OS; publishing extraction only for '%s'",
+                firm_info.firm_name,
+            )
+        elif str(pif.id) in NON_PI_FIRM_IDS:
             logger.info(
                 "Skipping enrichment for non-PI firm '%s' (%s)",
                 firm_info.firm_name,
@@ -415,6 +422,7 @@ def extract_pif_from_conversation(conversation_id: str) -> Dict[str, Any]:
             "enrichment_task_id": enrichment_task_id,
             "job_postings_research_triggered": job_postings_research_triggered,
             "job_postings_research_task_id": job_postings_research_task_id,
+            "downstream_owner": "possibleos",
         }
 
     except Exception as e:

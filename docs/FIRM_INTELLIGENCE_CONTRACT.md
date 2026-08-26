@@ -25,7 +25,9 @@ Companion design notes:
 3. **Raw is sacred; refined is re-derivable.** EmailTag retains raw extractions
    immutably; the published profile is a *versioned projection* of raw that can
    be recomputed with better models without re-fetching Front.
-4. **Identity is resolved once, at the source.** EmailTag owns canonical firm
+4. **Extraction identity is resolved once, at the source.** EmailTag owns raw
+   PIF extraction and extraction-level deduplication. Possible OS owns
+   canonical-domain web research and every derived field after extraction.
    identity (website-keyed). Consumers never re-resolve; they map their local
    ids via the alias table.
 5. **Every field carries provenance, freshness, and confidence.** Consumers must
@@ -234,6 +236,7 @@ Auth: existing `PIFSTATS_AUTH_TOKEN` (header). Versioned under `/v2`.
 
 | Method | Path | Purpose |
 |---|---|---|
+| GET | `/extractions?updated_since=<ts>&cursor=` | Raw PIF extraction delta for Possible OS; excludes canonical research, leadership, staff, vendors, scoring, and job postings |
 | GET | `/firms/{firm_id}` | full `firm_profile` |
 | GET | `/firms?updated_since=<ts>&cursor=` | **delta sync** (replaces watermark poll) |
 | POST | `/firms` | create or resolve a candidate firm from consumer-discovered identity |
@@ -243,6 +246,11 @@ Auth: existing `PIFSTATS_AUTH_TOKEN` (header). Versioned under `/v2`.
 | POST | `/events/external` | external firm signal ingest |
 | GET | `/health` | coverage + freshness (replaces `front_status`) |
 | POST | `/outcomes` | possibleos → outcome feedback (§6) |
+
+`/extractions` is the production ownership boundary. `/firms` remains a
+read-only compatibility surface during rollout. Downstream mutation routes are
+disabled by default with `PIF_DOWNSTREAM_ENRICHMENT_ENABLED=false`; Possible OS
+must execute and persist that work locally.
 
 Phase additions beyond today's `pif-info`: **inbox-split recency**,
 **vendor_stack**, **`updated_since` delta**, **neutral warm score**, **resolve**.

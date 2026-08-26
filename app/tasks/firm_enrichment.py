@@ -11,6 +11,7 @@ from app.db.session import SessionLocal
 from app.models.pif_info import PifInfo
 from app.services.firm_enrichment import enrich_firm_profile, select_enrichment_candidates
 from app.tasks.worker import celery_app
+from app.core.config import settings
 
 logger = get_task_logger(__name__)
 
@@ -22,6 +23,8 @@ logger = get_task_logger(__name__)
 )
 def enrich_firm_profile_task(self, pif_id: str, force: bool = False) -> Dict[str, Any]:
     """Run the full two-pass enrichment for one active firm."""
+    if not settings.PIF_DOWNSTREAM_ENRICHMENT_ENABLED:
+        return {"status": "skipped", "pif_id": pif_id, "message": "owned by Possible OS"}
     db = SessionLocal()
     try:
         pif = db.get(PifInfo, UUID(pif_id))
@@ -55,6 +58,8 @@ def enrich_firm_profile_task(self, pif_id: str, force: bool = False) -> Dict[str
 )
 def dispatch_firm_enrichment_task(self, limit: int = 25, force: bool = False) -> Dict[str, Any]:
     """Queue a bounded enrichment batch on the research queue."""
+    if not settings.PIF_DOWNSTREAM_ENRICHMENT_ENABLED:
+        return {"status": "skipped", "total": 0, "items": [], "message": "owned by Possible OS"}
     db = SessionLocal()
     try:
         candidates = select_enrichment_candidates(db, limit=limit, force=force)

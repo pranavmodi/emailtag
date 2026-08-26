@@ -11,8 +11,19 @@ from celery.utils.log import get_task_logger
 
 from app.tasks.worker import celery_app
 from app.db.session import SessionLocal
+from app.core.config import settings
 
 logger = get_task_logger(__name__)
+
+
+def _disabled_result(pif_id: str = "batch") -> Dict[str, Any] | None:
+    if settings.PIF_DOWNSTREAM_ENRICHMENT_ENABLED:
+        return None
+    return {
+        "status": "skipped",
+        "pif_id": pif_id,
+        "message": "PIF downstream enrichment is owned by Possible OS",
+    }
 
 
 def _get_project_root() -> str:
@@ -27,6 +38,8 @@ def _get_project_root() -> str:
     rate_limit="10/m",
 )
 def analyze_firm_behavior_task(self, pif_id: str) -> Dict[str, Any]:
+    if disabled := _disabled_result(pif_id):
+        return disabled
     """
     Analyze email behavior for a firm and compute ICP score.
 
@@ -143,6 +156,8 @@ def analyze_firm_behavior_task(self, pif_id: str) -> Dict[str, Any]:
     rate_limit="10/m",
 )
 def analyze_all_firms_task(self) -> Dict[str, Any]:
+    if disabled := _disabled_result():
+        return disabled
     """
     Dispatch analyze_firm_behavior_task for every firm in the database.
 
@@ -186,6 +201,8 @@ def analyze_all_firms_task(self) -> Dict[str, Any]:
     rate_limit="10/m",
 )
 def score_all_firms_task(self) -> Dict[str, Any]:
+    if disabled := _disabled_result():
+        return disabled
     """
     Re-score all firms that already have behavioral_data (synchronously in one task).
 
@@ -248,6 +265,8 @@ def score_all_firms_task(self) -> Dict[str, Any]:
     rate_limit="10/m",
 )
 def score_firm_task(self, pif_id: str) -> Dict[str, Any]:
+    if disabled := _disabled_result(pif_id):
+        return disabled
     """
     Re-score one firm that already has behavioral_data.
 

@@ -26,6 +26,8 @@ from app.schemas.firm_event import (
 from app.schemas.firm_intel import (
     CandidateFirmIn,
     CandidateFirmResponse,
+    FirmExtraction,
+    FirmExtractionDeltaResponse,
     FirmDeltaResponse,
     FirmIntelHealthResponse,
     FirmPeopleResponse,
@@ -84,6 +86,55 @@ async def require_pifstats_token(
 
 
 router = APIRouter(dependencies=[Depends(require_pifstats_token)])
+
+
+@router.get("/extractions", response_model=FirmExtractionDeltaResponse)
+async def list_firm_extractions(
+    updated_since: Optional[datetime] = Query(None),
+    cursor: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+) -> FirmExtractionDeltaResponse:
+    """Publish only facts produced by PIF extraction, without enrichment."""
+    offset = _decode_cursor(cursor)
+    updated_since = _as_db_naive_utc(updated_since)
+    query = select(PifInfo)
+    count_query = select(func.count(PifInfo.id))
+    if updated_since:
+        query = query.where(PifInfo.updated_at >= updated_since)
+        count_query = count_query.where(PifInfo.updated_at >= updated_since)
+
+    total = (await db.execute(count_query)).scalar() or 0
+    result = await db.execute(
+        query.order_by(PifInfo.updated_at.asc(), PifInfo.id.asc())
+        .offset(offset)
+        .limit(limit + 1)
+    )
+    firms = result.scalars().all()
+    next_cursor = str(offset + limit) if len(firms) > limit else None
+    items = [_firm_extraction(firm) for firm in firms[:limit]]
+    return FirmExtractionDeltaResponse(items=items, next_cursor=next_cursor, total=total)
+
+
+def _firm_extraction(firm: PifInfo) -> FirmExtraction:
+    return FirmExtraction(
+        extraction_id=firm.id,
+        firm_name=firm.firm_name,
+        entity_type=firm.entity_type or "pi_law_firm",
+        observed_website=firm.website,
+        emails=list(firm.emails or []),
+        phones=list(firm.phones or []),
+        fax=firm.fax,
+        addresses=list(firm.addresses or []),
+        contacts=list(firm.contacts or []),
+        conversation_ids=list(firm.conversation_ids or []),
+        extraction_notes=firm.extraction_notes,
+        first_contacted_precise_at=firm.first_contacted_precise_at,
+        merge_status=firm.merge_status or "active",
+        merged_into=firm.merged_into,
+        created_at=firm.created_at,
+        updated_at=firm.updated_at,
+    )
 
 
 @router.get("/firms", response_model=FirmDeltaResponse)

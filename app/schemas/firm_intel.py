@@ -135,6 +135,34 @@ class FirmDeltaResponse(BaseModel):
     total: int
 
 
+class FirmExtraction(BaseModel):
+    """Raw PIF extraction facts published for downstream local processing."""
+
+    extraction_id: UUID
+    firm_name: str
+    entity_type: str = "pi_law_firm"
+    observed_website: Optional[str] = None
+    emails: List[str] = Field(default_factory=list)
+    phones: List[str] = Field(default_factory=list)
+    fax: Optional[str] = None
+    addresses: List[str] = Field(default_factory=list)
+    contacts: List[Dict[str, Any]] = Field(default_factory=list)
+    conversation_ids: List[str] = Field(default_factory=list)
+    extraction_notes: Optional[str] = None
+    first_contacted_precise_at: Optional[datetime] = None
+    merge_status: str = "active"
+    merged_into: Optional[UUID] = None
+    created_at: datetime
+    updated_at: datetime
+    source: str = "emailtag_pif_extraction"
+
+
+class FirmExtractionDeltaResponse(BaseModel):
+    items: List[FirmExtraction]
+    next_cursor: Optional[str] = None
+    total: int
+
+
 class FirmResolveResponse(BaseModel):
     firm_id: UUID
     matched_by: str
