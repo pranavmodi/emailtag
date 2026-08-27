@@ -1797,9 +1797,9 @@ async def verify_sender_authorization(sender_email: str, participants: List[Dict
     Verifies if the sender's email is authorized to receive patient information.
 
     This function checks whether the sender's exact email address is listed as a
-    participant for the patient's case. Domain-level matches and global-directory
-    membership are intentionally not authorization because they can identify people
-    who are not assigned to this patient's studies.
+    participant for the patient's case, or whether the sender shares a non-public
+    organization domain with a listed participant. Global-directory membership is
+    intentionally not an authorization criterion.
 
     Args:
         sender_email: Email address of the sender
@@ -1808,18 +1808,20 @@ async def verify_sender_authorization(sender_email: str, participants: List[Dict
     Returns:
         Dictionary containing:
             {
-                "status": "verified" | "unverified",
+                "status": "verified" | "domain_verified" | "unverified",
                 "role": str,  # e.g., "attorney_on_file", "case_manager_on_file"
                 "player_info": dict  # Additional participant information (if verified)
             }
     """
-    # An exact participant-email match is the sole authorization condition.
+    sender_email_normalized = (sender_email or "").strip().lower()
+
+    # First preference: exact participant-email match.
     for participant in participants:
-        participant_email = participant.get("email", "").lower()
+        participant_email = (participant.get("email") or "").strip().lower()
         participant_role = participant.get("role", "").lower()
         participant_type = participant.get("type", "").lower()
 
-        if participant_email and sender_email.lower() == participant_email:
+        if participant_email and sender_email_normalized == participant_email:
             player_info = {
                 "email": participant_email,
                 "role": participant_role,
@@ -1834,6 +1836,43 @@ async def verify_sender_authorization(sender_email: str, participants: List[Dict
                 "status": "verified",
                 "role": f"{normalized_role}_on_file",
                 "player_info": player_info,
+            }
+
+    # Second preference: same non-public organization domain as a participant.
+    public_email_domains = {
+        "gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "aol.com",
+        "icloud.com", "mail.com", "protonmail.com", "zoho.com", "yandex.com",
+        "gmx.com", "inbox.com", "live.com", "msn.com", "me.com",
+    }
+    sender_domain = (
+        sender_email_normalized.rsplit("@", 1)[1]
+        if "@" in sender_email_normalized
+        else ""
+    )
+    if sender_domain and sender_domain not in public_email_domains:
+        for participant in participants:
+            participant_email = (participant.get("email") or "").strip().lower()
+            if "@" not in participant_email:
+                continue
+
+            participant_domain = participant_email.rsplit("@", 1)[1]
+            if participant_domain != sender_domain:
+                continue
+
+            participant_role = (participant.get("role") or "").lower()
+            participant_type = (participant.get("type") or "").lower()
+            normalized_role = re.sub(r"\W+", "_", participant_role).strip("_") or "participant"
+            return {
+                "status": "domain_verified",
+                "role": f"{normalized_role}_domain_match",
+                "player_info": {
+                    "email": participant_email,
+                    "role": participant_role,
+                    "type": participant_type,
+                    "accession_number": participant.get("accession_number", ""),
+                    "study_id": participant.get("study_id", ""),
+                    "domain": participant_domain,
+                },
             }
 
     return {"status": "unverified", "role": "unknown"}
@@ -1853,7 +1892,8 @@ async def verify_sender_for_patient_access(
     3. Verifies the sender against those patient-specific participants.
 
     A RadFlow global-directory record is not authorization to disclose a patient's
-    information. Authorization is granted only by a patient-specific participant match.
+    information. Authorization is granted only by an exact participant email or a
+    non-public organization-domain match tied to this patient's studies.
 
     Args:
         patient_id: The patient's ID
@@ -1864,7 +1904,7 @@ async def verify_sender_for_patient_access(
         Dictionary containing:
             {
                 "authorized": True/False,
-                "verification_status": str,  # "verified", "unverified"
+                "verification_status": str,  # "verified", "domain_verified", "unverified"
                 "role": str,  # e.g., "attorney_on_file", "case_manager_on_file"
                 "player_info": dict,  # Participant information (if verified)
                 "message": str  # Human-readable message about verification result

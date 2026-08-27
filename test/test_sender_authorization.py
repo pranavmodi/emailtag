@@ -71,7 +71,7 @@ def test_patient_participant_is_authorized_without_global_contact_lookup(monkeyp
     assert result["role"] == "case_manager_on_file"
 
 
-def test_same_domain_without_exact_participant_email_is_not_authorized(monkeypatch):
+def test_same_non_public_domain_is_authorized(monkeypatch):
     async def fake_compile_study_participants(patient_id, studies):
         return {
             "success": True,
@@ -93,6 +93,36 @@ def test_same_domain_without_exact_participant_email_is_not_authorized(monkeypat
     result = asyncio.run(
         agent_helpers.verify_sender_for_patient_access(
             "PRE1244712", "unassigned@medical.example", studies=[{"id": "study-1"}]
+        )
+    )
+
+    assert result["authorized"] is True
+    assert result["verification_status"] == "domain_verified"
+    assert result["role"] == "case_manager_domain_match"
+
+
+def test_same_public_domain_without_exact_email_is_not_authorized(monkeypatch):
+    async def fake_compile_study_participants(patient_id, studies):
+        return {
+            "success": True,
+            "total_participants": 1,
+            "participants": [
+                {
+                    "email": "assigned@gmail.com",
+                    "domain": "gmail.com",
+                    "role": "case manager",
+                    "type": "case manager",
+                }
+            ],
+            "studies_with_participants": 1,
+            "studies_without_participants": 0,
+        }
+
+    monkeypatch.setattr(agent_helpers, "compile_study_participants", fake_compile_study_participants)
+
+    result = asyncio.run(
+        agent_helpers.verify_sender_for_patient_access(
+            "PRE1244712", "unassigned@gmail.com", studies=[{"id": "study-1"}]
         )
     )
 
