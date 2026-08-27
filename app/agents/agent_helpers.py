@@ -1796,13 +1796,10 @@ async def verify_sender_authorization(sender_email: str, participants: List[Dict
     """
     Verifies if the sender's email is authorized to receive patient information.
 
-    This function checks if the sender is listed as a participant (attorney, doctor, etc.)
-    for the patient's case. It performs multiple verification passes:
-    1. Direct email match - exact match with participant email
-    2. Domain match - same domain as a participant (for both doctors AND attorneys)
-       - Generic domains (gmail, yahoo, etc.) are excluded from domain matching
-       - Only professional/organization domains allow domain matching
-    3. Pattern matching - domain contains keywords suggesting attorney/medical entity
+    This function checks whether the sender's exact email address is listed as a
+    participant for the patient's case. Domain-level matches and global-directory
+    membership are intentionally not authorization because they can identify people
+    who are not assigned to this patient's studies.
 
     Args:
         sender_email: Email address of the sender
@@ -1811,29 +1808,18 @@ async def verify_sender_authorization(sender_email: str, participants: List[Dict
     Returns:
         Dictionary containing:
             {
-                "status": "verified" | "domain_verified" | "unverified",
-                "role": str,  # e.g., "attorney_on_file", "doctor_on_file", "attorney_not_on_file", etc.
+                "status": "verified" | "unverified",
+                "role": str,  # e.g., "attorney_on_file", "case_manager_on_file"
                 "player_info": dict  # Additional participant information (if verified)
             }
     """
-    # Generic/public email domains that require exact email match (no domain matching)
-    GENERIC_DOMAINS = [
-        "gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "aol.com",
-        "icloud.com", "mail.com", "protonmail.com", "zoho.com", "yandex.com",
-        "gmx.com", "inbox.com", "live.com", "msn.com", "me.com"
-    ]
-
-    sender_domain = sender_email.split('@')[1].lower() if '@' in sender_email else None
-    is_generic_domain = sender_domain in GENERIC_DOMAINS if sender_domain else False
-
-    # First pass: Direct email matches
+    # An exact participant-email match is the sole authorization condition.
     for participant in participants:
         participant_email = participant.get("email", "").lower()
         participant_role = participant.get("role", "").lower()
         participant_type = participant.get("type", "").lower()
 
-        # Direct email match
-        if sender_email.lower() == participant_email:
+        if participant_email and sender_email.lower() == participant_email:
             player_info = {
                 "email": participant_email,
                 "role": participant_role,
@@ -1843,62 +1829,12 @@ async def verify_sender_authorization(sender_email: str, participants: List[Dict
                 "referrer_id": participant.get("referrer_id", ""),
                 "phone": participant.get("phone", "")
             }
-
-            # Check for attorney roles
-            if "attorney" in participant_role or "law" in participant_role:
-                return {"status": "verified", "role": "attorney_on_file", "player_info": player_info}
-
-            # Check for doctor/physician roles
-            if any(keyword in participant_role for keyword in ["doctor", "physician", "radiologist"]) or \
-               any(keyword in participant_type for keyword in ["doctor", "physician"]):
-                return {"status": "verified", "role": "doctor_on_file", "player_info": player_info}
-
-    # Second pass: Domain matches for BOTH doctors AND attorneys
-    # Skip domain matching if sender uses a generic public email domain
-    if sender_domain and not is_generic_domain:
-        logger.info(f"Checking domain match for non-generic domain: {sender_domain}")
-        for participant in participants:
-            participant_domain = participant.get("domain", "").lower()
-            participant_role = participant.get("role", "").lower()
-            participant_type = participant.get("type", "").lower()
-
-            if sender_domain == participant_domain:
-                # Domain match with doctor/physician type
-                if any(keyword in participant_role for keyword in ["doctor", "physician", "radiologist"]) or \
-                   any(keyword in participant_type for keyword in ["doctor", "physician"]):
-                    player_info = {
-                        "email": participant.get("email", ""),
-                        "role": participant_role,
-                        "type": participant_type,
-                        "accession_number": participant.get("accession_number", ""),
-                        "study_id": participant.get("study_id", ""),
-                        "domain": participant_domain
-                    }
-                    logger.info(f"Domain match: {sender_email} verified as doctor from {sender_domain}")
-                    return {"status": "domain_verified", "role": "doctor_domain_match", "player_info": player_info}
-
-                # Domain match with attorney type
-                if "attorney" in participant_role or "law" in participant_role:
-                    player_info = {
-                        "email": participant.get("email", ""),
-                        "role": participant_role,
-                        "type": participant_type,
-                        "accession_number": participant.get("accession_number", ""),
-                        "study_id": participant.get("study_id", ""),
-                        "domain": participant_domain
-                    }
-                    logger.info(f"Domain match: {sender_email} verified as attorney from {sender_domain}")
-                    return {"status": "domain_verified", "role": "attorney_domain_match", "player_info": player_info}
-    elif is_generic_domain:
-        logger.info(f"Skipping domain match for generic domain: {sender_domain} - exact email match required")
-
-    # Fallback to domain pattern matching
-    if sender_domain:
-        if any(keyword in sender_domain for keyword in ["law", "legal", "attorney", "lawfirm"]):
-            return {"status": "unverified", "role": "attorney_not_on_file"}
-
-        if any(keyword in sender_domain for keyword in ["med", "clinic", "hospital", "health", "medical"]):
-            return {"status": "unverified", "role": "doctor_not_on_file"}
+            normalized_role = re.sub(r"\W+", "_", participant_role).strip("_") or "participant"
+            return {
+                "status": "verified",
+                "role": f"{normalized_role}_on_file",
+                "player_info": player_info,
+            }
 
     return {"status": "unverified", "role": "unknown"}
 
@@ -1912,10 +1848,12 @@ async def verify_sender_for_patient_access(
     High-level function to verify if a sender is authorized to access patient information.
 
     This is the main entry point for sender verification. It:
-    1. Checks if sender exists in RadFlow contacts database (known attorneys, doctors, etc.)
-    2. If not found in contacts, fetches patient and study information
-    3. Compiles all participants for the patient's studies
-    4. Verifies the sender against the participants
+    1. Fetches patient and study information when studies are not supplied.
+    2. Compiles the participants assigned to the patient's studies.
+    3. Verifies the sender against those patient-specific participants.
+
+    A RadFlow global-directory record is not authorization to disclose a patient's
+    information. Authorization is granted only by a patient-specific participant match.
 
     Args:
         patient_id: The patient's ID
@@ -1926,28 +1864,13 @@ async def verify_sender_for_patient_access(
         Dictionary containing:
             {
                 "authorized": True/False,
-                "verification_status": str,  # "contact_verified", "verified", "domain_verified", "unverified"
-                "role": str,  # e.g., "known_contact", "attorney_on_file", "doctor_on_file", etc.
+                "verification_status": str,  # "verified", "unverified"
+                "role": str,  # e.g., "attorney_on_file", "case_manager_on_file"
                 "player_info": dict,  # Participant information (if verified)
                 "message": str  # Human-readable message about verification result
             }
     """
     try:
-        # First, check RadFlow contacts database
-        # If the sender is a known contact (attorney, doctor, etc.), they're authorized
-        # regardless of whether they're on file for this specific patient
-        radflow_contact_result = await verify_sender_via_radflow_contacts(sender_email)
-        if radflow_contact_result.get("found"):
-            logger.info(f"Sender {sender_email} verified via RadFlow contacts database")
-            return {
-                "authorized": True,
-                "verification_status": "contact_verified",
-                "role": "known_contact",
-                "player_info": {"email": radflow_contact_result.get("email")},
-                "message": f"Sender verified as known contact in RadFlow database",
-                "total_participants": 0
-            }
-
         # Fetch studies if not provided
         if studies is None:
             mcp_results = await get_patient_and_study_info(patient_id)
