@@ -1705,12 +1705,10 @@ async def compile_study_participants(patient_id: str, studies: List[Dict[str, An
 
 async def verify_sender_via_radflow_contacts(sender_email: str) -> Dict[str, Any]:
     """
-    Verifies if the sender's email exists in the RadFlow contact database.
+    Looks up the sender's email and its organization identifiers in RadFlow.
 
-    This function calls the RadFlow contactVerifyEmail endpoint to check if the
-    sender's email is registered as a known contact. This allows emails from
-    known contacts (like attorneys or doctors) to bypass HIPAA form requirements
-    even if they're not directly on file for a specific patient.
+    A contact-directory match alone is not patient authorization. The returned
+    referrer IDs must also be matched against a participant on the patient's exam.
 
     Args:
         sender_email: Email address of the sender
@@ -1720,11 +1718,21 @@ async def verify_sender_via_radflow_contacts(sender_email: str) -> Dict[str, Any
             {
                 "found": bool,  # Whether the email was found in contacts
                 "email": str,   # The matched email (if found)
+                "referrer_ids": list[str],
+                "player_type_names": list[str],
                 "error": str    # Error message (if any)
             }
     """
+    empty_result = {
+        "found": False,
+        "email": None,
+        "referrer_ids": [],
+        "player_type_names": [],
+        "error": None,
+    }
+
     if not sender_email or '@' not in sender_email:
-        return {"found": False, "email": None, "error": "Invalid email format"}
+        return {**empty_result, "error": "Invalid email format"}
 
     # Check if RadFlow contact verification is configured
     contact_verify_url = app_settings_instance.RADFLOW_CONTACT_VERIFY_URL
@@ -1732,7 +1740,7 @@ async def verify_sender_via_radflow_contacts(sender_email: str) -> Dict[str, Any
 
     if not contact_verify_url or not contact_verify_auth:
         logger.debug("RadFlow contact verification not configured, skipping")
-        return {"found": False, "email": None, "error": None}
+        return empty_result
 
     # Extract domain from sender email
     sender_domain = sender_email.split('@')[1].lower()
@@ -1752,14 +1760,14 @@ async def verify_sender_via_radflow_contacts(sender_email: str) -> Dict[str, Any
 
             if response.status_code != 200:
                 logger.warning(f"RadFlow contact verify API returned status {response.status_code}")
-                return {"found": False, "email": None, "error": f"API returned status {response.status_code}"}
+                return {**empty_result, "error": f"API returned status {response.status_code}"}
 
             data = response.json()
 
             # Check if the response indicates success
             if data.get("status") != 1 or data.get("responseStatus") != "Success":
                 logger.warning(f"RadFlow contact verify API returned unsuccessful response: {data}")
-                return {"found": False, "email": None, "error": "API returned unsuccessful response"}
+                return {**empty_result, "error": "API returned unsuccessful response"}
 
             # Parse the result - it's a JSON string containing a nested array
             result_str = data.get("result", "[]")
@@ -1772,24 +1780,60 @@ async def verify_sender_via_radflow_contacts(sender_email: str) -> Dict[str, Any
                     contacts = []
             except json.JSONDecodeError:
                 logger.error(f"Failed to parse RadFlow contact verify result: {result_str}")
-                return {"found": False, "email": None, "error": "Failed to parse API response"}
+                return {**empty_result, "error": "Failed to parse API response"}
 
-            # Check if sender's email is in the contacts list
+            # A sender may have more than one contact row, so retain every
+            # organization identifier associated with the exact email address.
+            matched_referrer_ids = set()
+            matched_player_types = set()
+            found = False
             for contact in contacts:
-                contact_email = contact.get("Email", "").lower()
-                if contact_email == sender_email_lower:
-                    logger.info(f"Sender {sender_email} found in RadFlow contacts database")
-                    return {"found": True, "email": contact_email, "error": None}
+                contact_email = (contact.get("Email") or "").strip().lower()
+                if contact_email != sender_email_lower:
+                    continue
+
+                found = True
+                referrer_id = (
+                    contact.get("ReferrerId")
+                    or contact.get("ReferrerID")
+                    or contact.get("referrerID")
+                    or contact.get("referrerId")
+                    or contact.get("referrer_id")
+                )
+                if referrer_id is not None and str(referrer_id).strip():
+                    matched_referrer_ids.add(str(referrer_id).strip())
+
+                player_type_name = (
+                    contact.get("PlayerTypeName")
+                    or contact.get("playerTypeName")
+                    or contact.get("player_type_name")
+                )
+                if player_type_name and str(player_type_name).strip():
+                    matched_player_types.add(str(player_type_name).strip())
+
+            if found:
+                referrer_ids = sorted(matched_referrer_ids)
+                logger.info(
+                    f"Sender {sender_email} found in RadFlow contacts database "
+                    f"with referrer IDs {referrer_ids}"
+                )
+                return {
+                    "found": True,
+                    "email": sender_email_lower,
+                    "referrer_ids": referrer_ids,
+                    "player_type_names": sorted(matched_player_types),
+                    "error": None,
+                }
 
             logger.debug(f"Sender {sender_email} not found in RadFlow contacts for domain {sender_domain}")
-            return {"found": False, "email": None, "error": None}
+            return empty_result
 
     except httpx.TimeoutException:
         logger.error("Timeout calling RadFlow contact verify API")
-        return {"found": False, "email": None, "error": "API timeout"}
+        return {**empty_result, "error": "API timeout"}
     except Exception as e:
         logger.error(f"Exception calling RadFlow contact verify API: {e}")
-        return {"found": False, "email": None, "error": str(e)}
+        return {**empty_result, "error": str(e)}
 
 
 async def verify_sender_authorization(sender_email: str, participants: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1891,9 +1935,9 @@ async def verify_sender_for_patient_access(
     2. Compiles the participants assigned to the patient's studies.
     3. Verifies the sender against those patient-specific participants.
 
-    A RadFlow global-directory record is not authorization to disclose a patient's
-    information. Authorization is granted only by an exact participant email or a
-    non-public organization-domain match tied to this patient's studies.
+    A RadFlow global-directory record is not authorization by itself. Authorization
+    is granted by an exact participant email, a non-public organization-domain
+    match, or an exact contact email whose referrer ID matches an exam participant.
 
     Args:
         patient_id: The patient's ID
@@ -1957,14 +2001,66 @@ async def verify_sender_for_patient_access(
         else:
             logger.info(f"No participants found for patient {patient_id}")
 
-        # Verify sender
+        # First verify directly against participant email/domain data.
         verification_result = await verify_sender_authorization(sender_email, participants)
+
+        # If direct matching is not possible (for example, a Gmail contact), use
+        # the contact endpoint only to bridge the exact email to an organization
+        # already present on this patient's exam. Fail closed when the endpoint
+        # has no referrer IDs, as is the case with the legacy production response.
+        if verification_result.get("status") == "unverified":
+            participants_by_referrer = {}
+            for participant in participants:
+                referrer_id = participant.get("referrer_id")
+                if referrer_id is None or not str(referrer_id).strip():
+                    continue
+                participants_by_referrer[str(referrer_id).strip()] = participant
+
+            if participants_by_referrer:
+                contact_result = await verify_sender_via_radflow_contacts(sender_email)
+                contact_referrer_ids = {
+                    str(referrer_id).strip()
+                    for referrer_id in contact_result.get("referrer_ids", [])
+                    if referrer_id is not None and str(referrer_id).strip()
+                }
+                matching_referrer_ids = sorted(
+                    contact_referrer_ids.intersection(participants_by_referrer)
+                )
+
+                if contact_result.get("found") and matching_referrer_ids:
+                    matched_referrer_id = matching_referrer_ids[0]
+                    participant = participants_by_referrer[matched_referrer_id]
+                    participant_role = (participant.get("role") or "").lower()
+                    normalized_role = (
+                        re.sub(r"\W+", "_", participant_role).strip("_")
+                        or "participant"
+                    )
+                    verification_result = {
+                        "status": "referrer_verified",
+                        "role": f"{normalized_role}_contact_on_file",
+                        "player_info": {
+                            "email": contact_result.get("email"),
+                            "participant_email": participant.get("email", ""),
+                            "role": participant_role,
+                            "type": participant.get("type", ""),
+                            "accession_number": participant.get("accession_number", ""),
+                            "study_id": participant.get("study_id", ""),
+                            "referrer_id": matched_referrer_id,
+                            "contact_player_types": contact_result.get(
+                                "player_type_names", []
+                            ),
+                        },
+                    }
 
         verification_status = verification_result.get("status", "unverified")
         role = verification_result.get("role", "unknown")
 
         # Determine if sender is authorized
-        authorized = verification_status in ["verified", "domain_verified"]
+        authorized = verification_status in [
+            "verified",
+            "domain_verified",
+            "referrer_verified",
+        ]
 
         # Create human-readable message
         if authorized:

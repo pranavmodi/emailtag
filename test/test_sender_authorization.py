@@ -14,21 +14,111 @@ def test_known_global_contact_without_patient_participant_is_not_authorized(monk
                     "domain": "example.com",
                     "role": "case manager",
                     "type": "case manager",
+                    "referrer_id": "200",
                 }
             ],
             "studies_with_participants": 1,
             "studies_without_participants": 0,
         }
 
-    async def global_lookup_must_not_run(sender_email):
-        raise AssertionError("Global contact lookup must not authorize patient access")
+    async def fake_contact_lookup(sender_email):
+        return {
+            "found": True,
+            "email": sender_email,
+            "referrer_ids": ["100"],
+            "player_type_names": ["Attorney"],
+            "error": None,
+        }
 
     monkeypatch.setattr(agent_helpers, "compile_study_participants", fake_compile_study_participants)
-    monkeypatch.setattr(agent_helpers, "verify_sender_via_radflow_contacts", global_lookup_must_not_run)
+    monkeypatch.setattr(agent_helpers, "verify_sender_via_radflow_contacts", fake_contact_lookup)
 
     result = asyncio.run(
         agent_helpers.verify_sender_for_patient_access(
             "PRE1244712", "amanda@newflexgroup.org", studies=[{"id": "study-1"}]
+        )
+    )
+
+    assert result["authorized"] is False
+    assert result["verification_status"] == "unverified"
+
+
+def test_contact_is_authorized_when_referrer_matches_exam_participant(monkeypatch):
+    async def fake_compile_study_participants(patient_id, studies):
+        return {
+            "success": True,
+            "total_participants": 1,
+            "participants": [
+                {
+                    "email": "bms@bellmedicalsolutions.com",
+                    "domain": "bellmedicalsolutions.com",
+                    "role": "broker",
+                    "type": "doctor",
+                    "referrer_id": "17090",
+                    "accession_number": "1186212",
+                }
+            ],
+            "studies_with_participants": 1,
+            "studies_without_participants": 0,
+        }
+
+    async def fake_contact_lookup(sender_email):
+        return {
+            "found": True,
+            "email": "btrejocmc@gmail.com",
+            "referrer_ids": ["17090"],
+            "player_type_names": ["Broker"],
+            "error": None,
+        }
+
+    monkeypatch.setattr(agent_helpers, "compile_study_participants", fake_compile_study_participants)
+    monkeypatch.setattr(agent_helpers, "verify_sender_via_radflow_contacts", fake_contact_lookup)
+
+    result = asyncio.run(
+        agent_helpers.verify_sender_for_patient_access(
+            "PRE1258156", "btrejocmc@gmail.com", studies=[{"id": "study-1"}]
+        )
+    )
+
+    assert result["authorized"] is True
+    assert result["verification_status"] == "referrer_verified"
+    assert result["role"] == "broker_contact_on_file"
+    assert result["player_info"]["referrer_id"] == "17090"
+
+
+def test_legacy_contact_response_without_referrer_id_is_not_authorized(monkeypatch):
+    async def fake_compile_study_participants(patient_id, studies):
+        return {
+            "success": True,
+            "total_participants": 1,
+            "participants": [
+                {
+                    "email": "bms@bellmedicalsolutions.com",
+                    "domain": "bellmedicalsolutions.com",
+                    "role": "broker",
+                    "type": "doctor",
+                    "referrer_id": "17090",
+                }
+            ],
+            "studies_with_participants": 1,
+            "studies_without_participants": 0,
+        }
+
+    async def fake_contact_lookup(sender_email):
+        return {
+            "found": True,
+            "email": sender_email,
+            "referrer_ids": [],
+            "player_type_names": [],
+            "error": None,
+        }
+
+    monkeypatch.setattr(agent_helpers, "compile_study_participants", fake_compile_study_participants)
+    monkeypatch.setattr(agent_helpers, "verify_sender_via_radflow_contacts", fake_contact_lookup)
+
+    result = asyncio.run(
+        agent_helpers.verify_sender_for_patient_access(
+            "PRE1258156", "btrejocmc@gmail.com", studies=[{"id": "study-1"}]
         )
     )
 
