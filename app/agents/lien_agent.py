@@ -479,6 +479,24 @@ def _score_split_document(split_doc: Dict[str, Any], signature_type: str = "ASL"
     return score
 
 
+def _split_has_required_signature(
+    split_signature_type: Optional[str],
+    required_signature_type: str,
+) -> bool:
+    """Return whether a split page has the signature required by the active agent.
+
+    Signature detection is performed per split, while the conversation-level
+    ASL/PSL tag is selected across the entire packet. A signature on one split
+    must never authorize a different split for upload.
+    """
+    normalized_split_type = (split_signature_type or "UNKNOWN").upper()
+    normalized_required_type = required_signature_type.upper()
+    return (
+        normalized_required_type in {"ASL", "PSL"}
+        and normalized_split_type == normalized_required_type
+    )
+
+
 async def _regenerate_split_documents(
     attachment_url: str,
     split_metadata: List[Dict[str, Any]],
@@ -1872,9 +1890,10 @@ async def handle_lien_request(
                         )
                         continue
 
-                    # Check per-split signature type — reject unsigned pages in a mixed document
+                    # Check per-split signature type. Conversation-level ASL/PSL
+                    # precedence must not allow a differently signed page through.
                     split_sig_type = split_doc.get("signature_type", "UNKNOWN")
-                    if split_sig_type == "UNKNOWN":
+                    if not _split_has_required_signature(split_sig_type, signature_type):
                         if split_lien_type.upper() == "RAD":
                             lien_type_label = "Professional Lien (Report)"
                         else:
@@ -1882,8 +1901,9 @@ async def handle_lien_request(
                         sig_label = "attorney" if signature_type == "ASL" else "patient"
                         logger.warning(
                             f"📄 {signature_type} AGENT: Rejecting split {i+1}/{len(all_split_documents)} — "
-                            f"{lien_type_label} is unsigned (Patient={split_patient_id}). "
-                            f"Expected {signature_type} signature but page has signature_type=UNKNOWN."
+                            f"{lien_type_label} does not have the required {signature_type} signature "
+                            f"(Patient={split_patient_id}). Expected {signature_type}, "
+                            f"detected {split_sig_type or 'UNKNOWN'}."
                         )
                         rejected_splits.append({
                             "patient_id": split_patient_id,
